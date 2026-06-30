@@ -37,3 +37,16 @@ The 2024 reaction-condensate paper treats condensate volume as a control paramet
 A two-step ODE can predict the expression allocation that maximizes product or minimizes toxic intermediate accumulation once `kcat`, `Km`, degradation, partition coefficients and enzyme abundances are measured. It does not prove molecular “first-then-second” ordering inside a condensate. Spatial order would require explicit architecture or distance-resolved modeling; kinetic order follows from the reaction network itself.
 
 For yeast, convert the predicted abundance ratio into promoter/5'UTR/copy-number/degradation-tag designs, then calibrate protein abundance experimentally. Do not use a bacterial RBS Calculator as the final design layer.
+
+## 5. OptoQS-Corelets compatibility
+
+The two light layers do not automatically solve each other's persistence problem. OptoQS can convert a short light input into sustained gene expression through quorum sensing/feedback, but the original iLID-SspB Corelets interaction itself remains light dependent and the supplied Corelets paper reports dissolution after illumination is removed. Sustained abundance of Corelet components therefore does not imply sustained assembly.
+
+At least one of the following must be designed and tested:
+
+- keep a low-duty-cycle illumination schedule that maintains iLID-SspB binding;
+- let OptoQS drive a condensate module whose assembly no longer requires light;
+- introduce a separately validated biochemical memory/latch for assembly;
+- accept transient droplets and model pulsed production explicitly.
+
+This is a system-architecture decision, not a parameter that the current ODE can infer.

@@ -17,6 +17,7 @@
 3. 酵母没有细菌式 RBS。表达比例应通过启动子、5'UTR、拷贝数、降解标签或基因组位点调节。
 4. “150 倍富集”不能直接无条件乘到 `Vmax` 上；必须同时满足酶总量守恒、相体积分数和底物分配。本仓库的模型已按两相质量守恒处理。
 5. 目前缺少 OC/DMT 序列、活性位点残基、底物结构和动力学参数，所以仓库只能提供可运行框架，不能诚实地给出“3:1”这一项目特异结论。
+6. OptoQS 的持续转录不会自动维持 iLID-SspB 结合；原始 Corelets 关光后解聚，需要周期照明或改成不依赖持续光的装配模块。
 
 详细审计见 [docs/literature_code_audit.md](docs/literature_code_audit.md)，模型假设见 [docs/modeling_notes.md](docs/modeling_notes.md)。
 
