@@ -1,0 +1,18 @@
+[submodule "third_party/alphafold3"]
+	path = third_party/alphafold3
+	url = https://github.com/google-deepmind/alphafold3.git
+[submodule "third_party/AutoDock-Vina"]
+	path = third_party/AutoDock-Vina
+	url = https://github.com/ccsb-scripps/AutoDock-Vina.git
+[submodule "third_party/freesasa"]
+	path = third_party/freesasa
+	url = https://github.com/mittinatten/freesasa.git
+[submodule "third_party/py-pde"]
+	path = third_party/py-pde
+	url = https://github.com/zwicker-group/py-pde.git
+[submodule "third_party/psap"]
+	path = third_party/psap
+	url = https://github.com/vanheeringen-lab/psap.git
+[submodule "third_party/DiffDock-PP"]
+	path = third_party/DiffDock-PP
+	url = https://github.com/ketatam/DiffDock-PP.git
