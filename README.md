@@ -50,6 +50,53 @@ After cloning the real repository, initialize these with:
 git submodule update --init --recursive
 ```
 
+To update all external tools to their latest remote commits:
+
+```bash
+git submodule update --remote --merge
+git status
+```
+
+Then review the changed gitlinks, run the pipeline smoke test, and commit the update:
+
+```bash
+python -m pytest
+git add .gitmodules vendor/
+git commit -m "Update external tool submodules"
+```
+
+Submodules are intentionally kept outside the main package code. Pipeline code should call them through adapters in `src/igem_pipeline/adapters/`, so each external tool can later be replaced, pinned, or disabled without rewriting the M1-M4 data contracts.
+
+## GitHub SSH Access
+
+The repository URL may use SSH form:
+
+```text
+git@github.com:ZincDYX/iGEM-2026-Tsinghua-T-dry-lab.git
+```
+
+That requires an SSH key. An SSH key is a public/private key pair on your computer:
+
+- the private key stays on your machine, usually under `~/.ssh/`;
+- the public key is copied to GitHub, either under your GitHub account or as a deploy key on the repository;
+- GitHub uses the public key to verify that this machine is allowed to clone, push, and fetch private repository content.
+
+Check whether this machine already has a key:
+
+```bash
+ls ~/.ssh
+ssh -T git@github.com
+```
+
+If no usable key exists, generate one and add the printed public key to GitHub:
+
+```bash
+ssh-keygen -t ed25519 -C "your_email@example.com"
+cat ~/.ssh/id_ed25519.pub
+```
+
+For a private repository, the GitHub account that owns this SSH key must also have access to `ZincDYX/iGEM-2026-Tsinghua-T-dry-lab`. Without that, `git push` will fail with `Permission denied (publickey)`.
+
 ## Development Notes
 
 The pipeline treats every stage as a data contract:
