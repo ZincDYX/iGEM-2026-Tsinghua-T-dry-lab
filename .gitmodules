@@ -1,0 +1,24 @@
+[submodule "vendor/calvados"]
+	path = vendor/calvados
+	url = https://github.com/KULL-Centre/CALVADOS.git
+[submodule "vendor/ABCFold"]
+	path = vendor/ABCFold
+	url = https://github.com/rigdenlab/ABCFold.git
+[submodule "vendor/alphafold3"]
+	path = vendor/alphafold3
+	url = https://github.com/google-deepmind/alphafold3.git
+[submodule "vendor/boltz"]
+	path = vendor/boltz
+	url = https://github.com/jwohlwend/boltz.git
+[submodule "vendor/chai-lab"]
+	path = vendor/chai-lab
+	url = https://github.com/chaidiscovery/chai-lab.git
+[submodule "vendor/freesasa"]
+	path = vendor/freesasa
+	url = https://github.com/mittinatten/freesasa.git
+[submodule "vendor/mdanalysis"]
+	path = vendor/mdanalysis
+	url = https://github.com/MDAnalysis/mdanalysis.git
+[submodule "vendor/AutoDock-Vina"]
+	path = vendor/AutoDock-Vina
+	url = https://github.com/ccsb-scripps/AutoDock-Vina.git

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "igem-pipeline"
+version = "0.1.0"
+description = "M1-M4 dry-lab pipeline skeleton for iGEM 2026 Tsinghua-T"
+requires-python = ">=3.9"
+dependencies = [
+  "pandas>=2.0",
+  "pydantic>=2.0",
+  "PyYAML>=6.0",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+igem-pipeline = "igem_pipeline.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

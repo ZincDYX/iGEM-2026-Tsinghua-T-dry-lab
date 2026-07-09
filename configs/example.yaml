@@ -1,0 +1,89 @@
+run:
+  id: demo-run
+  output_dir: outputs
+  random_seed: 42
+
+inputs:
+  protein_fasta: ../examples/data/proteins.fasta
+  ligands:
+    - id: vestitol
+      name: Vestitol
+      role: DMT substrate
+      sdf: ../examples/data/vestitol.sdf
+    - id: omo_preglabridin
+      name: 4-O-methylpreglabridin
+      role: OC/DMT intermediate
+      sdf: ../examples/data/4-o-methylpreglabridin.sdf
+  enzymes:
+    - id: OC
+      protein_id: OC
+      reaction_role: oxidative cyclase
+      structure_pdb: null
+    - id: DMT
+      protein_id: DMT
+      reaction_role: dimethyltransferase
+      structure_pdb: null
+  scaffolds:
+    - id: FTH1
+      description: Ferritin 24-mer scaffold
+      oligomeric_state: 24
+      structure_pdb: null
+    - id: SpyTag_SpyCatcher
+      description: SpyTag/SpyCatcher assembly scaffold placeholder
+      oligomeric_state: 1
+      structure_pdb: null
+  linkers:
+    - id: ser_gly_short
+      sequence: GGGGS
+      source: Ser/Gly linker literature
+    - id: ser_gly_long
+      sequence: GGGGSGGGGS
+      source: Ser/Gly linker literature
+
+tools:
+  picnic:
+    enabled: false
+    mode: mock
+  calvados:
+    enabled: true
+    mode: mock
+    repo_path: ../vendor/calvados
+  abcfold:
+    enabled: true
+    mode: mock
+    repo_path: ../vendor/ABCFold
+  boltz:
+    enabled: false
+    mode: mock
+    repo_path: ../vendor/boltz
+  chai1:
+    enabled: false
+    mode: mock
+    repo_path: ../vendor/chai-lab
+  freesasa:
+    enabled: true
+    mode: mock
+    repo_path: ../vendor/freesasa
+  mdanalysis:
+    enabled: true
+    mode: mock
+    repo_path: ../vendor/mdanalysis
+  autodock_vina:
+    enabled: true
+    mode: mock
+    repo_path: ../vendor/AutoDock-Vina
+
+stages:
+  m1_llps:
+    top_n: 6
+    min_llps_score: 0.45
+  m2_fusion:
+    activity_penalty_weight: 0.35
+    clash_penalty_weight: 0.25
+  m3_concentration:
+    saturation_threshold: 0.70
+    leakage_threshold: 0.35
+  m4_reaction:
+    target_product: glabridin
+    oc_first_weight: 0.60
+    dmt_later_weight: 0.40
