@@ -1,0 +1,50 @@
+# Secrets and local configuration
+API.txt
+.env
+.env.*
+*.key
+*.pem
+
+# Runtime uploads and user-provided source documents
+uploads/
+CatalystOptimizationSystem/uploads/
+*.docx
+*.pptx
+*.xlsx
+*.xls
+*.backup.py
+
+# Literature downloads, caches, and generated databases
+essay/
+outputs/
+*.pdf
+*.csv
+*.tsv
+*.jsonl
+*.zip
+
+# Generated software-copyright export bundles
+docs/softcopy/Source_*.txt
+docs/softcopy/Line_Counts.txt
+
+# Keep source-side examples and schema assets versioned
+!CatalystOptimizationSystem/docs/*.json
+!CatalystOptimizationSystem/docs/*.jsonl
+!CatalystOptimizationSystem/docs/schemas/*.json
+!CatalystOptimizationSystem/docs/README.md
+
+# Python/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

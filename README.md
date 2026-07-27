@@ -19,3 +19,16 @@ python scripts/sweep_kinetics.py --output results/example_sweep
 ```
 
 输出包括配比扫描 CSV、体积分数扫描 CSV 和曲面图。示例参数仅用于验证代码，不代表光甘草定通路的真实参数。
+## Literature extraction agent
+
+The literature extraction and structured database pipeline is kept in
+`literature_extraction_agent/`.
+
+It contains:
+
+- `CatalystOptimizationSystem/`: modular extraction, schema, dynamic ICL, validation, imputation, optimization, API, and UI code.
+- `scripts/`: candidate literature search, PDF/SI download, text caching, evidence mining, aggregation, and final database optimization.
+- `API.example.txt`: local API key template. Copy it to `API.txt` locally; never commit real keys.
+- `requirements.txt`: Python dependencies for the extraction pipeline.
+
+Large local outputs such as downloaded PDFs, supplementary files, text caches, and CSV databases are ignored by the nested `.gitignore`.
