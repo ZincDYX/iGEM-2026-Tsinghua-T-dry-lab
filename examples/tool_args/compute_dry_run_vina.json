@@ -1,0 +1,9 @@
+{
+  "config_path": "configs/m1_m4_example.yaml",
+  "tool_name": "autodock_vina",
+  "output_dir": "outputs/tool_runs/vina",
+  "dry_run": true,
+  "context": {
+    "config_file": "examples/data/vina_config.txt"
+  }
+}

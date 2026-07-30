@@ -1,0 +1,9 @@
+{
+  "config_path": "configs/m1_m4_example.yaml",
+  "tool_name": "freesasa",
+  "output_dir": "outputs/tool_runs/freesasa",
+  "dry_run": true,
+  "context": {
+    "pdb_file": "examples/data/example.pdb"
+  }
+}

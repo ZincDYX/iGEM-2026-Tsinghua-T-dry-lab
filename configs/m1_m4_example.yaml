@@ -37,15 +37,27 @@ tools:
   calvados:
     enabled: true
     mode: mock
+    command: calvados run --config {config_file} --output {output_dir}
   abcfold:
     enabled: true
     mode: mock
+    command: abcfold predict {input_file} --out_dir {output_dir}
   freesasa:
     enabled: true
     mode: mock
+    command: freesasa --format=json {pdb_file}
   autodock_vina:
     enabled: true
     mode: mock
+    command: vina --config {config_file} --out {output_dir}/vina_out.pdbqt
+  signalp:
+    enabled: true
+    mode: mock
+    command: signalp6 --fastafile {fasta_file} --output_dir {output_dir}
+  deeptmhmm:
+    enabled: true
+    mode: mock
+    command: biolib run DTU/DeepTMHMM --fasta {fasta_file} --outdir {output_dir}
 
 stages:
   m1_llps:

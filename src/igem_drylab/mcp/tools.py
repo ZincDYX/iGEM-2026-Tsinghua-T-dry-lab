@@ -9,6 +9,7 @@ from igem_drylab.literature import build_prompt, extract_records_from_text, load
 from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article_xml, search_scopus
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.llm import ChatClient
+from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
 
 from .types import JsonObject, McpTool, McpToolResult, ToolHandler
@@ -113,6 +114,39 @@ def pipeline_run(arguments: JsonObject) -> McpToolResult:
     )
 
 
+def compute_check_tool(arguments: JsonObject) -> McpToolResult:
+    config = load_config(Path(_require_str(arguments, "config_path")))
+    tool_name = _require_str(arguments, "tool_name")
+    adapter = create_tool_adapter(tool_name, config.tools.get(tool_name))
+    description = adapter.describe()
+    return McpToolResult.ok(
+        {
+            "ok": True,
+            "tool_name": tool_name,
+            "enabled": adapter.config.enabled,
+            "mode": adapter.config.mode,
+            "command": adapter.config.command,
+            "repo_path": str(adapter.config.repo_path) if adapter.config.repo_path is not None else None,
+            "available": adapter.is_available(),
+            "description": description.model_dump(mode="json"),
+        }
+    )
+
+
+def compute_run_tool(arguments: JsonObject) -> McpToolResult:
+    config = load_config(Path(_require_str(arguments, "config_path")))
+    tool_name = _require_str(arguments, "tool_name")
+    output_dir = Path(_require_str(arguments, "output_dir"))
+    context = arguments.get("context", {})
+    if not isinstance(context, dict):
+        raise ValueError("Argument 'context' must be an object")
+    dry_run = bool(arguments.get("dry_run", False))
+    timeout_seconds = _optional_int(arguments, "timeout_seconds", 3600, minimum=1)
+    adapter = create_tool_adapter(tool_name, config.tools.get(tool_name))
+    result = adapter.run(output_dir=output_dir, dry_run=dry_run, timeout_seconds=timeout_seconds, **context)
+    return McpToolResult.ok({"ok": result.status not in {"failed", "missing_executable"}, "run": result.model_dump(mode="json")})
+
+
 def literature_build_prompt(arguments: JsonObject) -> McpToolResult:
     text = _read_text_file(arguments, "text_file", "text")
     schema = load_schema(Path(_require_str(arguments, "schema_path")))
@@ -213,6 +247,47 @@ PIPELINE_RUN_TOOL = McpTool(
     ),
 )
 
+COMPUTE_CHECK_TOOL = McpTool(
+    name="igem.compute.check_tool",
+    title="Check configured compute tool",
+    description="Inspect command template, mode, and executable availability for a scientific compute tool.",
+    input_schema=_schema(
+        {
+            "config_path": {"type": "string"},
+            "tool_name": {
+                "type": "string",
+                "description": "Tool key from YAML, e.g. abcfold, calvados, freesasa, autodock_vina.",
+            },
+        },
+        ["config_path", "tool_name"],
+    ),
+    output_schema=_schema(
+        {"ok": {"type": "boolean"}, "tool_name": {"type": "string"}, "available": {"type": "boolean"}},
+        additional_properties=True,
+    ),
+)
+
+COMPUTE_RUN_TOOL = McpTool(
+    name="igem.compute.run_tool",
+    title="Run configured compute tool",
+    description="Render and optionally execute a scientific command-line tool from the YAML config.",
+    input_schema=_schema(
+        {
+            "config_path": {"type": "string"},
+            "tool_name": {"type": "string"},
+            "output_dir": {"type": "string"},
+            "context": {
+                "type": "object",
+                "description": "Template values used by the command, e.g. input_file, config_file, pdb_file.",
+            },
+            "dry_run": {"type": "boolean"},
+            "timeout_seconds": {"type": "integer", "minimum": 1},
+        },
+        ["config_path", "tool_name", "output_dir"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "run": {"type": "object"}}, additional_properties=True),
+)
+
 LITERATURE_BUILD_PROMPT_TOOL = McpTool(
     name="igem.literature.build_prompt",
     title="Build literature extraction prompt",
@@ -299,6 +374,8 @@ ELSEVIER_FETCH_ARTICLE_TEXT_TOOL = McpTool(
 TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PIPELINE_VALIDATE_TOOL, pipeline_validate),
     (PIPELINE_RUN_TOOL, pipeline_run),
+    (COMPUTE_CHECK_TOOL, compute_check_tool),
+    (COMPUTE_RUN_TOOL, compute_run_tool),
     (LITERATURE_BUILD_PROMPT_TOOL, literature_build_prompt),
     (LITERATURE_EXTRACT_RECORDS_TOOL, literature_extract_records),
     (ELSEVIER_SEARCH_TOOL, elsevier_search),

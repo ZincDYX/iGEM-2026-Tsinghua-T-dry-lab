@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .adapters import ExternalToolAdapter
+from .adapters import create_tool_adapter
 from .config import ProjectConfig
 from .io import read_fasta, write_models
 from .models import (
@@ -18,7 +18,7 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
     stage_dir = run_dir / "m1_llps"
     fasta = read_fasta(config.inputs.protein_fasta)
     idr_id = "IDR" if "IDR" in fasta else next(iter(fasta))
-    calvados = ExternalToolAdapter("calvados", config.tools.get("calvados"))
+    calvados = create_tool_adapter("calvados", config.tools.get("calvados"))
 
     candidates: list[M1Candidate] = []
     for scaffold_index, scaffold in enumerate(config.inputs.scaffolds):
@@ -58,7 +58,7 @@ def run_m2(
     candidates: list[M1Candidate],
 ) -> tuple[list[M2FusionAssessment], StageOutput]:
     stage_dir = run_dir / "m2_fusion"
-    abcfold = ExternalToolAdapter("abcfold", config.tools.get("abcfold"))
+    abcfold = create_tool_adapter("abcfold", config.tools.get("abcfold"))
     enzyme_pair = "+".join(enzyme.id for enzyme in config.inputs.enzymes)
 
     assessments: list[M2FusionAssessment] = []
@@ -96,7 +96,7 @@ def run_m3(
     assessments: list[M2FusionAssessment],
 ) -> tuple[list[M3ConcentrationAssessment], StageOutput]:
     stage_dir = run_dir / "m3_concentration"
-    freesasa = ExternalToolAdapter("freesasa", config.tools.get("freesasa"))
+    freesasa = create_tool_adapter("freesasa", config.tools.get("freesasa"))
 
     outputs: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
@@ -130,7 +130,7 @@ def run_m4(
     assessments: list[M3ConcentrationAssessment],
 ) -> tuple[list[M4ReactionPrediction], StageOutput]:
     stage_dir = run_dir / "m4_reaction"
-    vina = ExternalToolAdapter("autodock_vina", config.tools.get("autodock_vina"))
+    vina = create_tool_adapter("autodock_vina", config.tools.get("autodock_vina"))
 
     predictions: list[M4ReactionPrediction] = []
     for item in assessments:

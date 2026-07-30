@@ -9,6 +9,7 @@ Current maintained modules:
 - `igem_drylab.pipeline`: lightweight M1-M4 interface skeleton for LLPS candidate ranking, fusion-risk scoring, local concentration scoring, and reaction recommendation.
 - `igem_drylab.literature`: minimal schema-first literature extraction utilities using an OpenAI-compatible chat API such as DeepSeek.
 - `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
+- `igem_drylab.pipeline.adapters`: command adapters for external compute tools such as ABCFold, CALVADOS, FreeSASA, AutoDock Vina, SignalP, and DeepTMHMM.
 
 The M1-M4 pipeline is still a deterministic skeleton. It verifies config, data flow, intermediate outputs, and visualization-ready files; it does not yet call real AF3/Boltz/Chai/CALVADOS/FreeSASA/Vina engines.
 
@@ -69,6 +70,15 @@ igem-drylab tools call igem.pipeline.validate --arguments-file examples/tool_arg
 igem-drylab tools call igem.pipeline.run --arguments-file examples/tool_args/pipeline_run.json
 igem-drylab tools call igem.literature.build_prompt --arguments-file examples/tool_args/literature_build_prompt.json
 ```
+
+Compute-tool commands can also be inspected or dry-run through the same tool interface:
+
+```bash
+igem-drylab tools call igem.compute.check_tool --arguments-file examples/tool_args/compute_check_abcfold.json
+igem-drylab tools call igem.compute.run_tool --arguments-file examples/tool_args/compute_dry_run_abcfold.json
+```
+
+The example config keeps heavy scientific tools in `mode: mock`. To run them on a workstation or server, edit `configs/m1_m4_example.yaml`, set the intended tool to `mode: external`, and point `command` to the installed executable or wrapper script. Command templates are rendered without a shell; values such as `{input_file}`, `{config_file}`, `{pdb_file}`, `{fasta_file}`, and `{output_dir}` come from the tool-call context.
 
 Tools that call external APIs read secrets from environment variables instead of JSON arguments:
 

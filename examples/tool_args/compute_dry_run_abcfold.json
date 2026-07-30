@@ -1,0 +1,9 @@
+{
+  "config_path": "configs/m1_m4_example.yaml",
+  "tool_name": "abcfold",
+  "output_dir": "outputs/tool_runs/abcfold",
+  "dry_run": true,
+  "context": {
+    "input_file": "examples/data/proteins.fasta"
+  }
+}

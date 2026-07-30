@@ -60,6 +60,39 @@ def test_literature_build_prompt_tool_can_write_prompt(tmp_path):
     assert "Return JSON only" in output_path.read_text(encoding="utf-8")
 
 
+def test_compute_check_tool_reports_configured_command():
+    result = create_default_registry().call(
+        "igem.compute.check_tool",
+        {"config_path": "configs/m1_m4_example.yaml", "tool_name": "abcfold"},
+    )
+    structured = result.as_protocol_dict()["structuredContent"]
+
+    assert result.is_error is False
+    assert structured["ok"] is True
+    assert structured["tool_name"] == "abcfold"
+    assert "abcfold predict" in structured["command"]
+
+
+def test_compute_run_tool_can_dry_run_command(tmp_path):
+    result = create_default_registry().call(
+        "igem.compute.run_tool",
+        {
+            "config_path": "configs/m1_m4_example.yaml",
+            "tool_name": "abcfold",
+            "output_dir": str(tmp_path / "abcfold"),
+            "dry_run": True,
+            "context": {"input_file": "examples/data/proteins.fasta"},
+        },
+    )
+    structured = result.as_protocol_dict()["structuredContent"]
+
+    assert result.is_error is False
+    assert structured["ok"] is True
+    assert structured["run"]["status"] == "dry_run"
+    assert "examples/data/proteins.fasta" in structured["run"]["argv"]
+    assert Path(structured["run"]["manifest_file"]).exists()
+
+
 def test_unknown_tool_returns_mcp_error_result():
     result = create_default_registry().call("missing.tool", {})
     structured = result.as_protocol_dict()["structuredContent"]

@@ -91,8 +91,31 @@ Currently exposed tools:
 - `igem.literature.extract_records`
 - `igem.elsevier.search_scopus`
 - `igem.elsevier.fetch_article_text`
+- `igem.compute.check_tool`
+- `igem.compute.run_tool`
 
 This is not yet a transport-level MCP server. It is the stable tool layer that a future MCP server can wrap without rewriting the pipeline or literature modules.
+
+## External compute tool adapters
+
+Added command adapters in `src/igem_drylab/pipeline/adapters.py` for the scientific tools used in the dry-lab flowchart:
+
+- structure prediction: ABCFold, Boltz, Chai
+- LLPS simulation: CALVADOS
+- structure metric calculation: FreeSASA
+- docking: AutoDock Vina
+- sequence screening: SignalP and DeepTMHMM
+
+The adapters provide a shared contract:
+
+- render a command from the YAML `command` template;
+- avoid shell execution;
+- support `dry_run`;
+- check executable availability;
+- run external commands when `mode: external`;
+- record `argv`, `cwd`, stdout, stderr, return code, duration, output directory, and a JSON manifest.
+
+They do not yet parse scientific output files into M1-M4 scores. The current M1-M4 scoring remains deterministic mock scoring. Parser integration should be added only after the exact output files from the lab/server installation are fixed.
 
 ## Compatibility impact
 
@@ -108,3 +131,4 @@ This is not yet a transport-level MCP server. It is the stable tool layer that a
 - Literature extraction can build prompts and call OpenAI-compatible APIs through `ChatClient`, but no end-to-end paid API test is run in CI.
 - Elsevier helpers require valid API entitlement; ScienceDirect full-text access may fail even if Scopus search works.
 - API keys are read from environment variables such as `DEEPSEEK_API_KEY` and `ELSEVIER_API_KEY`, not passed directly in tool arguments.
+- Compute adapters are real command wrappers, but the repository does not bundle ABCFold, CALVADOS, FreeSASA, Vina, SignalP, or DeepTMHMM binaries/environments.
