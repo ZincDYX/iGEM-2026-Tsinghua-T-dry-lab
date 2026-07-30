@@ -6,4 +6,6 @@ dist/
 build/
 *.egg-info/
 results/
+outputs/
+outputs_test/
 third_party/downloads/

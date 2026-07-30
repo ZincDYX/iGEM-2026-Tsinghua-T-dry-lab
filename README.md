@@ -1,21 +1,56 @@
 # iGEM 2026 Tsinghua-T dry lab
 
-面向“Corelets 相分离凝聚体 + SH3/PDZ 酶招募 + OptoQS”的可复现干实验起点。
+This repository contains a reproducible dry-lab code base for the LUMOS/iGEM project.
 
-详细审计见 [docs/literature_code_audit.md](docs/literature_code_audit.md)，模型假设见 [docs/modeling_notes.md](docs/modeling_notes.md)。
+Current maintained modules:
 
-## 安装与测试
+- `igem_drylab.kinetics`: two-phase mass-conserving enzyme-cascade model.
+- `igem_drylab.structure_metrics`: structure metrics such as pocket RMSD, PAE, distances, and optional SASA.
+- `igem_drylab.pipeline`: lightweight M1-M4 interface skeleton for LLPS candidate ranking, fusion-risk scoring, local concentration scoring, and reaction recommendation.
+- `igem_drylab.literature`: minimal schema-first literature extraction utilities using an OpenAI-compatible chat API such as DeepSeek.
+
+The M1-M4 pipeline is still a deterministic skeleton. It verifies config, data flow, intermediate outputs, and visualization-ready files; it does not yet call real AF3/Boltz/Chai/CALVADOS/FreeSASA/Vina engines.
+
+## Install and test
 
 ```bash
-python -m venv .venv
 python -m pip install -e ".[test,plot,sasa]"
 pytest
 ```
 
-## 运行示例
+## Run the original kinetics example
 
 ```bash
 python scripts/sweep_kinetics.py --output results/example_sweep
 ```
 
-输出包括配比扫描 CSV、体积分数扫描 CSV 和曲面图。示例参数仅用于验证代码，不代表光甘草定通路的真实参数。
+## Run the M1-M4 skeleton
+
+```bash
+igem-drylab pipeline validate configs/m1_m4_example.yaml
+igem-drylab pipeline run configs/m1_m4_example.yaml
+```
+
+Output is written under:
+
+```text
+outputs/m1-m4-demo/
+```
+
+## Build a literature extraction prompt
+
+This command does not call an LLM. It only builds the schema-first prompt.
+
+```bash
+igem-drylab literature build-prompt \
+  examples/literature/glabridin_excerpt.txt \
+  data/schemas/glabridin_enzyme_catalysis.schema.json \
+  --icl-bank data/icl/glabridin_examples.minimal.jsonl \
+  --out outputs/literature_prompt.txt
+```
+
+Actual LLM extraction is implemented in `igem_drylab.literature.ChatClient`, which expects an OpenAI-compatible chat completions endpoint. DeepSeek is compatible with this format.
+
+## Integration notes
+
+See [docs/integration_refactor_notes.md](docs/integration_refactor_notes.md) for what was retained, removed, and intentionally not merged from the previous feature branches.

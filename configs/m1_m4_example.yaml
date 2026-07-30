@@ -1,0 +1,63 @@
+run:
+  id: m1-m4-demo
+  output_dir: outputs
+  random_seed: 42
+
+inputs:
+  protein_fasta: ../examples/data/proteins.fasta
+  ligands:
+    - id: vestitol
+      name: Vestitol
+      role: DMT substrate placeholder
+      sdf: null
+    - id: omo_preglabridin
+      name: 4-O-methylpreglabridin
+      role: OC/DMT intermediate placeholder
+      sdf: null
+  enzymes:
+    - id: OC
+      protein_id: OC
+      reaction_role: oxidative cyclase
+    - id: DMT
+      protein_id: DMT
+      reaction_role: demethylation-related enzyme
+  scaffolds:
+    - id: FTH1
+      description: Ferritin 24-mer scaffold placeholder
+      oligomeric_state: 24
+    - id: SpyTag_SpyCatcher
+      description: SpyTag/SpyCatcher assembly scaffold placeholder
+      oligomeric_state: 1
+  linkers:
+    - id: pgl3_3x_ggggs
+      sequence: GGGGSGGGGSGGGGS
+      source: Kuroiwa et al. EMBO Reports 2026, PGL-3(D1-D2-3(GGGGS)-RGG), Addgene 250141
+
+tools:
+  calvados:
+    enabled: true
+    mode: mock
+  abcfold:
+    enabled: true
+    mode: mock
+  freesasa:
+    enabled: true
+    mode: mock
+  autodock_vina:
+    enabled: true
+    mode: mock
+
+stages:
+  m1_llps:
+    top_n: 6
+    min_llps_score: 0.45
+  m2_fusion:
+    activity_penalty_weight: 0.35
+    clash_penalty_weight: 0.25
+  m3_concentration:
+    saturation_threshold: 0.70
+    leakage_threshold: 0.35
+  m4_reaction:
+    target_product: glabridin
+    oc_first_weight: 0.60
+    dmt_later_weight: 0.40

@@ -1,0 +1,31 @@
+{
+  "schema_id": "glabridin_enzyme_catalysis_minimal_v1",
+  "domain": "glabridin_enzyme_catalysis",
+  "prompt": {
+    "instructions": [
+      "A complete record corresponds to one enzyme or mutant, one substrate, one reaction system, one set of reaction conditions, and one set of results.",
+      "Split records when enzyme, mutant, substrate, temperature, pH, time, LLPS state, or reaction system differs.",
+      "Only extract values explicitly reported in the article. Do not infer or fill values from general biochemical knowledge.",
+      "Return JSON only. Each metric value must be an object with value, unit, and evidence."
+    ]
+  },
+  "metrics": [
+    {"name": "enzyme_name", "type": "text"},
+    {"name": "enzyme_mutant", "type": "text"},
+    {"name": "substrate_name", "type": "text"},
+    {"name": "main_product_name", "type": "text"},
+    {"name": "llps_state", "type": "text"},
+    {"name": "llps_trigger", "type": "text"},
+    {"name": "reaction_temperature", "type": "number"},
+    {"name": "reaction_ph", "type": "number"},
+    {"name": "reaction_time", "type": "number"},
+    {"name": "substrate_concentration", "type": "number"},
+    {"name": "cofactor", "type": "text"},
+    {"name": "substrate_conversion", "type": "number"},
+    {"name": "glabridin_titer", "type": "number"},
+    {"name": "leakage_ratio", "type": "number"},
+    {"name": "kcat", "type": "number"},
+    {"name": "km", "type": "number"},
+    {"name": "data_source_type", "type": "text"}
+  ]
+}
