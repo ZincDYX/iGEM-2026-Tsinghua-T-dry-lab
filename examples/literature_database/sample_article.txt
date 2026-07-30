@@ -1,0 +1,3 @@
+GgOC1 converted 4'-O-methylpreglabridin to glabridin in an in vitro assay.
+The reaction was incubated for 2 h at 30 degC, and the substrate conversion reached 62%.
+Engineered condensate scaffolds increased glabridin production to 18 mg/L after induction.

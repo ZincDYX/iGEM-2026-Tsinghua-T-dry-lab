@@ -7,7 +7,7 @@ Current maintained modules:
 - `igem_drylab.kinetics`: two-phase mass-conserving enzyme-cascade model.
 - `igem_drylab.structure_metrics`: structure metrics such as pocket RMSD, PAE, distances, and optional SASA.
 - `igem_drylab.pipeline`: lightweight M1-M4 interface skeleton for LLPS candidate ranking, fusion-risk scoring, local concentration scoring, and reaction recommendation.
-- `igem_drylab.literature`: minimal schema-first literature extraction utilities using an OpenAI-compatible chat API such as DeepSeek.
+- `igem_drylab.literature`: schema-first literature extraction and offline database construction utilities.
 - `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
 - `igem_drylab.pipeline.adapters`: command adapters for external compute tools such as ABCFold, CALVADOS, FreeSASA, AutoDock Vina, SignalP, and DeepTMHMM.
 
@@ -53,6 +53,27 @@ igem-drylab literature build-prompt \
 
 Actual LLM extraction is implemented in `igem_drylab.literature.ChatClient`, which expects an OpenAI-compatible chat completions endpoint. DeepSeek is compatible with this format.
 
+## Build a literature database from cached text
+
+This command builds a small offline database from a CSV manifest whose rows point to cached article text files. It mines numeric evidence, maps evidence to the schema, aggregates records, and writes clean/excluded outputs.
+
+```bash
+igem-drylab literature build-database \
+  examples/literature_database/manifest.csv \
+  data/schemas/glabridin_enzyme_catalysis.schema.json \
+  --output-dir outputs/literature_database_demo
+```
+
+Expected outputs:
+
+```text
+numeric_evidence.csv
+structured_records.csv
+clean_database.csv
+excluded_records.csv
+summary.json
+```
+
 ## Inspect and call MCP-style tools
 
 The repository does not run a network MCP server yet. It exposes a small local registry whose tool definitions follow the core MCP tool shape: `name`, `title`, `description`, `inputSchema`, optional `outputSchema`, and tool-call results with `content`, `structuredContent`, and optional `isError`.
@@ -69,6 +90,7 @@ On PowerShell, `--arguments-file` is usually less error-prone than inline JSON q
 igem-drylab tools call igem.pipeline.validate --arguments-file examples/tool_args/pipeline_validate.json
 igem-drylab tools call igem.pipeline.run --arguments-file examples/tool_args/pipeline_run.json
 igem-drylab tools call igem.literature.build_prompt --arguments-file examples/tool_args/literature_build_prompt.json
+igem-drylab tools call igem.literature.build_database --arguments-file examples/tool_args/literature_build_database.json
 ```
 
 Compute-tool commands can also be inspected or dry-run through the same tool interface:

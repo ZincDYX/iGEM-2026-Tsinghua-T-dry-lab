@@ -60,6 +60,24 @@ def test_literature_build_prompt_tool_can_write_prompt(tmp_path):
     assert "Return JSON only" in output_path.read_text(encoding="utf-8")
 
 
+def test_literature_build_database_tool_writes_database(tmp_path):
+    result = create_default_registry().call(
+        "igem.literature.build_database",
+        {
+            "manifest_path": "examples/literature_database/manifest.csv",
+            "schema_path": "data/schemas/glabridin_enzyme_catalysis.schema.json",
+            "output_dir": str(tmp_path / "database"),
+            "max_per_paper": 8,
+            "max_contexts_per_paper": 40,
+        },
+    )
+    structured = result.as_protocol_dict()["structuredContent"]
+
+    assert result.is_error is False
+    assert structured["ok"] is True
+    assert structured["summary"]["clean_records"] >= 1
+
+
 def test_compute_check_tool_reports_configured_command():
     result = create_default_registry().call(
         "igem.compute.check_tool",

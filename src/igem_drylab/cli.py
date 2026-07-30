@@ -6,6 +6,7 @@ from pathlib import Path
 import typer
 
 from igem_drylab.literature import build_prompt, load_schema
+from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.mcp import create_default_registry
 from igem_drylab.pipeline import load_config, run_pipeline
@@ -59,6 +60,24 @@ def build_literature_prompt(
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(prompt, encoding="utf-8")
         typer.echo(f"Wrote prompt: {out}")
+
+
+@literature_app.command("build-database")
+def build_literature_database(
+    manifest: Path,
+    schema: Path,
+    output_dir: Path = typer.Option(..., "--output-dir", "-o"),
+    max_per_paper: int = typer.Option(8, "--max-per-paper", min=1),
+    max_contexts_per_paper: int = typer.Option(160, "--max-contexts-per-paper", min=20),
+) -> None:
+    summary = build_database_from_manifest(
+        manifest=manifest,
+        schema=load_schema(schema),
+        output_dir=output_dir,
+        max_per_paper=max_per_paper,
+        max_contexts_per_paper=max_contexts_per_paper,
+    )
+    typer.echo(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
 @tools_app.command("list")

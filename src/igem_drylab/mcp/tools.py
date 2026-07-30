@@ -9,6 +9,7 @@ from igem_drylab.literature import build_prompt, extract_records_from_text, load
 from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article_xml, search_scopus
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.llm import ChatClient
+from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
 
@@ -168,6 +169,22 @@ def literature_build_prompt(arguments: JsonObject) -> McpToolResult:
     )
 
 
+def literature_build_database(arguments: JsonObject) -> McpToolResult:
+    manifest = Path(_require_str(arguments, "manifest_path"))
+    schema = load_schema(Path(_require_str(arguments, "schema_path")))
+    output_dir = Path(_require_str(arguments, "output_dir"))
+    max_per_paper = _optional_int(arguments, "max_per_paper", 8, minimum=1)
+    max_contexts_per_paper = _optional_int(arguments, "max_contexts_per_paper", 160, minimum=20)
+    summary = build_database_from_manifest(
+        manifest=manifest,
+        schema=schema,
+        output_dir=output_dir,
+        max_per_paper=max_per_paper,
+        max_contexts_per_paper=max_contexts_per_paper,
+    )
+    return McpToolResult.ok({"ok": True, "summary": summary})
+
+
 def literature_extract_records(arguments: JsonObject) -> McpToolResult:
     text = _read_text_file(arguments, "text_file", "text")
     schema = load_schema(Path(_require_str(arguments, "schema_path")))
@@ -309,6 +326,23 @@ LITERATURE_BUILD_PROMPT_TOOL = McpTool(
     ),
 )
 
+LITERATURE_BUILD_DATABASE_TOOL = McpTool(
+    name="igem.literature.build_database",
+    title="Build literature database",
+    description="Build an offline structured evidence database from a manifest of cached article text files.",
+    input_schema=_schema(
+        {
+            "manifest_path": {"type": "string"},
+            "schema_path": {"type": "string"},
+            "output_dir": {"type": "string"},
+            "max_per_paper": {"type": "integer", "minimum": 1},
+            "max_contexts_per_paper": {"type": "integer", "minimum": 20},
+        },
+        ["manifest_path", "schema_path", "output_dir"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "summary": {"type": "object"}}, additional_properties=True),
+)
+
 LITERATURE_EXTRACT_RECORDS_TOOL = McpTool(
     name="igem.literature.extract_records",
     title="Extract literature records",
@@ -377,6 +411,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (COMPUTE_CHECK_TOOL, compute_check_tool),
     (COMPUTE_RUN_TOOL, compute_run_tool),
     (LITERATURE_BUILD_PROMPT_TOOL, literature_build_prompt),
+    (LITERATURE_BUILD_DATABASE_TOOL, literature_build_database),
     (LITERATURE_EXTRACT_RECORDS_TOOL, literature_extract_records),
     (ELSEVIER_SEARCH_TOOL, elsevier_search),
     (ELSEVIER_FETCH_ARTICLE_TEXT_TOOL, elsevier_fetch_article_text),

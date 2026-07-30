@@ -1,0 +1,7 @@
+{
+  "manifest_path": "examples/literature_database/manifest.csv",
+  "schema_path": "data/schemas/glabridin_enzyme_catalysis.schema.json",
+  "output_dir": "outputs/literature_database_demo",
+  "max_per_paper": 8,
+  "max_contexts_per_paper": 40
+}

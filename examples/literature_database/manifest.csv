@@ -1,0 +1,2 @@
+article_id,title,doi,pii,text_file,rank,source
+sample-001,Sample glabridin enzymology paper,10.0000/example,,sample_article.txt,1,local_fixture

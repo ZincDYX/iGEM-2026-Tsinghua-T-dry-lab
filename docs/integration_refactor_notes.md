@@ -65,9 +65,10 @@ These can be reintroduced later only if they have a clear owner, tests, and a st
 | Literature OpenAI-compatible chat client | Retained and simplified | Suitable for DeepSeek-style chat-completions endpoints. |
 | Literature ICL example selection | Retained and simplified | Deterministic rule-based selector. |
 | Literature schema-first prompt construction | Retained | Output contract remains JSON records. |
+| Offline literature database construction | Reintroduced and refactored | Manifest-to-text, numeric evidence mining, schema mapping, aggregation, cleaning, and export are now in `igem_drylab.literature.database`. |
 | Elsevier Scopus/article helper functions | Retained minimally | Requires API entitlement; not tested against paid endpoints in unit tests. |
 | Legacy all-in-one agent script | Not retained | Dropped because it mixed orchestration, defaults, cleaning, prompting, and execution in one large script. |
-| Literature batch script collection | Not retained | Dropped until each script has a stable interface and test. |
+| Literature batch script collection | Partially retained by behavior | The stable offline database-building behavior was refactored into library code; large network/download/re-extraction scripts are not copied verbatim. |
 | CO2/methanol legacy defaults | Not retained | Out of scope for glabridin/LLPS pipeline. |
 | UI/API server scaffolding | Not retained | Out of scope for a minimal maintainable core. |
 | Softcopy export templates | Not retained | Can be reintroduced as a separate reporting module if needed. |
@@ -93,6 +94,7 @@ Currently exposed tools:
 - `igem.elsevier.fetch_article_text`
 - `igem.compute.check_tool`
 - `igem.compute.run_tool`
+- `igem.literature.build_database`
 
 This is not yet a transport-level MCP server. It is the stable tool layer that a future MCP server can wrap without rewriting the pipeline or literature modules.
 
@@ -116,6 +118,23 @@ The adapters provide a shared contract:
 - record `argv`, `cwd`, stdout, stderr, return code, duration, output directory, and a JSON manifest.
 
 They do not yet parse scientific output files into M1-M4 scores. The current M1-M4 scoring remains deterministic mock scoring. Parser integration should be added only after the exact output files from the lab/server installation are fixed.
+
+## Literature database construction
+
+Added `src/igem_drylab/literature/database.py` to preserve the useful parts of the previous literature batch pipeline without keeping the fragile script pile.
+
+The current offline database flow is:
+
+1. read a CSV manifest with article metadata and cached `text_file` paths;
+2. scan cached text for numeric experimental evidence with units;
+3. assign metric hints such as titer, conversion, kinetics, LLPS, or condition;
+4. map hints into the selected extraction schema;
+5. write intermediate `numeric_evidence.csv` and `structured_records.csv`;
+6. aggregate duplicate evidence groups into `clean_database.csv`;
+7. write rejected/low-quality rows to `excluded_records.csv`;
+8. write `summary.json`.
+
+This preserves the practical intent of the old database scripts: turn cached literature text into a structured experimental database. It does not yet reintroduce automatic large-scale article discovery, PDF download, supplementary-material download, or LLM-based repair passes, because those need separate entitlement, copyright, and reliability handling.
 
 ## Compatibility impact
 
