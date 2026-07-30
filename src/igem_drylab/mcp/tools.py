@@ -10,6 +10,7 @@ from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.llm import ChatClient
 from igem_drylab.literature.database import build_database_from_manifest
+from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
 
@@ -185,6 +186,47 @@ def literature_build_database(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok({"ok": True, "summary": summary})
 
 
+def literature_search(arguments: JsonObject) -> McpToolResult:
+    provider_value = arguments.get("providers", ["openalex"])
+    if not isinstance(provider_value, list) or not all(isinstance(item, str) for item in provider_value):
+        raise ValueError("Argument 'providers' must be a list of strings")
+    max_results = _optional_int(arguments, "max_results", 25, minimum=1)
+    from_year = arguments.get("from_year")
+    to_year = arguments.get("to_year")
+    if from_year is not None and not isinstance(from_year, int):
+        raise ValueError("Argument 'from_year' must be an integer when provided")
+    if to_year is not None and not isinstance(to_year, int):
+        raise ValueError("Argument 'to_year' must be an integer when provided")
+    mailto = arguments.get("mailto")
+    if mailto is not None and not isinstance(mailto, str):
+        raise ValueError("Argument 'mailto' must be a string when provided")
+    api_key_env = arguments.get("api_key_env")
+    if api_key_env is not None and not isinstance(api_key_env, str):
+        raise ValueError("Argument 'api_key_env' must be a string when provided")
+    results = search_literature(
+        providers=provider_value,
+        query=LiteratureSearchQuery(
+            query=_require_str(arguments, "query"),
+            max_results=max_results,
+            from_year=from_year,
+            to_year=to_year,
+            mailto=mailto,
+            api_key_env=api_key_env,
+        ),
+    )
+    output_manifest = _optional_path(arguments, "output_manifest")
+    if output_manifest is not None:
+        write_search_manifest(output_manifest, results)
+    return McpToolResult.ok(
+        {
+            "ok": True,
+            "result_count": len(results),
+            "output_manifest": str(output_manifest) if output_manifest else None,
+            "results": [result.__dict__ | {"raw": None} for result in results],
+        }
+    )
+
+
 def literature_extract_records(arguments: JsonObject) -> McpToolResult:
     text = _read_text_file(arguments, "text_file", "text")
     schema = load_schema(Path(_require_str(arguments, "schema_path")))
@@ -343,6 +385,29 @@ LITERATURE_BUILD_DATABASE_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "summary": {"type": "object"}}, additional_properties=True),
 )
 
+LITERATURE_SEARCH_TOOL = McpTool(
+    name="igem.literature.search",
+    title="Search literature sources",
+    description="Search OpenAlex, Crossref, or Elsevier Scopus and optionally write a manifest CSV.",
+    input_schema=_schema(
+        {
+            "query": {"type": "string"},
+            "providers": {"type": "array", "items": {"type": "string"}},
+            "output_manifest": {"type": "string"},
+            "max_results": {"type": "integer", "minimum": 1},
+            "from_year": {"type": "integer"},
+            "to_year": {"type": "integer"},
+            "mailto": {"type": "string"},
+            "api_key_env": {"type": "string"},
+        },
+        ["query"],
+    ),
+    output_schema=_schema(
+        {"ok": {"type": "boolean"}, "result_count": {"type": "integer"}, "results": {"type": "array"}},
+        additional_properties=True,
+    ),
+)
+
 LITERATURE_EXTRACT_RECORDS_TOOL = McpTool(
     name="igem.literature.extract_records",
     title="Extract literature records",
@@ -412,6 +477,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (COMPUTE_RUN_TOOL, compute_run_tool),
     (LITERATURE_BUILD_PROMPT_TOOL, literature_build_prompt),
     (LITERATURE_BUILD_DATABASE_TOOL, literature_build_database),
+    (LITERATURE_SEARCH_TOOL, literature_search),
     (LITERATURE_EXTRACT_RECORDS_TOOL, literature_extract_records),
     (ELSEVIER_SEARCH_TOOL, elsevier_search),
     (ELSEVIER_FETCH_ARTICLE_TEXT_TOOL, elsevier_fetch_article_text),

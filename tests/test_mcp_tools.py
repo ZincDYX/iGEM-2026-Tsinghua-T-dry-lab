@@ -78,6 +78,37 @@ def test_literature_build_database_tool_writes_database(tmp_path):
     assert structured["summary"]["clean_records"] >= 1
 
 
+def test_literature_search_tool_writes_manifest(monkeypatch, tmp_path):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "results": [
+                    {
+                        "id": "https://openalex.org/W1",
+                        "doi": "https://doi.org/10.0000/tool",
+                        "title": "Tool search record",
+                        "publication_year": 2024,
+                    }
+                ]
+            }
+
+    monkeypatch.setattr("igem_drylab.literature.sources.requests.get", lambda *args, **kwargs: FakeResponse())
+    manifest = tmp_path / "manifest.csv"
+    result = create_default_registry().call(
+        "igem.literature.search",
+        {"query": "glabridin", "providers": ["openalex"], "output_manifest": str(manifest), "max_results": 5},
+    )
+    structured = result.as_protocol_dict()["structuredContent"]
+
+    assert result.is_error is False
+    assert structured["ok"] is True
+    assert structured["result_count"] == 1
+    assert manifest.exists()
+
+
 def test_compute_check_tool_reports_configured_command():
     result = create_default_registry().call(
         "igem.compute.check_tool",

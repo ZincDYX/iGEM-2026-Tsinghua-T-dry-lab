@@ -55,6 +55,17 @@ Actual LLM extraction is implemented in `igem_drylab.literature.ChatClient`, whi
 
 ## Build a literature database from cached text
 
+First, candidate literature can be searched and exported as a manifest:
+
+```bash
+igem-drylab literature search \
+  "glabridin biosynthesis DMT OC" \
+  --provider openalex \
+  --provider crossref \
+  --output-manifest outputs/literature_search_manifest.csv \
+  --max-results 25
+```
+
 This command builds a small offline database from a CSV manifest whose rows point to cached article text files. It mines numeric evidence, maps evidence to the schema, aggregates records, and writes clean/excluded outputs.
 
 ```bash
@@ -90,6 +101,7 @@ On PowerShell, `--arguments-file` is usually less error-prone than inline JSON q
 igem-drylab tools call igem.pipeline.validate --arguments-file examples/tool_args/pipeline_validate.json
 igem-drylab tools call igem.pipeline.run --arguments-file examples/tool_args/pipeline_run.json
 igem-drylab tools call igem.literature.build_prompt --arguments-file examples/tool_args/literature_build_prompt.json
+igem-drylab tools call igem.literature.search --arguments-file examples/tool_args/literature_search_openalex_crossref.json
 igem-drylab tools call igem.literature.build_database --arguments-file examples/tool_args/literature_build_database.json
 ```
 

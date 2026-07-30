@@ -65,6 +65,7 @@ These can be reintroduced later only if they have a clear owner, tests, and a st
 | Literature OpenAI-compatible chat client | Retained and simplified | Suitable for DeepSeek-style chat-completions endpoints. |
 | Literature ICL example selection | Retained and simplified | Deterministic rule-based selector. |
 | Literature schema-first prompt construction | Retained | Output contract remains JSON records. |
+| Literature source search | Reintroduced and refactored | OpenAlex, Crossref, and Elsevier Scopus search providers normalize results to a shared manifest format. |
 | Offline literature database construction | Reintroduced and refactored | Manifest-to-text, numeric evidence mining, schema mapping, aggregation, cleaning, and export are now in `igem_drylab.literature.database`. |
 | Elsevier Scopus/article helper functions | Retained minimally | Requires API entitlement; not tested against paid endpoints in unit tests. |
 | Legacy all-in-one agent script | Not retained | Dropped because it mixed orchestration, defaults, cleaning, prompting, and execution in one large script. |
@@ -95,6 +96,7 @@ Currently exposed tools:
 - `igem.compute.check_tool`
 - `igem.compute.run_tool`
 - `igem.literature.build_database`
+- `igem.literature.search`
 
 This is not yet a transport-level MCP server. It is the stable tool layer that a future MCP server can wrap without rewriting the pipeline or literature modules.
 
@@ -135,6 +137,18 @@ The current offline database flow is:
 8. write `summary.json`.
 
 This preserves the practical intent of the old database scripts: turn cached literature text into a structured experimental database. It does not yet reintroduce automatic large-scale article discovery, PDF download, supplementary-material download, or LLM-based repair passes, because those need separate entitlement, copyright, and reliability handling.
+
+## Literature search interfaces
+
+Added `src/igem_drylab/literature/sources.py` for source search and manifest export.
+
+Current providers:
+
+- `openalex`: free metadata search through OpenAlex Works.
+- `crossref`: free DOI/metadata search through Crossref Works.
+- `elsevier_scopus`: Scopus search through Elsevier API, requiring `ELSEVIER_API_KEY`.
+
+All providers normalize into `LiteratureSearchResult` and can be exported as the manifest format consumed by the offline database builder. The manifest intentionally leaves `text_file` empty because source search returns metadata, not guaranteed full text. A separate caching/downloader layer should fill `text_file` after entitlement and copyright handling are decided.
 
 ## Compatibility impact
 

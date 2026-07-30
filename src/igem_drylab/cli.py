@@ -8,6 +8,7 @@ import typer
 from igem_drylab.literature import build_prompt, load_schema
 from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.icl import load_icl_examples
+from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
 from igem_drylab.mcp import create_default_registry
 from igem_drylab.pipeline import load_config, run_pipeline
 
@@ -78,6 +79,44 @@ def build_literature_database(
         max_contexts_per_paper=max_contexts_per_paper,
     )
     typer.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+@literature_app.command("search")
+def search_literature_command(
+    query: str,
+    provider: list[str] = typer.Option(["openalex"], "--provider", "-p"),
+    output_manifest: Path | None = typer.Option(None, "--output-manifest", "-o"),
+    max_results: int = typer.Option(25, "--max-results", min=1),
+    from_year: int | None = typer.Option(None, "--from-year"),
+    to_year: int | None = typer.Option(None, "--to-year"),
+    mailto: str | None = typer.Option(None, "--mailto"),
+    api_key_env: str | None = typer.Option(None, "--api-key-env"),
+) -> None:
+    results = search_literature(
+        providers=provider,
+        query=LiteratureSearchQuery(
+            query=query,
+            max_results=max_results,
+            from_year=from_year,
+            to_year=to_year,
+            mailto=mailto,
+            api_key_env=api_key_env,
+        ),
+    )
+    if output_manifest is not None:
+        write_search_manifest(output_manifest, results)
+    typer.echo(
+        json.dumps(
+            {
+                "query": query,
+                "providers": provider,
+                "results": len(results),
+                "output_manifest": str(output_manifest) if output_manifest else None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @tools_app.command("list")

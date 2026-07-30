@@ -1,0 +1,8 @@
+{
+  "query": "glabridin biosynthesis DMT OC",
+  "providers": ["openalex", "crossref"],
+  "output_manifest": "outputs/literature_search_manifest.csv",
+  "max_results": 10,
+  "from_year": 2000,
+  "to_year": 2026
+}
