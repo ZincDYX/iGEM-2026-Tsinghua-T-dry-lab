@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
 
 from igem_drylab.literature import build_prompt, load_schema
 from igem_drylab.literature.icl import load_icl_examples
+from igem_drylab.mcp import create_default_registry
 from igem_drylab.pipeline import load_config, run_pipeline
 
 app = typer.Typer(help="iGEM 2026 Tsinghua-T dry-lab utilities.")
 pipeline_app = typer.Typer(help="Run M1-M4 pipeline skeleton.")
 literature_app = typer.Typer(help="Use schema-first literature extraction helpers.")
+tools_app = typer.Typer(help="Inspect and call MCP-style local tools.")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(literature_app, name="literature")
+app.add_typer(tools_app, name="tools")
 
 
 @pipeline_app.command("validate")
@@ -55,6 +59,36 @@ def build_literature_prompt(
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(prompt, encoding="utf-8")
         typer.echo(f"Wrote prompt: {out}")
+
+
+@tools_app.command("list")
+def list_tools() -> None:
+    registry = create_default_registry()
+    typer.echo(json.dumps({"tools": registry.list_tools()}, ensure_ascii=False, indent=2))
+
+
+@tools_app.command("call")
+def call_tool(
+    name: str,
+    arguments_json: str | None = typer.Option(None, "--arguments-json"),
+    arguments_file: Path | None = typer.Option(None, "--arguments-file"),
+) -> None:
+    if arguments_json and arguments_file:
+        raise typer.BadParameter("Use either --arguments-json or --arguments-file, not both")
+    if arguments_file is not None:
+        raw_arguments = arguments_file.read_text(encoding="utf-8")
+    else:
+        raw_arguments = arguments_json or "{}"
+    try:
+        arguments = json.loads(raw_arguments)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"Tool arguments must be valid JSON: {exc}") from exc
+    if not isinstance(arguments, dict):
+        raise typer.BadParameter("Tool arguments must be a JSON object")
+    result = create_default_registry().call(name, arguments)
+    typer.echo(json.dumps(result.as_protocol_dict(), ensure_ascii=False, indent=2))
+    if result.is_error:
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

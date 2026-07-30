@@ -1,0 +1,6 @@
+{
+  "text_file": "examples/literature/glabridin_excerpt.txt",
+  "schema_path": "data/schemas/glabridin_enzyme_catalysis.schema.json",
+  "icl_bank": "data/icl/glabridin_examples.minimal.jsonl",
+  "output_path": "outputs/literature_prompt.txt"
+}

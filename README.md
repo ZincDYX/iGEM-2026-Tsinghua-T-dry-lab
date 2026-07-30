@@ -8,6 +8,7 @@ Current maintained modules:
 - `igem_drylab.structure_metrics`: structure metrics such as pocket RMSD, PAE, distances, and optional SASA.
 - `igem_drylab.pipeline`: lightweight M1-M4 interface skeleton for LLPS candidate ranking, fusion-risk scoring, local concentration scoring, and reaction recommendation.
 - `igem_drylab.literature`: minimal schema-first literature extraction utilities using an OpenAI-compatible chat API such as DeepSeek.
+- `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
 
 The M1-M4 pipeline is still a deterministic skeleton. It verifies config, data flow, intermediate outputs, and visualization-ready files; it does not yet call real AF3/Boltz/Chai/CALVADOS/FreeSASA/Vina engines.
 
@@ -50,6 +51,31 @@ igem-drylab literature build-prompt \
 ```
 
 Actual LLM extraction is implemented in `igem_drylab.literature.ChatClient`, which expects an OpenAI-compatible chat completions endpoint. DeepSeek is compatible with this format.
+
+## Inspect and call MCP-style tools
+
+The repository does not run a network MCP server yet. It exposes a small local registry whose tool definitions follow the core MCP tool shape: `name`, `title`, `description`, `inputSchema`, optional `outputSchema`, and tool-call results with `content`, `structuredContent`, and optional `isError`.
+
+```bash
+igem-drylab tools list
+igem-drylab tools call igem.pipeline.validate --arguments-json '{"config_path":"configs/m1_m4_example.yaml"}'
+igem-drylab tools call igem.pipeline.run --arguments-json '{"config_path":"configs/m1_m4_example.yaml","output_dir":"outputs"}'
+```
+
+On PowerShell, `--arguments-file` is usually less error-prone than inline JSON quoting.
+
+```bash
+igem-drylab tools call igem.pipeline.validate --arguments-file examples/tool_args/pipeline_validate.json
+igem-drylab tools call igem.pipeline.run --arguments-file examples/tool_args/pipeline_run.json
+igem-drylab tools call igem.literature.build_prompt --arguments-file examples/tool_args/literature_build_prompt.json
+```
+
+Tools that call external APIs read secrets from environment variables instead of JSON arguments:
+
+```bash
+set DEEPSEEK_API_KEY=...
+set ELSEVIER_API_KEY=...
+```
 
 ## Integration notes
 

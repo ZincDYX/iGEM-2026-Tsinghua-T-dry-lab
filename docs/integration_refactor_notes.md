@@ -50,15 +50,61 @@ Not merged:
 
 These can be reintroduced later only if they have a clear owner, tests, and a stable interface.
 
+## Feature retention matrix
+
+| Source capability | Current status | Notes |
+| --- | --- | --- |
+| Existing `develop` kinetics model | Retained | Original imports and tests are unchanged. |
+| Existing `develop` structure metrics | Retained | Original imports and tests are unchanged. |
+| M1-M4 config validation | Retained and renamed | Implemented under `igem_drylab.pipeline`; old `igem_pipeline` package name is not kept. |
+| M1-M4 staged JSON/CSV outputs | Retained | Deterministic skeleton behavior is preserved. |
+| M1 LLPS candidate ranking skeleton | Retained | Still a placeholder score, not a real CALVADOS/PICNIC calculation. |
+| M2 fusion-risk scoring skeleton | Retained | Still a placeholder score, not real Boltz/Chai/ABCFold structural prediction. |
+| M3 local concentration scoring skeleton | Retained | Still a placeholder score, not a fitted two-phase binding model. |
+| M4 reaction recommendation skeleton | Retained | Still a placeholder recommendation, not a mechanistic ODE over the full pathway. |
+| Literature OpenAI-compatible chat client | Retained and simplified | Suitable for DeepSeek-style chat-completions endpoints. |
+| Literature ICL example selection | Retained and simplified | Deterministic rule-based selector. |
+| Literature schema-first prompt construction | Retained | Output contract remains JSON records. |
+| Elsevier Scopus/article helper functions | Retained minimally | Requires API entitlement; not tested against paid endpoints in unit tests. |
+| Legacy all-in-one agent script | Not retained | Dropped because it mixed orchestration, defaults, cleaning, prompting, and execution in one large script. |
+| Literature batch script collection | Not retained | Dropped until each script has a stable interface and test. |
+| CO2/methanol legacy defaults | Not retained | Out of scope for glabridin/LLPS pipeline. |
+| UI/API server scaffolding | Not retained | Out of scope for a minimal maintainable core. |
+| Softcopy export templates | Not retained | Can be reintroduced as a separate reporting module if needed. |
+| Vendor submodule directory from skeleton branch | Not retained | The integrated code uses explicit adapters and `third_party/` placeholders instead. |
+
+So this branch should not be described as "no feature loss" relative to every old branch file. It is a cleaned integration that preserves the maintained core behavior and intentionally removes untested or out-of-scope code.
+
+## MCP-style tool interface
+
+Added as `src/igem_drylab/mcp/`:
+
+- `McpTool`: local representation of a tool definition with `name`, `title`, `description`, `inputSchema`, and optional `outputSchema`.
+- `McpToolResult`: local representation of a tool result with `content`, `structuredContent`, and optional `isError`.
+- `ToolRegistry`: deterministic local registry for listing and calling tools.
+
+Currently exposed tools:
+
+- `igem.pipeline.validate`
+- `igem.pipeline.run`
+- `igem.literature.build_prompt`
+- `igem.literature.extract_records`
+- `igem.elsevier.search_scopus`
+- `igem.elsevier.fetch_article_text`
+
+This is not yet a transport-level MCP server. It is the stable tool layer that a future MCP server can wrap without rewriting the pipeline or literature modules.
+
 ## Compatibility impact
 
 - Existing `igem_drylab.kinetics` and `igem_drylab.structure_metrics` imports are unchanged.
 - The old `igem_pipeline` package name from the M1-M4 branch is not preserved.
 - The old `literature_extraction_agent` directory is not preserved.
 - The new public CLI is `igem-drylab`.
+- New MCP-style CLI commands are `igem-drylab tools list` and `igem-drylab tools call`.
 
 ## Known limitations
 
 - M1-M4 is still a mock/interface skeleton and does not perform real structure prediction, LLPS simulation, SASA, docking, or ODE pathway prediction.
 - Literature extraction can build prompts and call OpenAI-compatible APIs through `ChatClient`, but no end-to-end paid API test is run in CI.
 - Elsevier helpers require valid API entitlement; ScienceDirect full-text access may fail even if Scopus search works.
+- API keys are read from environment variables such as `DEEPSEEK_API_KEY` and `ELSEVIER_API_KEY`, not passed directly in tool arguments.
