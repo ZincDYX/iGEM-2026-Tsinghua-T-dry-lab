@@ -11,6 +11,8 @@ from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.llm import ChatClient
 from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
+from igem_drylab.multichain import assess_interface, build_multichain_input, solve_binding_equilibrium
+from igem_drylab.multichain.models import ProteinChain
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
 
@@ -147,6 +149,45 @@ def compute_run_tool(arguments: JsonObject) -> McpToolResult:
     adapter = create_tool_adapter(tool_name, config.tools.get(tool_name))
     result = adapter.run(output_dir=output_dir, dry_run=dry_run, timeout_seconds=timeout_seconds, **context)
     return McpToolResult.ok({"ok": result.status not in {"failed", "missing_executable"}, "run": result.model_dump(mode="json")})
+
+
+def multichain_build_input(arguments: JsonObject) -> McpToolResult:
+    raw_chains = arguments.get("chains")
+    if not isinstance(raw_chains, list):
+        raise ValueError("Argument 'chains' must be a list")
+    chains = [ProteinChain.model_validate(item) for item in raw_chains]
+    result = build_multichain_input(
+        complex_id=_require_str(arguments, "complex_id"),
+        chains=chains,
+        output_dir=Path(_require_str(arguments, "output_dir")),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def multichain_binding_equilibrium(arguments: JsonObject) -> McpToolResult:
+    receptor_valency = _optional_int(arguments, "receptor_valency", 1, minimum=1)
+    ligand_valency = _optional_int(arguments, "ligand_valency", 1, minimum=1)
+    result = solve_binding_equilibrium(
+        receptor=_require_str(arguments, "receptor"),
+        ligand=_require_str(arguments, "ligand"),
+        receptor_total=float(arguments.get("receptor_total", 0.0)),
+        ligand_total=float(arguments.get("ligand_total", 0.0)),
+        kd=float(arguments.get("kd", 0.0)),
+        receptor_valency=receptor_valency,
+        ligand_valency=ligand_valency,
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def multichain_assess_interface(arguments: JsonObject) -> McpToolResult:
+    result = assess_interface(
+        pdb_file=Path(_require_str(arguments, "pdb_file")),
+        chain_a=_require_str(arguments, "chain_a"),
+        chain_b=_require_str(arguments, "chain_b"),
+        contact_cutoff_angstrom=float(arguments.get("contact_cutoff_angstrom", 5.0)),
+        clash_cutoff_angstrom=float(arguments.get("clash_cutoff_angstrom", 2.0)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
 
 def literature_build_prompt(arguments: JsonObject) -> McpToolResult:
@@ -347,6 +388,71 @@ COMPUTE_RUN_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "run": {"type": "object"}}, additional_properties=True),
 )
 
+MULTICHAIN_BUILD_INPUT_TOOL = McpTool(
+    name="igem.multichain.build_input",
+    title="Build multichain structure input",
+    description="Create a multichain FASTA and manifest for complex prediction tools such as ABCFold.",
+    input_schema=_schema(
+        {
+            "complex_id": {"type": "string"},
+            "output_dir": {"type": "string"},
+            "chains": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "chain_id": {"type": "string"},
+                        "name": {"type": "string"},
+                        "sequence": {"type": "string"},
+                        "copies": {"type": "integer", "minimum": 1},
+                        "role": {"type": "string"},
+                    },
+                    "required": ["chain_id", "name", "sequence"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        ["complex_id", "output_dir", "chains"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+MULTICHAIN_BINDING_EQUILIBRIUM_TOOL = McpTool(
+    name="igem.multichain.binding_equilibrium",
+    title="Solve multicomponent binding equilibrium",
+    description="Solve finite-site A+B binding for two expressed modules with configurable valency and Kd.",
+    input_schema=_schema(
+        {
+            "receptor": {"type": "string"},
+            "ligand": {"type": "string"},
+            "receptor_total": {"type": "number"},
+            "ligand_total": {"type": "number"},
+            "kd": {"type": "number"},
+            "receptor_valency": {"type": "integer", "minimum": 1},
+            "ligand_valency": {"type": "integer", "minimum": 1},
+        },
+        ["receptor", "ligand", "receptor_total", "ligand_total", "kd"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+MULTICHAIN_ASSESS_INTERFACE_TOOL = McpTool(
+    name="igem.multichain.assess_interface",
+    title="Assess chain-chain interface",
+    description="Calculate contact, clash, and minimum-distance metrics between two chains in a PDB file.",
+    input_schema=_schema(
+        {
+            "pdb_file": {"type": "string"},
+            "chain_a": {"type": "string"},
+            "chain_b": {"type": "string"},
+            "contact_cutoff_angstrom": {"type": "number"},
+            "clash_cutoff_angstrom": {"type": "number"},
+        },
+        ["pdb_file", "chain_a", "chain_b"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
 LITERATURE_BUILD_PROMPT_TOOL = McpTool(
     name="igem.literature.build_prompt",
     title="Build literature extraction prompt",
@@ -475,6 +581,9 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PIPELINE_RUN_TOOL, pipeline_run),
     (COMPUTE_CHECK_TOOL, compute_check_tool),
     (COMPUTE_RUN_TOOL, compute_run_tool),
+    (MULTICHAIN_BUILD_INPUT_TOOL, multichain_build_input),
+    (MULTICHAIN_BINDING_EQUILIBRIUM_TOOL, multichain_binding_equilibrium),
+    (MULTICHAIN_ASSESS_INTERFACE_TOOL, multichain_assess_interface),
     (LITERATURE_BUILD_PROMPT_TOOL, literature_build_prompt),
     (LITERATURE_BUILD_DATABASE_TOOL, literature_build_database),
     (LITERATURE_SEARCH_TOOL, literature_search),

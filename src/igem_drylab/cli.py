@@ -10,14 +10,17 @@ from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
 from igem_drylab.mcp import create_default_registry
+from igem_drylab.multichain import assess_interface, solve_binding_equilibrium
 from igem_drylab.pipeline import load_config, run_pipeline
 
 app = typer.Typer(help="iGEM 2026 Tsinghua-T dry-lab utilities.")
 pipeline_app = typer.Typer(help="Run M1-M4 pipeline skeleton.")
 literature_app = typer.Typer(help="Use schema-first literature extraction helpers.")
+multichain_app = typer.Typer(help="Build and inspect multichain module designs.")
 tools_app = typer.Typer(help="Inspect and call MCP-style local tools.")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(literature_app, name="literature")
+app.add_typer(multichain_app, name="multichain")
 app.add_typer(tools_app, name="tools")
 
 
@@ -117,6 +120,46 @@ def search_literature_command(
             indent=2,
         )
     )
+
+
+@multichain_app.command("binding-equilibrium")
+def binding_equilibrium_command(
+    receptor: str,
+    ligand: str,
+    receptor_total: float,
+    ligand_total: float,
+    kd: float,
+    receptor_valency: int = typer.Option(1, "--receptor-valency", min=1),
+    ligand_valency: int = typer.Option(1, "--ligand-valency", min=1),
+) -> None:
+    result = solve_binding_equilibrium(
+        receptor=receptor,
+        ligand=ligand,
+        receptor_total=receptor_total,
+        ligand_total=ligand_total,
+        kd=kd,
+        receptor_valency=receptor_valency,
+        ligand_valency=ligand_valency,
+    )
+    typer.echo(result.model_dump_json(indent=2))
+
+
+@multichain_app.command("assess-interface")
+def assess_interface_command(
+    pdb_file: Path,
+    chain_a: str,
+    chain_b: str,
+    contact_cutoff_angstrom: float = typer.Option(5.0, "--contact-cutoff"),
+    clash_cutoff_angstrom: float = typer.Option(2.0, "--clash-cutoff"),
+) -> None:
+    result = assess_interface(
+        pdb_file=pdb_file,
+        chain_a=chain_a,
+        chain_b=chain_b,
+        contact_cutoff_angstrom=contact_cutoff_angstrom,
+        clash_cutoff_angstrom=clash_cutoff_angstrom,
+    )
+    typer.echo(result.model_dump_json(indent=2))
 
 
 @tools_app.command("list")

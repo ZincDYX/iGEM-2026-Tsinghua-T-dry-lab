@@ -1,0 +1,7 @@
+{
+  "pdb_file": "examples/multichain/two_chain_interface.pdb",
+  "chain_a": "A",
+  "chain_b": "B",
+  "contact_cutoff_angstrom": 5.0,
+  "clash_cutoff_angstrom": 2.0
+}

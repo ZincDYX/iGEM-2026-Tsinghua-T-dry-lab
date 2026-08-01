@@ -9,6 +9,7 @@ Current maintained modules:
 - `igem_drylab.pipeline`: lightweight M1-M4 interface skeleton for LLPS candidate ranking, fusion-risk scoring, local concentration scoring, and reaction recommendation.
 - `igem_drylab.literature`: schema-first literature extraction and offline database construction utilities.
 - `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
+- `igem_drylab.multichain`: multichain input generation, chain-chain interface checks, and finite-site module binding models.
 - `igem_drylab.pipeline.adapters`: command adapters for external compute tools such as ABCFold, CALVADOS, FreeSASA, AutoDock Vina, SignalP, and DeepTMHMM.
 
 The M1-M4 pipeline is still a deterministic skeleton. It verifies config, data flow, intermediate outputs, and visualization-ready files; it does not yet call real AF3/Boltz/Chai/CALVADOS/FreeSASA/Vina engines.
@@ -113,6 +114,18 @@ igem-drylab tools call igem.compute.run_tool --arguments-file examples/tool_args
 ```
 
 The example config keeps heavy scientific tools in `mode: mock`. To run them on a workstation or server, edit `configs/m1_m4_example.yaml`, set the intended tool to `mode: external`, and point `command` to the installed executable or wrapper script. Command templates are rendered without a shell; values such as `{input_file}`, `{config_file}`, `{pdb_file}`, `{fasta_file}`, and `{output_dir}` come from the tool-call context.
+
+## Multichain module design tools
+
+For designs where the yeast expresses separate modules, such as `FTH1-iLID` and `SspB-IDR-SH3/PDZ`, the repository exposes explicit multichain tools:
+
+```bash
+igem-drylab tools call igem.multichain.build_input --arguments-file examples/tool_args/multichain_build_input.json
+igem-drylab tools call igem.multichain.binding_equilibrium --arguments-file examples/tool_args/multichain_binding_equilibrium.json
+igem-drylab tools call igem.multichain.assess_interface --arguments-file examples/tool_args/multichain_assess_interface.json
+```
+
+These tools do not replace ABCFold/Boltz/Chai. They prepare multichain inputs, quantify finite-site binding stoichiometry, and assess chain-chain contacts/clashes after a structure is available.
 
 Tools that call external APIs read secrets from environment variables instead of JSON arguments:
 

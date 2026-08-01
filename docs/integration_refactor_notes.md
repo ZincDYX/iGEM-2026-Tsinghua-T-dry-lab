@@ -97,6 +97,9 @@ Currently exposed tools:
 - `igem.compute.run_tool`
 - `igem.literature.build_database`
 - `igem.literature.search`
+- `igem.multichain.build_input`
+- `igem.multichain.binding_equilibrium`
+- `igem.multichain.assess_interface`
 
 This is not yet a transport-level MCP server. It is the stable tool layer that a future MCP server can wrap without rewriting the pipeline or literature modules.
 
@@ -120,6 +123,18 @@ The adapters provide a shared contract:
 - record `argv`, `cwd`, stdout, stderr, return code, duration, output directory, and a JSON manifest.
 
 They do not yet parse scientific output files into M1-M4 scores. The current M1-M4 scoring remains deterministic mock scoring. Parser integration should be added only after the exact output files from the lab/server installation are fixed.
+
+## Multichain and multicomponent module support
+
+Added `src/igem_drylab/multichain/` for designs where the wet lab expresses multiple protein modules instead of a single fused construct.
+
+Current tools:
+
+- `build_multichain_input`: writes a multichain FASTA and JSON manifest for complex prediction tools such as ABCFold.
+- `solve_binding_equilibrium`: solves finite-site A+B binding with configurable Kd and valency, suitable for iLID/SspB, SH3/ligand, PDZ/ligand, and similar recruitment pairs.
+- `assess_interface`: reads a PDB file and reports inter-chain contact count, clash count, minimum distance, and contact residues.
+
+This keeps the code aligned with an agent-style tool architecture: tools have explicit JSON inputs, structured outputs, deterministic side effects, and artifact manifests. It still does not implement autonomous planning, tool-choice reasoning, long-term memory, or advanced retry/error-recovery policies.
 
 ## Literature database construction
 

@@ -1,0 +1,9 @@
+{
+  "receptor": "FTH1-iLID core sites",
+  "ligand": "SspB-IDR recruitment module",
+  "receptor_total": 1.0,
+  "ligand_total": 10.0,
+  "kd": 0.5,
+  "receptor_valency": 24,
+  "ligand_valency": 1
+}

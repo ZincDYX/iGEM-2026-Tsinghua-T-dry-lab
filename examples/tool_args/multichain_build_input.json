@@ -1,0 +1,27 @@
+{
+  "complex_id": "core_condensate_client_demo",
+  "output_dir": "outputs/multichain_demo",
+  "chains": [
+    {
+      "chain_id": "A",
+      "name": "FTH1-iLID core module",
+      "sequence": "MSSQIRQNYSTDVEAAVNSLVNLYLQASYTYLSLGFYFDRDDVALEGVSHFFRELAEEKREGYERLLKMQNQRGGRALFQDIKKPAEDEWGKTPDAMKAAMALEKKLNQALLDLHALGSARTDPHLCDFLETHFLDEEVKLIKKMGDHLTNLHRLGGPEAGLGEYLFERLTLKHD",
+      "copies": 1,
+      "role": "core_module"
+    },
+    {
+      "chain_id": "B",
+      "name": "SspB-IDR-recruitment module",
+      "sequence": "MDELYKSGGGGSGGGGSGGGGSQSYQPPPPGGGGSQSYQPPPPGGGGS",
+      "copies": 1,
+      "role": "condensate_module"
+    },
+    {
+      "chain_id": "C",
+      "name": "OC-client placeholder",
+      "sequence": "MSEQUENCEGGGGSGGGGSLIGAND",
+      "copies": 1,
+      "role": "enzyme_client"
+    }
+  ]
+}
