@@ -1,0 +1,11 @@
+{
+  "candidate_id": "M1-FTH1-pgl3_3x_ggggs",
+  "sasa_retention": 0.91,
+  "pocket_rmsd_angstrom": 0.8,
+  "mean_interdomain_pae": 14.0,
+  "iptm": 0.72,
+  "mean_plddt": 82.0,
+  "interface_contact_count": 24,
+  "clash_count": 0,
+  "notes": "Example rule-based M2 scoring call."
+}

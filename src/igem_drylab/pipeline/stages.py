@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from igem_drylab.kinetics import CascadeParameters
+from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
+from igem_drylab.scoring.m4_reaction import load_docking_penalties, score_m4_ode
+
 from .adapters import create_tool_adapter
 from .config import ProjectConfig
 from .io import read_fasta, write_models
@@ -60,16 +64,31 @@ def run_m2(
     stage_dir = run_dir / "m2_fusion"
     abcfold = create_tool_adapter("abcfold", config.tools.get("abcfold"))
     enzyme_pair = "+".join(enzyme.id for enzyme in config.inputs.enzymes)
+    real_metrics = (
+        load_m2_structure_metrics(config.stages.m2_fusion.structure_metrics_file)
+        if config.stages.m2_fusion.structure_metrics_file
+        else {}
+    )
 
     assessments: list[M2FusionAssessment] = []
     for index, candidate in enumerate(candidates):
-        activity_risk = round(max(0.05, 0.38 - 0.08 * candidate.llps_score + index * 0.02), 3)
-        clash_risk = round(max(0.05, 0.22 + 0.04 * len(candidate.linker_id) / 10 - 0.03 * index), 3)
-        weighted_penalty = (
-            config.stages.m2_fusion.activity_penalty_weight * activity_risk
-            + config.stages.m2_fusion.clash_penalty_weight * clash_risk
-        )
-        score = round(max(0, min(1, candidate.llps_score - weighted_penalty)), 3)
+        real_score = score_m2_structure(real_metrics[candidate.candidate_id]) if candidate.candidate_id in real_metrics else None
+        if real_score is None:
+            activity_risk = round(max(0.05, 0.38 - 0.08 * candidate.llps_score + index * 0.02), 3)
+            clash_risk = round(max(0.05, 0.22 + 0.04 * len(candidate.linker_id) / 10 - 0.03 * index), 3)
+            weighted_penalty = (
+                config.stages.m2_fusion.activity_penalty_weight * activity_risk
+                + config.stages.m2_fusion.clash_penalty_weight * clash_risk
+            )
+            score = round(max(0, min(1, candidate.llps_score - weighted_penalty)), 3)
+            recommended = score >= 0.45 and clash_risk < 0.5
+            notes = "Mock score fallback: no M2 structure metrics file entry for this candidate."
+        else:
+            activity_risk = real_score.activity_risk
+            clash_risk = real_score.clash_risk
+            score = real_score.m2_score
+            recommended = real_score.recommended_for_m3
+            notes = "Rule-based real M2 score: " + "; ".join(real_score.reasons)
         assessments.append(
             M2FusionAssessment(
                 candidate_id=candidate.candidate_id,
@@ -81,8 +100,8 @@ def run_m2(
                 activity_risk=activity_risk,
                 clash_risk=clash_risk,
                 m2_score=score,
-                recommended_for_m3=score >= 0.45 and clash_risk < 0.5,
-                notes="Mock score leaves room for ABCFold/Boltz/Chai structural replacement.",
+                recommended_for_m3=recommended,
+                notes=notes,
             )
         )
 
@@ -131,29 +150,37 @@ def run_m4(
 ) -> tuple[list[M4ReactionPrediction], StageOutput]:
     stage_dir = run_dir / "m4_reaction"
     vina = create_tool_adapter("autodock_vina", config.tools.get("autodock_vina"))
+    docking_penalties = (
+        load_docking_penalties(config.stages.m4_reaction.docking_penalties_file)
+        if config.stages.m4_reaction.docking_penalties_file
+        else {}
+    )
 
     predictions: list[M4ReactionPrediction] = []
     for item in assessments:
-        oc_first = round(min(1, item.oc_dmt_colocalization_score * 0.72 + (1 - item.leakage_risk) * 0.18), 3)
-        dmt_later = round(
-            min(1, item.local_concentration_fold_change / 10 * 0.55 + (1 - item.saturation_risk) * 0.25),
-            3,
-        )
-        predicted_yield = round(
-            min(
-                1,
-                config.stages.m4_reaction.oc_first_weight * oc_first
-                + config.stages.m4_reaction.dmt_later_weight * dmt_later,
+        ode_score = score_m4_ode(
+            candidate_id=item.candidate_id,
+            params=CascadeParameters(
+                oc_total=item.oc_dmt_colocalization_score,
+                dmt_total=item.oc_dmt_colocalization_score,
+                partition_oc=max(1.0, item.local_concentration_fold_change),
+                partition_dmt=max(1.0, item.local_concentration_fold_change),
+                activity_ratio_oc=max(0.1, 1.0 - item.leakage_risk),
+                activity_ratio_dmt=max(0.1, 1.0 - item.saturation_risk),
             ),
-            3,
+            docking_penalty=docking_penalties.get(item.candidate_id),
+            t_end=config.stages.m4_reaction.t_end,
         )
-        if predicted_yield >= 0.65 and item.recommended_for_m4:
-            recommendation = "test"
-        elif predicted_yield >= 0.4:
-            recommendation = "iterate"
-        else:
-            recommendation = "drop"
+        oc_first = round(min(1, item.oc_dmt_colocalization_score * 0.72 + (1 - item.leakage_risk) * 0.18), 3)
+        dmt_later = round(min(1, 1.0 - ode_score.leakage_proxy), 3)
+        predicted_yield = ode_score.relative_yield
+        recommendation = ode_score.recommendation if item.recommended_for_m4 else "iterate"
         bottleneck = "saturation" if item.saturation_risk > item.leakage_risk else "leakage"
+        docking_note = (
+            f"docking activity multiplier={docking_penalties[item.candidate_id].activity_multiplier}; "
+            if item.candidate_id in docking_penalties
+            else "no docking penalty supplied; "
+        )
         predictions.append(
             M4ReactionPrediction(
                 candidate_id=item.candidate_id,
@@ -163,7 +190,11 @@ def run_m4(
                 predicted_relative_yield=predicted_yield,
                 bottleneck=bottleneck,
                 recommendation=recommendation,
-                notes=f"Docking placeholder for {vina.describe('vina --config <generated>').tool}.",
+                notes=(
+                    f"Lightweight ODE score with {docking_note}"
+                    f"product_final={ode_score.product_final}, leakage_proxy={ode_score.leakage_proxy}; "
+                    f"adapter={vina.describe('vina --config <generated>').tool}."
+                ),
             )
         )
 

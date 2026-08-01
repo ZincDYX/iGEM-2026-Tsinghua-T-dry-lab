@@ -1,0 +1,7 @@
+{
+  "model_json": "examples/real_metrics/freesasa_model.json",
+  "reference_json": "examples/real_metrics/freesasa_reference.json",
+  "chain": "A",
+  "residues": [10, 11, 12],
+  "threshold_loss_fraction": 0.15
+}

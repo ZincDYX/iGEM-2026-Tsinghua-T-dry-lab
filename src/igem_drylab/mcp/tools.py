@@ -13,6 +13,10 @@ from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
 from igem_drylab.multichain import assess_interface, build_multichain_input, solve_binding_equilibrium
 from igem_drylab.multichain.models import ProteinChain
+from igem_drylab.parsers.freesasa import compute_pocket_sasa_retention
+from igem_drylab.scoring.m2_structure import M2StructureMetrics, score_m2_structure
+from igem_drylab.scoring.m4_reaction import DockingPenalty, compute_docking_penalty, score_m4_ode
+from igem_drylab.kinetics import CascadeParameters
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
 
@@ -186,6 +190,51 @@ def multichain_assess_interface(arguments: JsonObject) -> McpToolResult:
         chain_b=_require_str(arguments, "chain_b"),
         contact_cutoff_angstrom=float(arguments.get("contact_cutoff_angstrom", 5.0)),
         clash_cutoff_angstrom=float(arguments.get("clash_cutoff_angstrom", 2.0)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def scoring_pocket_sasa(arguments: JsonObject) -> McpToolResult:
+    residues = arguments.get("residues")
+    if not isinstance(residues, list) or not all(isinstance(item, int) for item in residues):
+        raise ValueError("Argument 'residues' must be a list of integers")
+    result = compute_pocket_sasa_retention(
+        model_pdb=_optional_path(arguments, "model_pdb"),
+        reference_pdb=_optional_path(arguments, "reference_pdb"),
+        model_json=_optional_path(arguments, "model_json"),
+        reference_json=_optional_path(arguments, "reference_json"),
+        chain=_require_str(arguments, "chain"),
+        residues=residues,
+        threshold_loss_fraction=float(arguments.get("threshold_loss_fraction", 0.15)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def scoring_m2_structure(arguments: JsonObject) -> McpToolResult:
+    result = score_m2_structure(M2StructureMetrics.model_validate(arguments))
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def scoring_docking_penalty(arguments: JsonObject) -> McpToolResult:
+    result = compute_docking_penalty(
+        candidate_id=_require_str(arguments, "candidate_id"),
+        reference_vina_output=Path(_require_str(arguments, "reference_vina_output")),
+        fusion_vina_output=Path(_require_str(arguments, "fusion_vina_output")),
+        allowed_loss_kcal_mol=float(arguments.get("allowed_loss_kcal_mol", 1.0)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def scoring_m4_ode(arguments: JsonObject) -> McpToolResult:
+    params_payload = arguments.get("params", {})
+    if not isinstance(params_payload, dict):
+        raise ValueError("Argument 'params' must be an object")
+    penalty_payload = arguments.get("docking_penalty")
+    result = score_m4_ode(
+        candidate_id=_require_str(arguments, "candidate_id"),
+        params=CascadeParameters(**params_payload),
+        docking_penalty=None if penalty_payload is None else DockingPenalty.model_validate(penalty_payload),
+        t_end=float(arguments.get("t_end", 24.0)),
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
@@ -453,6 +502,78 @@ MULTICHAIN_ASSESS_INTERFACE_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
 
+SCORING_POCKET_SASA_TOOL = McpTool(
+    name="igem.scoring.pocket_sasa",
+    title="Calculate pocket SASA retention",
+    description="Compare model and reference pocket SASA from FreeSASA JSON or PDB inputs.",
+    input_schema=_schema(
+        {
+            "model_json": {"type": "string"},
+            "reference_json": {"type": "string"},
+            "model_pdb": {"type": "string"},
+            "reference_pdb": {"type": "string"},
+            "chain": {"type": "string"},
+            "residues": {"type": "array", "items": {"type": "integer"}},
+            "threshold_loss_fraction": {"type": "number"},
+        },
+        ["chain", "residues"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+SCORING_M2_STRUCTURE_TOOL = McpTool(
+    name="igem.scoring.m2_structure",
+    title="Score M2 structure compatibility",
+    description="Apply transparent rule-based structural screening from SASA/RMSD/PAE/confidence/clash metrics.",
+    input_schema=_schema(
+        {
+            "candidate_id": {"type": "string"},
+            "sasa_retention": {"type": "number"},
+            "pocket_rmsd_angstrom": {"type": "number"},
+            "mean_interdomain_pae": {"type": "number"},
+            "iptm": {"type": "number"},
+            "mean_plddt": {"type": "number"},
+            "interface_contact_count": {"type": "integer"},
+            "clash_count": {"type": "integer"},
+            "notes": {"type": "string"},
+        },
+        ["candidate_id"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+SCORING_DOCKING_PENALTY_TOOL = McpTool(
+    name="igem.scoring.docking_penalty",
+    title="Calculate Vina docking penalty",
+    description="Parse wild-type and fusion Vina outputs and convert affinity loss into an activity multiplier.",
+    input_schema=_schema(
+        {
+            "candidate_id": {"type": "string"},
+            "reference_vina_output": {"type": "string"},
+            "fusion_vina_output": {"type": "string"},
+            "allowed_loss_kcal_mol": {"type": "number"},
+        },
+        ["candidate_id", "reference_vina_output", "fusion_vina_output"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+SCORING_M4_ODE_TOOL = McpTool(
+    name="igem.scoring.m4_ode",
+    title="Score M4 lightweight ODE",
+    description="Run lightweight two-phase ODE scoring with optional docking penalty.",
+    input_schema=_schema(
+        {
+            "candidate_id": {"type": "string"},
+            "params": {"type": "object"},
+            "docking_penalty": {"type": "object"},
+            "t_end": {"type": "number"},
+        },
+        ["candidate_id"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
 LITERATURE_BUILD_PROMPT_TOOL = McpTool(
     name="igem.literature.build_prompt",
     title="Build literature extraction prompt",
@@ -584,6 +705,10 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (MULTICHAIN_BUILD_INPUT_TOOL, multichain_build_input),
     (MULTICHAIN_BINDING_EQUILIBRIUM_TOOL, multichain_binding_equilibrium),
     (MULTICHAIN_ASSESS_INTERFACE_TOOL, multichain_assess_interface),
+    (SCORING_POCKET_SASA_TOOL, scoring_pocket_sasa),
+    (SCORING_M2_STRUCTURE_TOOL, scoring_m2_structure),
+    (SCORING_DOCKING_PENALTY_TOOL, scoring_docking_penalty),
+    (SCORING_M4_ODE_TOOL, scoring_m4_ode),
     (LITERATURE_BUILD_PROMPT_TOOL, literature_build_prompt),
     (LITERATURE_BUILD_DATABASE_TOOL, literature_build_database),
     (LITERATURE_SEARCH_TOOL, literature_search),

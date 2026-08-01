@@ -109,6 +109,58 @@ def test_literature_search_tool_writes_manifest(monkeypatch, tmp_path):
     assert manifest.exists()
 
 
+def test_scoring_mcp_tools_return_structured_results():
+    registry = create_default_registry()
+
+    sasa = registry.call(
+        "igem.scoring.pocket_sasa",
+        {
+            "model_json": "examples/real_metrics/freesasa_model.json",
+            "reference_json": "examples/real_metrics/freesasa_reference.json",
+            "chain": "A",
+            "residues": [10, 11, 12],
+        },
+    ).as_protocol_dict()["structuredContent"]
+    assert sasa["ok"] is True
+    assert sasa["result"]["passes"] is True
+
+    m2 = registry.call(
+        "igem.scoring.m2_structure",
+        {
+            "candidate_id": "demo",
+            "sasa_retention": 0.9,
+            "pocket_rmsd_angstrom": 0.8,
+            "iptm": 0.8,
+            "mean_plddt": 85.0,
+            "interface_contact_count": 30,
+            "clash_count": 0,
+        },
+    ).as_protocol_dict()["structuredContent"]
+    assert m2["ok"] is True
+    assert m2["result"]["recommended_for_m3"] is True
+
+    docking = registry.call(
+        "igem.scoring.docking_penalty",
+        {
+            "candidate_id": "demo",
+            "reference_vina_output": "examples/real_metrics/vina_reference.txt",
+            "fusion_vina_output": "examples/real_metrics/vina_fusion.txt",
+        },
+    ).as_protocol_dict()["structuredContent"]
+    assert docking["ok"] is True
+    assert docking["result"]["passes"] is True
+
+    m4 = registry.call(
+        "igem.scoring.m4_ode",
+        {
+            "candidate_id": "demo",
+            "docking_penalty": docking["result"],
+        },
+    ).as_protocol_dict()["structuredContent"]
+    assert m4["ok"] is True
+    assert m4["result"]["recommendation"] in {"drop", "iterate", "test"}
+
+
 def test_compute_check_tool_reports_configured_command():
     result = create_default_registry().call(
         "igem.compute.check_tool",

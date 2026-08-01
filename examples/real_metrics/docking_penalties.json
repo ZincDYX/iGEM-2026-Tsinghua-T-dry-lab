@@ -1,0 +1,20 @@
+{
+  "records": [
+    {
+      "candidate_id": "M1-FTH1-pgl3_3x_ggggs",
+      "reference_affinity_kcal_mol": -7.8,
+      "fusion_affinity_kcal_mol": -7.1,
+      "delta_delta_g_kcal_mol": 0.7,
+      "activity_multiplier": 0.825,
+      "passes": true
+    },
+    {
+      "candidate_id": "M1-SpyTag_SpyCatcher-pgl3_3x_ggggs",
+      "reference_affinity_kcal_mol": -7.8,
+      "fusion_affinity_kcal_mol": -5.2,
+      "delta_delta_g_kcal_mol": 2.6,
+      "activity_multiplier": 0.35,
+      "passes": false
+    }
+  ]
+}

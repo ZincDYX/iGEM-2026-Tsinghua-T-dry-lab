@@ -64,6 +64,7 @@ class M1Config(BaseModel):
 class M2Config(BaseModel):
     activity_penalty_weight: float = Field(default=0.35, ge=0, le=1)
     clash_penalty_weight: float = Field(default=0.25, ge=0, le=1)
+    structure_metrics_file: Path | None = None
 
 
 class M3Config(BaseModel):
@@ -75,6 +76,8 @@ class M4Config(BaseModel):
     target_product: str = "glabridin"
     oc_first_weight: float = Field(default=0.60, ge=0, le=1)
     dmt_later_weight: float = Field(default=0.40, ge=0, le=1)
+    docking_penalties_file: Path | None = None
+    t_end: float = Field(default=24.0, gt=0)
 
 
 class StagesConfig(BaseModel):
@@ -113,4 +116,12 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         scaffold.structure_pdb = _resolve_path(scaffold.structure_pdb, base_dir)  # type: ignore[assignment]
     for tool in config.tools.values():
         tool.repo_path = _resolve_path(tool.repo_path, base_dir)  # type: ignore[assignment]
+    config.stages.m2_fusion.structure_metrics_file = _resolve_path(
+        config.stages.m2_fusion.structure_metrics_file,
+        base_dir,
+    )  # type: ignore[assignment]
+    config.stages.m4_reaction.docking_penalties_file = _resolve_path(
+        config.stages.m4_reaction.docking_penalties_file,
+        base_dir,
+    )  # type: ignore[assignment]
     return config

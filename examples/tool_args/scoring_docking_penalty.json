@@ -1,0 +1,6 @@
+{
+  "candidate_id": "M1-FTH1-pgl3_3x_ggggs",
+  "reference_vina_output": "examples/real_metrics/vina_reference.txt",
+  "fusion_vina_output": "examples/real_metrics/vina_fusion.txt",
+  "allowed_loss_kcal_mol": 1.0
+}

@@ -10,9 +10,12 @@ Current maintained modules:
 - `igem_drylab.literature`: schema-first literature extraction and offline database construction utilities.
 - `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
 - `igem_drylab.multichain`: multichain input generation, chain-chain interface checks, and finite-site module binding models.
+- `igem_drylab.parsers`: parsers for FreeSASA and AutoDock Vina outputs.
+- `igem_drylab.scoring`: transparent rule-based M2/M4 scoring with real-metric fallback support.
+- `igem_drylab.agent`: planner/memory/policy/executor/recovery runtime skeleton for an agent learning project.
 - `igem_drylab.pipeline.adapters`: command adapters for external compute tools such as ABCFold, CALVADOS, FreeSASA, AutoDock Vina, SignalP, and DeepTMHMM.
 
-The M1-M4 pipeline is still a deterministic skeleton. It verifies config, data flow, intermediate outputs, and visualization-ready files; it does not yet call real AF3/Boltz/Chai/CALVADOS/FreeSASA/Vina engines.
+The M1-M4 pipeline is lightweight by default. It does not rerun heavy tools unless configured. If real M2 structure metrics or M4 docking penalties are supplied, the pipeline uses rule-based real scoring; otherwise it falls back to deterministic mock scores.
 
 ## Install and test
 
@@ -38,6 +41,27 @@ Output is written under:
 
 ```text
 outputs/m1-m4-demo/
+```
+
+## Run M1-M4 with real metric files
+
+This example does not run ABCFold, FreeSASA, or Vina. It reads already-produced metrics and applies lightweight rule-based scoring.
+
+```bash
+igem-drylab pipeline validate configs/m1_m4_real_scoring_example.yaml
+igem-drylab pipeline run configs/m1_m4_real_scoring_example.yaml
+```
+
+The intended usage is:
+
+```text
+heavy tools run only when needed
+        ↓
+parser extracts metrics
+        ↓
+M1-M4 reads metric JSON files
+        ↓
+fast rule-based scoring and ODE scan
 ```
 
 ## Build a literature extraction prompt
@@ -126,6 +150,30 @@ igem-drylab tools call igem.multichain.assess_interface --arguments-file example
 ```
 
 These tools do not replace ABCFold/Boltz/Chai. They prepare multichain inputs, quantify finite-site binding stoichiometry, and assess chain-chain contacts/clashes after a structure is available.
+
+## Real-metric parser and scoring tools
+
+```bash
+igem-drylab tools call igem.scoring.pocket_sasa --arguments-file examples/tool_args/scoring_pocket_sasa.json
+igem-drylab tools call igem.scoring.m2_structure --arguments-file examples/tool_args/scoring_m2_structure.json
+igem-drylab tools call igem.scoring.docking_penalty --arguments-file examples/tool_args/scoring_docking_penalty.json
+igem-drylab tools call igem.scoring.m4_ode --arguments-file examples/tool_args/scoring_m4_ode.json
+```
+
+The current scoring rules are intentionally transparent, not a trained black-box model. Update the TODO calibration points after wet-lab HPLC data becomes available.
+
+## Agent framework skeleton
+
+The `igem_drylab.agent` package contains the main agent architecture slots:
+
+- planner;
+- memory;
+- decision policy;
+- tool executor;
+- error recovery policy;
+- runtime trace.
+
+Important policy decisions are marked with `TODO`. See [docs/agent_framework_notes.md](docs/agent_framework_notes.md) before filling them in.
 
 Tools that call external APIs read secrets from environment variables instead of JSON arguments:
 

@@ -1,0 +1,25 @@
+{
+  "candidate_id": "M1-FTH1-pgl3_3x_ggggs",
+  "params": {
+    "phi": 0.05,
+    "oc_total": 1.0,
+    "dmt_total": 1.0,
+    "kcat_oc": 1.0,
+    "km_oc": 1.0,
+    "kcat_dmt": 1.0,
+    "km_dmt": 1.0,
+    "partition_oc": 50.0,
+    "partition_dmt": 50.0,
+    "partition_a": 5.0,
+    "partition_b": 5.0
+  },
+  "docking_penalty": {
+    "candidate_id": "M1-FTH1-pgl3_3x_ggggs",
+    "reference_affinity_kcal_mol": -7.8,
+    "fusion_affinity_kcal_mol": -7.1,
+    "delta_delta_g_kcal_mol": 0.7,
+    "activity_multiplier": 0.825,
+    "passes": true
+  },
+  "t_end": 24.0
+}

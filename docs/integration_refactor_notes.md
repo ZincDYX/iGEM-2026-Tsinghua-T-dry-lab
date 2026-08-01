@@ -59,9 +59,9 @@ These can be reintroduced later only if they have a clear owner, tests, and a st
 | M1-M4 config validation | Retained and renamed | Implemented under `igem_drylab.pipeline`; old `igem_pipeline` package name is not kept. |
 | M1-M4 staged JSON/CSV outputs | Retained | Deterministic skeleton behavior is preserved. |
 | M1 LLPS candidate ranking skeleton | Retained | Still a placeholder score, not a real CALVADOS/PICNIC calculation. |
-| M2 fusion-risk scoring skeleton | Retained | Still a placeholder score, not real Boltz/Chai/ABCFold structural prediction. |
+| M2 fusion-risk scoring skeleton | Retained and upgraded | Uses rule-based real scoring when structure metrics are provided; otherwise falls back to mock scoring. |
 | M3 local concentration scoring skeleton | Retained | Still a placeholder score, not a fitted two-phase binding model. |
-| M4 reaction recommendation skeleton | Retained | Still a placeholder recommendation, not a mechanistic ODE over the full pathway. |
+| M4 reaction recommendation skeleton | Retained and upgraded | Uses lightweight ODE scoring with optional docking penalty when metric files are provided. |
 | Literature OpenAI-compatible chat client | Retained and simplified | Suitable for DeepSeek-style chat-completions endpoints. |
 | Literature ICL example selection | Retained and simplified | Deterministic rule-based selector. |
 | Literature schema-first prompt construction | Retained | Output contract remains JSON records. |
@@ -100,6 +100,10 @@ Currently exposed tools:
 - `igem.multichain.build_input`
 - `igem.multichain.binding_equilibrium`
 - `igem.multichain.assess_interface`
+- `igem.scoring.pocket_sasa`
+- `igem.scoring.m2_structure`
+- `igem.scoring.docking_penalty`
+- `igem.scoring.m4_ode`
 
 This is not yet a transport-level MCP server. It is the stable tool layer that a future MCP server can wrap without rewriting the pipeline or literature modules.
 
@@ -122,7 +126,36 @@ The adapters provide a shared contract:
 - run external commands when `mode: external`;
 - record `argv`, `cwd`, stdout, stderr, return code, duration, output directory, and a JSON manifest.
 
-They do not yet parse scientific output files into M1-M4 scores. The current M1-M4 scoring remains deterministic mock scoring. Parser integration should be added only after the exact output files from the lab/server installation are fixed.
+They do not yet run and parse every scientific tool end-to-end. FreeSASA-style pocket SASA JSON, Vina outputs, rule-based M2 scoring, and lightweight M4 ODE scoring have been added. ABCFold/Boltz/Chai and CALVADOS parser integration still depends on the exact tool version and server output layout.
+
+## Real-metric parser and scoring layer
+
+Added:
+
+- `src/igem_drylab/parsers/freesasa.py`
+- `src/igem_drylab/parsers/vina.py`
+- `src/igem_drylab/scoring/m2_structure.py`
+- `src/igem_drylab/scoring/m4_reaction.py`
+
+The pipeline now supports optional real metric files:
+
+- `stages.m2_fusion.structure_metrics_file`
+- `stages.m4_reaction.docking_penalties_file`
+
+If files are present, M2/M4 use transparent rule-based scoring. If files are absent, the pipeline uses the previous lightweight fallback. This avoids re-running heavy tools every time.
+
+## Agent framework skeleton
+
+Added `src/igem_drylab/agent/`:
+
+- planner;
+- memory;
+- decision policy;
+- tool executor;
+- error recovery policy;
+- runtime trace.
+
+Important scientific and engineering decisions are intentionally marked with TODO. See `docs/agent_framework_notes.md`.
 
 ## Multichain and multicomponent module support
 
@@ -175,7 +208,7 @@ All providers normalize into `LiteratureSearchResult` and can be exported as the
 
 ## Known limitations
 
-- M1-M4 is still a mock/interface skeleton and does not perform real structure prediction, LLPS simulation, SASA, docking, or ODE pathway prediction.
+- M1-M4 is still lightweight by default. It can consume real SASA/docking/structure metric files, but it does not automatically run all heavy tools end-to-end.
 - Literature extraction can build prompts and call OpenAI-compatible APIs through `ChatClient`, but no end-to-end paid API test is run in CI.
 - Elsevier helpers require valid API entitlement; ScienceDirect full-text access may fail even if Scopus search works.
 - API keys are read from environment variables such as `DEEPSEEK_API_KEY` and `ELSEVIER_API_KEY`, not passed directly in tool arguments.
