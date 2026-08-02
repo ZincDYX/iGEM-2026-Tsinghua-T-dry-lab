@@ -4,18 +4,18 @@ This repository contains a reproducible dry-lab code base for the LUMOS/iGEM pro
 
 Current maintained modules:
 
-- `igem_drylab.kinetics`: two-phase mass-conserving enzyme-cascade model.
+- `igem_drylab.kinetics`: two-phase mass-conserving enzyme-cascade model and OC-first/DMT-later competitive piecewise ODE.
 - `igem_drylab.structure_metrics`: structure metrics such as pocket RMSD, PAE, distances, and optional SASA.
 - `igem_drylab.pipeline`: lightweight M1-M4 interface skeleton for LLPS candidate ranking, fusion-risk scoring, local concentration scoring, and reaction recommendation.
 - `igem_drylab.literature`: schema-first literature extraction and offline database construction utilities.
 - `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
 - `igem_drylab.multichain`: multichain input generation, chain-chain interface checks, and finite-site module binding models.
-- `igem_drylab.parsers`: parsers for FreeSASA and AutoDock Vina outputs.
+- `igem_drylab.parsers`: parsers for FreeSASA, AutoDock Vina, AF3/Boltz/Chai/ABCFold-style confidence outputs, and CALVADOS summaries.
 - `igem_drylab.scoring`: transparent rule-based M2/M4 scoring with real-metric fallback support.
 - `igem_drylab.agent`: planner/memory/policy/executor/recovery runtime skeleton for an agent learning project.
 - `igem_drylab.pipeline.adapters`: command adapters for external compute tools such as ABCFold, CALVADOS, FreeSASA, AutoDock Vina, SignalP, and DeepTMHMM.
 
-The M1-M4 pipeline is lightweight by default. It does not rerun heavy tools unless configured. If real M2 structure metrics or M4 docking penalties are supplied, the pipeline uses rule-based real scoring; otherwise it falls back to deterministic mock scores.
+The M1-M4 pipeline is lightweight by default. It does not rerun heavy tools unless configured. If real M2 structure metrics, structure-prediction confidence artifacts, CALVADOS summaries, or M4 docking penalties are supplied, the pipeline can parse them and use rule-based real scoring; otherwise it falls back to deterministic mock scores.
 
 ## Install and test
 
@@ -63,6 +63,16 @@ M1-M4 reads metric JSON files
         ↓
 fast rule-based scoring and ODE scan
 ```
+
+## Parse real scientific-tool outputs
+
+```bash
+igem-drylab tools call igem.parsers.structure_prediction --arguments-file examples/mcp/parse_structure_prediction.json
+igem-drylab tools call igem.parsers.calvados --arguments-file examples/mcp/parse_calvados.json
+igem-drylab tools call igem.scoring.m4_piecewise_ode --arguments-file examples/mcp/score_m4_piecewise_ode.json
+```
+
+The structure parser is version-tolerant rather than version-perfect: AF3 and Boltz have clearer output schemas, while Chai/ABCFold/CALVADOS layouts should be locked with real lab fixtures once your server versions are fixed.
 
 ## Build a literature extraction prompt
 

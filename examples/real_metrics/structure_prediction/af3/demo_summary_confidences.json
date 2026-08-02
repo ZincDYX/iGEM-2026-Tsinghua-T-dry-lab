@@ -1,0 +1,9 @@
+{
+  "ptm": 0.72,
+  "iptm": 0.68,
+  "ranking_score": 0.701,
+  "has_clash": false,
+  "chain_pair_iptm": [[0.91, 0.62], [0.62, 0.88]],
+  "chain_pair_pae_min": [[0.0, 16.5], [16.5, 0.0]],
+  "atom_plddts": [82.0, 84.0, 86.0, 88.0]
+}

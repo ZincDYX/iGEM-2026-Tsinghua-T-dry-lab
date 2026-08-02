@@ -1,0 +1,30 @@
+{
+  "candidate_id": "demo_oc_first_dmt_later",
+  "params": {
+    "phi": 0.05,
+    "oc_total": 1.0,
+    "dmt_total": 1.0,
+    "kcat_oc": 1.2,
+    "km_oc": 1.0,
+    "kcat_dmt_product": 1.1,
+    "km_dmt_product": 0.7,
+    "kcat_dmt_leak": 0.4,
+    "km_dmt_leak": 1.0,
+    "partition_oc": 50.0,
+    "partition_dmt": 50.0,
+    "partition_a": 3.0,
+    "partition_b": 6.0
+  },
+  "oc_gate": {
+    "on_time": 0.0,
+    "basal": 0.0,
+    "induced": 1.0
+  },
+  "dmt_gate": {
+    "on_time": 4.0,
+    "basal": 0.0,
+    "induced": 1.0
+  },
+  "initial": [10.0, 0.0, 0.0, 0.0],
+  "t_end": 24.0
+}

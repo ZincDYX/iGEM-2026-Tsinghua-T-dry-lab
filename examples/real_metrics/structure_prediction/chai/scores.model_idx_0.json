@@ -1,0 +1,8 @@
+{
+  "aggregate_score": 0.74,
+  "ptm": 0.71,
+  "iptm": 0.69,
+  "plddt": 0.83,
+  "has_inter_chain_clashes": false,
+  "per_chain_pair_iptm": [[0.90, 0.65], [0.65, 0.86]]
+}

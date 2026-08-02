@@ -14,9 +14,16 @@ from igem_drylab.literature.sources import LiteratureSearchQuery, search_literat
 from igem_drylab.multichain import assess_interface, build_multichain_input, solve_binding_equilibrium
 from igem_drylab.multichain.models import ProteinChain
 from igem_drylab.parsers.freesasa import compute_pocket_sasa_retention
+from igem_drylab.parsers.calvados import parse_calvados_output
+from igem_drylab.parsers.structure_prediction import parse_structure_prediction_output
 from igem_drylab.scoring.m2_structure import M2StructureMetrics, score_m2_structure
-from igem_drylab.scoring.m4_reaction import DockingPenalty, compute_docking_penalty, score_m4_ode
-from igem_drylab.kinetics import CascadeParameters
+from igem_drylab.scoring.m4_reaction import (
+    DockingPenalty,
+    compute_docking_penalty,
+    score_m4_ode,
+    score_m4_piecewise_ode,
+)
+from igem_drylab.kinetics import CascadeParameters, CompetitiveCascadeParameters, InductionGate
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
 
@@ -215,6 +222,19 @@ def scoring_m2_structure(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
 
+def parser_structure_prediction(arguments: JsonObject) -> McpToolResult:
+    result = parse_structure_prediction_output(
+        Path(_require_str(arguments, "path")),
+        candidate_id=arguments.get("candidate_id") if isinstance(arguments.get("candidate_id"), str) else None,
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def parser_calvados(arguments: JsonObject) -> McpToolResult:
+    result = parse_calvados_output(Path(_require_str(arguments, "path")))
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
 def scoring_docking_penalty(arguments: JsonObject) -> McpToolResult:
     result = compute_docking_penalty(
         candidate_id=_require_str(arguments, "candidate_id"),
@@ -234,6 +254,30 @@ def scoring_m4_ode(arguments: JsonObject) -> McpToolResult:
         candidate_id=_require_str(arguments, "candidate_id"),
         params=CascadeParameters(**params_payload),
         docking_penalty=None if penalty_payload is None else DockingPenalty.model_validate(penalty_payload),
+        t_end=float(arguments.get("t_end", 24.0)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def scoring_m4_piecewise_ode(arguments: JsonObject) -> McpToolResult:
+    params_payload = arguments.get("params", {})
+    if not isinstance(params_payload, dict):
+        raise ValueError("Argument 'params' must be an object")
+    oc_gate_payload = arguments.get("oc_gate", {})
+    dmt_gate_payload = arguments.get("dmt_gate", {})
+    if not isinstance(oc_gate_payload, dict) or not isinstance(dmt_gate_payload, dict):
+        raise ValueError("Arguments 'oc_gate' and 'dmt_gate' must be objects")
+    initial_payload = arguments.get("initial", [10.0, 0.0, 0.0, 0.0])
+    if not isinstance(initial_payload, list) or len(initial_payload) != 4:
+        raise ValueError("Argument 'initial' must be a four-number list")
+    penalty_payload = arguments.get("docking_penalty")
+    result = score_m4_piecewise_ode(
+        candidate_id=_require_str(arguments, "candidate_id"),
+        params=CompetitiveCascadeParameters(**params_payload),
+        oc_gate=InductionGate(**oc_gate_payload),
+        dmt_gate=InductionGate(**dmt_gate_payload),
+        docking_penalty=None if penalty_payload is None else DockingPenalty.model_validate(penalty_payload),
+        initial=tuple(float(value) for value in initial_payload),  # type: ignore[arg-type]
         t_end=float(arguments.get("t_end", 24.0)),
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
@@ -542,6 +586,28 @@ SCORING_M2_STRUCTURE_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
 
+PARSER_STRUCTURE_PREDICTION_TOOL = McpTool(
+    name="igem.parsers.structure_prediction",
+    title="Parse AF3/Boltz/Chai/ABCFold prediction outputs",
+    description="Extract pTM/ipTM/pLDDT/PAE/clash summary metrics from real structure-prediction output folders.",
+    input_schema=_schema(
+        {
+            "path": {"type": "string"},
+            "candidate_id": {"type": "string"},
+        },
+        ["path"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+PARSER_CALVADOS_TOOL = McpTool(
+    name="igem.parsers.calvados",
+    title="Parse CALVADOS analysis outputs",
+    description="Extract dense/dilute concentration, enrichment factor, cSat, Rg, and LLPS score from CALVADOS summaries.",
+    input_schema=_schema({"path": {"type": "string"}}, ["path"]),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
 SCORING_DOCKING_PENALTY_TOOL = McpTool(
     name="igem.scoring.docking_penalty",
     title="Calculate Vina docking penalty",
@@ -567,6 +633,25 @@ SCORING_M4_ODE_TOOL = McpTool(
             "candidate_id": {"type": "string"},
             "params": {"type": "object"},
             "docking_penalty": {"type": "object"},
+            "t_end": {"type": "number"},
+        },
+        ["candidate_id"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+SCORING_M4_PIECEWISE_ODE_TOOL = McpTool(
+    name="igem.scoring.m4_piecewise_ode",
+    title="Score M4 OC-first/DMT-later competitive ODE",
+    description="Run the complete piecewise induction ODE with shared DMT substrate competition and byproduct leakage.",
+    input_schema=_schema(
+        {
+            "candidate_id": {"type": "string"},
+            "params": {"type": "object"},
+            "oc_gate": {"type": "object"},
+            "dmt_gate": {"type": "object"},
+            "docking_penalty": {"type": "object"},
+            "initial": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
             "t_end": {"type": "number"},
         },
         ["candidate_id"],
@@ -707,8 +792,11 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (MULTICHAIN_ASSESS_INTERFACE_TOOL, multichain_assess_interface),
     (SCORING_POCKET_SASA_TOOL, scoring_pocket_sasa),
     (SCORING_M2_STRUCTURE_TOOL, scoring_m2_structure),
+    (PARSER_STRUCTURE_PREDICTION_TOOL, parser_structure_prediction),
+    (PARSER_CALVADOS_TOOL, parser_calvados),
     (SCORING_DOCKING_PENALTY_TOOL, scoring_docking_penalty),
     (SCORING_M4_ODE_TOOL, scoring_m4_ode),
+    (SCORING_M4_PIECEWISE_ODE_TOOL, scoring_m4_piecewise_ode),
     (LITERATURE_BUILD_PROMPT_TOOL, literature_build_prompt),
     (LITERATURE_BUILD_DATABASE_TOOL, literature_build_database),
     (LITERATURE_SEARCH_TOOL, literature_search),

@@ -11,4 +11,12 @@ def test_agent_runtime_dry_run_exposes_framework_slots(tmp_path):
     assert trace.plan.steps
     assert trace.calls == []
     assert "Dry run only" in trace.notes[0]
+    assert "context, planner, scheduler" in trace.notes[1]
+    assert runtime.context_builder is not None
+    assert runtime.scheduler is not None
+    assert runtime.budget is not None
+    assert runtime.human_gate is not None
+    assert runtime.reflection is not None
+    assert runtime.artifacts is not None
+    assert runtime.events.events
     assert (tmp_path / "memory.jsonl").exists()

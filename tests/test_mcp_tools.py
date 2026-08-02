@@ -160,6 +160,33 @@ def test_scoring_mcp_tools_return_structured_results():
     assert m4["ok"] is True
     assert m4["result"]["recommendation"] in {"drop", "iterate", "test"}
 
+    structure = registry.call(
+        "igem.parsers.structure_prediction",
+        {
+            "path": "examples/real_metrics/structure_prediction/af3",
+            "candidate_id": "demo_af3",
+        },
+    ).as_protocol_dict()["structuredContent"]
+    assert structure["ok"] is True
+    assert structure["result"]["iptm"] == 0.68
+
+    calvados = registry.call(
+        "igem.parsers.calvados",
+        {"path": "examples/real_metrics/calvados"},
+    ).as_protocol_dict()["structuredContent"]
+    assert calvados["ok"] is True
+    assert calvados["result"]["enrichment_factor"] == 30.0
+
+    piecewise = registry.call(
+        "igem.scoring.m4_piecewise_ode",
+        {
+            "candidate_id": "demo_piecewise",
+            "dmt_gate": {"on_time": 4.0, "basal": 0.0, "induced": 1.0},
+        },
+    ).as_protocol_dict()["structuredContent"]
+    assert piecewise["ok"] is True
+    assert piecewise["result"]["observable_13_reduction"] >= 1.0
+
 
 def test_compute_check_tool_reports_configured_command():
     result = create_default_registry().call(

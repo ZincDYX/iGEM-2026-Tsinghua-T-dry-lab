@@ -8,4 +8,5 @@ build/
 results/
 outputs/
 outputs_test/
+outputs*/
 third_party/downloads/

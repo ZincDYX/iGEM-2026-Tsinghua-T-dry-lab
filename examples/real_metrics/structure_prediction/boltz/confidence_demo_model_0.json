@@ -1,0 +1,8 @@
+{
+  "confidence_score": 0.81,
+  "ptm": 0.76,
+  "iptm": 0.79,
+  "complex_plddt": 84.5,
+  "has_clash": false,
+  "pair_chains_iptm": [[0.93, 0.70], [0.70, 0.89]]
+}
