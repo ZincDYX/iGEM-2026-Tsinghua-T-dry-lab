@@ -1,0 +1,18 @@
+{
+  "template_pdb": "path/to/fth1_24mer_template.pdb",
+  "local_arm_pdb": "path/to/local_fusion_arm.pdb",
+  "reference_core_chain": "A",
+  "core_anchor_residue": 1,
+  "core_anchor_atom": "CA",
+  "core_orientation_atom": "CB",
+  "arm_anchor_chain": "X",
+  "arm_anchor_residue": 1,
+  "arm_anchor_atom": "CA",
+  "arm_orientation_atom": "CB",
+  "probe_chain": "X",
+  "probe_residue_ids": [2],
+  "clash_cutoff_angstrom": 2.0,
+  "exposure_cutoff_angstrom": 5.0,
+  "expected_subunits": 24,
+  "output_pdb": "outputs/fth1_expanded_arms.pdb"
+}

@@ -157,9 +157,12 @@ For designs where the yeast expresses separate modules, such as `FTH1-iLID` and 
 igem-drylab tools call igem.multichain.build_input --arguments-file examples/tool_args/multichain_build_input.json
 igem-drylab tools call igem.multichain.binding_equilibrium --arguments-file examples/tool_args/multichain_binding_equilibrium.json
 igem-drylab tools call igem.multichain.assess_interface --arguments-file examples/tool_args/multichain_assess_interface.json
+igem-drylab tools call igem.multichain.expand_fth1_arms --arguments-file examples/tool_args/multichain_expand_fth1_arms.json
 ```
 
 These tools do not replace ABCFold/Boltz/Chai. They prepare multichain inputs, quantify finite-site binding stoichiometry, and assess chain-chain contacts/clashes after a structure is available.
+
+`igem.multichain.expand_fth1_arms` is the lightweight FTH1-cage step: it reads a complete FTH1 24-mer PDB template, maps a separately predicted local fusion arm to each subunit, writes an optional assembled PDB, and reports core-arm/arm-arm clashes plus a geometric exposure proxy. It deliberately does **not** claim to predict LLPS, linker ensembles, or enzyme activity. Use a biologically appropriate FTH1 24-mer template and a local-arm PDB that does not include a duplicate FTH1 chain.
 
 ## Real-metric parser and scoring tools
 

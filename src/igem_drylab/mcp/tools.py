@@ -11,7 +11,7 @@ from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.llm import ChatClient
 from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
-from igem_drylab.multichain import assess_interface, build_multichain_input, solve_binding_equilibrium
+from igem_drylab.multichain import assess_interface, build_multichain_input, expand_fth1_arms, solve_binding_equilibrium
 from igem_drylab.multichain.models import ProteinChain
 from igem_drylab.parsers.freesasa import compute_pocket_sasa_retention
 from igem_drylab.parsers.calvados import parse_calvados_output
@@ -197,6 +197,33 @@ def multichain_assess_interface(arguments: JsonObject) -> McpToolResult:
         chain_b=_require_str(arguments, "chain_b"),
         contact_cutoff_angstrom=float(arguments.get("contact_cutoff_angstrom", 5.0)),
         clash_cutoff_angstrom=float(arguments.get("clash_cutoff_angstrom", 2.0)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def multichain_expand_fth1_arms(arguments: JsonObject) -> McpToolResult:
+    probe_residue_ids = arguments.get("probe_residue_ids")
+    if probe_residue_ids is not None and (
+        not isinstance(probe_residue_ids, list) or not all(isinstance(value, int) for value in probe_residue_ids)
+    ):
+        raise ValueError("Argument 'probe_residue_ids' must be a list of integers")
+    result = expand_fth1_arms(
+        template_pdb=Path(_require_str(arguments, "template_pdb")),
+        local_arm_pdb=Path(_require_str(arguments, "local_arm_pdb")),
+        reference_core_chain=_require_str(arguments, "reference_core_chain"),
+        core_anchor_residue=int(arguments.get("core_anchor_residue")),
+        core_anchor_atom=_require_str(arguments, "core_anchor_atom"),
+        core_orientation_atom=_require_str(arguments, "core_orientation_atom"),
+        arm_anchor_chain=_require_str(arguments, "arm_anchor_chain"),
+        arm_anchor_residue=int(arguments.get("arm_anchor_residue")),
+        arm_anchor_atom=_require_str(arguments, "arm_anchor_atom"),
+        arm_orientation_atom=_require_str(arguments, "arm_orientation_atom"),
+        probe_chain=arguments.get("probe_chain") if isinstance(arguments.get("probe_chain"), str) else None,
+        probe_residue_ids=probe_residue_ids,
+        clash_cutoff_angstrom=float(arguments.get("clash_cutoff_angstrom", 2.0)),
+        exposure_cutoff_angstrom=float(arguments.get("exposure_cutoff_angstrom", 5.0)),
+        expected_subunits=_optional_int(arguments, "expected_subunits", 24, minimum=1),
+        output_pdb=_optional_path(arguments, "output_pdb"),
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
@@ -546,6 +573,30 @@ MULTICHAIN_ASSESS_INTERFACE_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
 
+MULTICHAIN_EXPAND_FTH1_ARMS_TOOL = McpTool(
+    name="igem.multichain.expand_fth1_arms",
+    title="Expand a local fusion arm around an FTH1 24-mer template",
+    description=(
+        "Map one local appendage structure to every FTH1 subunit using template geometry, then report "
+        "core/arm clashes and a geometric exposure proxy. This is not an LLPS or SASA calculation."
+    ),
+    input_schema=_schema(
+        {
+            "template_pdb": {"type": "string"}, "local_arm_pdb": {"type": "string"},
+            "reference_core_chain": {"type": "string"}, "core_anchor_residue": {"type": "integer"},
+            "core_anchor_atom": {"type": "string"}, "core_orientation_atom": {"type": "string"},
+            "arm_anchor_chain": {"type": "string"}, "arm_anchor_residue": {"type": "integer"},
+            "arm_anchor_atom": {"type": "string"}, "arm_orientation_atom": {"type": "string"},
+            "probe_chain": {"type": "string"}, "probe_residue_ids": {"type": "array", "items": {"type": "integer"}},
+            "clash_cutoff_angstrom": {"type": "number"}, "exposure_cutoff_angstrom": {"type": "number"},
+            "expected_subunits": {"type": "integer", "minimum": 1}, "output_pdb": {"type": "string"},
+        },
+        ["template_pdb", "local_arm_pdb", "reference_core_chain", "core_anchor_residue", "core_anchor_atom",
+         "core_orientation_atom", "arm_anchor_chain", "arm_anchor_residue", "arm_anchor_atom", "arm_orientation_atom"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
 SCORING_POCKET_SASA_TOOL = McpTool(
     name="igem.scoring.pocket_sasa",
     title="Calculate pocket SASA retention",
@@ -790,6 +841,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (MULTICHAIN_BUILD_INPUT_TOOL, multichain_build_input),
     (MULTICHAIN_BINDING_EQUILIBRIUM_TOOL, multichain_binding_equilibrium),
     (MULTICHAIN_ASSESS_INTERFACE_TOOL, multichain_assess_interface),
+    (MULTICHAIN_EXPAND_FTH1_ARMS_TOOL, multichain_expand_fth1_arms),
     (SCORING_POCKET_SASA_TOOL, scoring_pocket_sasa),
     (SCORING_M2_STRUCTURE_TOOL, scoring_m2_structure),
     (PARSER_STRUCTURE_PREDICTION_TOOL, parser_structure_prediction),

@@ -6,6 +6,7 @@
 - Pocket RMSD: first align the enzyme backbone, then calculate pocket heavy-atom RMSD. A 1.5 Å cutoff is also a heuristic; catalytic geometry may require residue-specific distance/angle checks.
 - PAE: summarize both enzyme-to-tag and tag-to-enzyme blocks. High PAE is compatible with flexibility but may also mean poor prediction or insufficient evolutionary information; it is not a positive score by itself.
 - Distance: calculate against an assembled FTH1 24-mer, not an isolated FTH1 monomer. Radial clearance is an approximation; minimum atom distance and sampled linker conformations are more useful for steric exclusion.
+- The repository's `igem.multichain.expand_fth1_arms` tool performs this as a rigid-template geometric expansion. It uses an anchor atom and an outward orientation atom for one local appendage and maps that appendage to each template subunit. Its accessibility value is a geometric clearance fraction, not FreeSASA and not evidence that the assembly forms LLPS. Linker/IDR conformational sampling remains a separate required step for finalists.
 - AF3 seeds: compare multiple random seeds. A single predicted pose is not a conformational ensemble.
 
 ## 2. Linker candidates
