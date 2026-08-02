@@ -1,0 +1,7 @@
+{
+  "plddts": {"model_1_multimer_v3_seed_000": 84.2},
+  "ptm": {"model_1_multimer_v3_seed_000": 0.71},
+  "iptm": {"model_1_multimer_v3_seed_000": 0.66},
+  "ranking_confidence": {"model_1_multimer_v3_seed_000": 0.75},
+  "order": ["model_1_multimer_v3_seed_000"]
+}

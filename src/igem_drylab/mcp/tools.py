@@ -639,7 +639,7 @@ SCORING_M2_STRUCTURE_TOOL = McpTool(
 
 PARSER_STRUCTURE_PREDICTION_TOOL = McpTool(
     name="igem.parsers.structure_prediction",
-    title="Parse AF3/Boltz/Chai/ABCFold prediction outputs",
+    title="Parse ColabFold/AF3/Boltz/Chai/ABCFold prediction outputs",
     description="Extract pTM/ipTM/pLDDT/PAE/clash summary metrics from real structure-prediction output folders.",
     input_schema=_schema(
         {

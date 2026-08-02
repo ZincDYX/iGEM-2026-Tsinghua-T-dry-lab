@@ -170,6 +170,16 @@ class StructurePredictionAdapter(ExternalToolAdapter):
         return self.run(input_file=input_file, output_dir=output_dir, dry_run=dry_run)
 
 
+class ColabFoldAdapter(StructurePredictionAdapter):
+    """Adapter for local ``colabfold_batch`` with the public MSA service.
+
+    ColabFold performs model inference on the configured machine.  For small,
+    serial batches it can obtain MSAs from the public MMseqs2 service, avoiding
+    a local sequence database.  This adapter does not bypass the service's
+    limits and does not turn the public MSA endpoint into a high-throughput API.
+    """
+
+
 class LlpsSimulationAdapter(ExternalToolAdapter):
     def simulate(self, *, config_file: Path, output_dir: Path, dry_run: bool = False) -> ToolRunResult:
         return self.run(config_file=config_file, output_dir=output_dir, dry_run=dry_run)
@@ -192,6 +202,7 @@ class SequenceScreeningAdapter(ExternalToolAdapter):
 
 def create_tool_adapter(name: str, config: ToolConfig | None) -> ExternalToolAdapter:
     adapter_types: dict[str, type[ExternalToolAdapter]] = {
+        "colabfold": ColabFoldAdapter,
         "abcfold": StructurePredictionAdapter,
         "boltz": StructurePredictionAdapter,
         "chai": StructurePredictionAdapter,

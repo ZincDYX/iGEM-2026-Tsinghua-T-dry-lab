@@ -10,10 +10,10 @@ Current maintained modules:
 - `igem_drylab.literature`: schema-first literature extraction and offline database construction utilities.
 - `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
 - `igem_drylab.multichain`: multichain input generation, chain-chain interface checks, and finite-site module binding models.
-- `igem_drylab.parsers`: parsers for FreeSASA, AutoDock Vina, AF3/Boltz/Chai/ABCFold-style confidence outputs, and CALVADOS summaries.
+- `igem_drylab.parsers`: parsers for FreeSASA, AutoDock Vina, ColabFold/AF3/Boltz/Chai/ABCFold-style confidence outputs, and optional CALVADOS summaries.
 - `igem_drylab.scoring`: transparent rule-based M2/M4 scoring with real-metric fallback support.
 - `igem_drylab.agent`: planner/memory/policy/executor/recovery runtime skeleton for an agent learning project.
-- `igem_drylab.pipeline.adapters`: command adapters for external compute tools such as ABCFold, CALVADOS, FreeSASA, AutoDock Vina, SignalP, and DeepTMHMM.
+- `igem_drylab.pipeline.adapters`: command adapters for the lean default stack: ColabFold, FreeSASA, and AutoDock Vina. Optional legacy/advanced adapters are retained but not default dependencies.
 
 The M1-M4 pipeline is lightweight by default. It does not rerun heavy tools unless configured. If real M2 structure metrics, structure-prediction confidence artifacts, CALVADOS summaries, or M4 docking penalties are supplied, the pipeline can parse them and use rule-based real scoring; otherwise it falls back to deterministic mock scores.
 
@@ -45,7 +45,7 @@ outputs/m1-m4-demo/
 
 ## Run M1-M4 with real metric files
 
-This example does not run ABCFold, FreeSASA, or Vina. It reads already-produced metrics and applies lightweight rule-based scoring.
+This example does not run ColabFold, FreeSASA, or Vina. It reads already-produced metrics and applies lightweight rule-based scoring.
 
 ```bash
 igem-drylab pipeline validate configs/m1_m4_real_scoring_example.yaml
@@ -68,11 +68,11 @@ fast rule-based scoring and ODE scan
 
 ```bash
 igem-drylab tools call igem.parsers.structure_prediction --arguments-file examples/mcp/parse_structure_prediction.json
-igem-drylab tools call igem.parsers.calvados --arguments-file examples/mcp/parse_calvados.json
+igem-drylab tools call igem.parsers.structure_prediction --arguments-file examples/mcp/parse_colabfold.json
 igem-drylab tools call igem.scoring.m4_piecewise_ode --arguments-file examples/mcp/score_m4_piecewise_ode.json
 ```
 
-The structure parser is version-tolerant rather than version-perfect: AF3 and Boltz have clearer output schemas, while Chai/ABCFold/CALVADOS layouts should be locked with real lab fixtures once your server versions are fixed.
+The default structure backend is ColabFold AlphaFold2-Multimer. Its `ranking_debug.json` parser extracts pLDDT, pTM and ipTM. It deliberately does not claim an inter-chain PAE value without chain boundaries. AF3/Boltz/Chai/ABCFold/CALVADOS parsers are retained as optional compatibility tools, not required dependencies.
 
 ## Build a literature extraction prompt
 
@@ -143,8 +143,8 @@ igem-drylab tools call igem.literature.build_database --arguments-file examples/
 Compute-tool commands can also be inspected or dry-run through the same tool interface:
 
 ```bash
-igem-drylab tools call igem.compute.check_tool --arguments-file examples/tool_args/compute_check_abcfold.json
-igem-drylab tools call igem.compute.run_tool --arguments-file examples/tool_args/compute_dry_run_abcfold.json
+igem-drylab tools call igem.compute.check_tool --arguments-file examples/tool_args/compute_check_colabfold.json
+igem-drylab tools call igem.compute.run_tool --arguments-file examples/tool_args/compute_dry_run_colabfold.json
 ```
 
 The example config keeps heavy scientific tools in `mode: mock`. To run them on a workstation or server, edit `configs/m1_m4_example.yaml`, set the intended tool to `mode: external`, and point `command` to the installed executable or wrapper script. Command templates are rendered without a shell; values such as `{input_file}`, `{config_file}`, `{pdb_file}`, `{fasta_file}`, and `{output_dir}` come from the tool-call context.
@@ -160,7 +160,7 @@ igem-drylab tools call igem.multichain.assess_interface --arguments-file example
 igem-drylab tools call igem.multichain.expand_fth1_arms --arguments-file examples/tool_args/multichain_expand_fth1_arms.json
 ```
 
-These tools do not replace ABCFold/Boltz/Chai. They prepare multichain inputs, quantify finite-site binding stoichiometry, and assess chain-chain contacts/clashes after a structure is available.
+These tools complement ColabFold; they prepare multichain inputs, quantify finite-site binding stoichiometry, and assess chain-chain contacts/clashes after a structure is available.
 
 `igem.multichain.expand_fth1_arms` is the lightweight FTH1-cage step: it reads a complete FTH1 24-mer PDB template, maps a separately predicted local fusion arm to each subunit, writes an optional assembled PDB, and reports core-arm/arm-arm clashes plus a geometric exposure proxy. It deliberately does **not** claim to predict LLPS, linker ensembles, or enzyme activity. Use a biologically appropriate FTH1 24-mer template and a local-arm PDB that does not include a duplicate FTH1 chain.
 
@@ -187,6 +187,10 @@ The `igem_drylab.agent` package contains the main agent architecture slots:
 - runtime trace.
 
 Important policy decisions are marked with `TODO`. See [docs/agent_framework_notes.md](docs/agent_framework_notes.md) before filling them in.
+
+## Lean default tool stack
+
+The maintained default route is **ColabFold Multimer -> FTH1 24-mer geometric expansion -> FreeSASA -> AutoDock Vina -> M3/M4 ODE**. It uses no local sequence database for small serial jobs because ColabFold can request MSAs from its public service; model inference itself remains local to the GPU server. Optional AF3/ABCFold/Boltz/Chai/CALVADOS integrations are retained for compatibility but are not mandatory. See [docs/lean_tool_stack.md](docs/lean_tool_stack.md) for scope and limits.
 
 Tools that call external APIs read secrets from environment variables instead of JSON arguments:
 

@@ -30,6 +30,16 @@ def test_parse_boltz_style_confidence_json():
     assert result.chain_pair_iptm is not None
 
 
+def test_parse_colabfold_ranking_debug():
+    result = parse_structure_prediction_output(Path("examples/real_metrics/structure_prediction/colabfold"))
+
+    assert result.source == "colabfold_af2_multimer"
+    assert result.iptm == 0.66
+    assert result.ptm == 0.71
+    assert result.mean_plddt == 84.2
+    assert result.mean_interdomain_pae is None
+
+
 def test_parse_chai_style_scores_npz(tmp_path):
     scores = tmp_path / "scores.model_idx_0.npz"
     np.savez(

@@ -191,14 +191,14 @@ def test_scoring_mcp_tools_return_structured_results():
 def test_compute_check_tool_reports_configured_command():
     result = create_default_registry().call(
         "igem.compute.check_tool",
-        {"config_path": "configs/m1_m4_example.yaml", "tool_name": "abcfold"},
+        {"config_path": "configs/m1_m4_example.yaml", "tool_name": "colabfold"},
     )
     structured = result.as_protocol_dict()["structuredContent"]
 
     assert result.is_error is False
     assert structured["ok"] is True
-    assert structured["tool_name"] == "abcfold"
-    assert "abcfold predict" in structured["command"]
+    assert structured["tool_name"] == "colabfold"
+    assert "colabfold_batch" in structured["command"]
 
 
 def test_compute_run_tool_can_dry_run_command(tmp_path):
@@ -206,8 +206,8 @@ def test_compute_run_tool_can_dry_run_command(tmp_path):
         "igem.compute.run_tool",
         {
             "config_path": "configs/m1_m4_example.yaml",
-            "tool_name": "abcfold",
-            "output_dir": str(tmp_path / "abcfold"),
+            "tool_name": "colabfold",
+            "output_dir": str(tmp_path / "colabfold"),
             "dry_run": True,
             "context": {"input_file": "examples/data/proteins.fasta"},
         },

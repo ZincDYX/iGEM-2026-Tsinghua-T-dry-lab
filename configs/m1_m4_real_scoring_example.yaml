@@ -34,14 +34,10 @@ inputs:
       source: Kuroiwa et al. EMBO Reports 2026, PGL-3(D1-D2-3(GGGGS)-RGG), Addgene 250141
 
 tools:
-  calvados:
+  colabfold:
     enabled: true
     mode: mock
-    command: calvados run --config {config_file} --output {output_dir}
-  abcfold:
-    enabled: true
-    mode: mock
-    command: abcfold predict {input_file} --out_dir {output_dir}
+    command: colabfold_batch {input_file} {output_dir} --model-type alphafold2_multimer
   freesasa:
     enabled: true
     mode: mock

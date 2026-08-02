@@ -1,0 +1,9 @@
+{
+  "config_path": "configs/m1_m4_example.yaml",
+  "tool_name": "colabfold",
+  "output_dir": "outputs/colabfold_dry_run",
+  "dry_run": true,
+  "context": {
+    "input_file": "examples/data/proteins.fasta"
+  }
+}

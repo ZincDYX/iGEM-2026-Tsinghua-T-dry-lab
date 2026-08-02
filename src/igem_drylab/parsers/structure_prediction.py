@@ -28,7 +28,7 @@ class StructurePredictionSummary(BaseModel):
 
 
 def parse_structure_prediction_output(path: Path, *, candidate_id: str | None = None) -> StructurePredictionSummary:
-    """Parse common AF3/Boltz/Chai/ABCFold confidence outputs.
+    """Parse common ColabFold, AF3, Boltz, Chai, and ABCFold confidence outputs.
 
     ABCFold is an orchestrator, so this parser scans its output directory for
     AF3-style JSON, Boltz confidence JSON/NPZ, or Chai scores JSON/NPZ.
@@ -37,11 +37,15 @@ def parse_structure_prediction_output(path: Path, *, candidate_id: str | None = 
     if path.is_file():
         return _parse_single_file(path, candidate_id=candidate_id or path.stem)
     files = [item for item in path.rglob("*") if item.is_file()]
+    colabfold_ranking = _pick_colabfold_ranking(files)
     confidence_json = _pick_confidence_json(files)
     scores_npz = _pick_npz(files, prefixes=("scores",))
     pae_npz = _pick_npz(files, prefixes=("pae",))
     plddt_npz = _pick_npz(files, prefixes=("plddt",))
     model_file = _pick_model_file(files)
+    if colabfold_ranking is not None:
+        summary = _parse_colabfold_ranking(colabfold_ranking, candidate_id=candidate_id or path.name)
+        return summary.model_copy(update={"model_file": model_file})
     if confidence_json is not None:
         summary = _parse_confidence_json(confidence_json, candidate_id=candidate_id or path.name)
         return summary.model_copy(
@@ -97,6 +101,39 @@ def _parse_confidence_json(path: Path, *, candidate_id: str) -> StructurePredict
     )
 
 
+def _parse_colabfold_ranking(path: Path, *, candidate_id: str) -> StructurePredictionSummary:
+    """Parse ``ranking_debug.json`` emitted by ColabFold/AlphaFold2.
+
+    This file reports confidence per model.  It does not contain chain-boundary
+    information, so this parser deliberately leaves ``mean_interdomain_pae``
+    empty. Calculate a chain-pair PAE block separately when chain ranges are
+    known.
+    """
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("ColabFold ranking_debug.json must be an object")
+    order = payload.get("order", [])
+    model_name = order[0] if isinstance(order, list) and order else None
+    if not isinstance(model_name, str):
+        for key in ("iptm", "ptm", "plddts", "ranking_confidence"):
+            values = payload.get(key)
+            if isinstance(values, dict) and values:
+                model_name = next(iter(values))
+                break
+    if not isinstance(model_name, str):
+        raise ValueError("Could not identify a ranked ColabFold model")
+    return StructurePredictionSummary(
+        candidate_id=candidate_id,
+        source="colabfold_af2_multimer",
+        confidence_file=path,
+        ranking_score=_mapping_value(payload.get("ranking_confidence"), model_name),
+        ptm=_mapping_value(payload.get("ptm"), model_name),
+        iptm=_mapping_value(payload.get("iptm"), model_name),
+        mean_plddt=_normalize_plddt(_mapping_value(payload.get("plddts"), model_name)),
+        raw_keys=sorted(str(key) for key in payload.keys()),
+    )
+
+
 def _parse_scores_npz(path: Path, *, candidate_id: str) -> StructurePredictionSummary:
     with np.load(path, allow_pickle=True) as data:
         keys = list(data.files)
@@ -121,6 +158,11 @@ def _pick_confidence_json(files: list[Path]) -> Path | None:
         key=lambda item: (0 if "summary_confidences" in item.name.lower() else 1, len(item.parts)),
     )
     return ranked[0] if ranked else None
+
+
+def _pick_colabfold_ranking(files: list[Path]) -> Path | None:
+    matches = [item for item in files if item.name.lower() == "ranking_debug.json"]
+    return sorted(matches, key=lambda item: len(item.parts))[0] if matches else None
 
 
 def _pick_npz(files: list[Path], *, prefixes: tuple[str, ...]) -> Path | None:
@@ -163,6 +205,12 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _mapping_value(value: Any, key: str) -> float | None:
+    if isinstance(value, dict):
+        return _optional_float(value.get(key))
+    return _optional_float(value)
 
 
 def _optional_bool(value: Any) -> bool | None:

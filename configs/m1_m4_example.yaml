@@ -34,14 +34,10 @@ inputs:
       source: Kuroiwa et al. EMBO Reports 2026, PGL-3(D1-D2-3(GGGGS)-RGG), Addgene 250141
 
 tools:
-  calvados:
+  colabfold:
     enabled: true
     mode: mock
-    command: calvados run --config {config_file} --output {output_dir}
-  abcfold:
-    enabled: true
-    mode: mock
-    command: abcfold predict {input_file} --out_dir {output_dir}
+    command: colabfold_batch {input_file} {output_dir} --model-type alphafold2_multimer
   freesasa:
     enabled: true
     mode: mock
@@ -50,14 +46,9 @@ tools:
     enabled: true
     mode: mock
     command: vina --config {config_file} --out {output_dir}/vina_out.pdbqt
-  signalp:
-    enabled: true
-    mode: mock
-    command: signalp6 --fastafile {fasta_file} --output_dir {output_dir}
-  deeptmhmm:
-    enabled: true
-    mode: mock
-    command: biolib run DTU/DeepTMHMM --fasta {fasta_file} --outdir {output_dir}
+# SignalP/DeepTMHMM are optional M0 checks for the OC N-terminus.  They are not
+# default pipeline dependencies because their local deployment/access route is
+# environment-specific.
 
 stages:
   m1_llps:
