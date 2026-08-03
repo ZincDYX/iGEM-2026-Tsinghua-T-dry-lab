@@ -4,17 +4,23 @@ from .models import Plan, PlanStep
 
 
 class StepScheduler:
-    """Select executable DAG steps from a plan.
-
-    TODO: support parallel execution, resource labels such as GPU/CPU/network,
-    and priority updates after reflection or user feedback.
-    """
+    """Dependency-aware scheduler with resource-aware batch selection."""
 
     def ready_steps(self, plan: Plan) -> list[PlanStep]:
         status_by_id = {step.step_id: step.status for step in plan.steps}
-        return [
-            step
-            for step in plan.steps
-            if step.status in {"pending", "ready"}
-            and all(status_by_id.get(parent) == "succeeded" for parent in step.depends_on)
-        ]
+        ready = [step for step in plan.steps if step.status in {"pending", "ready"} and all(status_by_id.get(parent) == "succeeded" for parent in step.depends_on)]
+        return sorted(ready, key=lambda step: step.priority, reverse=True)
+
+    def next_batch(self, plan: Plan, *, max_parallel: int = 1, available_resources: set[str] | None = None) -> list[PlanStep]:
+        chosen: list[PlanStep] = []
+        occupied: set[str] = set()
+        allowed = available_resources or {"cpu", "gpu", "network", "external_api"}
+        for step in self.ready_steps(plan):
+            resources = set(step.resources)
+            if not resources <= allowed or (resources & occupied):
+                continue
+            chosen.append(step)
+            occupied |= resources
+            if len(chosen) >= max_parallel:
+                break
+        return chosen

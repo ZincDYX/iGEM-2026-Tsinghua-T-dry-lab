@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from igem_drylab.mcp import create_default_registry
+from igem_drylab.mcp import ToolRegistry, create_default_registry
 
 from .artifacts import ArtifactStore
-from .budget import BudgetManager
+from .budget import BudgetManager, BudgetState
 from .context import ContextBuilder
 from .executor import ToolExecutor
 from .human import HumanApprovalGate
-from .memory import AgentMemory
-from .models import AgentTask, AgentTrace
+from .memory import AgentMemory, MemoryRecord
+from .models import AgentTask, AgentTrace, PlanStep
 from .observability import EventLogger
-from .planner import Planner
+from .planner import Planner, PlanningBackend
 from .policy import DecisionPolicy
 from .recovery import ErrorRecoveryPolicy
 from .reflection import ReflectionEvaluator
@@ -20,76 +20,137 @@ from .scheduler import StepScheduler
 
 
 class AgentRuntime:
-    """Composable agent runtime skeleton.
+    """Conservative, traceable research-agent runtime for this project.
 
-    This is intentionally not an autonomous agent yet. It provides the same
-    architectural seams: context building, planner, scheduler, memory,
-    artifact/provenance store, budget guardrail, human gate, decision policy,
-    tool executor, observability, reflection, trace, and recovery policy.
-    Fill TODOs before enabling unattended execution.
+    It is deliberately autonomy-bounded: external API calls and costly GPU jobs
+    stop at an approval gate, and scientific outputs are treated as hypotheses
+    until wet-lab data validates them.
     """
 
-    def __init__(self, memory_path: Path | None = None) -> None:
-        self.registry = create_default_registry()
-        self.context_builder = ContextBuilder()
-        self.planner = Planner()
+    def __init__(
+        self,
+        memory_path: Path | None = None,
+        *,
+        artifacts_root: Path | None = None,
+        event_path: Path | None = None,
+        registry: ToolRegistry | None = None,
+        budget_state: BudgetState | None = None,
+        planning_backend: PlanningBackend | None = None,
+    ) -> None:
+        self.registry = registry or create_default_registry()
+        self.memory = AgentMemory(memory_path or Path("outputs/agent_memory/events.jsonl"))
+        self.artifacts = ArtifactStore(artifacts_root or Path("outputs/agent_artifacts"))
+        self.context_builder = ContextBuilder(self.memory, self.artifacts)
+        self.planner = Planner(self.registry, planning_backend)
         self.scheduler = StepScheduler()
-        self.policy = DecisionPolicy()
+        self.policy = DecisionPolicy(self.artifacts)
         self.executor = ToolExecutor(self.registry)
         self.recovery = ErrorRecoveryPolicy()
-        self.budget = BudgetManager()
+        self.budget = BudgetManager(budget_state)
         self.human_gate = HumanApprovalGate()
-        self.reflection = ReflectionEvaluator()
-        self.events = EventLogger()
-        self.memory = AgentMemory(memory_path or Path("outputs/agent_memory/events.jsonl"))
-        self.artifacts = ArtifactStore(Path("outputs/agent_artifacts"))
+        self.reflection = ReflectionEvaluator(self.artifacts)
+        self.events = EventLogger(event_path)
 
     def dry_run(self, task: AgentTask) -> AgentTrace:
-        plan = self.planner.create_plan(task)
-        trace = AgentTrace(task=task, plan=plan)
-        self.context_builder.build_for_task(task)
+        context = self.context_builder.build_for_task(task)
+        plan = self.planner.create_plan(task, context)
+        trace = AgentTrace(task=task, plan=plan, context_summary=_context_summary(context))
         self.events.emit("dry_run_created", task_id=task.task_id, step_count=len(plan.steps))
-        trace.notes.append("Dry run only: planner skeleton produced a plan but no tools were executed.")
+        trace.notes.append("Dry run only: planner produced a dependency-aware plan but no tools were executed.")
         trace.notes.append("Agent framework slots present: context, planner, scheduler, memory, artifact store, budget, human gate, policy, executor, recovery, reflection, observability.")
-        self.memory.append({"event": "dry_run_created", "task_id": task.task_id, "step_count": len(plan.steps)})
+        self.memory.append(MemoryRecord(record_id=f"task-{task.task_id}", kind="task", content=task.objective, tags=["dry_run"], metadata={"step_count": len(plan.steps)}))
         return trace
 
     def run_once(self, task: AgentTask) -> AgentTrace:
-        """Execute one planner-produced pass.
+        """Run a dependency-aware pass until completion, blockage, or failure.
 
-        TODO: add real dependency scheduling loops, retry limits, re-planning,
-        provenance validation, and domain-specific result reflection rubrics.
+        The method is synchronous by design. ``StepScheduler.next_batch`` keeps
+        resource labels explicit so a future worker pool can safely parallelize
+        independent CPU/network work without changing plan semantics.
         """
-        plan = self.planner.create_plan(task)
-        trace = AgentTrace(task=task, plan=plan)
-        self.context_builder.build_for_task(task)
-        for step in self.scheduler.ready_steps(plan):
-            within_budget, budget_reason = self.budget.can_run_tool()
-            if not within_budget:
-                trace.notes.append(f"{step.step_id}: {budget_reason}")
+        context = self.context_builder.build_for_task(task)
+        plan = self.planner.create_plan(task, context)
+        trace = AgentTrace(task=task, plan=plan, context_summary=_context_summary(context))
+        self.events.emit("agent_run_started", task_id=task.task_id, step_count=len(plan.steps))
+
+        while True:
+            batch = self.scheduler.next_batch(plan)
+            if not batch:
                 break
-            if self.human_gate.requires_approval(step):
-                trace.notes.append(f"{step.step_id}: waiting for human approval; TODO approval transport")
-                continue
-            allowed, reason = self.policy.should_execute(step)
-            if not allowed:
-                trace.notes.append(f"{step.step_id}: {reason}")
-                continue
-            if not step.tool_name:
-                trace.notes.append(f"{step.step_id}: no tool assigned; TODO planner must assign tools")
-                continue
-            self.events.emit("tool_call_started", step_id=step.step_id, tool_name=step.tool_name)
-            call = self.executor.execute(step)
-            self.budget.record_tool_call(succeeded=call.status == "succeeded")
-            trace.calls.append(call)
-            if call.status == "failed":
-                self.events.emit("tool_call_failed", step_id=step.step_id, tool_name=step.tool_name)
-                trace.notes.append(f"{step.step_id}: {self.recovery.next_action(step, call)}")
+            progress = False
+            for step in batch:
+                progress = self._run_step(task, trace, step) or progress
+            if not progress:
                 break
-            self.events.emit("tool_call_succeeded", step_id=step.step_id, tool_name=step.tool_name)
+
         report = self.reflection.evaluate(trace)
         if not report.passed:
             trace.notes.extend(report.issues)
-            trace.notes.extend(f"next_action: {item}" for item in report.next_actions)
-        self.memory.append({"event": "run_once_completed", "task_id": task.task_id, "calls": len(trace.calls)})
+            trace.notes.extend(f"next_action:{item}" for item in report.next_actions)
+        if any(step.status == "waiting_approval" for step in plan.steps):
+            trace.final_status = "waiting_for_human"
+        elif any(step.status == "blocked" for step in plan.steps):
+            trace.final_status = "blocked"
+        elif any(step.status == "failed" for step in plan.steps):
+            trace.final_status = "failed"
+        self.memory.append(MemoryRecord(record_id=f"run-{task.task_id}-{len(trace.calls)}", kind="reflection", content=trace.final_status, tags=["agent_run"], metadata={"calls": len(trace.calls), "notes": trace.notes}))
+        self.events.emit("agent_run_finished", task_id=task.task_id, status=trace.final_status, calls=len(trace.calls))
         return trace
+
+    def _run_step(self, task: AgentTask, trace: AgentTrace, step: PlanStep) -> bool:
+        if step.status == "blocked":
+            return False
+        if self.human_gate.requires_approval(step) and task.require_human_approval:
+            decision = self.human_gate.decision_for(step.step_id)
+            if decision is None:
+                step.status = "waiting_approval"
+                trace.notes.append(f"{step.step_id}:waiting_for_human_approval")
+                self.events.emit("approval_requested", step_id=step.step_id, tool_name=step.tool_name)
+                return True
+            if not decision.approved:
+                step.status = "blocked"
+                trace.notes.append(f"{step.step_id}:approval_rejected:{decision.reason}")
+                return True
+        allowed, reason = self.policy.should_execute(step)
+        if not allowed:
+            step.status = "blocked"
+            trace.notes.append(f"{step.step_id}:{reason}")
+            self.events.emit("step_blocked", step_id=step.step_id, reason=reason)
+            return True
+        within_budget, budget_reason = self.budget.can_run_tool(step)
+        if not within_budget:
+            step.status = "blocked"
+            trace.notes.append(f"{step.step_id}:{budget_reason}")
+            self.events.emit("step_blocked", step_id=step.step_id, reason=budget_reason)
+            return True
+
+        step.status = "running"
+        step.attempts += 1
+        self.events.emit("tool_call_started", step_id=step.step_id, tool_name=step.tool_name)
+        call = self.executor.execute(step)
+        self.budget.record_tool_call(step, succeeded=call.status == "succeeded")
+        trace.calls.append(call)
+        self.memory.append(MemoryRecord(record_id=f"call-{task.task_id}-{step.step_id}-{step.attempts}", kind="tool_call", content=f"{step.tool_name}:{call.status}", tags=[step.step_id, call.status], metadata={"result": call.result}))
+        if call.status == "succeeded":
+            step.status = "succeeded"
+            self.events.emit("tool_call_succeeded", step_id=step.step_id, tool_name=step.tool_name)
+            return True
+        decision = self.recovery.next_action(step, call)
+        self.events.emit("tool_call_failed", step_id=step.step_id, tool_name=step.tool_name, recovery_action=decision.action)
+        trace.notes.append(f"{step.step_id}:recovery={decision.action}:{decision.reason}")
+        if decision.action == "retry" and step.attempts <= step.retry_limit:
+            step.status = "pending"
+        elif decision.action in {"ask_user", "replan"}:
+            step.status = "blocked"
+        else:
+            step.status = "failed"
+        return True
+
+
+def _context_summary(context: object) -> dict[str, object]:
+    bundle = context
+    return {
+        "memory_items": len(bundle.retrieved_memory),  # type: ignore[attr-defined]
+        "artifact_items": len(bundle.artifact_summaries),  # type: ignore[attr-defined]
+        "conflicts": bundle.conflicts,  # type: ignore[attr-defined]
+    }

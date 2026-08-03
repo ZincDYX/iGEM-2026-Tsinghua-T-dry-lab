@@ -1,17 +1,34 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from .artifacts import ArtifactStore
 from .models import PlanStep
 
 
 class DecisionPolicy:
-    """Tool-choice and safety policy layer.
+    """Deterministic scientific and safety policy applied before every tool call."""
 
-    TODO: implement scientific decision rules, e.g. when to run heavy structure
-    prediction, when to use mock fallback, when to ask for wet-lab input, and
-    which artifacts are trusted enough to enter M1-M4 scoring.
-    """
+    HEAVY_TOOLS = {"igem.compute.run_tool"}
+
+    def __init__(self, artifacts: ArtifactStore | None = None) -> None:
+        self.artifacts = artifacts
 
     def should_execute(self, step: PlanStep) -> tuple[bool, str]:
-        if step.status in {"succeeded", "skipped"}:
+        if step.status in {"succeeded", "skipped", "failed", "blocked"}:
             return False, "step_already_terminal"
-        return True, "allowed_by_default_skeleton_policy"
+        if not step.tool_name:
+            return False, "no_tool_assigned"
+        if self.artifacts:
+            for artifact_id in step.required_artifact_ids:
+                valid, reason = self.artifacts.verify(artifact_id)
+                if not valid:
+                    return False, f"required_artifact_{reason}:{artifact_id}"
+        if step.tool_name in self.HEAVY_TOOLS and not step.arguments.get("dry_run", False):
+            if not step.arguments.get("justification"):
+                return False, "heavy_compute_requires_justification"
+        for key, value in step.arguments.items():
+            is_input_path = key == "path" or key.endswith("_path")
+            if is_input_path and isinstance(value, str) and value and not Path(value).exists() and key not in {"output_path", "output_dir"}:
+                return False, f"missing_input_path:{key}"
+        return True, "allowed_by_policy"

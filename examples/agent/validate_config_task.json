@@ -1,0 +1,8 @@
+{
+  "task_id": "validate-example",
+  "objective": "Validate the M1-M4 project configuration before running dry-lab analysis.",
+  "constraints": ["Do not run GPU tools", "Use existing local configuration only"],
+  "inputs": {
+    "config_path": "configs/m1_m4_example.yaml"
+  }
+}

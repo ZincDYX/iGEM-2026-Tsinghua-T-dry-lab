@@ -175,18 +175,20 @@ igem-drylab tools call igem.scoring.m4_ode --arguments-file examples/tool_args/s
 
 The current scoring rules are intentionally transparent, not a trained black-box model. Update the TODO calibration points after wet-lab HPLC data becomes available.
 
-## Agent framework skeleton
+## Agent framework
 
-The `igem_drylab.agent` package contains the main agent architecture slots:
+The `igem_drylab.agent` package provides a conservative runnable agent loop:
 
 - planner;
 - memory;
 - decision policy;
 - tool executor;
 - error recovery policy;
-- runtime trace.
+- runtime trace, JSONL events, artifact checksums, typed memory, recovery, and reflection.
 
-Important policy decisions are marked with `TODO`. See [docs/agent_framework_notes.md](docs/agent_framework_notes.md) before filling them in.
+Run a safe example with `igem-drylab agent dry-run examples/agent/validate_config_task.json` or `igem-drylab agent run examples/agent/validate_config_task.json`. See [docs/agent_framework_notes.md](docs/agent_framework_notes.md) and [docs/agent_tutorial.md](docs/agent_tutorial.md) for architecture, limits, and a code-level learning guide.
+
+The default planner is local and deterministic. To explicitly use the optional OpenAI-compatible planner, copy `.env.example` to `.env`, add the key locally, then pass `--planner llm`. `.env` is ignored by Git; never commit API keys.
 
 ## Lean default tool stack
 

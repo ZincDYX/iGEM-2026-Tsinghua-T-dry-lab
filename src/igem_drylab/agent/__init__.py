@@ -7,7 +7,9 @@ research/industry agent system, while leaving project-specific policies as TODOs
 from .artifacts import ArtifactRecord, ArtifactStore
 from .budget import BudgetManager, BudgetState
 from .context import ContextBuilder, ContextBundle
-from .human import HumanApprovalGate
+from .human import ApprovalDecision, HumanApprovalGate
+from .memory import AgentMemory, MemoryRecord
+from .llm_planner import OpenAICompatiblePlanningBackend
 from .models import AgentTask, AgentTrace, Plan, PlanStep
 from .observability import EventLogger
 from .reflection import ReflectionEvaluator, ReflectionReport
@@ -16,16 +18,20 @@ from .scheduler import StepScheduler
 
 __all__ = [
     "AgentRuntime",
+    "AgentMemory",
     "AgentTask",
     "AgentTrace",
     "ArtifactRecord",
     "ArtifactStore",
+    "ApprovalDecision",
     "BudgetManager",
     "BudgetState",
     "ContextBuilder",
     "ContextBundle",
     "EventLogger",
     "HumanApprovalGate",
+    "MemoryRecord",
+    "OpenAICompatiblePlanningBackend",
     "Plan",
     "PlanStep",
     "ReflectionEvaluator",

@@ -1,24 +1,24 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 
 class EventLogger:
-    """Structured run event logger.
+    """Structured in-memory and JSONL event logger."""
 
-    TODO: persist JSONL traces, attach tool stdout/stderr summaries, and export
-    run metadata to the future wiki visualization layer.
-    """
-
-    def __init__(self) -> None:
+    def __init__(self, path: Path | None = None) -> None:
         self.events: list[dict[str, Any]] = []
+        self.path = path
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
 
-    def emit(self, event_type: str, **payload: Any) -> None:
-        self.events.append(
-            {
-                "event_type": event_type,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                **payload,
-            }
-        )
+    def emit(self, event_type: str, **payload: Any) -> dict[str, Any]:
+        event = {"event_type": event_type, "created_at": datetime.now(timezone.utc).isoformat(), **payload}
+        self.events.append(event)
+        if self.path is not None:
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        return event

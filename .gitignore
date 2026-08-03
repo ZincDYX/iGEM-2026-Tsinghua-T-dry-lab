@@ -10,3 +10,6 @@ outputs/
 outputs_test/
 outputs*/
 third_party/downloads/
+.env
+.env.*
+!.env.example

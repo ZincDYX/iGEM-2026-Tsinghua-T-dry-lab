@@ -6,6 +6,8 @@ from pathlib import Path
 import typer
 
 from igem_drylab.literature import build_prompt, load_schema
+from igem_drylab.agent import AgentRuntime, AgentTask, OpenAICompatiblePlanningBackend
+from igem_drylab.agent.env import load_local_env
 from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
@@ -18,10 +20,12 @@ pipeline_app = typer.Typer(help="Run M1-M4 pipeline skeleton.")
 literature_app = typer.Typer(help="Use schema-first literature extraction helpers.")
 multichain_app = typer.Typer(help="Build and inspect multichain module designs.")
 tools_app = typer.Typer(help="Inspect and call MCP-style local tools.")
+agent_app = typer.Typer(help="Plan and run conservative dry-lab agent workflows.")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(literature_app, name="literature")
 app.add_typer(multichain_app, name="multichain")
 app.add_typer(tools_app, name="tools")
+app.add_typer(agent_app, name="agent")
 
 
 @pipeline_app.command("validate")
@@ -189,6 +193,68 @@ def call_tool(
     result = create_default_registry().call(name, arguments)
     typer.echo(json.dumps(result.as_protocol_dict(), ensure_ascii=False, indent=2))
     if result.is_error:
+        raise typer.Exit(code=1)
+
+
+def _load_agent_task(task_file: Path) -> AgentTask:
+    payload = json.loads(task_file.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise typer.BadParameter("Agent task file must contain a JSON object")
+    return AgentTask.model_validate(payload)
+
+
+def _agent_runtime(
+    memory_path: Path,
+    *,
+    planner: str,
+    api_base: str | None,
+    model: str | None,
+    api_key_env: str,
+) -> AgentRuntime:
+    if planner == "rule-based":
+        return AgentRuntime(memory_path=memory_path)
+    if planner != "llm":
+        raise typer.BadParameter("Planner must be 'rule-based' or 'llm'")
+    import os
+
+    load_local_env()
+    resolved_base = api_base or os.getenv("DEEPSEEK_API_BASE") or "https://api.deepseek.com/chat/completions"
+    resolved_model = model or os.getenv("DEEPSEEK_MODEL") or "deepseek-chat"
+    backend = OpenAICompatiblePlanningBackend.from_environment(
+        api_base=resolved_base,
+        model=resolved_model,
+        api_key_env=api_key_env,
+    )
+    return AgentRuntime(memory_path=memory_path, planning_backend=backend)
+
+
+@agent_app.command("dry-run")
+def agent_dry_run(
+    task_file: Path,
+    memory_path: Path = typer.Option(Path("outputs/agent_memory/events.jsonl"), "--memory-path"),
+    planner: str = typer.Option("rule-based", "--planner", help="rule-based (default) or llm"),
+    api_base: str | None = typer.Option(None, "--api-base", help="OpenAI-compatible /chat/completions URL"),
+    model: str | None = typer.Option(None, "--model", help="Model name for --planner llm"),
+    api_key_env: str = typer.Option("DEEPSEEK_API_KEY", "--api-key-env"),
+) -> None:
+    runtime = _agent_runtime(memory_path, planner=planner, api_base=api_base, model=model, api_key_env=api_key_env)
+    trace = runtime.dry_run(_load_agent_task(task_file))
+    typer.echo(trace.model_dump_json(indent=2))
+
+
+@agent_app.command("run")
+def agent_run(
+    task_file: Path,
+    memory_path: Path = typer.Option(Path("outputs/agent_memory/events.jsonl"), "--memory-path"),
+    planner: str = typer.Option("rule-based", "--planner", help="rule-based (default) or llm"),
+    api_base: str | None = typer.Option(None, "--api-base", help="OpenAI-compatible /chat/completions URL"),
+    model: str | None = typer.Option(None, "--model", help="Model name for --planner llm"),
+    api_key_env: str = typer.Option("DEEPSEEK_API_KEY", "--api-key-env"),
+) -> None:
+    runtime = _agent_runtime(memory_path, planner=planner, api_base=api_base, model=model, api_key_env=api_key_env)
+    trace = runtime.run_once(_load_agent_task(task_file))
+    typer.echo(trace.model_dump_json(indent=2))
+    if trace.final_status in {"blocked", "failed"}:
         raise typer.Exit(code=1)
 
 
