@@ -13,3 +13,6 @@ third_party/downloads/
 .env
 .env.*
 !.env.example
+
+docs/agent_tutorial.md
+docs/agent_framework_notes.md
