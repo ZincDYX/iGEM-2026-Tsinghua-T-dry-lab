@@ -10,7 +10,7 @@ from .context import ContextBuilder, ContextBundle
 from .human import ApprovalDecision, HumanApprovalGate
 from .memory import AgentMemory, MemoryRecord
 from .llm_planner import OpenAICompatiblePlanningBackend
-from .models import AgentTask, AgentTrace, Plan, PlanStep
+from .models import AgentTask, AgentTrace, Plan, PlanStep, ResultBinding, ResultCondition
 from .observability import EventLogger
 from .reflection import ReflectionEvaluator, ReflectionReport
 from .runtime import AgentRuntime
@@ -34,6 +34,8 @@ __all__ = [
     "OpenAICompatiblePlanningBackend",
     "Plan",
     "PlanStep",
+    "ResultBinding",
+    "ResultCondition",
     "ReflectionEvaluator",
     "ReflectionReport",
     "StepScheduler",

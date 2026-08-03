@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from igem_drylab.agent import AgentRuntime, AgentTask, ArtifactRecord, ArtifactStore, BudgetManager, BudgetState, HumanApprovalGate, PlanStep
+from igem_drylab.agent import AgentRuntime, AgentTask, ArtifactRecord, ArtifactStore, BudgetManager, BudgetState, HumanApprovalGate, Plan, PlanStep, ResultBinding, ResultCondition
 from igem_drylab.agent.context import ContextBundle
 from igem_drylab.agent.env import load_local_env
 from igem_drylab.agent.llm_planner import OpenAICompatiblePlanningBackend
+from igem_drylab.mcp import McpTool, McpToolResult, ToolRegistry
 
 
 def test_agent_runtime_dry_run_exposes_framework_slots(tmp_path):
@@ -112,3 +113,54 @@ def test_local_env_loader_respects_existing_environment(tmp_path, monkeypatch):
     assert __import__("os").environ["TEST_AGENT_KEY"] == "from_process"
     assert load_local_env(env_file, override=True) is True
     assert __import__("os").environ["TEST_AGENT_KEY"] == "from_file"
+
+
+def test_planner_selects_colabfold_only_after_explicit_compute_request(tmp_path):
+    runtime = AgentRuntime(memory_path=tmp_path / "memory.jsonl")
+    trace = runtime.dry_run(
+        AgentTask(
+            task_id="new-structure",
+            objective="Screen OC DMT fusion structure",
+            inputs={
+                "config_path": "configs/m1_m4_real_scoring_example.yaml",
+                "structure_input_file": "examples/data/proteins.fasta",
+                "allow_new_compute": True,
+            },
+        )
+    )
+    run_step = next(step for step in trace.plan.steps if step.step_id == "run_colabfold")
+    assert run_step.tool_name == "igem.compute.run_tool"
+    assert run_step.resources == ["gpu"]
+    assert run_step.estimated_gpu_minutes == 60
+    assert next(step for step in trace.plan.steps if step.step_id == "parse_structure").depends_on == ["run_colabfold"]
+
+
+def test_runtime_binds_results_and_skips_failed_gate(tmp_path):
+    registry = ToolRegistry()
+    source_tool = McpTool("test.source", "source", "", {"type": "object"}, None)
+    target_tool = McpTool("test.target", "target", "", {"type": "object"}, None)
+    registry.register(source_tool, lambda _arguments: McpToolResult.ok({"result": {"passes": True, "penalty": {"value": 7}}}))
+    registry.register(target_tool, lambda arguments: McpToolResult.ok({"received": arguments["penalty"]}))
+
+    class FixedBackend:
+        def create_plan(self, task, context, available_tools):
+            return Plan(
+                task_id=task.task_id,
+                steps=[
+                    PlanStep(
+                        step_id="source", objective="source", tool_name="test.source",
+                        result_bindings=[ResultBinding(target_step_id="target", target_argument="penalty", source_path=["structuredContent", "result", "penalty"])],
+                    ),
+                    PlanStep(
+                        step_id="target", objective="target", tool_name="test.target", depends_on=["source"],
+                        run_conditions=[ResultCondition(source_step_id="source", source_path=["structuredContent", "result", "passes"], allowed_values=[True])],
+                    ),
+                ],
+            )
+
+    trace = AgentRuntime(memory_path=tmp_path / "memory.jsonl", registry=registry, planning_backend=FixedBackend()).run_once(
+        AgentTask(task_id="binding", objective="test")
+    )
+    assert trace.final_status == "completed"
+    assert trace.plan.steps[1].status == "succeeded"
+    assert trace.calls[1].result["structuredContent"]["received"] == {"value": 7}

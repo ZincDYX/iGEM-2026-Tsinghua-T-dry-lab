@@ -26,6 +26,22 @@ class AgentTask(BaseModel):
     require_human_approval: bool = True
 
 
+class ResultCondition(BaseModel):
+    """Permit a step only when a prior tool result has an accepted value."""
+
+    source_step_id: str
+    source_path: list[str]
+    allowed_values: list[Any]
+
+
+class ResultBinding(BaseModel):
+    """Copy a JSON value from one successful tool result into a later step."""
+
+    target_step_id: str
+    target_argument: str
+    source_path: list[str]
+
+
 class PlanStep(BaseModel):
     step_id: str
     objective: str
@@ -34,6 +50,8 @@ class PlanStep(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     required_artifact_ids: list[str] = Field(default_factory=list)
     produces: list[str] = Field(default_factory=list)
+    run_conditions: list[ResultCondition] = Field(default_factory=list)
+    result_bindings: list[ResultBinding] = Field(default_factory=list)
     resources: list[ResourceLabel] = Field(default_factory=lambda: ["cpu"])
     priority: int = Field(default=50, ge=0, le=100)
     estimated_gpu_minutes: float = Field(default=0.0, ge=0)

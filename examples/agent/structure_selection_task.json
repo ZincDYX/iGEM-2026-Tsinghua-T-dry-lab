@@ -1,0 +1,16 @@
+{
+  "task_id": "oc-dmt-fusion-structure-selection",
+  "objective": "Screen the OC DMT fusion construct before docking and OC-first DMT-later kinetics.",
+  "constraints": [
+    "Run only one explicitly supplied construct.",
+    "Require human approval before GPU prediction."
+  ],
+  "inputs": {
+    "candidate_id": "oc-dmt-c-terminal-linker-v1",
+    "config_path": "configs/m1_m4_real_scoring_example.yaml",
+    "structure_input_file": "examples/data/proteins.fasta",
+    "allow_new_compute": true
+  },
+  "artifacts_dir": "outputs/agent_runs",
+  "require_human_approval": true
+}

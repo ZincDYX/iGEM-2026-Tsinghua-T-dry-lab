@@ -159,7 +159,24 @@ def compute_run_tool(arguments: JsonObject) -> McpToolResult:
     timeout_seconds = _optional_int(arguments, "timeout_seconds", 3600, minimum=1)
     adapter = create_tool_adapter(tool_name, config.tools.get(tool_name))
     result = adapter.run(output_dir=output_dir, dry_run=dry_run, timeout_seconds=timeout_seconds, **context)
+    result = _persist_standard_output(tool_name, result)
     return McpToolResult.ok({"ok": result.status not in {"failed", "missing_executable"}, "run": result.model_dump(mode="json")})
+
+
+def _persist_standard_output(tool_name: str, result: Any) -> Any:
+    """Materialize machine-readable stdout for downstream local tools.
+
+    AutoDock Vina prints its pose table to stdout and FreeSASA can print JSON to
+    stdout. Persisting those streams makes the next stage reproducible without
+    parsing an agent trace. Empty mock output is intentionally not written.
+    """
+    filenames = {"autodock_vina": "vina_stdout.txt", "freesasa": "freesasa.json"}
+    filename = filenames.get(tool_name)
+    if filename is None or result.output_dir is None or not result.stdout.strip():
+        return result
+    output_file = result.output_dir / filename
+    output_file.write_text(result.stdout, encoding="utf-8")
+    return result.model_copy(update={"outputs": {**result.outputs, "standard_output": output_file}})
 
 
 def multichain_build_input(arguments: JsonObject) -> McpToolResult:

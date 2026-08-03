@@ -10,7 +10,7 @@ from .context import ContextBuilder
 from .executor import ToolExecutor
 from .human import HumanApprovalGate
 from .memory import AgentMemory, MemoryRecord
-from .models import AgentTask, AgentTrace, PlanStep
+from .models import AgentTask, AgentTrace, Plan, PlanStep
 from .observability import EventLogger
 from .planner import Planner, PlanningBackend
 from .policy import DecisionPolicy
@@ -100,6 +100,12 @@ class AgentRuntime:
     def _run_step(self, task: AgentTask, trace: AgentTrace, step: PlanStep) -> bool:
         if step.status == "blocked":
             return False
+        conditions_met, condition_reason = self._conditions_met(trace, step)
+        if not conditions_met:
+            step.status = "skipped"
+            trace.notes.append(f"{step.step_id}:skipped:{condition_reason}")
+            self.events.emit("step_skipped", step_id=step.step_id, reason=condition_reason)
+            return True
         if self.human_gate.requires_approval(step) and task.require_human_approval:
             decision = self.human_gate.decision_for(step.step_id)
             if decision is None:
@@ -133,6 +139,7 @@ class AgentRuntime:
         self.memory.append(MemoryRecord(record_id=f"call-{task.task_id}-{step.step_id}-{step.attempts}", kind="tool_call", content=f"{step.tool_name}:{call.status}", tags=[step.step_id, call.status], metadata={"result": call.result}))
         if call.status == "succeeded":
             step.status = "succeeded"
+            self._apply_result_bindings(trace.plan, step, call, trace)
             self.events.emit("tool_call_succeeded", step_id=step.step_id, tool_name=step.tool_name)
             return True
         decision = self.recovery.next_action(step, call)
@@ -146,6 +153,40 @@ class AgentRuntime:
             step.status = "failed"
         return True
 
+    @staticmethod
+    def _conditions_met(trace: AgentTrace, step: PlanStep) -> tuple[bool, str]:
+        for condition in step.run_conditions:
+            source = next((call for call in trace.calls if call.step_id == condition.source_step_id), None)
+            if source is None:
+                return False, f"condition_source_missing:{condition.source_step_id}"
+            try:
+                value = _read_result_path(source.result, condition.source_path)
+            except (KeyError, TypeError):
+                return False, f"condition_value_missing:{condition.source_step_id}"
+            if value not in condition.allowed_values:
+                return False, f"condition_not_met:{condition.source_step_id}"
+        return True, "conditions_met"
+
+    def _apply_result_bindings(self, plan: Plan, source_step: PlanStep, call: object, trace: AgentTrace) -> None:
+        call_result = call.result  # type: ignore[attr-defined]
+        steps = {step.step_id: step for step in plan.steps}
+        for binding in source_step.result_bindings:
+            target = steps.get(binding.target_step_id)
+            if target is None:
+                trace.notes.append(f"{source_step.step_id}:binding_target_missing:{binding.target_step_id}")
+                continue
+            try:
+                target.arguments[binding.target_argument] = _read_result_path(call_result, binding.source_path)
+            except (KeyError, TypeError):
+                trace.notes.append(f"{source_step.step_id}:binding_value_missing:{binding.target_argument}")
+                continue
+            self.events.emit(
+                "result_bound",
+                source_step_id=source_step.step_id,
+                target_step_id=target.step_id,
+                target_argument=binding.target_argument,
+            )
+
 
 def _context_summary(context: object) -> dict[str, object]:
     bundle = context
@@ -154,3 +195,12 @@ def _context_summary(context: object) -> dict[str, object]:
         "artifact_items": len(bundle.artifact_summaries),  # type: ignore[attr-defined]
         "conflicts": bundle.conflicts,  # type: ignore[attr-defined]
     }
+
+
+def _read_result_path(payload: object, path: list[str]) -> object:
+    current = payload
+    for key in path:
+        if not isinstance(current, dict):
+            raise TypeError(f"Cannot read '{key}' from non-object result")
+        current = current[key]
+    return current

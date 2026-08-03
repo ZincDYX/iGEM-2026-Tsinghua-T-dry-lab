@@ -8,7 +8,12 @@ class StepScheduler:
 
     def ready_steps(self, plan: Plan) -> list[PlanStep]:
         status_by_id = {step.step_id: step.status for step in plan.steps}
-        ready = [step for step in plan.steps if step.status in {"pending", "ready"} and all(status_by_id.get(parent) == "succeeded" for parent in step.depends_on)]
+        ready = [
+            step
+            for step in plan.steps
+            if step.status in {"pending", "ready"}
+            and all(status_by_id.get(parent) in {"succeeded", "skipped"} for parent in step.depends_on)
+        ]
         return sorted(ready, key=lambda step: step.priority, reverse=True)
 
     def next_batch(self, plan: Plan, *, max_parallel: int = 1, available_resources: set[str] | None = None) -> list[PlanStep]:
