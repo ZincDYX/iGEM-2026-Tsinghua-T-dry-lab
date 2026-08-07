@@ -1,0 +1,12 @@
+# Copy this file to API.txt for local runs.
+# Never commit API.txt to GitHub.
+
+ELSEVIER_API_KEY='YOUR_ELSEVIER_API_KEY'
+DEEPSEEK_API_KEY='YOUR_DEEPSEEK_API_KEY'
+WOS_API_KEY='YOUR_WEB_OF_SCIENCE_API_KEY_OPTIONAL'
+
+# Search query groups can be edited here or passed through scripts/CLI flags.
+REGULATION_QUERY='("concentration dependent" OR "threshold" OR "bistable" OR "switch-like" OR "nonlinear response" OR "cooperative assembly") AND ("enzyme activity" OR "metabolic reaction" OR "biosynthetic pathway" OR "product formation" OR "in vivo catalysis")'
+PRODUCT_QUERY='("flavonoid" OR "isoflavonoid" OR "pterocarpan" OR "isoprenoid" OR "plant natural product" OR "specialized metabolite") AND ("yeast" OR "Saccharomyces cerevisiae" OR "metabolic engineering" OR "heterologous biosynthesis" OR "titer improvement")'
+YEAST_CONDENSATE_QUERY='("Saccharomyces cerevisiae" OR "yeast") AND ("puncta" OR "foci" OR "granule" OR "body" OR "aggregate" OR "inclusion body" OR "protein condensate" OR "liquid droplet") AND ("enzyme" OR "metabolism" OR "biosynthesis" OR "heterologous expression")'
+LLPS_QUERY='("phase separation" OR "phase transition" OR "membraneless organelle" OR "biomolecular condensate" OR "protein assembly" OR "protein aggregate" OR "intracellular compartment") AND ("metabolic engineering" OR "synthetic biology" OR "enzyme engineering" OR "pathway optimization" OR "metabolic flux" OR "enzyme colocalization" OR "metabolic channeling")'

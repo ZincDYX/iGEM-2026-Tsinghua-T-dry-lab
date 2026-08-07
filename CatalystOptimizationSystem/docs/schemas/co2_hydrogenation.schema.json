@@ -1,0 +1,105 @@
+{
+  "schema_id": "co2_hydrogenation_v1",
+  "domain": "co2_hydrogenation",
+  "description": "CO2 hydrogenation to methanol extraction schema.",
+  "prompt": {
+    "instructions": [
+      "Extract raw values and raw units exactly as stated in the text.",
+      "Do not convert units; downstream Python code handles normalization.",
+      "Return null for both value and unit when a metric is not explicitly reported.",
+      "Include evidence as the shortest source sentence or phrase supporting each non-null value."
+    ]
+  },
+  "metrics": [
+    {
+      "name": "temperature",
+      "description": "Reaction temperature.",
+      "constraints": {
+        "units": ["C", "K", null],
+        "target_unit": "C",
+        "min": -50.0,
+        "max": 500.0,
+        "conversions": [
+          {"from": "K", "to": "C", "factor": 1.0, "offset": -273.15}
+        ]
+      }
+    },
+    {
+      "name": "pressure",
+      "description": "Reaction pressure.",
+      "constraints": {
+        "units": ["bar", "MPa", null],
+        "target_unit": "bar",
+        "min": 0.0,
+        "max": 500.0,
+        "conversions": [
+          {"from": "MPa", "to": "bar", "factor": 10.0, "offset": 0.0}
+        ]
+      }
+    },
+    {
+      "name": "co2_conversion",
+      "description": "CO2 conversion.",
+      "constraints": {
+        "units": ["%", "fraction", null],
+        "target_unit": "fraction",
+        "min": 0.0,
+        "max": 1.0,
+        "decimal_policy": "percent_to_fraction"
+      }
+    },
+    {
+      "name": "methanol_selectivity",
+      "description": "Methanol selectivity.",
+      "constraints": {
+        "units": ["%", "fraction", null],
+        "target_unit": "fraction",
+        "min": 0.0,
+        "max": 1.0,
+        "decimal_policy": "percent_to_fraction"
+      }
+    },
+    {
+      "name": "methanol_yield",
+      "description": "Methanol yield.",
+      "constraints": {
+        "units": ["%", "fraction", null],
+        "target_unit": "fraction",
+        "min": 0.0,
+        "max": 1.0,
+        "decimal_policy": "percent_to_fraction"
+      }
+    }
+  ],
+  "cross_relations": [
+    {
+      "type": "lte",
+      "left": "methanol_yield",
+      "right": "co2_conversion",
+      "name": "yield_exceeds_conversion",
+      "tolerance": 0.000001
+    }
+  ],
+  "cleaning": {
+    "grouping_keys": ["doi", "final_catalyst_name"],
+    "key_value_columns": [
+      "temperature_norm_value",
+      "pressure_norm_value",
+      "co2_conversion_norm_value",
+      "methanol_selectivity_norm_value",
+      "methanol_yield_norm_value"
+    ],
+    "required_columns": ["co2_conversion_norm_value"],
+    "nonzero_columns": ["co2_conversion_norm_value"]
+  },
+  "optimization": {
+    "columns": {
+      "T": "temperature_norm_value",
+      "P": "pressure_norm_value",
+      "conv": "co2_conversion_norm_value",
+      "sel": "methanol_selectivity_norm_value",
+      "yld": "methanol_yield_norm_value"
+    },
+    "default_objective": "0.8*sel + 0.2*conv"
+  }
+}

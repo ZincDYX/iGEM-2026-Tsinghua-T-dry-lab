@@ -1,0 +1,1006 @@
+{
+  "schema_id": "glabridin_enzyme_catalysis_v1",
+  "domain": "glabridin_enzyme_catalysis",
+  "description": "Schema for extracting glabridin-related enzymatic catalysis and LLPS-regulated biocatalysis records.",
+  "prompt": {
+    "instructions": [
+      "A complete record corresponds to one enzyme or mutant, one substrate, one reaction system, one set of reaction conditions, and one set of results.",
+      "Split records when the same enzyme is tested at different temperature, pH, substrate, mutant, LLPS state, or reaction system. Keep multiple products in the same row when they come from the same enzyme-condition product spectrum.",
+      "Prefer complete numeric values from tables over partial best-result text when both describe the same condition.",
+      "Only extract values explicitly reported in the article. Do not infer, extrapolate, or fill values from general biochemical knowledge.",
+      "If a value is described qualitatively without a number, such as complete conversion, enhanced activity, or strong LLPS, return null unless the requested field is textual.",
+      "For figure-derived values, return the estimated raw value only when needed and include the phrase estimated from figure in evidence.",
+      "Do not confuse reaction temperature with expression, purification, storage, thermal stability, SDS-PAGE, or instrument temperatures.",
+      "Do not confuse catalytic reaction time with protein expression time, cell growth time before catalysis, post-sampling analysis time, or storage time.",
+      "Do not confuse glabridin with related intermediates such as 4'-O-methylglabridin, 4'-O-methylpreglabridin, vestitol, medicarpin, demethylvestitol, or licoagrocarpin.",
+      "Do not confuse conversion, yield, selectivity, titer, concentration, enzyme activity, specific activity, and relative activity. They are different fields.",
+      "For in vivo or whole-cell systems, keep intracellular, extracellular, and total production distinct in evidence when the article distinguishes them.",
+      "For LLPS systems, distinguish free enzyme activity from condensate, coacervate, droplet, cluster, or scaffold-localized activity.",
+      "Return JSON only. Each metric value must be an object with value, unit, and evidence.",
+      "If a numeric field is reported as a range or condition series, keep the raw range string and evidence; do not collapse it to a midpoint.",
+      "For LLPS-only studies without catalytic output, fill LLPS context fields and return null for glabridin-specific catalytic metrics.",
+      "When comparing condensate and soluble controls, create or extract separate records for each state if their conditions or kinetic parameters differ.",
+      "Use data_source_type=figure_estimated when a value is read approximately from a plot, and keep the phrase estimated from figure in evidence."
+    ]
+  },
+  "metrics": [
+    {
+      "name": "enzyme_name",
+      "type": "text",
+      "description": "Enzyme name such as GgOC1, GgDMT1, PTR, PT, IFR, LOX, or peptide/coacervate catalyst.",
+      "aliases": [
+        "enzyme",
+        "oxidative cyclase",
+        "DMT",
+        "demethylase",
+        "PTR",
+        "PT",
+        "LOX"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "enzyme_mutant",
+      "type": "text",
+      "description": "Mutant or variant name, including site mutation format such as I293A, T295S, N303R, H270A.",
+      "aliases": [
+        "mutant",
+        "variant"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "enzyme_source_species",
+      "type": "text",
+      "description": "Natural source species of the enzyme.",
+      "aliases": [
+        "Glycyrrhiza glabra",
+        "G. uralensis",
+        "Homo sapiens"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "expression_host",
+      "type": "text",
+      "description": "Heterologous expression or production host.",
+      "aliases": [
+        "E. coli",
+        "S. cerevisiae",
+        "Pichia pastoris",
+        "BL21",
+        "BY4741",
+        "CHO"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "substrate_name",
+      "type": "text",
+      "description": "Substrate name.",
+      "aliases": [
+        "4'-O-methylpreglabridin",
+        "vestitol",
+        "formononetin",
+        "medicarpin",
+        "L-lactic acid"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "substrate_id",
+      "type": "text",
+      "description": "Substrate compound number or article-specific identifier.",
+      "aliases": [
+        "compound 10",
+        "compound 9",
+        "substrate 9"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "main_product_name",
+      "type": "text",
+      "description": "Main product name.",
+      "aliases": [
+        "glabridin",
+        "4'-O-methylglabridin",
+        "demethylvestitol",
+        "vestitol",
+        "pyruvic acid"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "main_product_id",
+      "type": "text",
+      "description": "Main product compound number or article-specific identifier.",
+      "aliases": [
+        "compound 11",
+        "compound 15",
+        "product 13"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "byproduct_name",
+      "type": "text",
+      "description": "Side product or shunt product.",
+      "aliases": [
+        "side product",
+        "byproduct",
+        "shinflaperocarpan",
+        "licoagrocarpin"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "reaction_system_type",
+      "type": "categorical",
+      "description": "Reaction system type: purified enzyme, crude enzyme, microsome, whole cell, in vivo fermentation, LLPS condensate, coacervate, droplet, cluster, or peptide catalyst.",
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "is_whole_cell",
+      "type": "boolean",
+      "description": "Whether the reported catalysis is whole-cell or in vivo rather than purified in vitro enzyme.",
+      "constraints": {
+        "type": "boolean"
+      }
+    },
+    {
+      "name": "llps_component",
+      "type": "text",
+      "description": "LLPS scaffold, protein, peptide, polymer, RNA, or condensate component.",
+      "aliases": [
+        "PLL",
+        "FUS",
+        "FMRP",
+        "Corelet",
+        "coacervate",
+        "droplet",
+        "condensate"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "llps_state",
+      "type": "text",
+      "description": "Assembly or phase state, such as free, dispersed, cluster, droplet, condensate, coacervate, phosphorylated, methylated, or scaffold-localized.",
+      "aliases": [
+        "free enzyme",
+        "cluster",
+        "droplet",
+        "coacervate",
+        "condensate"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "llps_trigger",
+      "type": "text",
+      "description": "LLPS trigger or regulator, including salt, RNA, phosphorylation, methylation, light activation, scaffold concentration, or polymer additive.",
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "reaction_temperature",
+      "description": "Temperature during catalytic reaction or kinetic assay, not expression, purification, storage, or thermal-stability temperature.",
+      "aliases": [
+        "incubated at",
+        "reaction was carried out at",
+        "assayed at"
+      ],
+      "constraints": {
+        "units": [
+          "C",
+          "K",
+          null
+        ],
+        "target_unit": "C",
+        "min": 0,
+        "max": 100,
+        "conversions": [
+          {
+            "from": "K",
+            "to": "C",
+            "factor": 1,
+            "offset": -273.15
+          }
+        ]
+      }
+    },
+    {
+      "name": "reaction_ph",
+      "description": "Reaction buffer pH.",
+      "aliases": [
+        "pH"
+      ],
+      "constraints": {
+        "units": [
+          "pH",
+          null
+        ],
+        "target_unit": "pH",
+        "min": 3,
+        "max": 11
+      }
+    },
+    {
+      "name": "reaction_time",
+      "description": "Catalytic reaction duration from enzyme-substrate mixing to sampling or termination.",
+      "aliases": [
+        "incubated for",
+        "reaction time"
+      ],
+      "constraints": {
+        "units": [
+          "s",
+          "min",
+          "h",
+          null
+        ],
+        "target_unit": "h",
+        "min": 0,
+        "max": 168,
+        "conversions": [
+          {
+            "from": "s",
+            "to": "h",
+            "factor": 0.0002777778,
+            "offset": 0
+          },
+          {
+            "from": "min",
+            "to": "h",
+            "factor": 0.0166666667,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "buffer_type",
+      "type": "text",
+      "description": "Reaction buffer species.",
+      "aliases": [
+        "Tris-HCl",
+        "PBS",
+        "potassium phosphate",
+        "HEPES",
+        "citrate phosphate"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "buffer_concentration",
+      "description": "Reaction buffer concentration.",
+      "constraints": {
+        "units": [
+          "μM",
+          "mM",
+          "M",
+          null
+        ],
+        "target_unit": "mM",
+        "min": 0,
+        "max": 1000,
+        "conversions": [
+          {
+            "from": "M",
+            "to": "mM",
+            "factor": 1000,
+            "offset": 0
+          },
+          {
+            "from": "μM",
+            "to": "mM",
+            "factor": 0.001,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "substrate_concentration",
+      "description": "Initial substrate concentration in the catalytic reaction.",
+      "constraints": {
+        "units": [
+          "nM",
+          "μM",
+          "mM",
+          "M",
+          "mg/L",
+          null
+        ],
+        "target_unit": "μM",
+        "min": 0,
+        "max": 100000,
+        "conversions": [
+          {
+            "from": "nM",
+            "to": "μM",
+            "factor": 0.001,
+            "offset": 0
+          },
+          {
+            "from": "mM",
+            "to": "μM",
+            "factor": 1000,
+            "offset": 0
+          },
+          {
+            "from": "M",
+            "to": "μM",
+            "factor": 1000000,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "enzyme_concentration",
+      "description": "Purified enzyme, catalyst, peptide, or LLPS enzyme concentration.",
+      "constraints": {
+        "units": [
+          "nM",
+          "μM",
+          "mM",
+          "mg/mL",
+          "μg/mL",
+          null
+        ],
+        "min": 0,
+        "max": 100000
+      }
+    },
+    {
+      "name": "enzyme_amount",
+      "description": "Mass, volume, units, or loading amount of enzyme or crude enzyme added.",
+      "constraints": {
+        "units": [
+          "μg",
+          "mg",
+          "U",
+          "μL",
+          "mL",
+          null
+        ],
+        "min": 0,
+        "max": 100000
+      }
+    },
+    {
+      "name": "cofactor",
+      "type": "text",
+      "description": "Cofactor or coenzyme identity.",
+      "aliases": [
+        "2-OG",
+        "2-oxoglutarate",
+        "Fe2+",
+        "FeSO4",
+        "FAD",
+        "NADPH",
+        "ascorbate",
+        "FMN"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "cofactor_concentration",
+      "description": "Cofactor or coenzyme concentration.",
+      "constraints": {
+        "units": [
+          "μM",
+          "mM",
+          "M",
+          null
+        ],
+        "target_unit": "mM",
+        "min": 0,
+        "max": 100,
+        "conversions": [
+          {
+            "from": "μM",
+            "to": "mM",
+            "factor": 0.001,
+            "offset": 0
+          },
+          {
+            "from": "M",
+            "to": "mM",
+            "factor": 1000,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "cosubstrate",
+      "type": "text",
+      "description": "Co-substrate identity.",
+      "aliases": [
+        "DMAPP",
+        "SAM",
+        "quinone"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "cosubstrate_concentration",
+      "description": "Co-substrate concentration.",
+      "constraints": {
+        "units": [
+          "μM",
+          "mM",
+          "M",
+          null
+        ],
+        "target_unit": "mM",
+        "min": 0,
+        "max": 100,
+        "conversions": [
+          {
+            "from": "μM",
+            "to": "mM",
+            "factor": 0.001,
+            "offset": 0
+          },
+          {
+            "from": "M",
+            "to": "mM",
+            "factor": 1000,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "reaction_volume",
+      "description": "Final catalytic reaction volume.",
+      "constraints": {
+        "units": [
+          "μL",
+          "mL",
+          null
+        ],
+        "target_unit": "mL",
+        "min": 0,
+        "max": 1000,
+        "conversions": [
+          {
+            "from": "μL",
+            "to": "mL",
+            "factor": 0.001,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "cell_density_od600",
+      "description": "Cell density for whole-cell or fermentation catalysis.",
+      "constraints": {
+        "units": [
+          "OD600",
+          null
+        ],
+        "target_unit": "OD600",
+        "min": 0,
+        "max": 100
+      }
+    },
+    {
+      "name": "llps_scaffold_concentration",
+      "description": "Concentration of LLPS scaffold, polymer, peptide, protein, RNA, or condensate-organizing component.",
+      "constraints": {
+        "units": [
+          "nM",
+          "μM",
+          "mM",
+          "mg/mL",
+          null
+        ],
+        "min": 0,
+        "max": 100000
+      }
+    },
+    {
+      "name": "llps_salt_concentration",
+      "description": "Salt concentration used to regulate phase separation.",
+      "constraints": {
+        "units": [
+          "μM",
+          "mM",
+          "M",
+          null
+        ],
+        "target_unit": "mM",
+        "min": 0,
+        "max": 5000,
+        "conversions": [
+          {
+            "from": "μM",
+            "to": "mM",
+            "factor": 0.001,
+            "offset": 0
+          },
+          {
+            "from": "M",
+            "to": "mM",
+            "factor": 1000,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "substrate_conversion",
+      "description": "Explicitly reported substrate conversion percentage. Do not use qualitative complete conversion unless a number is given.",
+      "aliases": [
+        "conversion",
+        "substrate conversion",
+        "conversion rate",
+        "% conversion"
+      ],
+      "constraints": {
+        "units": [
+          "%",
+          "fraction",
+          null
+        ],
+        "target_unit": "fraction",
+        "min": 0,
+        "max": 1,
+        "decimal_policy": "percent_to_fraction"
+      }
+    },
+    {
+      "name": "glabridin_yield",
+      "description": "Glabridin yield, not titer or concentration.",
+      "aliases": [
+        "yield",
+        "isolated yield"
+      ],
+      "constraints": {
+        "units": [
+          "%",
+          "fraction",
+          null
+        ],
+        "target_unit": "fraction",
+        "min": 0,
+        "max": 1,
+        "decimal_policy": "percent_to_fraction"
+      }
+    },
+    {
+      "name": "glabridin_titer",
+      "description": "Glabridin production or titer, commonly used for in vivo yeast expression or fermentation.",
+      "aliases": [
+        "production",
+        "titer",
+        "final production"
+      ],
+      "constraints": {
+        "units": [
+          "mg/L",
+          "μg/mL",
+          "mg/g DW",
+          "mg/g DCW",
+          null
+        ],
+        "min": 0,
+        "max": 100000
+      }
+    },
+    {
+      "name": "glabridin_concentration",
+      "description": "Glabridin concentration in the reaction mixture, separate from yield and titer.",
+      "aliases": [
+        "concentration"
+      ],
+      "constraints": {
+        "units": [
+          "nM",
+          "μM",
+          "mM",
+          "mg/L",
+          "μg/mL",
+          null
+        ],
+        "min": 0,
+        "max": 100000
+      }
+    },
+    {
+      "name": "glabridin_selectivity",
+      "description": "Glabridin product selectivity among products.",
+      "aliases": [
+        "selectivity",
+        "product selectivity"
+      ],
+      "constraints": {
+        "units": [
+          "%",
+          "fraction",
+          null
+        ],
+        "target_unit": "fraction",
+        "min": 0,
+        "max": 1,
+        "decimal_policy": "percent_to_fraction"
+      }
+    },
+    {
+      "name": "enzyme_activity",
+      "description": "Total enzyme activity or volumetric activity, not normalized by enzyme mass.",
+      "aliases": [
+        "activity",
+        "enzyme activity"
+      ],
+      "constraints": {
+        "units": [
+          "U",
+          "U/mL",
+          "μmol/min",
+          null
+        ],
+        "min": 0,
+        "max": 1000000
+      }
+    },
+    {
+      "name": "specific_activity",
+      "description": "Activity normalized by enzyme protein mass.",
+      "aliases": [
+        "specific activity",
+        "U/mg",
+        "μmol/min/mg"
+      ],
+      "constraints": {
+        "units": [
+          "U/mg",
+          "μmol/min/mg",
+          null
+        ],
+        "min": 0,
+        "max": 1000000
+      }
+    },
+    {
+      "name": "relative_activity",
+      "description": "Mutant or condition activity relative to wild type or control.",
+      "aliases": [
+        "relative activity",
+        "% of WT",
+        "fold increase"
+      ],
+      "constraints": {
+        "units": [
+          "%",
+          "fraction",
+          "fold",
+          null
+        ],
+        "min": 0,
+        "max": 100000
+      }
+    },
+    {
+      "name": "kinetic_efficiency",
+      "description": "Catalytic efficiency kcat/Km when explicitly reported.",
+      "aliases": [
+        "kcat/Km",
+        "catalytic efficiency"
+      ],
+      "constraints": {
+        "units": [
+          "mM⁻¹·s⁻¹",
+          "M^-1 s^-1",
+          null,
+          "M⁻¹·s⁻¹",
+          "mM^-1 s^-1"
+        ],
+        "min": 0,
+        "max": 1000000000
+      }
+    },
+    {
+      "name": "regioselectivity",
+      "description": "Regioselectivity for a modification site such as 4'-O vs 7-O.",
+      "constraints": {
+        "units": [
+          "%",
+          "fraction",
+          null
+        ],
+        "target_unit": "fraction",
+        "min": 0,
+        "max": 1,
+        "decimal_policy": "percent_to_fraction"
+      }
+    },
+    {
+      "name": "leakage_ratio",
+      "description": "Intermediate leakage or extracellular/intracellular distribution ratio.",
+      "constraints": {
+        "units": [
+          "%",
+          "fraction",
+          null
+        ],
+        "target_unit": "fraction",
+        "min": 0,
+        "max": 1,
+        "decimal_policy": "percent_to_fraction"
+      }
+    },
+    {
+      "name": "phase_regulation_direction",
+      "type": "text",
+      "description": "Direction of LLPS or condensate regulation, such as promotes LLPS, inhibits LLPS, dissolves droplets, enhances activity, or suppresses aggregation.",
+      "aliases": [
+        "phase separation propensity",
+        "LLPS regulation",
+        "droplet formation",
+        "droplet dissolution"
+      ],
+      "constraints": {
+        "type": "text"
+      }
+    },
+    {
+      "name": "critical_phase_concentration",
+      "description": "Critical protein or scaffold concentration for visible phase separation under the stated condition. Keep the condition in evidence.",
+      "aliases": [
+        "critical concentration",
+        "saturation concentration",
+        "threshold concentration"
+      ],
+      "constraints": {
+        "units": [
+          "nM",
+          "μM",
+          "mM",
+          "mg/mL",
+          null
+        ],
+        "min": 0,
+        "max": 100000
+      }
+    },
+    {
+      "name": "frap_half_time",
+      "description": "FRAP fluorescence recovery half-time for droplets or condensates.",
+      "aliases": [
+        "FRAP t1/2",
+        "half recovery time",
+        "t1/2"
+      ],
+      "constraints": {
+        "units": [
+          "s",
+          "min",
+          null
+        ],
+        "target_unit": "s",
+        "min": 0,
+        "max": 100000,
+        "conversions": [
+          {
+            "from": "min",
+            "to": "s",
+            "factor": 60,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "droplet_dissolution_time",
+      "description": "Time required for droplet melting or dissolution after a perturbation.",
+      "aliases": [
+        "droplet melting",
+        "droplet dissolution"
+      ],
+      "constraints": {
+        "units": [
+          "s",
+          "min",
+          "h",
+          null
+        ],
+        "target_unit": "h",
+        "min": 0,
+        "max": 168,
+        "conversions": [
+          {
+            "from": "s",
+            "to": "h",
+            "factor": 0.0002777778,
+            "offset": 0
+          },
+          {
+            "from": "min",
+            "to": "h",
+            "factor": 0.0166666667,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "catalytic_efficiency_fold_change",
+      "description": "Fold-change in catalytic efficiency caused by LLPS, coacervation, mutation, or another condition relative to the stated control.",
+      "aliases": [
+        "fold increase",
+        "fold enhancement",
+        "catalytic efficiency increased"
+      ],
+      "constraints": {
+        "units": [
+          "fold",
+          null
+        ],
+        "target_unit": "fold",
+        "min": 0,
+        "max": 1000000
+      }
+    },
+    {
+      "name": "kcat",
+      "description": "Turnover number kcat when explicitly reported.",
+      "aliases": [
+        "k_cat",
+        "turnover number"
+      ],
+      "constraints": {
+        "units": [
+          "s^-1",
+          "s⁻¹",
+          "min^-1",
+          "min⁻¹",
+          null
+        ],
+        "min": 0,
+        "max": 1000000
+      }
+    },
+    {
+      "name": "km",
+      "description": "Michaelis constant Km when explicitly reported.",
+      "aliases": [
+        "K_M",
+        "Km",
+        "Michaelis constant"
+      ],
+      "constraints": {
+        "units": [
+          "nM",
+          "μM",
+          "mM",
+          "M",
+          null
+        ],
+        "target_unit": "μM",
+        "min": 0,
+        "max": 100000000,
+        "conversions": [
+          {
+            "from": "nM",
+            "to": "μM",
+            "factor": 0.001,
+            "offset": 0
+          },
+          {
+            "from": "mM",
+            "to": "μM",
+            "factor": 1000,
+            "offset": 0
+          },
+          {
+            "from": "M",
+            "to": "μM",
+            "factor": 1000000,
+            "offset": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "data_source_type",
+      "type": "categorical",
+      "description": "Where the value came from: text, table, figure, figure_estimated, method, or not_reported.",
+      "constraints": {
+        "type": "text"
+      }
+    }
+  ],
+  "cross_relations": [
+    {
+      "type": "lte",
+      "left": "glabridin_yield",
+      "right": "substrate_conversion",
+      "name": "yield_exceeds_conversion",
+      "tolerance": 1e-06
+    }
+  ],
+  "cleaning": {
+    "grouping_keys": [
+      "doi",
+      "enzyme_name_norm_value",
+      "enzyme_mutant_norm_value",
+      "substrate_name_norm_value",
+      "reaction_system_type_norm_value"
+    ],
+    "key_value_columns": [
+      "reaction_temperature_norm_value",
+      "reaction_ph_norm_value",
+      "reaction_time_norm_value",
+      "substrate_concentration_norm_value",
+      "enzyme_concentration_norm_value",
+      "substrate_conversion_norm_value",
+      "glabridin_yield_norm_value",
+      "glabridin_titer_norm_value",
+      "glabridin_selectivity_norm_value",
+      "specific_activity_norm_value",
+      "relative_activity_norm_value"
+    ],
+    "required_columns": [
+      "enzyme_name_norm_value",
+      "substrate_name_norm_value"
+    ],
+    "nonzero_columns": [
+      "substrate_conversion_norm_value",
+      "glabridin_titer_norm_value",
+      "specific_activity_norm_value"
+    ]
+  },
+  "optimization": {
+    "columns": {
+      "T": "reaction_temperature_norm_value",
+      "pH": "reaction_ph_norm_value",
+      "time": "reaction_time_norm_value",
+      "substrate": "substrate_concentration_norm_value",
+      "enzyme": "enzyme_concentration_norm_value",
+      "conv": "substrate_conversion_norm_value",
+      "yield": "glabridin_yield_norm_value",
+      "titer": "glabridin_titer_norm_value",
+      "sel": "glabridin_selectivity_norm_value",
+      "activity": "specific_activity_norm_value"
+    },
+    "default_objective": "prefer glabridin_titer; if unavailable use 0.45*substrate_conversion + 0.35*glabridin_selectivity + 0.20*specific_activity"
+  }
+}
