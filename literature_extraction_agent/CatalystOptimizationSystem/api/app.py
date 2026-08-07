@@ -105,6 +105,30 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_record(req)
             elif parsed.path == '/correct':
                 self._handle_correct(req)
+            elif parsed.path == '/literature-qa':
+                self._handle_literature_qa(req)
+            elif parsed.path == '/agent/status':
+                self._handle_agent_status(req)
+            elif parsed.path == '/agent/evidence':
+                self._handle_agent_evidence(req)
+            elif parsed.path == '/agent/components':
+                self._handle_agent_components(req)
+            elif parsed.path == '/agent/constructs':
+                self._handle_agent_constructs(req)
+            elif parsed.path == '/agent/structure-screen':
+                self._handle_agent_structure_screen(req)
+            elif parsed.path == '/agent/llps-score':
+                self._handle_agent_llps_score(req)
+            elif parsed.path == '/agent/partition-model':
+                self._handle_agent_partition_model(req)
+            elif parsed.path == '/agent/design':
+                self._handle_agent_design(req)
+            elif parsed.path == '/agent/external-tools':
+                self._handle_agent_external_tools(req)
+            elif parsed.path == '/agent/run':
+                self._handle_agent_run(req)
+            elif parsed.path == '/agent/run-external-tool':
+                self._handle_agent_run_external_tool(req)
             else:
                 self._send(404, {'error': 'not found'})
         except ValueError as ve:
@@ -674,10 +698,176 @@ class Handler(BaseHTTPRequestHandler):
             'output_csv': csv_path,
         })
 
+    def _handle_literature_qa(self, req: dict):
+        from CatalystOptimizationSystem.core.literature_qa import answer_literature_question
+
+        question = req.get('question')
+        if not question:
+            self._send(400, {'error': 'question required'})
+            return
+        try:
+            result = answer_literature_question(
+                question=question,
+                evidence_csv=req.get('evidence_csv') or None,
+                top_k=int(req.get('top_k', 8)),
+                filters=req.get('filters') or {},
+                llm_config=req.get('llm') or {},
+            )
+        except ValueError as ex:
+            self._send(400, {'error': str(ex)})
+            return
+        except Exception as ex:
+            self._send(500, {'error': f'literature QA failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _agent(self, req: dict):
+        from CatalystOptimizationSystem.core.lkd_agent import get_agent
+
+        return get_agent(req.get('evidence_csv') or None)
+
+    def _handle_agent_status(self, req: dict):
+        try:
+            self._send(200, self._agent(req).status())
+        except Exception as ex:
+            self._send(500, {'error': f'agent status failed: {ex}'})
+
+    def _handle_agent_evidence(self, req: dict):
+        question = req.get('question') or 'LLPS enzyme Glabridin yeast evidence'
+        try:
+            result = self._agent(req).evidence(
+                question=question,
+                top_k=int(req.get('top_k', 8)),
+                filters=req.get('filters') or {},
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent evidence failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_components(self, req: dict):
+        try:
+            result = self._agent(req).components(
+                query=req.get('query') or '',
+                top_k=int(req.get('top_k', 20)),
+                include_defaults=bool(req.get('include_defaults', True)),
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent components failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_constructs(self, req: dict):
+        try:
+            result = self._agent(req).constructs(
+                enzyme=req.get('enzyme') or 'GgDMT1',
+                top_k=int(req.get('top_k', 20)),
+                include_oc=bool(req.get('include_oc', False)),
+                sbd_candidates=req.get('sbd_candidates') or None,
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent constructs failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_structure_screen(self, req: dict):
+        try:
+            result = self._agent(req).structure_screen(
+                candidates=req.get('candidates') or None,
+                top_k=int(req.get('top_k', 20)),
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent structure screen failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_llps_score(self, req: dict):
+        try:
+            result = self._agent(req).llps_score(sequences=req.get('sequences') or None)
+        except Exception as ex:
+            self._send(500, {'error': f'agent LLPS score failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_partition_model(self, req: dict):
+        try:
+            result = self._agent(req).partition_model(
+                enzyme_total=float(req.get('enzyme_total', 1.0)),
+                phi_values=req.get('phi_values') or None,
+                kp_values=req.get('kp_values') or None,
+                free_activity_threshold=float(req.get('free_activity_threshold', 0.25)),
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent partition model failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_design(self, req: dict):
+        try:
+            result = self._agent(req).design(
+                question=req.get('question') or 'Design a substrate-sensing LLPS system for Glabridin in yeast',
+                top_k=int(req.get('top_k', 8)),
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent design failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_external_tools(self, req: dict):
+        try:
+            from CatalystOptimizationSystem.core.external_tools import check_external_tools
+
+            result = check_external_tools(
+                api_txt=req.get('api_txt') or None,
+                network=bool(req.get('network', False)),
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent external tool check failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_run(self, req: dict):
+        try:
+            result = self._agent(req).agent_run(
+                goal=req.get('goal') or req.get('question') or 'Design a substrate-sensing LLPS system for Glabridin in yeast',
+                top_k=int(req.get('top_k', 8)),
+                run_external=bool(req.get('run_external', False)),
+                tool_inputs=req.get('tool_inputs') or {},
+                network_check=bool(req.get('network_check', False)),
+                max_steps=int(req.get('max_steps', 10)),
+            )
+        except Exception as ex:
+            self._send(500, {'error': f'agent run failed: {ex}'})
+            return
+        self._send(200, result)
+
+    def _handle_agent_run_external_tool(self, req: dict):
+        try:
+            from CatalystOptimizationSystem.core.external_tools import ExternalToolRegistry
+
+            registry = ExternalToolRegistry()
+            tool = (req.get('tool') or '').strip().lower()
+            payload = req.get('payload') or {}
+            if tool in {'boltz', 'boltz2'}:
+                result = registry.run_boltz2(**payload)
+            elif tool == 'alphafold3':
+                result = registry.run_alphafold3(**payload)
+            elif tool in {'mpipi', 'psap'}:
+                result = registry.run_phase_predictor(tool, **payload)
+            elif tool in {'vina', 'autodock_vina'}:
+                result = registry.run_vina(**payload)
+            else:
+                self._send(400, {'error': 'tool must be boltz2, alphafold3, mpipi, psap, or autodock_vina'})
+                return
+        except Exception as ex:
+            self._send(500, {'error': f'agent external tool execution failed: {ex}'})
+            return
+        self._send(200, result)
+
 
 def run(host: str = '127.0.0.1', port: int = 8080):
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f'API listening on http://{host}:{port} (GET /health, /jobs/<id>; POST /extract, /clean, /impute/evaluate, /impute/apply, /suggest)')
+    print(f'API listening on http://{host}:{port} (GET /health, /jobs/<id>; POST /extract, /clean, /impute/evaluate, /impute/apply, /suggest, /literature-qa, /agent/*)')
     httpd.serve_forever()
 
 

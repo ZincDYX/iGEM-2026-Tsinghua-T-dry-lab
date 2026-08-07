@@ -8,11 +8,14 @@ API.txt
 # Runtime uploads and user-provided source documents
 uploads/
 CatalystOptimizationSystem/uploads/
+archive/
 *.docx
 *.pptx
 *.xlsx
 *.xls
 *.backup.py
+work_pdf_text.txt
+work_pdf_fig_pages.txt
 
 # Literature downloads, caches, and generated databases
 essay/

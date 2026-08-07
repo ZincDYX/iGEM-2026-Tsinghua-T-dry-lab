@@ -1,37 +1,90 @@
-# 文献抽取 iGEM 项目
+# iGEM Tsinghua-T Literature Knowledge Design AI Agent
 
-这个仓库整理了面向光甘草定酶催化、代谢工程和 LLPS/凝聚体调控方向的文献抽取流程。项目包含模块化抽取系统、动态 ICL 材料、JSON Schema 约束、候选文献检索、全文/补充材料下载、数值证据高召回挖掘、结构化聚合和最终数据库分层优化。
+This repository contains the dry-lab literature extraction and evidence-grounded design-support code for the iGEM Tsinghua-T project. The system focuses on literature mining for Yeast, Glabridin biosynthesis, LLPS/condensate regulation and enzyme-catalysis design.
 
-## 代码结构
+## What This Project Does
 
-- `CatalystOptimizationSystem/`：主系统代码，包含抽取、schema、动态 ICL、校验、插补、优化和 API。
-- `scripts/`：批处理脚本，覆盖候选文献收集、PDF/SI 下载、文本缓存、证据挖掘、结构化、聚合、合并和最终优化。
-- `tools/`：Windows 环境检查、API server 启动和软著材料导出脚本。
-- `docs/`：项目结构、运行流程和软著相关说明。
-- `CatalystOptimizationSystem/docs/`：ICL 示例、gold examples 和 schema 文件。
+- Builds a candidate literature pool from Elsevier, Web of Science and open full-text routes.
+- Extracts multi-record experimental evidence with JSON Schema constraints and dynamic ICL examples.
+- Normalizes units, validates required/non-zero fields and keeps DOI/title/evidence provenance.
+- Expands evidence from full text, SI, supplementary tables and data files.
+- Provides a local web UI for extraction, cleaning, imputation, optimization and literature QA.
+- Adds an optional DeepSeek-Pro grounded-answer layer that only writes answers from retrieved evidence rows.
 
-大型运行产物不进入 GitHub，包括 `essay/`、`outputs/`、PDF、补充材料、全文缓存和最终 CSV 数据库。真实 API key 保存在本地 `API.txt`，不要提交。
+## Repository Layout
 
-## 环境准备
+- `CatalystOptimizationSystem/`: main application package.
+  - `api/app.py`: local HTTP API server.
+  - `core/extractor.py`: literature search, prompt construction, LLM extraction and CSV output.
+  - `core/schema_config.py`: schema loading, field rules and unit constraints.
+  - `core/icl_selector.py`: dynamic ICL example retrieval.
+  - `core/literature_qa.py`: evidence retrieval and DeepSeek-grounded QA.
+  - `core/lkd_agent.py`: LLPS-LKD design-support agent modules.
+  - `ui/`: static web frontend with the iGEM-styled Literature QA page.
+  - `docs/`: schema files, ICL examples and gold examples.
+- `scripts/`: batch workflows for literature collection, PDF/SI processing, high-recall extraction, LLM QC, database aggregation and visualization.
+- `tools/`: Windows helper scripts for environment checking, server startup and software-copyright export.
+- `docs/`: project-structure and implementation notes.
+
+Large runtime outputs are intentionally not committed. These include `essay/`, `outputs/`, `uploads/`, PDFs, CSV databases, supplementary files and API keys.
+
+## Setup
 
 ```powershell
+cd D:\文献抽取igem
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item API.example.txt API.txt
 ```
 
-然后在 `API.txt` 中填入本地 API key。
+Fill your local `API.txt` with keys. Do not commit `API.txt`.
 
-## 常用入口
-
-启动模块化 API：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_api_server.ps1
+```text
+ELSEVIER_API_KEY='YOUR_ELSEVIER_API_KEY'
+DEEPSEEK_API_KEY='YOUR_DEEPSEEK_API_KEY'
+WOS_API_KEY='YOUR_WEB_OF_SCIENCE_API_KEY_OPTIONAL'
 ```
 
-运行 schema-first 抽取：
+## Start The Web App
+
+PowerShell:
+
+```powershell
+cd D:\文献抽取igem
+& C:\Users\zhaol\AppData\Local\Programs\Python\Python313\python.exe -m CatalystOptimizationSystem.api.app
+```
+
+Windows cmd:
+
+```cmd
+cd /d D:\文献抽取igem
+C:\Users\zhaol\AppData\Local\Programs\Python\Python313\python.exe -m CatalystOptimizationSystem.api.app
+```
+
+Open:
+
+```text
+http://127.0.0.1:8080/
+```
+
+If port 8080 is occupied:
+
+```cmd
+cd /d D:\文献抽取igem
+C:\Users\zhaol\AppData\Local\Programs\Python\Python313\python.exe -m CatalystOptimizationSystem.api.app 127.0.0.1 8090
+```
+
+## Literature QA
+
+The `Literature QA` tab works in two modes:
+
+- Local retrieval + rules: retrieves project-conditioned evidence and returns deterministic recommendations.
+- DeepSeek grounded answer: sends only the retrieved evidence package and local rule summary to DeepSeek, then returns a Chinese answer with row/DOI citations.
+
+The LLM layer is optional and disabled by default to avoid accidental API usage.
+
+## Schema-first Extraction Example
 
 ```powershell
 python -m CatalystOptimizationSystem.core.extractor `
@@ -48,23 +101,14 @@ python -m CatalystOptimizationSystem.core.extractor `
   --out extracted_schema.csv
 ```
 
-继续全量 SI / supplementary table / data 补抽：
+## Data And Secret Policy
 
-```powershell
-python scripts/run_supplementary_until_limit.py `
-  --limits 2500,3000,3500,4000,4500,5000,5275 `
-  --cache-python "C:\Path\To\Python\python.exe" `
-  --workers 8 `
-  --final-each-limit
-```
+The repository keeps code and reusable prompt/schema assets only. It excludes:
 
-## 输出说明
+- `API.txt`, `.env`, keys and tokens.
+- `essay/`, `outputs/`, `uploads/`.
+- downloaded PDFs and supplementary files.
+- generated CSV/TSV/JSONL databases.
+- Word/Excel/PDF project documents and cached full text.
 
-本地运行后主要输出位于 `essay/` 和 `essay/supplementary_current/`，这些文件可能很大，默认被 `.gitignore` 排除。常见关键产物包括：
-
-- `optimized_experimental_database_with_supplementary.csv`
-- `optimized_core_experimental_database_with_supplementary.csv`
-- `optimized_core_experimental_database_with_supplementary_excel_friendly.csv`
-- `supplementary_current_download_manifest.csv`
-
-如果需要共享数据库，建议使用 release 附件、网盘、对象存储或 Git LFS，不建议直接提交普通 Git。
+Share large databases through releases, object storage, Git LFS or a separate data archive rather than normal Git commits.

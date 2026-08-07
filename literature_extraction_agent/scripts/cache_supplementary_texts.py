@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import csv
@@ -62,13 +62,13 @@ def df_to_text(df: pd.DataFrame, label: str, max_rows: int) -> str:
 
 def read_excel(path: Path, max_rows: int) -> str:
     parts: list[str] = []
-    xls = pd.ExcelFile(path)
-    for sheet in xls.sheet_names[:30]:
-        try:
-            df = pd.read_excel(xls, sheet_name=sheet, nrows=max_rows)
-            parts.append(df_to_text(df, f"sheet: {sheet}", max_rows=max_rows))
-        except Exception as exc:
-            parts.append(f"[sheet: {sheet}] error: {type(exc).__name__}: {exc}")
+    with pd.ExcelFile(path) as xls:
+        for sheet in xls.sheet_names[:30]:
+            try:
+                df = pd.read_excel(xls, sheet_name=sheet, nrows=max_rows)
+                parts.append(df_to_text(df, f"sheet: {sheet}", max_rows=max_rows))
+            except Exception as exc:
+                parts.append(f"[sheet: {sheet}] error: {type(exc).__name__}: {exc}")
     return "\n\n".join(parts)
 
 

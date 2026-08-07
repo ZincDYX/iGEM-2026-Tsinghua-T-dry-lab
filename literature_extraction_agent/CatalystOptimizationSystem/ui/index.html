@@ -1,163 +1,258 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CatalystOptimizationSystem 控制台</title>
+  <title>iGEM Tsinghua-T Literature Knowledge Design AI Agent</title>
   <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
-  <header>
-    <h1>CatalystOptimizationSystem 控制台</h1>
-    <p>数据抽取 · 智能清洗 · 插补评估 · 贝叶斯优化</p>
+  <header class="app-header">
+    <div class="brand-mark">iGEM</div>
+    <div>
+      <h1>iGEM Tsinghua-T Literature Knowledge Design AI Agent</h1>
+      <p>Traceable literature database · Dynamic ICL · Evidence-grounded QA · LLPS-enzyme design support</p>
+    </div>
   </header>
 
   <nav class="tabs">
-    <button class="tab active" data-tab="wizard">向导</button>
-    <button class="tab" data-tab="extract">数据抽取</button>
-    <button class="tab" data-tab="correct">纠错</button>
-    <button class="tab" data-tab="clean">数据清洗</button>
-    <button class="tab" data-tab="impute">插补评估</button>
-    <button class="tab" data-tab="optimize">贝叶斯优化</button>
+    <button class="tab active" data-tab="wizard">Guide</button>
+    <button class="tab" data-tab="extract">Extraction</button>
+    <button class="tab" data-tab="correct">Curation</button>
+    <button class="tab" data-tab="clean">Cleaning</button>
+    <button class="tab" data-tab="impute">Imputation</button>
+    <button class="tab" data-tab="literature-qa">Literature QA</button>
+    <button class="tab" data-tab="agent-run">Agent Run</button>
+    <button class="tab" data-tab="optimize">Optimization</button>
   </nav>
 
   <main>
     <section id="wizard" class="panel active">
-      <h2>使用向导</h2>
+      <h2>Project Workflow</h2>
       <ol>
-        <li>在“数据抽取”页完成抽取或直接上传已有 CSV</li>
-        <li>在“数据清洗”页调整参数并校验后得到 cleaned CSV</li>
-        <li>在“插补评估”页查看缺失情况、挑选插补模型</li>
-        <li>在“贝叶斯优化”页设置目标（权重/公式）获取建议</li>
+        <li>Build a candidate literature pool from search APIs and downloaded PDFs.</li>
+        <li>Extract structured experimental records with schema constraints and dynamic ICL examples.</li>
+        <li>Clean, normalize and quality-control records while preserving DOI/title/evidence provenance.</li>
+        <li>Use the Literature QA page for project-specific decisions around Yeast, Glabridin and LLPS-enzyme design.</li>
       </ol>
     </section>
 
     <section id="extract" class="panel">
-      <h2>数据抽取</h2>
+      <h2>Literature Extraction</h2>
       <div class="grid">
-        <label>Elsevier API Key<input id="ext-els-key" type="password" placeholder="必填" /></label>
-        <label>Elsevier InstToken<input id="ext-insttoken" type="password" placeholder="可选，机构权限需要时填写" /></label>
-        <label>关键词<input id="ext-keyword" type="text" placeholder="CO2 hydrogenation methanol" /></label>
-        <label>数量<input id="ext-count" type="number" min="1" max="1000" value="20" /></label>
-        <label>并发线程<input id="ext-workers" type="number" min="1" max="12" value="3" /></label>
-        <label>输出 CSV<input id="ext-out" type="text" placeholder="可选，例如 outputs/glabridin_400.csv" /></label>
-        <label><input id="ext-background" type="checkbox" checked /> 后台任务</label>
-        <label><input id="ext-resume" type="checkbox" checked /> 断点续跑</label>
-        <label>分块字符数<input id="ext-chunk-chars" type="number" min="4000" max="30000" value="14000" /></label>
-        <label>分块重叠<input id="ext-chunk-overlap" type="number" min="0" max="5000" value="1000" /></label>
-        <label>每篇最多分块<input id="ext-max-chunks" type="number" min="1" max="20" value="8" /></label>
-        <label>指标(英文, 空格分隔)<input id="ext-metrics" type="text" placeholder="co2_conversion methanol_selectivity methanol_yield" /></label>
-        <label>ICL JSON 路径<input id="ext-icl" type="text" placeholder="可选，或本地上传" /></label>
-        <label>上传 ICL JSON<input id="ext-icl-file" type="file" accept="application/json" /></label>
-        <label>LLM Key<input id="ext-llm-key" type="password" placeholder="可选" /></label>
+        <label>Elsevier API Key<input id="ext-els-key" type="password" placeholder="required" /></label>
+        <label>Elsevier InstToken<input id="ext-insttoken" type="password" placeholder="optional for institutional access" /></label>
+        <label>Keyword<input id="ext-keyword" type="text" placeholder="phase separation enzyme yeast" /></label>
+        <label>Count<input id="ext-count" type="number" min="1" max="1000" value="20" /></label>
+        <label>Workers<input id="ext-workers" type="number" min="1" max="12" value="3" /></label>
+        <label>Output CSV<input id="ext-out" type="text" placeholder="optional, e.g. outputs/glabridin_400.csv" /></label>
+        <label><input id="ext-background" type="checkbox" checked /> Background job</label>
+        <label><input id="ext-resume" type="checkbox" checked /> Resume from existing output</label>
+        <label>Chunk characters<input id="ext-chunk-chars" type="number" min="4000" max="30000" value="14000" /></label>
+        <label>Chunk overlap<input id="ext-chunk-overlap" type="number" min="0" max="5000" value="1000" /></label>
+        <label>Max chunks per paper<input id="ext-max-chunks" type="number" min="1" max="20" value="8" /></label>
+        <label>Metrics<input id="ext-metrics" type="text" placeholder="glabridin_titer enzyme_activity km kcat" /></label>
+        <label>ICL JSON path<input id="ext-icl" type="text" placeholder="optional" /></label>
+        <label>Upload ICL JSON<input id="ext-icl-file" type="file" accept="application/json" /></label>
+        <label>LLM Key<input id="ext-llm-key" type="password" placeholder="optional" /></label>
         <label>Schema JSON<input id="ext-schema" type="text" value="CatalystOptimizationSystem/docs/schemas/glabridin_enzyme_catalysis.schema.json" /></label>
         <label>ICL Bank JSONL<input id="ext-icl-bank" type="text" value="CatalystOptimizationSystem/docs/icl_bank.default.jsonl" /></label>
         <label>ICL Top-K<input id="ext-icl-top-k" type="number" min="1" max="10" value="3" /></label>
         <label>Domain<input id="ext-domain" type="text" value="glabridin_enzyme_catalysis" /></label>
         <label>LLM Base<input id="ext-llm-base" type="text" value="https://api.deepseek.com/v1/chat/completions" /></label>
-        <label>LLM 模型<input id="ext-llm-model" type="text" value="deepseek-chat" /></label>
+        <label>LLM Model<input id="ext-llm-model" type="text" value="deepseek-chat" /></label>
       </div>
-      <div class="actions">
-        <button id="btn-extract">开始抽取</button>
-      </div>
+      <div class="actions"><button id="btn-extract">Start Extraction</button></div>
       <pre id="ext-log" class="log"></pre>
     </section>
 
     <section id="correct" class="panel">
-      <h2>交互式纠错</h2>
+      <h2>Record Curation</h2>
       <div class="grid">
-        <label>CSV 路径<input id="cor-csv" type="text" placeholder="抽取或清洗得到的 CSV 路径" /></label>
-        <label>上传 CSV<input id="cor-file" type="file" accept=".csv,text/csv" /></label>
-        <label>记录索引<input id="cor-row-index" type="number" min="0" value="0" /></label>
+        <label>CSV path<input id="cor-csv" type="text" placeholder="CSV to inspect or correct" /></label>
+        <label>Upload CSV<input id="cor-file" type="file" accept=".csv,text/csv" /></label>
+        <label>Row index<input id="cor-row-index" type="number" min="0" value="0" /></label>
       </div>
-      <div class="actions">
-        <button id="btn-cor-view">查看记录</button>
-      </div>
+      <div class="actions"><button id="btn-cor-view">View Record</button></div>
       <pre id="cor-view" class="log"></pre>
-      <h3>提交修订</h3>
+      <h3>Apply a correction</h3>
       <div class="grid">
-        <label>DOI(可选，不填默认当前行)<input id="cor-doi" type="text" placeholder="如 10.xxxx/xxxx" /></label>
-        <label>指标名(英文)<input id="cor-metric" type="text" placeholder="co2_conversion / methanol_selectivity / ..." /></label>
-        <label>修订值<input id="cor-value" type="text" placeholder="如 12.5 或 0.125" /></label>
-        <label>修订单位<input id="cor-unit" type="text" placeholder="% / fraction / C / bar / ..." /></label>
-        <label>备注(可选)<input id="cor-note" type="text" placeholder="修订说明" /></label>
+        <label>DOI<input id="cor-doi" type="text" placeholder="optional if row index is used" /></label>
+        <label>Metric<input id="cor-metric" type="text" placeholder="glabridin_titer / km / ..." /></label>
+        <label>Value<input id="cor-value" type="text" placeholder="e.g. 12.5" /></label>
+        <label>Unit<input id="cor-unit" type="text" placeholder="mg/L / uM / U/mg / ..." /></label>
+        <label>Note<input id="cor-note" type="text" placeholder="curation note" /></label>
       </div>
-      <div class="actions">
-        <button id="btn-cor-apply">应用修订</button>
-      </div>
+      <div class="actions"><button id="btn-cor-apply">Apply Correction</button></div>
       <pre id="cor-log" class="log"></pre>
     </section>
 
     <section id="clean" class="panel">
-      <h2>数据清洗</h2>
+      <h2>Database Cleaning</h2>
       <div class="grid">
-        <label>CSV 路径<input id="cln-csv" type="text" placeholder="可输入或本地上传" /></label>
-        <label>上传 CSV<input id="cln-file" type="file" accept=".csv,text/csv" /></label>
-        <label>分组键(空格分隔)<input id="cln-grouping" type="text" placeholder="doi final_catalyst_name" /></label>
-        <label>关键数值列(空格分隔)<input id="cln-keys" type="text" placeholder="final_reaction_temp final_pressure ..." /></label>
-        <label>必填列(空格分隔)<input id="cln-required" type="text" placeholder="final_catalyst_name final_reaction_temp final_co2_conversion" /></label>
-        <label>非零列(空格分隔)<input id="cln-nonzero" type="text" placeholder="final_co2_conversion" /></label>
+        <label>CSV path<input id="cln-csv" type="text" placeholder="input CSV" /></label>
+        <label>Upload CSV<input id="cln-file" type="file" accept=".csv,text/csv" /></label>
+        <label>Grouping keys<input id="cln-grouping" type="text" placeholder="doi final_catalyst_name" /></label>
+        <label>Key numeric columns<input id="cln-keys" type="text" placeholder="final_reaction_temp final_pressure ..." /></label>
+        <label>Required columns<input id="cln-required" type="text" placeholder="final_catalyst_name final_reaction_temp" /></label>
+        <label>Non-zero columns<input id="cln-nonzero" type="text" placeholder="final_co2_conversion" /></label>
       </div>
-      <div class="actions">
-        <button id="btn-clean">开始清洗</button>
-      </div>
+      <div class="actions"><button id="btn-clean">Clean Database</button></div>
       <pre id="cln-log" class="log"></pre>
     </section>
 
     <section id="impute" class="panel">
-      <h2>插补评估</h2>
+      <h2>Missing-value Evaluation</h2>
       <div class="grid">
-        <label>CSV 路径<input id="imp-csv" type="text" placeholder="清洗后的 CSV 路径" /></label>
-        <label>列名(逗号分隔, 可选)<input id="imp-cols" type="text" placeholder="允许自动推断数值列" /></label>
-        <label>LLM Key<input id="imp-llm-key" type="password" placeholder="可选" /></label>
+        <label>CSV path<input id="imp-csv" type="text" placeholder="cleaned CSV" /></label>
+        <label>Columns<input id="imp-cols" type="text" placeholder="optional comma-separated numeric columns" /></label>
+        <label>LLM Key<input id="imp-llm-key" type="password" placeholder="optional" /></label>
         <label>LLM Base<input id="imp-llm-base" type="text" value="https://api.deepseek.com/v1/chat/completions" /></label>
-        <label>LLM 模型<input id="imp-llm-model" type="text" value="deepseek-chat" /></label>
-        <label>Mask 比例<input id="imp-mask" type="number" step="0.01" value="0.1" /></label>
-        <label>重复次数<input id="imp-repeats" type="number" value="3" /></label>
-        <label>随机种子<input id="imp-seed" type="number" value="42" /></label>
+        <label>LLM Model<input id="imp-llm-model" type="text" value="deepseek-chat" /></label>
+        <label>Mask fraction<input id="imp-mask" type="number" step="0.01" value="0.1" /></label>
+        <label>Repeats<input id="imp-repeats" type="number" value="3" /></label>
+        <label>Seed<input id="imp-seed" type="number" value="42" /></label>
       </div>
-      <div class="actions">
-        <button id="btn-imp-eval">开始评估</button>
-      </div>
+      <div class="actions"><button id="btn-imp-eval">Evaluate Imputation</button></div>
       <div id="imp-summary"></div>
       <div id="imp-table" class="table"></div>
-      <h3>应用最终插补</h3>
+      <h3>Apply imputation</h3>
       <div class="grid">
-        <label>方法<select id="imp-apply-method"><option value="median">median</option><option value="knn">knn</option><option value="mice">mice</option></select></label>
-        <label>参数(JSON)<input id="imp-apply-params" type="text" value='{}' /></label>
+        <label>Method<select id="imp-apply-method"><option value="median">median</option><option value="knn">knn</option><option value="mice">mice</option></select></label>
+        <label>Parameters JSON<input id="imp-apply-params" type="text" value='{}' /></label>
       </div>
-      <div class="actions">
-        <button id="btn-imp-apply">应用插补</button>
-      </div>
+      <div class="actions"><button id="btn-imp-apply">Apply Imputation</button></div>
       <pre id="imp-log" class="log"></pre>
     </section>
 
+    <section id="literature-qa" class="panel qa-panel">
+      <div class="qa-hero">
+        <div>
+          <p class="eyebrow">iGEM Literature Knowledge Design</p>
+          <h2>Evidence-grounded QA for Yeast · Glabridin · LLPS-enzyme design</h2>
+          <p class="qa-lead">Ask design questions against the traceable literature database. The agent retrieves project-conditioned evidence first, then can use DeepSeek-Pro to write an answer only from those evidence rows.</p>
+        </div>
+        <div class="qa-hero-badges" aria-label="project focus">
+          <span>Traceable DOI</span>
+          <span>Dynamic ICL</span>
+          <span>LLPS Design</span>
+        </div>
+      </div>
+
+      <div class="qa-workspace">
+        <div class="qa-card qa-question-card">
+          <h3>Ask the literature database</h3>
+          <label class="wide">Question
+            <textarea id="qa-question" rows="5" placeholder="Example: How should we choose pH and temperature for a yeast LLPS-enzyme glabridin system?"></textarea>
+          </label>
+          <label class="wide">Evidence CSV
+            <input id="qa-csv" type="text" value="D:\文献抽取igem\essay\project_conditioned_evidence_database.csv" />
+          </label>
+          <div class="qa-control-row">
+            <label>Top-K evidence<input id="qa-topk" type="number" min="1" max="30" value="8" /></label>
+            <label>Temperature<input id="qa-llm-temp" type="number" min="0" max="1" step="0.05" value="0.15" /></label>
+          </div>
+        </div>
+
+        <div class="qa-card">
+          <h3>Project filters</h3>
+          <div class="qa-check-grid">
+            <label><input id="qa-project-only" type="checkbox" checked /> Project-conditioned only</label>
+            <label><input id="qa-yeast" type="checkbox" /> Yeast / Saccharomyces</label>
+            <label><input id="qa-llps" type="checkbox" /> LLPS / condensate</label>
+            <label><input id="qa-glabridin" type="checkbox" /> Glabridin direct</label>
+            <label><input id="qa-high-transfer" type="checkbox" /> High-transferability LLPS</label>
+          </div>
+        </div>
+
+        <div class="qa-card">
+          <h3>Grounded generation</h3>
+          <label class="qa-switch"><input id="qa-use-llm" type="checkbox" /> Use DeepSeek-Pro grounded answer</label>
+          <label>DeepSeek API Key<input id="qa-llm-key" type="password" placeholder="Only used when grounded generation is enabled" /></label>
+          <label>DeepSeek Base URL<input id="qa-llm-base" type="text" value="https://api.deepseek.com/v1/chat/completions" /></label>
+          <label>DeepSeek model<input id="qa-llm-model" type="text" value="deepseek-chat" placeholder="deepseek-chat / deepseek-reasoner / DeepSeek-V4-Pro" /></label>
+        </div>
+      </div>
+
+      <div class="actions qa-actions"><button id="btn-qa">Ask Literature Database</button></div>
+      <div id="qa-answer" class="qa-result"></div>
+      <div id="qa-evidence" class="evidence-list"></div>
+      <pre id="qa-log" class="log qa-log"></pre>
+    </section>
+
+    <section id="agent-run" class="panel qa-panel">
+      <div class="qa-hero">
+        <div>
+          <p class="eyebrow">Autonomous Tool-Using Agent</p>
+          <h2>Plan, call tools, and trace LLPS-enzyme design decisions</h2>
+          <p class="qa-lead">Run the bounded agent loop for protocol sections 5.1-5.6. Boltz2 is used as the lightweight structure predictor; external tools are called only when their executable and strict inputs are available.</p>
+        </div>
+        <div class="qa-hero-badges" aria-label="agent capabilities">
+          <span>Tool registry</span>
+          <span>Trace</span>
+          <span>No fake outputs</span>
+        </div>
+      </div>
+
+      <div class="qa-workspace agent-workspace">
+        <div class="qa-card qa-question-card">
+          <h3>Agent goal</h3>
+          <label class="wide">Goal
+            <textarea id="agent-goal" rows="5">Design a substrate-sensing LLPS system for Glabridin in yeast</textarea>
+          </label>
+          <div class="qa-control-row">
+            <label>Top-K<input id="agent-topk" type="number" min="1" max="20" value="5" /></label>
+            <label>Max steps<input id="agent-max-steps" type="number" min="4" max="20" value="10" /></label>
+          </div>
+        </div>
+
+        <div class="qa-card">
+          <h3>Execution mode</h3>
+          <label><input id="agent-run-external" type="checkbox" /> Run external tools when inputs are present</label>
+          <label><input id="agent-network-check" type="checkbox" /> Check network APIs</label>
+          <div class="actions">
+            <button id="btn-agent-health">Check Tools</button>
+            <button id="btn-agent-run">Run Agent</button>
+          </div>
+        </div>
+
+        <div class="qa-card">
+          <h3>External tool inputs JSON</h3>
+          <label class="wide">Tool inputs
+            <textarea id="agent-tool-inputs" rows="10" placeholder='{"boltz2":{"sequence":"MSEQUENCE...","job_name":"GgDMT1_boltz2"},"psap":{"sequences":[{"id":"FUS_test","sequence":"SYGQQSSYGQQSRGGRGG"}]}}'></textarea>
+          </label>
+        </div>
+      </div>
+
+      <div id="agent-summary" class="qa-result"></div>
+      <div id="agent-trace" class="evidence-list"></div>
+      <pre id="agent-log" class="log qa-log"></pre>
+    </section>
+
     <section id="optimize" class="panel">
-      <h2>贝叶斯优化</h2>
+      <h2>Bayesian Optimization</h2>
       <div class="grid">
-        <label>CSV 路径<input id="opt-csv" type="text" placeholder="清洗/插补后的 CSV 路径" /></label>
-        <label>映射列 T<input id="opt-col-T" type="text" value="final_reaction_temp" /></label>
-        <label>映射列 P<input id="opt-col-P" type="text" value="final_pressure" /></label>
-        <label>映射列 conv<input id="opt-col-conv" type="text" value="final_co2_conversion" /></label>
-        <label>映射列 sel<input id="opt-col-sel" type="text" value="final_methanol_selectivity" /></label>
-        <label>映射列 yld<input id="opt-col-yld" type="text" value="final_methanol_yield" /></label>
-        <label>目标公式(可选)<input id="opt-objective" type="text" placeholder="如 sel + 0.5*conv" /></label>
-        <label>权重 sel<input id="opt-w-sel" type="number" step="0.01" value="0.8" /></label>
-        <label>权重 conv<input id="opt-w-conv" type="number" step="0.01" value="0.2" /></label>
-        <label>权重 yld<input id="opt-w-yld" type="number" step="0.01" value="0.0" /></label>
-        <label>候选数<input id="opt-nc" type="number" value="2000" /></label>
+        <label>CSV path<input id="opt-csv" type="text" placeholder="cleaned or imputed CSV" /></label>
+        <label>Column T<input id="opt-col-T" type="text" value="final_reaction_temp" /></label>
+        <label>Column P<input id="opt-col-P" type="text" value="final_pressure" /></label>
+        <label>Column conv<input id="opt-col-conv" type="text" value="final_co2_conversion" /></label>
+        <label>Column sel<input id="opt-col-sel" type="text" value="final_methanol_selectivity" /></label>
+        <label>Column yld<input id="opt-col-yld" type="text" value="final_methanol_yield" /></label>
+        <label>Objective<input id="opt-objective" type="text" placeholder="e.g. sel + 0.5*conv" /></label>
+        <label>Weight sel<input id="opt-w-sel" type="number" step="0.01" value="0.8" /></label>
+        <label>Weight conv<input id="opt-w-conv" type="number" step="0.01" value="0.2" /></label>
+        <label>Weight yld<input id="opt-w-yld" type="number" step="0.01" value="0.0" /></label>
+        <label>Candidates<input id="opt-nc" type="number" value="2000" /></label>
         <label>Top-K<input id="opt-topk" type="number" value="5" /></label>
       </div>
-      <div class="actions">
-        <button id="btn-opt">获取建议</button>
-      </div>
+      <div class="actions"><button id="btn-opt">Get Suggestions</button></div>
       <div id="opt-table" class="table"></div>
       <pre id="opt-log" class="log"></pre>
     </section>
   </main>
 
   <footer>
-    <small>提示：所有参数默认仅支持英文、数字与下划线。</small>
+    <small>iGEM Tsinghua-T dry lab agent. Keep API keys local and use evidence-grounded claims for project-facing decisions.</small>
   </footer>
 
   <script src="/assets/app.js"></script>

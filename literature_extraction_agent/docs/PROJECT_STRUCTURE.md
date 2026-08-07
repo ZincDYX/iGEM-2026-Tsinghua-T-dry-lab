@@ -1,66 +1,84 @@
-# 代码结构说明
+# Project Structure
 
-## 主系统：CatalystOptimizationSystem
+## Main Package: `CatalystOptimizationSystem`
 
-- `api/app.py`：内置 HTTP API 服务，包含健康检查、优化建议和文献抽取接口。
-- `core/extractor.py`：文献检索、prompt 构建、LLM 调用和抽取结果输出。
-- `core/schema_config.py`：JSON Schema 加载、字段规则、单位规范化和跨字段约束。
-- `core/icl_selector.py`：动态 ICL 示例选择，根据文本、domain、metrics 和关键词匹配示例。
-- `core/validator.py`：结构化字段校验和基础清洗。
-- `core/imputer.py`、`core/imputation_workflow.py`：缺失值插补评估与交互式插补流程。
-- `core/optimizer.py`：贝叶斯优化/实验建议相关逻辑。
-- `core/scorer.py`：gold examples 对比评分。
-- `docs/icl_examples.default.json`：兼容旧流程的 ICL 示例。
-- `docs/icl_bank.default.jsonl`：动态 ICL 示例库。
-- `docs/gold_examples.default.jsonl`：抽取评分用小型 gold set。
-- `docs/schemas/*.schema.json`：领域 schema、单位、必填字段和约束。
-- `ui/`：前端静态页面。
-- `tests/`：轻量单元测试。
+- `api/app.py`: local HTTP API server for extraction, cleaning, imputation, optimization, evidence QA and LLPS-LKD agent endpoints.
+- `core/extractor.py`: Elsevier search, full-text retrieval, prompt building, LLM calls, multi-chunk extraction and resumable CSV output.
+- `core/schema_config.py`: JSON Schema loading, field rules, unit normalization and cross-field constraints.
+- `core/icl_selector.py`: dynamic ICL retrieval from the example bank.
+- `core/literature_qa.py`: evidence retrieval plus optional DeepSeek grounded-answer generation.
+- `core/lkd_agent.py`: design-support modules for evidence retrieval, component selection, construct planning, structure screening, LLPS scoring and partition modeling.
+- `core/validator.py`: structured-record cleaning and validation.
+- `core/imputer.py` and `core/imputation_workflow.py`: missing-value evaluation and imputation workflow.
+- `core/optimizer.py`: Bayesian optimization and experiment recommendation logic.
+- `docs/icl_examples.default.json`: default ICL examples.
+- `docs/icl_bank.default.jsonl`: dynamic ICL example bank.
+- `docs/gold_examples.default.jsonl`: small gold set for scoring and regression checks.
+- `docs/schemas/*.schema.json`: domain schemas, units, required fields and constraints.
+- `ui/`: static frontend. The current user-facing title is `iGEM Tsinghua-T Literature Knowledge Design AI Agent`.
+- `tests/`: lightweight unit tests.
 
-## 批处理脚本：scripts
+## Batch Scripts: `scripts`
 
-### 候选文献与全文
+Literature pool and full text:
 
-- `collect_candidate_literature_20000.py`：早期候选文献收集。
-- `collect_candidate_literature_year_slices.py`：按年份切片扩展候选文献池。
-- `continue_candidate_literature.py`：候选文献续跑。
-- `direct_pdf_candidates_20000.py`、`openalex_pdf_candidates_20000.py`：开放 PDF 候选链接发现。
-- `download_pdf_candidates.py`、`download_elsevier_article_pdfs.py`：PDF 下载。
-- `cache_downloaded_pdf_text.py`：PDF 全文转文本缓存。
+- `collect_candidate_literature_20000.py`
+- `collect_candidate_literature_year_slices.py`
+- `continue_candidate_literature.py`
+- `direct_pdf_candidates_20000.py`
+- `openalex_pdf_candidates_20000.py`
+- `download_pdf_candidates.py`
+- `download_elsevier_article_pdfs.py`
+- `cache_downloaded_pdf_text.py`
 
-### SI/data 补充材料
+Supplementary and data extraction:
 
-- `download_supplementary_for_current_database.py`：从 DOI landing page、全文链接和 Elsevier XML 中发现并下载 supplementary/data 文件。
-- `cache_supplementary_texts.py`：把 xlsx/csv/zip/docx/pdf/txt 转为统一文本缓存。
-- `run_supplementary_until_limit.py`：全量编排脚本，按 DOI 批次执行下载、转文本、证据挖掘、清洗、结构化、聚合和优化。
+- `download_supplementary_for_current_database.py`
+- `cache_supplementary_texts.py`
+- `run_supplementary_until_limit.py`
 
-### 证据挖掘和数据库构建
+Evidence mining and database construction:
 
-- `mine_numeric_evidence_records.py`：高召回数值证据挖掘，支持断点续跑。
-- `clean_numeric_evidence_database.py`：规则清洗明显噪声。
-- `build_high_recall_structured_database.py`：把候选证据映射为 schema 字段。
-- `aggregate_structured_records.py`：按 DOI、结果指标和证据上下文聚合为实验记录。
-- `merge_aggregated_databases.py`：合并主分析库和 SI/data 聚合库。
-- `optimize_experimental_database.py`：最终去重、分层和 Excel-friendly 核心库生成前处理。
+- `mine_numeric_evidence_records.py`
+- `clean_numeric_evidence_database.py`
+- `build_high_recall_structured_database.py`
+- `aggregate_structured_records.py`
+- `merge_aggregated_databases.py`
+- `merge_clean_databases.py`
+- `optimize_experimental_database.py`
 
-### LLM 质控和补全
+LLM QC and completion:
 
-- `llm_complete_d_result_only_with_fulltext.py`：对 D_result_only 记录用全文上下文补全。
-- `llm_qc_high_recall_structured.py`：对高召回结构化记录做 LLM 质控。
-- `llm_normalize_clean_database.py`：二次规范化清洗。
-- `llm_upgrade_rule_c_with_context.py`、`llm_upgrade_rule_c_groups_with_context.py`：对 RULE_C/C_partial 记录做上下文升级。
+- `llm_complete_d_result_only_with_fulltext.py`
+- `llm_qc_high_recall_structured.py`
+- `llm_qc_enrich_broad_database.py`
+- `llm_normalize_clean_database.py`
+- `llm_upgrade_rule_c_with_context.py`
+- `llm_upgrade_rule_c_groups_with_context.py`
+- `fulltext_pro_field_completion.py`
 
-## 本地运行产物
+Visualization:
 
-以下目录/文件为运行产物，默认不提交 GitHub：
+- `generate_modified_project_visualization_v6.py`
+- `generate_project_story_takehome_visualization_v5.py`
+- `generate_morandi_publication_visuals.py`
+- `generate_nature_style_vector_pdf_en.py`
+- `generate_known_visualization_report_en.py`
 
+## Local Runtime Outputs
+
+The following are intentionally excluded from GitHub:
+
+- `API.txt`
 - `essay/`
 - `outputs/`
 - `uploads/`
+- `archive/`
 - `*.pdf`
 - `*.csv`
-- `*.xlsx`
-- `*.docx`
-- `API.txt`
+- `*.tsv`
+- `*.jsonl` outside approved docs assets
+- `*.docx`, `*.xlsx`, `*.xls`
+- Python caches and local IDE files
 
-这些文件可能包含 API key、版权文献、全文缓存、补充材料或超大数据库。
+These files may contain API keys, copyrighted papers, full-text caches, supplementary materials or large generated databases.

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import csv
@@ -23,7 +23,7 @@ DEFAULT_MANIFEST = OUT_DIR / "supplementary_current_download_manifest.csv"
 DEFAULT_SUMMARY = OUT_DIR / "supplementary_current_download_summary.json"
 DEFAULT_API_TXT = ROOT / "API.txt"
 
-URL_RE = re.compile(r"https?://[^\s)\]}>\"']+", re.I)
+URL_RE = re.compile(r"https?://[^\s)\]}<>\"']+", re.I)
 HREF_RE = re.compile(r"""(?:href|src)=["']([^"']+)["']""", re.I)
 SUP_HINTS = [
     "supplement", "supporting", "additional", "appendix", "media", "mmc",
