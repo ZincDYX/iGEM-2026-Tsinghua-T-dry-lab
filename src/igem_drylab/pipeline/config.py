@@ -13,6 +13,14 @@ class RunConfig(BaseModel):
     random_seed: int = 42
 
 
+class ExecutionConfig(BaseModel):
+    """Controls whether fixture values may be used as non-scientific demonstrations."""
+
+    mode: Literal["demo", "real"] = "demo"
+    require_provenance: bool = True
+    allow_assumptions: bool = False
+
+
 class LigandConfig(BaseModel):
     id: str
     name: str
@@ -46,6 +54,7 @@ class InputsConfig(BaseModel):
     enzymes: list[EnzymeConfig]
     scaffolds: list[ScaffoldConfig]
     linkers: list[LinkerConfig]
+    idr_id: str | None = None
 
 
 class ToolConfig(BaseModel):
@@ -89,6 +98,7 @@ class StagesConfig(BaseModel):
 
 class ProjectConfig(BaseModel):
     run: RunConfig
+    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     inputs: InputsConfig
     tools: dict[str, ToolConfig] = Field(default_factory=dict)
     stages: StagesConfig = Field(default_factory=StagesConfig)

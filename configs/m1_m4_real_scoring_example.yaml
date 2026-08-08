@@ -3,6 +3,11 @@ run:
   output_dir: outputs
   random_seed: 42
 
+execution:
+  mode: real
+  require_provenance: true
+  allow_assumptions: false
+
 inputs:
   protein_fasta: ../examples/data/proteins.fasta
   ligands:
