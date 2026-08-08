@@ -189,17 +189,18 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
         for result, report in zip(results, reports):
             prediction = prediction_by_context.get((result.construct_id, result.condition_id))
             comparisons = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else {}
-            product = comparisons.get("15")
+            usable = [item for item in comparisons.values() if item.comparison_status in {"trajectory_aligned", "endpoint_only"}]
+            product = comparisons.get("15") or comparisons.get("13")
             residual = product.residual_final if product else None
             trend = product.trend_agreement if product else None
-            variation = variations[(result.construct_id, result.condition_id)]
+            variation = variations.get((result.construct_id, result.condition_id, product.metabolite_id)) if product else None
             fit = product.fit if product else None
-            comparison_status = product.comparison_status if product else ("unmatched_condition" if prediction is None else "no_observed_15")
+            comparison_status = product.comparison_status if product else ("unmatched_condition" if prediction is None else "no_observed_metabolite")
             if residual is not None:
                 residuals.append(residual)
             systematic = False
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic)
-            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and comparisons else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}."))
+            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and usable else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}; diagnosis_metabolites={','.join(item.metabolite_id for item in usable)}."))
     write_models(stage_dir, "feedback", records)
     return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
 

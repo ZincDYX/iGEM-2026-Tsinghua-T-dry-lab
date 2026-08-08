@@ -133,6 +133,21 @@ def pipeline_run(arguments: JsonObject) -> McpToolResult:
     )
 
 
+def pipeline_run_stage(arguments: JsonObject) -> McpToolResult:
+    """Run the production pipeline and expose a selected stage without new equations."""
+    stage = _require_str(arguments, "stage")
+    if stage != "m4":
+        raise ValueError("Only production stage 'm4' is exposed through this tool")
+    config_path = Path(_require_str(arguments, "config_path"))
+    config = load_config(config_path)
+    output_dir = _optional_path(arguments, "output_dir")
+    if output_dir is not None:
+        config.run.output_dir = output_dir
+    manifest = run_pipeline(config)
+    output = next(item for item in manifest.stages if item.stage == "m4_glabridin_kinetics")
+    return McpToolResult.ok({"ok": True, "run_dir": str(manifest.run_dir), "stage": "m4", "records": json.loads(output.json_file.read_text(encoding="utf-8"))})
+
+
 def compute_check_tool(arguments: JsonObject) -> McpToolResult:
     config = load_config(Path(_require_str(arguments, "config_path")))
     tool_name = _require_str(arguments, "tool_name")
@@ -583,6 +598,14 @@ PIPELINE_RUN_TOOL = McpTool(
     ),
 )
 
+PIPELINE_RUN_STAGE_TOOL = McpTool(
+    name="igem.pipeline.run_stage",
+    title="Run production M4 glabridin stage",
+    description="Run the same reviewed-parameter five-state glabridin M4 used by the production pipeline; it is not the generic legacy ODE.",
+    input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m4"]}, "output_dir": {"type": "string"}}, ["config_path", "stage"]),
+    output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True),
+)
+
 COMPUTE_CHECK_TOOL = McpTool(
     name="igem.compute.check_tool",
     title="Check configured compute tool",
@@ -984,6 +1007,7 @@ ELSEVIER_FETCH_ARTICLE_TEXT_TOOL = McpTool(
 TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PIPELINE_VALIDATE_TOOL, pipeline_validate),
     (PIPELINE_RUN_TOOL, pipeline_run),
+    (PIPELINE_RUN_STAGE_TOOL, pipeline_run_stage),
     (COMPUTE_CHECK_TOOL, compute_check_tool),
     (COMPUTE_RUN_TOOL, compute_run_tool),
     (MULTICHAIN_BUILD_INPUT_TOOL, multichain_build_input),

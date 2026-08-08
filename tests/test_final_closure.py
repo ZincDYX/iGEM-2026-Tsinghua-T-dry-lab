@@ -29,6 +29,6 @@ def test_human_approval_persists_and_reloads(tmp_path):
 def test_replicate_variation_uses_replicate_ids_not_time_series():
     base = {"construct_id": "c", "condition_id": "x", "metabolite_time": [0, 1], "metabolites": {"15": [0, 2]}}
     one = WetLabResult(experiment_id="e1", replicate_id="r1", **base)
-    assert replicate_variation([one])[("c", "x")] is None
+    assert replicate_variation([one])[("c", "x", "15")] is None
     two = WetLabResult(experiment_id="e2", replicate_id="r2", **{**base, "metabolites": {"15": [0, 4]}})
-    assert replicate_variation([one, two])[("c", "x")] is not None
+    assert replicate_variation([one, two])[("c", "x", "15")] is not None

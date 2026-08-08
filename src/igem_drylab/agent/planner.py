@@ -254,33 +254,9 @@ class RuleBasedDryLabPlanner:
         objective = task.objective.lower()
         if not any(token in objective for token in ("ode", "timing", "simulate", "simulation", "时序", "动力学")):
             return
-        params = task.inputs.get("ode_params")
-        if not isinstance(params, dict) or not params:
-            steps.append(PlanStep(
-                step_id="collect_ode_parameters", objective="Collect sourced competitive kinetic and partition parameters before ODE simulation.",
-                rationale="The agent must not invent kcat, Km, partition, or degradation values.", status="blocked",
-            ))
+        if "igem.pipeline.run_stage" not in available_tools or not isinstance(task.inputs.get("config_path"), str):
             return
-        if "igem.scoring.m4_piecewise_ode" not in available_tools:
-            return
-        conditions = _m2_conditions(m2_step)
-        if docking_step:
-            conditions.append(ResultCondition(source_step_id=docking_step, source_path=["structuredContent", "result", "passes_negative_screen"], allowed_values=[True]))
-        step = PlanStep(
-            step_id="simulate_timing", objective="Run OC-first/DMT-later piecewise ODE using explicit assumptions.",
-            tool_name="igem.scoring.m4_piecewise_ode",
-            arguments={"candidate_id": candidate_id, "params": params, "oc_gate": task.inputs.get("oc_gate", {}),
-                       "dmt_gate": task.inputs.get("dmt_gate", {}), "initial": task.inputs.get("initial", [10.0, 0.0, 0.0, 0.0]),
-                       "t_end": task.inputs.get("t_end", 24.0)},
-            depends_on=[item for item in (m2_step, docking_step) if item], run_conditions=conditions,
-            priority=45, rationale="This produces a relative timing hypothesis, not an absolute yield forecast.",
-        )
-        steps.append(step)
-        if docking_step:
-            source = next(item for item in steps if item.step_id == docking_step)
-            source.result_bindings.append(ResultBinding(
-                target_step_id="simulate_timing", target_argument="docking_penalty", source_path=["structuredContent", "result"],
-            ))
+        steps.append(PlanStep(step_id="run_production_m4", objective="Run the production five-state glabridin M4 from reviewed project configuration.", tool_name="igem.pipeline.run_stage", arguments={"config_path": task.inputs["config_path"], "stage": "m4", "output_dir": str(Path(task.artifacts_dir) / candidate_id / "production_m4")}, priority=45, rationale="Agent reuses pipeline PT 9→10, OC 10→11, DMT 9→13/11→15 implementation; it does not use the generic four-state ODE."))
 
 
 def _load_config_if_present(config_path: object) -> Any | None:
