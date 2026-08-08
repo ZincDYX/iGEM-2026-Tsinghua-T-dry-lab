@@ -85,3 +85,13 @@ class M4ReactionPrediction(ScientificResult):
     baseline_comparison: dict[str, float] = Field(default_factory=dict)
     bottleneck: str = "insufficient_data"
     notes: str = ""
+
+
+class M5FeedbackAssessment(ScientificResult):
+    experiment_id: str
+    construct_id: str
+    qc_passed: bool | None = None
+    qc_flags: list[str] = Field(default_factory=list)
+    diagnosis: str | None = None
+    next_measurement: str | None = None
+    notes: str = ""

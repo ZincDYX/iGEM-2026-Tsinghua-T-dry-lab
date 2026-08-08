@@ -39,7 +39,7 @@ def test_pipeline_run_tool_writes_outputs(tmp_path):
     structured = result.as_protocol_dict()["structuredContent"]
     assert structured["ok"] is True
     assert Path(structured["run_dir"]).exists()
-    assert len(structured["stages"]) == 4
+    assert len(structured["stages"]) == 5
 
 
 def test_literature_build_prompt_tool_can_write_prompt(tmp_path):

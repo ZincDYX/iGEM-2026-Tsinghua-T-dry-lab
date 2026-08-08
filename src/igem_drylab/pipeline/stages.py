@@ -7,11 +7,12 @@ from igem_drylab.enrichment import EnrichmentInput, calculate_many
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.parameters import validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
+from igem_drylab.wetlab import diagnose_discrepancy, load_wetlab_results, quality_control
 
 from .adapters import create_tool_adapter
 from .config import ConstructDefinition, ProjectConfig
 from .io import write_models
-from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, M4ReactionPrediction, StageOutput
+from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, M4ReactionPrediction, M5FeedbackAssessment, StageOutput
 
 
 def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], StageOutput]:
@@ -153,6 +154,21 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 notes=f"Mass-balance error={delayed.mass_balance_error:.3g}; docking scores were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
+
+
+def run_m5(config: ProjectConfig, run_dir: Path) -> tuple[list[M5FeedbackAssessment], StageOutput]:
+    """Ingest wet-lab records and emit deterministic QC/diagnostic feedback."""
+    stage_dir = run_dir / "m5_wetlab_feedback"
+    path = config.stages.m5_feedback.wetlab_results_file
+    if path is None:
+        records = [M5FeedbackAssessment(experiment_id="unavailable", construct_id="unavailable", status="insufficient_data", data_quality="heuristic", missing_inputs=["wetlab_results_file"], recommended_next_action=["provide structured wet-lab measurements"], notes="No wet-lab feedback file was configured.")]
+    else:
+        results = load_wetlab_results(path); reports = quality_control(results); records = []
+        for result, report in zip(results, reports):
+            diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=None, abundance_ratio=None, trend_agreement=None, systematic_directional_error=None)
+            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed else "invalid_input", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes="Raw outliers are retained and only flagged."))
+    write_models(stage_dir, "feedback", records)
+    return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
 
 
 def _legacy_demo_definitions(config: ProjectConfig) -> list[ConstructDefinition]:

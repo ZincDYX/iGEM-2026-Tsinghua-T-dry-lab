@@ -106,11 +106,16 @@ class M4Config(BaseModel):
     dmt_gate: dict[str, Any] | None = None
 
 
+class M5Config(BaseModel):
+    wetlab_results_file: Path | None = None
+
+
 class StagesConfig(BaseModel):
     m1_llps: M1Config = Field(default_factory=M1Config)
     m2_fusion: M2Config = Field(default_factory=M2Config)
     m3_concentration: M3Config = Field(default_factory=M3Config)
     m4_reaction: M4Config = Field(default_factory=M4Config)
+    m5_feedback: M5Config = Field(default_factory=M5Config)
 
 
 class ProjectConfig(BaseModel):
@@ -152,4 +157,5 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         config.stages.m4_reaction.docking_penalties_file,
         base_dir,
     )  # type: ignore[assignment]
+    config.stages.m5_feedback.wetlab_results_file = _resolve_path(config.stages.m5_feedback.wetlab_results_file, base_dir)  # type: ignore[assignment]
     return config

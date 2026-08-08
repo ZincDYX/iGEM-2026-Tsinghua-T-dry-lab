@@ -15,6 +15,7 @@ def test_m1_m4_pipeline_skeleton_writes_expected_outputs(tmp_path):
         "m2_structure_screen",
         "m3_enrichment",
         "m4_glabridin_kinetics",
+        "m5_wetlab_feedback",
     ]
     assert (tmp_path / "m1-m4-demo" / "manifest.json").exists()
     assert (tmp_path / "m1-m4-demo" / "m4_glabridin_kinetics" / "reaction_predictions.csv").exists()
