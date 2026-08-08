@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+ScientificStatus = Literal["valid", "insufficient_data", "invalid_input", "failed"]
+DataQuality = Literal["measured", "literature", "predicted", "heuristic", "demo_fixture"]
+
+
+class ScientificResult(BaseModel):
+    """Common uncertainty contract for all stage outputs."""
+
+    status: ScientificStatus = "valid"
+    data_quality: DataQuality = "heuristic"
+    missing_inputs: list[str] = Field(default_factory=list)
+    recommended_next_action: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
 
 
 class StageOutput(BaseModel):
@@ -20,49 +33,55 @@ class PipelineManifest(BaseModel):
     stages: list[StageOutput]
 
 
-class M1Candidate(BaseModel):
+class M1Candidate(ScientificResult):
     candidate_id: str
-    scaffold_id: str
-    linker_id: str
-    idr_id: str
-    llps_score: float = Field(ge=0, le=1)
-    oligomeric_state: int = Field(ge=1)
-    predicted_state: Literal["reject", "borderline", "promising"]
-    adapter: str
-    notes: str
+    construct_definition: dict[str, Any]
+    scaffold_id: str | None = None
+    linker_id: str | None = None
+    idr_id: str | None = None
+    linker_features: dict[str, Any] | None = None
+    screen_flags: list[str] = Field(default_factory=list)
+    engineering_priority_score: float | None = Field(default=None, ge=0, le=1)
+    recommended_for_m2: bool = False
+    notes: str = ""
 
 
-class M2FusionAssessment(BaseModel):
+class M2FusionAssessment(ScientificResult):
     candidate_id: str
-    scaffold_id: str
-    linker_id: str
-    enzyme_pair: str
-    fusion_topology: str
-    structure_model: str
-    activity_risk: float = Field(ge=0, le=1)
-    clash_risk: float = Field(ge=0, le=1)
-    m2_score: float = Field(ge=0, le=1)
-    recommended_for_m3: bool
-    notes: str
+    construct_definition: dict[str, Any]
+    structure_model: str | None = None
+    available_metrics: list[str] = Field(default_factory=list)
+    missing_metrics: list[str] = Field(default_factory=list)
+    confidence_level: Literal["none", "partial", "complete"] = "none"
+    heuristic_structure_risk: float | None = Field(default=None, ge=0, le=1)
+    pocket_sasa_retention: float | None = Field(default=None, ge=0)
+    pocket_rmsd_angstrom: float | None = Field(default=None, ge=0)
+    clash_count: int | None = Field(default=None, ge=0)
+    recommended_for_m3: bool = False
+    threshold_origin: str = "project_heuristic"
+    notes: str = ""
 
 
-class M3ConcentrationAssessment(BaseModel):
+class M3ConcentrationAssessment(ScientificResult):
     candidate_id: str
-    local_concentration_fold_change: float = Field(ge=0)
-    binding_equilibrium_hint: str
-    saturation_risk: float = Field(ge=0, le=1)
-    leakage_risk: float = Field(ge=0, le=1)
-    oc_dmt_colocalization_score: float = Field(ge=0, le=1)
-    recommended_for_m4: bool
-    notes: str
+    concentrations: dict[str, dict[str, float]] = Field(default_factory=dict)
+    dense_oc_dmt_ratio: float | None = Field(default=None, ge=0)
+    whole_cell_oc_dmt_ratio: float | None = Field(default=None, ge=0)
+    recruitment_fraction: dict[str, float] = Field(default_factory=dict)
+    site_occupancy: dict[str, float] = Field(default_factory=dict)
+    saturation: bool | None = None
+    recommended_for_m4: bool = False
+    notes: str = ""
 
 
-class M4ReactionPrediction(BaseModel):
+class M4ReactionPrediction(ScientificResult):
     candidate_id: str
     target_product: str
-    oc_first_feasibility: float = Field(ge=0, le=1)
-    dmt_later_feasibility: float = Field(ge=0, le=1)
-    predicted_relative_yield: float = Field(ge=0, le=1)
-    bottleneck: str
-    recommendation: Literal["drop", "iterate", "test"]
-    notes: str
+    final_15: float | None = Field(default=None, ge=0)
+    final_13: float | None = Field(default=None, ge=0)
+    leakage_fraction: float | None = Field(default=None, ge=0, le=1)
+    productivity: float | None = Field(default=None, ge=0)
+    recommendation: Literal["drop", "iterate", "test", "insufficient_data"] = "insufficient_data"
+    baseline_comparison: dict[str, float] = Field(default_factory=dict)
+    bottleneck: str = "insufficient_data"
+    notes: str = ""

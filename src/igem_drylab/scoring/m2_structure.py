@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,11 +21,15 @@ class M2StructureMetrics(BaseModel):
 
 class M2StructureScore(BaseModel):
     candidate_id: str
-    activity_risk: float = Field(ge=0, le=1)
-    clash_risk: float = Field(ge=0, le=1)
-    confidence_score: float = Field(ge=0, le=1)
-    m2_score: float = Field(ge=0, le=1)
+    status: Literal["valid", "insufficient_data"]
+    available_metrics: list[str]
+    missing_metrics: list[str]
+    activity_risk: float | None = Field(default=None, ge=0, le=1)
+    clash_risk: float | None = Field(default=None, ge=0, le=1)
+    confidence_score: float | None = Field(default=None, ge=0, le=1)
+    heuristic_structure_risk: float | None = Field(default=None, ge=0, le=1)
     recommended_for_m3: bool
+    threshold_origin: str = "project_heuristic"
     reasons: list[str]
 
 
@@ -89,23 +94,36 @@ def score_m2_structure(metrics: M2StructureMetrics) -> M2StructureScore:
         else:
             confidence_terms.append(0.85)
 
-    activity_risk = _average(activity_terms, default=0.25)
-    clash_risk = _average(clash_terms, default=0.20)
-    confidence_score = _average(confidence_terms, default=0.65)
-    score = _clip01(0.45 * (1 - activity_risk) + 0.25 * (1 - clash_risk) + 0.30 * confidence_score)
+    present = [name for name, value in metrics.model_dump().items() if value is not None and name not in {"candidate_id", "notes"}]
+    required = {"sasa_retention", "pocket_rmsd_angstrom", "clash_count", "iptm", "mean_plddt"}
+    missing = sorted(required - set(present))
+    if missing:
+        return M2StructureScore(
+            candidate_id=metrics.candidate_id, status="insufficient_data", available_metrics=present, missing_metrics=missing,
+            recommended_for_m3=False, reasons=["missing_required_structure_metrics"],
+        )
+    activity_risk = _average(activity_terms)
+    clash_risk = _average(clash_terms)
+    confidence_score = _average(confidence_terms)
+    risk = _clip01(0.45 * activity_risk + 0.25 * clash_risk + 0.30 * (1 - confidence_score))
     return M2StructureScore(
         candidate_id=metrics.candidate_id,
+        status="valid",
+        available_metrics=present,
+        missing_metrics=[],
         activity_risk=round(activity_risk, 3),
         clash_risk=round(clash_risk, 3),
         confidence_score=round(confidence_score, 3),
-        m2_score=round(score, 3),
-        recommended_for_m3=score >= 0.55 and activity_risk <= 0.45 and clash_risk <= 0.45,
+        heuristic_structure_risk=round(risk, 3),
+        recommended_for_m3=activity_risk <= 0.45 and clash_risk <= 0.45,
         reasons=reasons or ["passed_rule_based_structure_screen"],
     )
 
 
-def _average(values: list[float], *, default: float) -> float:
-    return default if not values else sum(values) / len(values)
+def _average(values: list[float]) -> float:
+    if not values:
+        raise ValueError("required structure metric group was unexpectedly empty")
+    return sum(values) / len(values)
 
 
 def _clip01(value: float) -> float:

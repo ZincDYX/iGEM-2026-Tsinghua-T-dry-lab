@@ -62,7 +62,9 @@ def test_m2_structure_rule_based_score_flags_bad_geometry():
 
     assert good.recommended_for_m3 is True
     assert bad.recommended_for_m3 is False
-    assert bad.m2_score < good.m2_score
+    assert bad.heuristic_structure_risk is not None
+    assert good.heuristic_structure_risk is not None
+    assert bad.heuristic_structure_risk > good.heuristic_structure_risk
 
 
 def test_m4_lightweight_ode_score_uses_docking_penalty():

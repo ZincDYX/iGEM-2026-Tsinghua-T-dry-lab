@@ -10,8 +10,8 @@ def test_pipeline_uses_real_metrics_when_configured(tmp_path):
     config.run.output_dir = tmp_path
 
     manifest = run_pipeline(config)
-    m2_text = (manifest.run_dir / "m2_fusion" / "fusion_assessments.json").read_text(encoding="utf-8")
-    m4_text = (manifest.run_dir / "m4_reaction" / "reaction_predictions.json").read_text(encoding="utf-8")
+    m2_text = (manifest.run_dir / "m2_structure_screen" / "fusion_assessments.json").read_text(encoding="utf-8")
+    m4_text = (manifest.run_dir / "m4_glabridin_kinetics" / "reaction_predictions.json").read_text(encoding="utf-8")
 
-    assert "Rule-based real M2 score" in m2_text
-    assert "Lightweight ODE score" in m4_text
+    assert '"data_quality": "predicted"' in m2_text
+    assert '"status": "insufficient_data"' in m4_text
