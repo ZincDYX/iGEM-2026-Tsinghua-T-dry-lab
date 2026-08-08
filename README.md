@@ -1,21 +1,23 @@
 # iGEM 2026 Tsinghua-T dry lab
 
-This repository contains a reproducible dry-lab code base for the LUMOS/iGEM project.
+This repository contains a reproducible dry-lab code base for the LUMOS/iGEM project. It separates deterministic scientific calculations from orchestration and from wet-lab feedback. A result is never promoted from a fixture, heuristic, docking score, or extracted sentence to a validated biological fact.
 
 Current maintained modules:
 
-- `igem_drylab.kinetics`: two-phase mass-conserving enzyme-cascade model and OC-first/DMT-later competitive piecewise ODE.
+- `igem_drylab.kinetics`: generic demonstration kinetics plus an explicit, mass-conserving glabridin network: PT `9→10`, OC `10→11`, DMT `9→13` / `11→15` with a shared competitive DMT pool.
 - `igem_drylab.structure_metrics`: structure metrics such as pocket RMSD, PAE, distances, and optional SASA.
-- `igem_drylab.pipeline`: lightweight M1-M4 interface skeleton for LLPS candidate ranking, fusion-risk scoring, local concentration scoring, and reaction recommendation.
+- `igem_drylab.pipeline`: M0 evidence/configuration, M1 construct screen, M2 structural negative screen, M3 partitioning, M4 kinetics, and M5 wet-lab feedback. Real mode returns `insufficient_data` instead of mock scientific scores.
+- `igem_drylab.parameters`: reviewed parameter registry with value, unit, DOI/source, condition, uncertainty, and review state.
+- `igem_drylab.wetlab`: structured wet-lab data, non-destructive QC, bounded least-squares fitting, deterministic diagnosis, and transparent measurement ranking.
 - `igem_drylab.literature`: schema-first literature extraction and offline database construction utilities.
 - `igem_drylab.mcp`: MCP-style local tool definitions and structured tool-call results for future agent integration.
 - `igem_drylab.multichain`: multichain input generation, chain-chain interface checks, and finite-site module binding models.
 - `igem_drylab.parsers`: parsers for FreeSASA, AutoDock Vina, ColabFold/AF3/Boltz/Chai/ABCFold-style confidence outputs, and optional CALVADOS summaries.
-- `igem_drylab.scoring`: transparent rule-based M2/M4 scoring with real-metric fallback support.
+- `igem_drylab.scoring`: transparent structural and docking negative screens. Vina affinity is not converted into enzyme activity.
 - `igem_drylab.agent`: planner/memory/policy/executor/recovery runtime skeleton for an agent learning project.
 - `igem_drylab.pipeline.adapters`: command adapters for the lean default stack: ColabFold, FreeSASA, and AutoDock Vina. Optional legacy/advanced adapters are retained but not default dependencies.
 
-The M1-M4 pipeline is lightweight by default. It does not rerun heavy tools unless configured. If real M2 structure metrics, structure-prediction confidence artifacts, CALVADOS summaries, or M4 docking penalties are supplied, the pipeline can parse them and use rule-based real scoring; otherwise it falls back to deterministic mock scores.
+The pipeline has two execution modes. `demo` may use explicit fixtures to test software plumbing. `real` requires reviewed, provenance-bearing inputs and never falls back to mock scores. Sequence-level M1 flags are engineering screens, not LLPS probabilities; M2 and Vina are negative screens, not enzyme-activity measurements.
 
 ## Install and test
 
@@ -30,7 +32,7 @@ pytest
 python scripts/sweep_kinetics.py --output results/example_sweep
 ```
 
-## Run the M1-M4 skeleton
+## Run the M0-M5 workflow
 
 ```bash
 igem-drylab pipeline validate configs/m1_m4_example.yaml
@@ -43,9 +45,9 @@ Output is written under:
 outputs/m1-m4-demo/
 ```
 
-## Run M1-M4 with real metric files
+## Run with existing structural metrics
 
-This example does not run ColabFold, FreeSASA, or Vina. It reads already-produced metrics and applies lightweight rule-based scoring.
+This example does not run ColabFold, FreeSASA, or Vina. It reads already-produced metrics. It remains `insufficient_data` for M3/M4 until reviewed partition and kinetic parameter records are supplied.
 
 ```bash
 igem-drylab pipeline validate configs/m1_m4_real_scoring_example.yaml

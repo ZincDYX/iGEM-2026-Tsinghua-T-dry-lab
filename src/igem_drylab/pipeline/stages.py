@@ -194,7 +194,12 @@ def _m4_insufficient(candidate_id: str, config: ProjectConfig, missing: list[str
 
 
 def _glabridin_parameter_values(selected: dict[str, object]) -> dict[str, float]:
-    values = {name: float(getattr(record, "value")) for name, record in selected.items()}
+    accepted = {
+        "phi", "pt_total", "oc_total", "dmt_total", "kcat_pt", "km_pt", "kcat_oc", "km_oc", "kcat_dmt_9", "km_dmt_9", "kcat_dmt_11", "km_dmt_11",
+        "partition_pt", "partition_oc", "partition_dmt", "partition_x9", "partition_x10", "partition_x11", "partition_x13", "partition_x15",
+        "activity_dense_pt", "activity_dilute_pt", "activity_dense_oc", "activity_dilute_oc", "activity_dense_dmt", "activity_dilute_dmt",
+    }
+    values = {name: float(getattr(record, "value")) for name, record in selected.items() if name in accepted}
     for species in ("9", "10", "11", "13", "15"):
         values[f"partition_{species}"] = values.pop(f"partition_x{species}")
     return values

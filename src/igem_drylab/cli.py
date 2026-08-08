@@ -15,6 +15,7 @@ from igem_drylab.literature.sources import LiteratureSearchQuery, search_literat
 from igem_drylab.mcp import create_default_registry
 from igem_drylab.multichain import assess_interface, solve_binding_equilibrium
 from igem_drylab.pipeline import load_config, run_pipeline
+from igem_drylab.parameters import validate_parameters
 
 app = typer.Typer(help="iGEM 2026 Tsinghua-T dry-lab utilities.")
 pipeline_app = typer.Typer(help="Run M1-M4 pipeline skeleton.")
@@ -22,11 +23,13 @@ literature_app = typer.Typer(help="Use schema-first literature extraction helper
 multichain_app = typer.Typer(help="Build and inspect multichain module designs.")
 tools_app = typer.Typer(help="Inspect and call MCP-style local tools.")
 agent_app = typer.Typer(help="Plan and run conservative dry-lab agent workflows.")
+parameters_app = typer.Typer(help="Inspect reviewed scientific parameters and provenance.")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(literature_app, name="literature")
 app.add_typer(multichain_app, name="multichain")
 app.add_typer(tools_app, name="tools")
 app.add_typer(agent_app, name="agent")
+app.add_typer(parameters_app, name="parameters")
 
 
 @pipeline_app.command("validate")
@@ -131,6 +134,32 @@ def search_literature_command(
             api_key_env=api_key_env,
         ),
     )
+
+
+@parameters_app.command("list")
+def list_parameters(config: Path) -> None:
+    """List registry records; literature evidence is not automatically reviewed."""
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in load_config(config).parameters], ensure_ascii=False, indent=2))
+
+
+@parameters_app.command("validate")
+def validate_parameter_records(
+    config: Path,
+    required: list[str] = typer.Option([], "--required", help="Required parameter name; repeat option."),
+) -> None:
+    project = load_config(config)
+    _selected, missing = validate_parameters(project.parameters, required_names=set(required), allow_assumptions=project.execution.allow_assumptions)
+    typer.echo(json.dumps({"ok": not missing, "missing": missing}, ensure_ascii=False, indent=2))
+    if missing:
+        raise typer.Exit(code=1)
+
+
+@parameters_app.command("provenance")
+def parameter_provenance(config: Path, parameter_id: str) -> None:
+    for item in load_config(config).parameters:
+        if item.parameter_id == parameter_id:
+            typer.echo(item.model_dump_json(indent=2)); return
+    raise typer.BadParameter(f"Unknown parameter_id: {parameter_id}")
     if output_manifest is not None:
         write_search_manifest(output_manifest, results)
     typer.echo(

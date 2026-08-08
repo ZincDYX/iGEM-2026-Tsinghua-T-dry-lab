@@ -1,5 +1,7 @@
 # Clean integration notes
 
+> Historical integration record. The current scientific contract is in `scientific_model_contract.md`: M1 does not claim LLPS ranking, M3 does not derive concentration from M2 scores, M4 uses the explicit glabridin network, and M5 handles wet-lab feedback.
+
 This branch was created from `develop` and manually integrates the useful core ideas from:
 
 - `feature/m1-m4-pipeline-skeleton`

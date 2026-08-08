@@ -62,7 +62,7 @@ Vina output is parsed into best affinity. The docking penalty compares fusion an
 ΔΔG = ΔG_fusion - ΔG_reference
 ```
 
-If fusion docking is worse, the activity multiplier decreases. This is only a screening proxy, not a real enzyme rate.
+If fusion docking is worse, flag it as a possible binding-risk construct. Do not derive an activity multiplier or any enzyme-rate parameter from Vina; activity requires wet-lab measurement, reviewed literature, or an explicitly allowed assumption.
 
 The complete M4 piecewise model is now implemented as `simulate_piecewise_induction` and `score_m4_piecewise_ode`.
 
