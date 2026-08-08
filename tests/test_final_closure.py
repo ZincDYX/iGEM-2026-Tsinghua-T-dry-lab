@@ -4,6 +4,7 @@ import json
 from igem_drylab.wetlab import WetLabResult, approve_and_persist_parameter, compare_prediction
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.pipeline import load_config
+from igem_drylab.wetlab import replicate_variation
 
 
 def test_wetlab_time_and_horizon_are_explicit(tmp_path):
@@ -23,3 +24,11 @@ def test_human_approval_persists_and_reloads(tmp_path):
     approved = approve_and_persist_parameter(project, candidate, reviewer="human")
     assert approved.approved_by == "human"
     assert any(record.parameter_id == "p" for record in load_config(project).parameters)
+
+
+def test_replicate_variation_uses_replicate_ids_not_time_series():
+    base = {"construct_id": "c", "condition_id": "x", "metabolite_time": [0, 1], "metabolites": {"15": [0, 2]}}
+    one = WetLabResult(experiment_id="e1", replicate_id="r1", **base)
+    assert replicate_variation([one])[("c", "x")] is None
+    two = WetLabResult(experiment_id="e2", replicate_id="r2", **{**base, "metabolites": {"15": [0, 4]}})
+    assert replicate_variation([one, two])[("c", "x")] is not None

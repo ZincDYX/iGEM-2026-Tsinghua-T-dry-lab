@@ -6,6 +6,7 @@ from .models import WetLabResult, load_wetlab_results
 from .qc import QcReport, quality_control
 from .parameter_update import MeasurementMapping, approve_and_persist_parameter, parameter_updates_from_measurements
 from .comparison import MetaboliteComparison, compare_prediction
+from .aggregation import replicate_variation
 from .recommend import NextExperimentRecommendation, recommend_measurements
 
-__all__ = ["DiscrepancyDiagnosis", "FitResult", "MeasurementMapping", "MetaboliteComparison", "NextExperimentRecommendation", "QcReport", "WetLabResult", "approve_and_persist_parameter", "compare_prediction", "diagnose_discrepancy", "fit_scale_parameter", "load_wetlab_results", "parameter_updates_from_measurements", "quality_control", "recommend_measurements"]
+__all__ = ["DiscrepancyDiagnosis", "FitResult", "MeasurementMapping", "MetaboliteComparison", "NextExperimentRecommendation", "QcReport", "WetLabResult", "approve_and_persist_parameter", "compare_prediction", "diagnose_discrepancy", "fit_scale_parameter", "load_wetlab_results", "parameter_updates_from_measurements", "quality_control", "recommend_measurements", "replicate_variation"]

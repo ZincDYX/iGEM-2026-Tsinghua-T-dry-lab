@@ -8,7 +8,7 @@ from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.parameters import m3_requirements, m4_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
-from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control
+from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation
 
 from .adapters import create_tool_adapter
 from .config import ConstructDefinition, ProjectConfig
@@ -183,7 +183,7 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
     if path is None:
         records = [M5FeedbackAssessment(experiment_id="unavailable", construct_id="unavailable", status="insufficient_data", data_quality="heuristic", missing_inputs=["wetlab_results_file"], recommended_next_action=["provide structured wet-lab measurements"], notes="No wet-lab feedback file was configured.")]
     else:
-        results = load_wetlab_results(path); reports = quality_control(results); records = []
+        results = load_wetlab_results(path); reports = quality_control(results); records = []; variations = replicate_variation(results)
         prediction_by_context = {(item.candidate_id.removeprefix("M1-"), item.condition_id): item for item in predictions or [] if item.status == "valid"}
         residuals: list[float] = []
         for result, report in zip(results, reports):
@@ -192,12 +192,12 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
             product = comparisons.get("15")
             residual = product.residual_final if product else None
             trend = product.trend_agreement if product else None
-            variation = None
+            variation = variations[(result.construct_id, result.condition_id)]
             fit = product.fit if product else None
             comparison_status = product.comparison_status if product else ("unmatched_condition" if prediction is None else "no_observed_15")
             if residual is not None:
                 residuals.append(residual)
-            systematic = len(residuals) >= 2 and all(value > 0 for value in residuals) or len(residuals) >= 2 and all(value < 0 for value in residuals)
+            systematic = False
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic)
             records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and comparisons else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}."))
     write_models(stage_dir, "feedback", records)

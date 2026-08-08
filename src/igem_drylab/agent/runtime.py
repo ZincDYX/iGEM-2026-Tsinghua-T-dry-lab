@@ -115,6 +115,16 @@ class AgentRuntime:
         self.events.emit("agent_run_finished", task_id=task.task_id, status=trace.final_status, calls=len(trace.calls))
         return trace
 
+    def replan_after_registry_approval(self, task: AgentTask, previous: AgentTrace) -> AgentTrace:
+        """Explicit external-human state-change replan; does not approve data itself."""
+        context = self.context_builder.build_for_task(task)
+        plan = self.planner.create_plan(task, context)
+        plan.previous_plan_id = previous.plan.plan_id
+        trace = AgentTrace(task=task, plan=plan, replan_count=previous.replan_count + 1, replan_reasons=[*previous.replan_reasons, "registry_state_changed_after_human_approval"], context_summary=_context_summary(context))
+        trace.notes.append(f"replanned:{previous.plan.plan_id}->{plan.plan_id}:registry_state_changed_after_human_approval")
+        self.events.emit("agent_replanned", task_id=task.task_id, reason="registry_state_changed_after_human_approval", replan_count=trace.replan_count)
+        return trace
+
     def _run_step(self, task: AgentTask, trace: AgentTrace, step: PlanStep) -> bool:
         if step.status == "blocked":
             return False

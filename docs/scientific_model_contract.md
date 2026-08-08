@@ -31,6 +31,7 @@ silently converted or selected.
 - M3 calculates independent species concentrations from explicit `phi`, total concentration, and partition coefficient using mass conservation.
 - M4 uses hours for its simulation and gate axis, writes a machine-readable trajectory artifact (`time`, `x9`, `x10`, `x11`, `x13`, `x15`), and requires explicit initial state/gates in real mode.
 - M5 matches a prediction by `(construct_id, condition_id)`, interpolates the M4 `x15` trajectory to observed time points, and only runs a one-parameter fit with at least two aligned points. Endpoint-only data are labelled as such and are not treated as a trajectory fit.
+- Validated wet-lab parameter candidates require an explicit human approval action before `approve_and_persist_parameter` appends an approved, provenance-bearing record to project YAML. Agent replanning after that external action is explicit, not autonomous.
 
 ## Experimental inputs required for real mode
 
