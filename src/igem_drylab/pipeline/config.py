@@ -23,6 +23,14 @@ class ExecutionConfig(BaseModel):
     allow_assumptions: bool = False
 
 
+class ExperimentalContext(BaseModel):
+    host: str | None = None
+    strain: str | None = None
+    temperature_c: float | None = None
+    pH: float | None = None
+    assay_system: str | None = None
+
+
 class LigandConfig(BaseModel):
     id: str
     name: str
@@ -158,6 +166,7 @@ class StagesConfig(BaseModel):
 class ProjectConfig(BaseModel):
     run: RunConfig
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    experimental_context: ExperimentalContext = Field(default_factory=ExperimentalContext)
     inputs: InputsConfig
     tools: dict[str, ToolConfig] = Field(default_factory=dict)
     parameters: list[ParameterRecord] = Field(default_factory=list)

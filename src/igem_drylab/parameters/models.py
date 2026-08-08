@@ -41,6 +41,7 @@ class ParameterRecord(BaseModel):
     conditions: dict[str, str | float] = Field(default_factory=dict)
     uncertainty: ParameterUncertainty | None = None
     review_status: ReviewStatus = "extracted"
+    approved_by: str | None = None
     validation_flags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

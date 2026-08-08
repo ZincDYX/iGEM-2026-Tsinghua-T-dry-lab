@@ -54,3 +54,15 @@ def m4_requirements() -> list[ParameterRequirement]:
         *[_requirement(f"partition_x{species}", "kp") for species in ("9", "10", "11", "13", "15")],
         *[_requirement(f"activity_{phase}_{enzyme}", "activity_ratio", enzyme_id=enzyme.upper()) for phase in ("dense", "dilute") for enzyme in ("pt", "oc", "dmt")],
     ]
+
+
+def recruitment_requirements(recruitment: object, *, binding_model: str) -> list[ParameterRequirement]:
+    enzyme = recruitment.enzyme_id
+    requirements = [
+        _requirement(recruitment.enzyme_total_parameter, "abundance", enzyme_id=enzyme),
+        _requirement(recruitment.site_total_parameter, "abundance"),
+        _requirement(recruitment.kd_parameter, "kd", enzyme_id=enzyme),
+    ]
+    if binding_model == "hill" and recruitment.hill_coefficient_parameter:
+        requirements.append(_requirement(recruitment.hill_coefficient_parameter, "hill_coefficient", enzyme_id=enzyme))
+    return requirements

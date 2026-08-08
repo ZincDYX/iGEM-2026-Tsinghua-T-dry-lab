@@ -6,7 +6,7 @@ import json
 from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
-from igem_drylab.parameters import m3_requirements, m4_requirements, validate_parameters
+from igem_drylab.parameters import m3_requirements, m4_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control
 
@@ -99,8 +99,8 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
     """Calculate species-specific two-phase concentrations from reviewed inputs."""
     stage_dir = run_dir / "m3_enrichment"
     species = ("PT", "OC", "DMT", "9", "10", "11", "13", "15")
-    requirements = m3_requirements()
-    selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions)
+    requirements = m3_requirements() + [requirement for entry in config.stages.m3_concentration.recruitment for requirement in recruitment_requirements(entry, binding_model=config.stages.m3_concentration.binding_model)]
+    selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c)
     records: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
         if not assessment.recommended_for_m3:
@@ -122,7 +122,8 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
         occupancy = {}
         for entry in config.stages.m3_concentration.recruitment:
             enzyme = entry.enzyme_id
-            recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=selected[entry.enzyme_total_parameter].canonical_value, site_total=selected[entry.site_total_parameter].canonical_value, kd=selected[entry.kd_parameter].canonical_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=config.stages.m3_concentration.hill_coefficient))
+            hill = selected[entry.hill_coefficient_parameter].canonical_value if entry.hill_coefficient_parameter else config.stages.m3_concentration.hill_coefficient
+            recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=selected[entry.enzyme_total_parameter].canonical_value, site_total=selected[entry.site_total_parameter].canonical_value, kd=selected[entry.kd_parameter].canonical_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=hill))
             recruitment[enzyme] = recruitment_result.recruited_fraction; occupancy[enzyme] = recruitment_result.site_occupancy
         records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="valid", data_quality=_data_quality(selected.values()),
             concentrations={key: value.model_dump() for key, value in result.items()},
@@ -138,7 +139,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
     stage_dir = run_dir / "m4_glabridin_kinetics"
-    selected, missing = validate_parameters(config.parameters, requirements=m4_requirements(), allow_assumptions=config.execution.allow_assumptions)
+    selected, missing = validate_parameters(config.parameters, requirements=m4_requirements(), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c)
     gates = config.stages.m4_reaction
     gate_missing = [name for name in ("pt_gate", "oc_gate", "dmt_gate") if getattr(gates, name) is None]
     records: list[M4ReactionPrediction] = []

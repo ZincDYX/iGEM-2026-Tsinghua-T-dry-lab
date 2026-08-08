@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
+from pathlib import Path
+import yaml
 
 from igem_drylab.parameters import ParameterRecord
 
@@ -65,3 +67,15 @@ def _scalar_field(result: WetLabResult, field: str) -> float | None:
         raise ValueError("source_field must be protein_abundance.*, imaging.*, or enzyme_activity.*")
     value = getattr(result, group).get(key)
     return float(value) if value is not None else None
+
+
+def approve_and_persist_parameter(project_path: Path, candidate: ParameterRecord, *, reviewer: str) -> ParameterRecord:
+    """Human-triggered YAML update retaining old records and provenance."""
+    if candidate.review_status != "validated":
+        raise ValueError("only validated candidates may be approved")
+    raw = yaml.safe_load(project_path.read_text(encoding="utf-8"))
+    records = raw.setdefault("parameters", [])
+    approved = candidate.model_copy(update={"review_status": "approved", "approved_by": reviewer, "validation_flags": [*candidate.validation_flags, f"approved_by:{reviewer}"]})
+    records.append(approved.model_dump(mode="json"))
+    project_path.write_text(yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return approved
