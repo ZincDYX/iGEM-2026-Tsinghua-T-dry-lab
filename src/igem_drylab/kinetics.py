@@ -194,6 +194,82 @@ class CompetitiveSimulationResult:
         return self.concentrations[3]
 
 
+@dataclass(frozen=True)
+class GlabridinKineticParameters:
+    """Explicit two-phase parameters for 9→10→11→15 and competing 9→13.
+
+    Units must be internally consistent. Values are deliberately required at
+    construction: callers must obtain them from reviewed parameter records or
+    explicitly labelled assumptions outside this numerical module.
+    """
+    phi: float
+    pt_total: float
+    oc_total: float
+    dmt_total: float
+    kcat_pt: float
+    km_pt: float
+    kcat_oc: float
+    km_oc: float
+    kcat_dmt_9: float
+    km_dmt_9: float
+    kcat_dmt_11: float
+    km_dmt_11: float
+    partition_pt: float
+    partition_oc: float
+    partition_dmt: float
+    partition_9: float
+    partition_10: float
+    partition_11: float
+    partition_13: float
+    partition_15: float
+    activity_dense_pt: float
+    activity_dilute_pt: float
+    activity_dense_oc: float
+    activity_dilute_oc: float
+    activity_dense_dmt: float
+    activity_dilute_dmt: float
+    kdeg_9: float = 0.0
+    kdeg_10: float = 0.0
+    kdeg_11: float = 0.0
+    kdeg_13: float = 0.0
+    kdeg_15: float = 0.0
+
+    def validate(self) -> None:
+        if not 0 <= self.phi <= 1:
+            raise ValueError("phi must be between 0 and 1")
+        values = tuple(self.__dict__.values())
+        if any(value < 0 for value in values):
+            raise ValueError("glabridin parameters must be nonnegative")
+        if any(value == 0 for value in (self.km_pt, self.km_oc, self.km_dmt_9, self.km_dmt_11)):
+            raise ValueError("Km values must be positive")
+        if any(value <= 0 for value in (self.partition_pt, self.partition_oc, self.partition_dmt, self.partition_9, self.partition_10, self.partition_11, self.partition_13, self.partition_15)):
+            raise ValueError("partition coefficients must be positive")
+
+
+@dataclass(frozen=True)
+class GlabridinSimulationResult:
+    time: np.ndarray
+    concentrations: np.ndarray
+    pt_gate: np.ndarray
+    oc_gate: np.ndarray
+    dmt_gate: np.ndarray
+
+    @property
+    def x9(self) -> np.ndarray: return self.concentrations[0]
+    @property
+    def x10(self) -> np.ndarray: return self.concentrations[1]
+    @property
+    def x11(self) -> np.ndarray: return self.concentrations[2]
+    @property
+    def x13(self) -> np.ndarray: return self.concentrations[3]
+    @property
+    def x15(self) -> np.ndarray: return self.concentrations[4]
+
+    @property
+    def mass_balance_error(self) -> float:
+        return float(np.max(np.abs(self.concentrations.sum(axis=0) - self.concentrations.sum(axis=0)[0])))
+
+
 def phase_concentrations(average: float, partition: float, phi: float) -> tuple[float, float]:
     """Return dense- and dilute-phase concentrations under mass conservation."""
     denominator = (1.0 - phi) + phi * partition
@@ -312,6 +388,57 @@ def competitive_cascade_rates(
     v_product = phi * v_product_in + (1.0 - phi) * v_product_out
     v_leak = phi * v_leak_in + (1.0 - phi) * v_leak_out
     return v_oc, v_product, v_leak
+
+
+def glabridin_rates(
+    state: np.ndarray, params: GlabridinKineticParameters, *, pt_gate_level: float, oc_gate_level: float, dmt_gate_level: float
+) -> tuple[float, float, float, float]:
+    """Return cell-average PT, OC, DMT(9), DMT(11) rates with shared DMT pool."""
+    x9, x10, x11, _x13, _x15 = np.maximum(state, 0.0)
+    phi = params.phi
+    pt = (phase_concentrations(params.pt_total * pt_gate_level, params.partition_pt, phi),
+          phase_concentrations(params.oc_total * oc_gate_level, params.partition_oc, phi),
+          phase_concentrations(params.dmt_total * dmt_gate_level, params.partition_dmt, phi))
+    p9 = phase_concentrations(x9, params.partition_9, phi)
+    p10 = phase_concentrations(x10, params.partition_10, phi)
+    p11 = phase_concentrations(x11, params.partition_11, phi)
+    pt_dense = _mm_rate(pt[0][0], p9[0], params.kcat_pt * params.activity_dense_pt, params.km_pt)
+    pt_dilute = _mm_rate(pt[0][1], p9[1], params.kcat_pt * params.activity_dilute_pt, params.km_pt)
+    oc_dense = _mm_rate(pt[1][0], p10[0], params.kcat_oc * params.activity_dense_oc, params.km_oc)
+    oc_dilute = _mm_rate(pt[1][1], p10[1], params.kcat_oc * params.activity_dilute_oc, params.km_oc)
+    d15_dense, d13_dense = competitive_dmt_rates(dmt=pt[2][0], substrate_a=p9[0], intermediate_b=p11[0], kcat_product=params.kcat_dmt_11 * params.activity_dense_dmt, km_product=params.km_dmt_11, kcat_leak=params.kcat_dmt_9 * params.activity_dense_dmt, km_leak=params.km_dmt_9)
+    d15_dilute, d13_dilute = competitive_dmt_rates(dmt=pt[2][1], substrate_a=p9[1], intermediate_b=p11[1], kcat_product=params.kcat_dmt_11 * params.activity_dilute_dmt, km_product=params.km_dmt_11, kcat_leak=params.kcat_dmt_9 * params.activity_dilute_dmt, km_leak=params.km_dmt_9)
+    average = lambda dense, dilute: phi * dense + (1 - phi) * dilute
+    return average(pt_dense, pt_dilute), average(oc_dense, oc_dilute), average(d13_dense, d13_dilute), average(d15_dense, d15_dilute)
+
+
+def simulate_glabridin(
+    params: GlabridinKineticParameters, *, pt_gate: InductionGate = InductionGate(on_time=0.0, basal=0.0, induced=1.0),
+    oc_gate: InductionGate = InductionGate(on_time=0.0, basal=0.0, induced=1.0),
+    dmt_gate: InductionGate = InductionGate(on_time=0.0, basal=0.0, induced=1.0), initial: tuple[float, float, float, float, float] = (10.0, 0.0, 0.0, 0.0, 0.0),
+    t_end: float = 24.0, points: int = 241,
+) -> GlabridinSimulationResult:
+    """Segmented two-compartment ODE; no degradation gives pathway mass balance."""
+    params.validate(); pt_gate.validate(); oc_gate.validate(); dmt_gate.validate()
+    if t_end <= 0 or points < 2 or any(value < 0 for value in initial):
+        raise ValueError("invalid simulation horizon, point count, or initial state")
+    evaluation = np.linspace(0.0, t_end, points)
+    state = np.asarray(initial, dtype=float); all_t: list[np.ndarray] = []; all_y: list[np.ndarray] = []
+    for start, end in zip(_piecewise_boundaries(t_end, pt_gate, oc_gate, dmt_gate)[:-1], _piecewise_boundaries(t_end, pt_gate, oc_gate, dmt_gate)[1:]):
+        segment = evaluation[(evaluation >= start) & (evaluation <= end)]
+        segment = np.unique(np.concatenate(([start, end], segment if segment.size else np.asarray([]))))
+        def rhs(time: float, current: np.ndarray) -> np.ndarray:
+            vpt, voc, v13, v15 = glabridin_rates(current, params, pt_gate_level=gate_value(time, pt_gate), oc_gate_level=gate_value(time, oc_gate), dmt_gate_level=gate_value(time, dmt_gate))
+            x9, x10, x11, x13, x15 = np.maximum(current, 0.0)
+            return np.array([-vpt-v13-params.kdeg_9*x9, vpt-voc-params.kdeg_10*x10, voc-v15-params.kdeg_11*x11, v13-params.kdeg_13*x13, v15-params.kdeg_15*x15])
+        solved = solve_ivp(rhs, (start, end), state, t_eval=segment, method="LSODA", rtol=1e-8, atol=1e-10)
+        if not solved.success: raise RuntimeError(solved.message)
+        times, values = solved.t, np.maximum(solved.y, 0.0)
+        if all_t: times, values = times[1:], values[:, 1:]
+        all_t.append(times); all_y.append(values); state = values[:, -1]
+    time = np.concatenate(all_t); concentrations = np.concatenate(all_y, axis=1); order = np.argsort(time)
+    time, concentrations = time[order], concentrations[:, order]
+    return GlabridinSimulationResult(time, concentrations, np.asarray([gate_value(float(t), pt_gate) for t in time]), np.asarray([gate_value(float(t), oc_gate) for t in time]), np.asarray([gate_value(float(t), dmt_gate) for t in time]))
 
 
 def simulate_cascade(

@@ -99,10 +99,11 @@ class M3Config(BaseModel):
 
 class M4Config(BaseModel):
     target_product: str = "glabridin"
-    oc_first_weight: float = Field(default=0.60, ge=0, le=1)
-    dmt_later_weight: float = Field(default=0.40, ge=0, le=1)
     docking_penalties_file: Path | None = None
     t_end: float = Field(default=24.0, gt=0)
+    pt_gate: dict[str, Any] | None = None
+    oc_gate: dict[str, Any] | None = None
+    dmt_gate: dict[str, Any] | None = None
 
 
 class StagesConfig(BaseModel):

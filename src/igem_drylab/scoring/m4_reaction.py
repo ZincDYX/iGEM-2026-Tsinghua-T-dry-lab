@@ -16,12 +16,19 @@ from igem_drylab.parsers.vina import parse_vina_output
 
 
 class DockingPenalty(BaseModel):
+    """Negative binding screen; it is not an enzyme-activity measurement."""
     candidate_id: str
     reference_affinity_kcal_mol: float
     fusion_affinity_kcal_mol: float
     delta_delta_g_kcal_mol: float
-    activity_multiplier: float = Field(ge=0, le=1)
-    passes: bool
+    pose_available: bool = True
+    binding_risk: str
+    passes_negative_screen: bool
+    notes: str = ""
+
+    @property
+    def passes(self) -> bool:
+        return self.passes_negative_screen
 
 
 class M4OdeScore(BaseModel):
@@ -56,14 +63,15 @@ def compute_docking_penalty(
     reference = parse_vina_output(reference_vina_output)
     fusion = parse_vina_output(fusion_vina_output)
     delta = fusion.best_affinity_kcal_mol - reference.best_affinity_kcal_mol
-    multiplier = _clip01(1.0 - max(0.0, delta) / 4.0)
+    risk = "low" if delta <= 0 else "moderate" if delta <= allowed_loss_kcal_mol else "high"
     return DockingPenalty(
         candidate_id=candidate_id,
         reference_affinity_kcal_mol=reference.best_affinity_kcal_mol,
         fusion_affinity_kcal_mol=fusion.best_affinity_kcal_mol,
         delta_delta_g_kcal_mol=round(delta, 3),
-        activity_multiplier=round(multiplier, 3),
-        passes=delta <= allowed_loss_kcal_mol,
+        binding_risk=risk,
+        passes_negative_screen=delta <= allowed_loss_kcal_mol,
+        notes="Vina affinity difference is a negative binding screen, not an activity multiplier.",
     )
 
 
@@ -83,15 +91,8 @@ def score_m4_ode(
     docking_penalty: DockingPenalty | None = None,
     t_end: float = 24.0,
 ) -> M4OdeScore:
-    multiplier = docking_penalty.activity_multiplier if docking_penalty is not None else 1.0
-    adjusted = CascadeParameters(
-        **{
-            **params.__dict__,
-            "activity_ratio_oc": params.activity_ratio_oc * multiplier,
-            "activity_ratio_dmt": params.activity_ratio_dmt * multiplier,
-        }
-    )
-    result = simulate_cascade(adjusted, t_end=t_end)
+    # Docking can fail a construct's negative screen but cannot parameterize kinetics.
+    result = simulate_cascade(params, t_end=t_end)
     product_final = float(result.product[-1])
     substrate_initial = float(result.substrate[0] + result.intermediate[0] + result.product[0])
     relative_yield = _clip01(product_final / substrate_initial) if substrate_initial > 0 else 0.0
@@ -123,23 +124,15 @@ def score_m4_piecewise_ode(
     initial: tuple[float, float, float, float] = (10.0, 0.0, 0.0, 0.0),
     t_end: float = 24.0,
 ) -> M4PiecewiseOdeScore:
-    multiplier = docking_penalty.activity_multiplier if docking_penalty is not None else 1.0
-    adjusted = CompetitiveCascadeParameters(
-        **{
-            **params.__dict__,
-            "activity_ratio_oc": params.activity_ratio_oc * multiplier,
-            "activity_ratio_dmt": params.activity_ratio_dmt * multiplier,
-        }
-    )
     delayed = simulate_piecewise_induction(
-        adjusted,
+        params,
         oc_gate=oc_gate,
         dmt_gate=dmt_gate,
         initial=initial,
         t_end=t_end,
     )
     baseline = simulate_piecewise_induction(
-        adjusted,
+        params,
         oc_gate=InductionGate(on_time=oc_gate.on_time, basal=oc_gate.basal, induced=oc_gate.induced, mode=oc_gate.mode),
         dmt_gate=InductionGate(on_time=0.0, basal=dmt_gate.basal, induced=dmt_gate.induced, mode=dmt_gate.mode),
         initial=initial,

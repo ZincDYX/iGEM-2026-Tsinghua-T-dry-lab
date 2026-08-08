@@ -160,7 +160,7 @@ def test_scoring_mcp_tools_return_structured_results():
         },
     ).as_protocol_dict()["structuredContent"]
     assert docking["ok"] is True
-    assert docking["result"]["passes"] is True
+    assert docking["result"]["passes_negative_screen"] is True
 
     m4 = registry.call(
         "igem.scoring.m4_ode",

@@ -244,7 +244,7 @@ class RuleBasedDryLabPlanner:
             return
         conditions = _m2_conditions(m2_step)
         if docking_step:
-            conditions.append(ResultCondition(source_step_id=docking_step, source_path=["structuredContent", "result", "passes"], allowed_values=[True]))
+            conditions.append(ResultCondition(source_step_id=docking_step, source_path=["structuredContent", "result", "passes_negative_screen"], allowed_values=[True]))
         step = PlanStep(
             step_id="simulate_timing", objective="Run OC-first/DMT-later piecewise ODE using explicit assumptions.",
             tool_name="igem.scoring.m4_piecewise_ode",
