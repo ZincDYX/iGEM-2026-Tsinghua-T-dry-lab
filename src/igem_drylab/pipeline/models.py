@@ -94,5 +94,9 @@ class M5FeedbackAssessment(ScientificResult):
     qc_passed: bool | None = None
     qc_flags: list[str] = Field(default_factory=list)
     diagnosis: str | None = None
+    prediction_residual: float | None = None
+    trend_agreement: bool | None = None
+    replicate_variation: float | None = None
+    fit: dict[str, Any] | None = None
     next_measurement: str | None = None
     notes: str = ""

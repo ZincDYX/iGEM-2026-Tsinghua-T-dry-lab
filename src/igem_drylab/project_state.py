@@ -23,4 +23,11 @@ class ProjectState(BaseModel):
     def missing_inputs(self, stage: str, *, allow_assumptions: bool = False) -> list[str]:
         requirements = m3_requirements() if stage == "m3" else m4_requirements() if stage == "m4" else []
         registry = ParameterRegistry(self.approved_parameters)
-        return [item.name for item in requirements if registry.resolve_for_model(item.name, allow_assumptions=allow_assumptions).status != "resolved"]
+        return [item.name for item in requirements if registry.resolve(item, allow_assumptions=allow_assumptions).status != "resolved"]
+
+    def approve_parameter(self, candidate: ParameterRecord, *, reviewer: str) -> "ProjectState":
+        """Return updated state; persistence remains an explicit caller action."""
+        if candidate.review_status not in {"validated", "approved"}:
+            raise ValueError("only validated parameter candidates can be approved")
+        approved = candidate.model_copy(update={"review_status": "approved", "validation_flags": [*candidate.validation_flags, f"approved_by:{reviewer}"]})
+        return self.model_copy(update={"approved_parameters": [*self.approved_parameters, approved]})

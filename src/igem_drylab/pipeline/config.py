@@ -97,13 +97,32 @@ class M2Config(BaseModel):
 class M3Config(BaseModel):
     binding_model: Literal["independent", "hill"] = "independent"
     hill_coefficient: float | None = Field(default=None, gt=0)
-    recruitment: list[dict[str, str]] = Field(default_factory=list)
+    recruitment: list["RecruitmentConfig"] = Field(default_factory=list)
+
+
+class RecruitmentConfig(BaseModel):
+    enzyme_id: str
+    enzyme_total_parameter: str
+    site_total_parameter: str
+    kd_parameter: str
+    hill_coefficient_parameter: str | None = None
+
+
+class InitialStateConfig(BaseModel):
+    x9: float = Field(ge=0)
+    x10: float = Field(default=0, ge=0)
+    x11: float = Field(default=0, ge=0)
+    x13: float = Field(default=0, ge=0)
+    x15: float = Field(default=0, ge=0)
+
+    def as_tuple(self) -> tuple[float, float, float, float, float]:
+        return self.x9, self.x10, self.x11, self.x13, self.x15
 
 
 class M4Config(BaseModel):
     target_product: str = "glabridin"
-    docking_penalties_file: Path | None = None
     t_end: float = Field(default=24.0, gt=0)
+    initial_state: InitialStateConfig | None = None
     pt_gate: dict[str, Any] | None = None
     oc_gate: dict[str, Any] | None = None
     dmt_gate: dict[str, Any] | None = None
@@ -154,10 +173,6 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         tool.repo_path = _resolve_path(tool.repo_path, base_dir)  # type: ignore[assignment]
     config.stages.m2_fusion.structure_metrics_file = _resolve_path(
         config.stages.m2_fusion.structure_metrics_file,
-        base_dir,
-    )  # type: ignore[assignment]
-    config.stages.m4_reaction.docking_penalties_file = _resolve_path(
-        config.stages.m4_reaction.docking_penalties_file,
         base_dir,
     )  # type: ignore[assignment]
     config.stages.m5_feedback.wetlab_results_file = _resolve_path(config.stages.m5_feedback.wetlab_results_file, base_dir)  # type: ignore[assignment]

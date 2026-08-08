@@ -5,7 +5,7 @@ import pytest
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_enrichment, calculate_recruitment
 from igem_drylab.pipeline import load_config
 from igem_drylab.pipeline.stages import run_m1, run_m2, run_m3
-from igem_drylab.parameters import ParameterRecord
+from igem_drylab.parameters import ParameterRecord, m3_requirements
 
 
 def test_phase_concentration_mass_conservation():
@@ -29,12 +29,9 @@ def test_finite_site_and_hill_recruitment_require_explicit_inputs():
 def test_m3_uses_independent_oc_and_dmt_partition_inputs(tmp_path):
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
     config.execution.allow_assumptions = True
-    config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit="uM", source_type="assumption", source_reference="synthetic test", review_status="approved") for name, value in {
-        "phi": 0.1, **{f"x{species}_total": 10.0 for species in ("9", "10", "11", "13", "15")},
-        "pt_total": 1.0, "oc_total": 2.0, "dmt_total": 3.0,
-        **{f"partition_x{species}": 1.0 for species in ("9", "10", "11", "13", "15")},
-        "partition_pt": 1.0, "partition_oc": 20.0, "partition_dmt": 2.0,
-    }.items()]
+    values = {"phi": 0.1, "pt_total": 1.0, "oc_total": 2.0, "dmt_total": 3.0, "partition_pt": 1.0, "partition_oc": 20.0, "partition_dmt": 2.0}
+    requirements = {item.name: item for item in m3_requirements()}
+    config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit=requirements[name].canonical_unit, parameter_type=requirements[name].parameter_type, enzyme_id=requirements[name].enzyme_id, source_type="assumption", source_reference="synthetic test", review_status="approved") for name, value in values.items()]
     candidates, _ = run_m1(config, tmp_path)
     m2, _ = run_m2(config, tmp_path, candidates)
     records, _ = run_m3(config, tmp_path, m2)
