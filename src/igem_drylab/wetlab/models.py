@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+from typing import Literal
 
 
 class WetLabResult(BaseModel):
@@ -17,12 +18,17 @@ class WetLabResult(BaseModel):
     imaging: dict[str, float] = Field(default_factory=dict)
     enzyme_activity: dict[str, float] = Field(default_factory=dict)
     metabolite_time: list[float] = Field(default_factory=list)
+    metabolite_time_unit: Literal["h", "min", "s"] = "h"
     metabolites: dict[str, list[float]] = Field(default_factory=dict)
     biological_replicate_count: int = Field(default=1, ge=1)
     technical_replicate_count: int = Field(default=1, ge=1)
     batch_id: str | None = None
     control_available: bool = False
     notes: str = ""
+
+    def time_hours(self) -> list[float]:
+        divisor = {"h": 1.0, "min": 60.0, "s": 3600.0}[self.metabolite_time_unit]
+        return [time / divisor for time in self.metabolite_time]
 
 
 def load_wetlab_results(path: Path) -> list[WetLabResult]:

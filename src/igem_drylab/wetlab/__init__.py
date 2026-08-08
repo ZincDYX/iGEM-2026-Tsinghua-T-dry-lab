@@ -5,7 +5,7 @@ from .fit import FitResult, fit_scale_parameter
 from .models import WetLabResult, load_wetlab_results
 from .qc import QcReport, quality_control
 from .parameter_update import MeasurementMapping, parameter_updates_from_measurements
-from .comparison import compare_prediction
+from .comparison import MetaboliteComparison, compare_prediction
 from .recommend import NextExperimentRecommendation, recommend_measurements
 
-__all__ = ["DiscrepancyDiagnosis", "FitResult", "MeasurementMapping", "NextExperimentRecommendation", "QcReport", "WetLabResult", "compare_prediction", "diagnose_discrepancy", "fit_scale_parameter", "load_wetlab_results", "parameter_updates_from_measurements", "quality_control", "recommend_measurements"]
+__all__ = ["DiscrepancyDiagnosis", "FitResult", "MeasurementMapping", "MetaboliteComparison", "NextExperimentRecommendation", "QcReport", "WetLabResult", "compare_prediction", "diagnose_discrepancy", "fit_scale_parameter", "load_wetlab_results", "parameter_updates_from_measurements", "quality_control", "recommend_measurements"]

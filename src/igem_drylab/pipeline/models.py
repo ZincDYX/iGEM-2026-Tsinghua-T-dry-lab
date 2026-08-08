@@ -101,5 +101,6 @@ class M5FeedbackAssessment(ScientificResult):
     trend_agreement: bool | None = None
     replicate_variation: float | None = None
     fit: dict[str, Any] | None = None
+    metabolite_comparisons: dict[str, Any] = Field(default_factory=dict)
     next_measurement: str | None = None
     notes: str = ""

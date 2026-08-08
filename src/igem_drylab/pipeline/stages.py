@@ -187,12 +187,18 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
         residuals: list[float] = []
         for result, report in zip(results, reports):
             prediction = prediction_by_context.get((result.construct_id, result.condition_id))
-            residual, trend, variation, fit, comparison_status = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else (None, None, None, None, "unmatched_condition")
+            comparisons = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else {}
+            product = comparisons.get("15")
+            residual = product.residual_final if product else None
+            trend = product.trend_agreement if product else None
+            variation = None
+            fit = product.fit if product else None
+            comparison_status = product.comparison_status if product else ("unmatched_condition" if prediction is None else "no_observed_15")
             if residual is not None:
                 residuals.append(residual)
             systematic = len(residuals) >= 2 and all(value > 0 for value in residuals) or len(residuals) >= 2 and all(value < 0 for value in residuals)
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic)
-            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and comparison_status != "unmatched_condition" else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}."))
+            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and comparisons else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}."))
     write_models(stage_dir, "feedback", records)
     return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
 

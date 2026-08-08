@@ -26,7 +26,7 @@ from igem_drylab.scoring.m4_reaction import (
 from igem_drylab.kinetics import CascadeParameters, CompetitiveCascadeParameters, InductionGate
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
-from igem_drylab.parameters import ParameterRecord, ParameterRegistry, parameter_from_evidence
+from igem_drylab.parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements, parameter_from_evidence
 from igem_drylab.project_state import ProjectState
 from igem_drylab.constructs import ConstructRegistry
 from igem_drylab.wetlab import MeasurementMapping, load_wetlab_results, parameter_updates_from_measurements, quality_control
@@ -480,7 +480,13 @@ def parameters_query(arguments: JsonObject) -> McpToolResult:
 
 def parameters_resolve(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
-    result = ParameterRegistry(project.parameters).resolve_for_model(_require_str(arguments, "name"), allow_assumptions=project.execution.allow_assumptions)
+    stage = _require_str(arguments, "stage")
+    requirement_name = _require_str(arguments, "requirement_name")
+    requirements = m3_requirements() if stage == "m3" else m4_requirements() if stage == "m4" else []
+    requirement = next((item for item in requirements if item.name == requirement_name), None)
+    if requirement is None:
+        raise ValueError("Unknown requirement_name for stage")
+    result = ParameterRegistry(project.parameters).resolve(requirement, allow_assumptions=project.execution.allow_assumptions)
     return McpToolResult.ok({"ok": result.status == "resolved", "resolution": result.model_dump(mode="json")})
 
 
@@ -932,7 +938,7 @@ LITERATURE_QA_TOOL = McpTool(
 )
 
 PARAMETERS_QUERY_TOOL = McpTool(name="igem.parameters.query", title="Query parameter registry", description="Query records from project config; raw literature extraction is not implicitly approved.", input_schema=_schema({"config_path": {"type": "string"}, "name": {"type": "string"}, "parameter_type": {"type": "string"}, "enzyme_id": {"type": "string"}, "substrate_id": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
-PARAMETERS_RESOLVE_TOOL = McpTool(name="igem.parameters.resolve", title="Resolve approved parameter", description="Resolve one approved, provenance-bearing parameter or return missing/conflict without guessing.", input_schema=_schema({"config_path": {"type": "string"}, "name": {"type": "string"}}, ["config_path", "name"]), output_schema=_schema({"ok": {"type": "boolean"}, "resolution": {"type": "object"}}, additional_properties=True))
+PARAMETERS_RESOLVE_TOOL = McpTool(name="igem.parameters.resolve", title="Resolve approved parameter", description="Resolve one declared M3/M4 requirement with identity, condition, and dimension checks.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}}, ["config_path", "stage", "requirement_name"]), output_schema=_schema({"ok": {"type": "boolean"}, "resolution": {"type": "object"}}, additional_properties=True))
 PARAMETERS_PROVENANCE_TOOL = McpTool(name="igem.parameters.provenance", title="Show parameter provenance", description="Return selected parameter and superseded lineage.", input_schema=_schema({"config_path": {"type": "string"}, "parameter_id": {"type": "string"}}, ["config_path", "parameter_id"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 PARAMETERS_VALIDATE_EVIDENCE_TOOL = McpTool(name="igem.parameters.validate_evidence", title="Create extracted parameter candidate", description="Normalize raw evidence into an extracted candidate; it cannot approve or write a model parameter.", input_schema=_schema({"parameter_id": {"type": "string"}, "name": {"type": "string"}, "value": {}, "unit": {"type": "string"}, "parameter_type": {"type": "string"}, "source": {"type": "object"}, "identity": {"type": "object"}}, ["parameter_id", "name", "value", "parameter_type", "source"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
 CONSTRUCTS_QUERY_TOOL = McpTool(name="igem.constructs.query", title="Query approved construct registry", description="Return approved construct records from project config.", input_schema=_schema({"config_path": {"type": "string"}, "scaffold": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
