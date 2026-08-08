@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from igem_drylab.literature import build_prompt, extract_records_from_text, load_schema
+from igem_drylab.literature import answer_question, build_prompt, extract_records_chunked, extract_records_from_text, load_schema
 from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article_xml, search_scopus
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.llm import ChatClient
@@ -433,6 +433,41 @@ def literature_extract_records(arguments: JsonObject) -> McpToolResult:
     )
 
 
+def literature_extract_chunked_records(arguments: JsonObject) -> McpToolResult:
+    text = _read_text_file(arguments, "text_file", "text")
+    schema = load_schema(Path(_require_str(arguments, "schema_path")))
+    examples = load_icl_examples(_optional_path(arguments, "icl_bank"))
+    client = ChatClient(
+        api_key=_secret_from_env(arguments, "api_key_env", "DEEPSEEK_API_KEY"),
+        api_base=_require_str(arguments, "api_base"), model=_require_str(arguments, "model"),
+        temperature=float(arguments.get("temperature", 0.2)),
+        timeout_seconds=_optional_int(arguments, "timeout_seconds", 180, minimum=1),
+        retries=_optional_int(arguments, "retries", 3, minimum=1),
+    )
+    records = extract_records_chunked(
+        text=text, schema=schema, examples=examples, client=client,
+        source_id=str(arguments.get("source_id", "")),
+        max_characters=_optional_int(arguments, "max_characters", 12_000, minimum=200),
+        overlap_characters=_optional_int(arguments, "overlap_characters", 800, minimum=0),
+        icl_top_k=_optional_int(arguments, "top_k", 3, minimum=0),
+        repair_invalid=bool(arguments.get("repair_invalid", False)),
+    )
+    payload = {"records": [record.as_dict() for record in records]}
+    output_path = _optional_path(arguments, "output_path")
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return McpToolResult.ok({"ok": True, **payload, "record_count": len(records), "output_path": str(output_path) if output_path else None})
+
+
+def literature_qa(arguments: JsonObject) -> McpToolResult:
+    result = answer_question(
+        _require_str(arguments, "question"), Path(_require_str(arguments, "evidence_path")),
+        top_k=_optional_int(arguments, "top_k", 5, minimum=1),
+    )
+    return McpToolResult.ok(result)
+
+
 def elsevier_search(arguments: JsonObject) -> McpToolResult:
     query = _require_str(arguments, "query")
     count = _optional_int(arguments, "count", 10, minimum=1)
@@ -815,6 +850,29 @@ LITERATURE_EXTRACT_RECORDS_TOOL = McpTool(
     ),
 )
 
+LITERATURE_EXTRACT_CHUNKED_RECORDS_TOOL = McpTool(
+    name="igem.literature.extract_chunked_records",
+    title="Extract auditable literature records from long text",
+    description="Chunk a local article, call an OpenAI-compatible JSON extractor, deduplicate exact records, and retain validation/provenance metadata.",
+    input_schema=_schema({
+        "text": {"type": "string"}, "text_file": {"type": "string"}, "schema_path": {"type": "string"},
+        "icl_bank": {"type": "string"}, "source_id": {"type": "string"}, "top_k": {"type": "integer", "minimum": 0},
+        "max_characters": {"type": "integer", "minimum": 200}, "overlap_characters": {"type": "integer", "minimum": 0}, "repair_invalid": {"type": "boolean"},
+        "api_key_env": {"type": "string", "default": "DEEPSEEK_API_KEY"}, "api_base": {"type": "string"}, "model": {"type": "string"},
+        "temperature": {"type": "number"}, "timeout_seconds": {"type": "integer", "minimum": 1},
+        "retries": {"type": "integer", "minimum": 1}, "output_path": {"type": "string"},
+    }, ["schema_path", "api_base", "model"]),
+    output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}, "record_count": {"type": "integer"}}, additional_properties=True),
+)
+
+LITERATURE_QA_TOOL = McpTool(
+    name="igem.literature.qa",
+    title="Query a local literature evidence database",
+    description="Use transparent local TF-IDF retrieval and return evidence, DOI, and score. It does not make a scientific conclusion or call an LLM.",
+    input_schema=_schema({"question": {"type": "string"}, "evidence_path": {"type": "string"}, "top_k": {"type": "integer", "minimum": 1}}, ["question", "evidence_path"]),
+    output_schema=_schema({"ok": {"type": "boolean"}, "status": {"type": "string"}, "answer": {"type": "string"}, "sources": {"type": "array"}}, additional_properties=True),
+)
+
 ELSEVIER_SEARCH_TOOL = McpTool(
     name="igem.elsevier.search_scopus",
     title="Search Elsevier Scopus",
@@ -870,6 +928,8 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (LITERATURE_BUILD_DATABASE_TOOL, literature_build_database),
     (LITERATURE_SEARCH_TOOL, literature_search),
     (LITERATURE_EXTRACT_RECORDS_TOOL, literature_extract_records),
+    (LITERATURE_EXTRACT_CHUNKED_RECORDS_TOOL, literature_extract_chunked_records),
+    (LITERATURE_QA_TOOL, literature_qa),
     (ELSEVIER_SEARCH_TOOL, elsevier_search),
     (ELSEVIER_FETCH_ARTICLE_TEXT_TOOL, elsevier_fetch_article_text),
 ]

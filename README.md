@@ -186,7 +186,7 @@ The `igem_drylab.agent` package provides a conservative runnable agent loop:
 - error recovery policy;
 - runtime trace, JSONL events, artifact checksums, typed memory, recovery, and reflection.
 
-Run a safe example with `igem-drylab agent dry-run examples/agent/validate_config_task.json` or `igem-drylab agent run examples/agent/validate_config_task.json`. See [docs/agent_framework_notes.md](docs/agent_framework_notes.md) and [docs/agent_tutorial.md](docs/agent_tutorial.md) for architecture, limits, and a code-level learning guide.
+Run a safe example with `igem-drylab agent dry-run examples/agent/validate_config_task.json` or `igem-drylab agent run examples/agent/validate_config_task.json`.
 
 The default planner is local and deterministic. To explicitly use the optional OpenAI-compatible planner, copy `.env.example` to `.env`, add the key locally, then pass `--planner llm`. `.env` is ignored by Git; never commit API keys.
 
@@ -200,6 +200,17 @@ Tools that call external APIs read secrets from environment variables instead of
 set DEEPSEEK_API_KEY=...
 set ELSEVIER_API_KEY=...
 ```
+
+## Literature evidence QA
+
+The evidence QA route is deliberately local and conservative: it uses transparent TF-IDF retrieval over a supplied `.jsonl`, `.json`, or `.csv` evidence file and returns evidence text, DOI, and score. It does not call an LLM or turn a retrieved sentence into a validated parameter.
+
+```bash
+igem-drylab literature qa "What evidence reports OC activity?" --evidence path/to/evidence.jsonl
+igem-drylab literature serve-qa --evidence path/to/evidence.jsonl
+```
+
+The browser page binds to `127.0.0.1` by default, accepts only a question, and has no file-upload, command-execution, or API-key endpoint. For long articles, `igem.literature.extract_chunked_records` adds chunk provenance and schema validation to the existing OpenAI-compatible extractor. Its optional `repair_invalid` flag makes at most one extra formatting-only call per invalid record; both the original extraction and repair remain unverified until human review.
 
 ## Integration notes
 

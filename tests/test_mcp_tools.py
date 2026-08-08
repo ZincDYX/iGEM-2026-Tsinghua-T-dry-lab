@@ -13,6 +13,7 @@ def test_registry_lists_mcp_style_tool_definitions():
     assert "igem.pipeline.validate" in names
     assert "igem.pipeline.run" in names
     assert "igem.literature.build_prompt" in names
+    assert "igem.literature.qa" in names
     assert all("inputSchema" in tool for tool in tools)
 
 
@@ -76,6 +77,17 @@ def test_literature_build_database_tool_writes_database(tmp_path):
     assert result.is_error is False
     assert structured["ok"] is True
     assert structured["summary"]["clean_records"] >= 1
+
+
+def test_literature_qa_tool_returns_provenance(tmp_path):
+    evidence = tmp_path / "evidence.jsonl"
+    evidence.write_text(json.dumps({"record_id": "r1", "title": "OC study", "doi": "10.1/oc", "evidence": "OC converts compound 11."}) + "\n", encoding="utf-8")
+    result = create_default_registry().call(
+        "igem.literature.qa", {"question": "Which enzyme converts compound 11?", "evidence_path": str(evidence)},
+    )
+    structured = result.as_protocol_dict()["structuredContent"]
+    assert structured["ok"] is True
+    assert structured["sources"][0]["doi"] == "10.1/oc"
 
 
 def test_literature_search_tool_writes_manifest(monkeypatch, tmp_path):

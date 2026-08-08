@@ -46,6 +46,17 @@ def test_agent_runtime_executes_config_validation_and_persists_trace(tmp_path):
     assert (tmp_path / "events.jsonl").exists()
 
 
+def test_agent_selects_explicit_local_literature_qa(tmp_path):
+    evidence = tmp_path / "evidence.jsonl"
+    evidence.write_text('{"record_id":"r1","title":"OC study","doi":"10.1/oc","evidence":"OC converts compound 11."}\n', encoding="utf-8")
+    trace = AgentRuntime(memory_path=tmp_path / "memory.jsonl").run_once(AgentTask(
+        task_id="qa", objective="Find a local literature source",
+        inputs={"evidence_database_path": str(evidence), "literature_question": "What converts compound 11?"},
+    ))
+    assert trace.final_status == "completed"
+    assert trace.calls[0].tool_name == "igem.literature.qa"
+
+
 def test_agent_blocks_when_required_input_is_missing(tmp_path):
     runtime = AgentRuntime(memory_path=tmp_path / "memory.jsonl")
     trace = runtime.run_once(

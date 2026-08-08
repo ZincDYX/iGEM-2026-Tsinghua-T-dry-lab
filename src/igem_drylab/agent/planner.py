@@ -47,6 +47,8 @@ class RuleBasedDryLabPlanner:
             )
             validate_dependencies = ["validate_config"]
 
+        self._select_literature_qa(inputs, available_tools, validate_dependencies, steps)
+
         structure_step = self._select_structure_step(task, available_tools, config, candidate_id, validate_dependencies, steps)
         fth1_step = self._select_fth1_expansion(inputs, available_tools, structure_step, steps)
         sasa_step = self._select_pocket_sasa(inputs, available_tools, structure_step, steps)
@@ -64,6 +66,27 @@ class RuleBasedDryLabPlanner:
                 )
             )
         return Plan(task_id=task.task_id, steps=steps)
+
+    @staticmethod
+    def _select_literature_qa(
+        inputs: dict[str, Any], available_tools: set[str], validate_dependencies: list[str], steps: list[PlanStep]
+    ) -> None:
+        """Retrieve only from an explicit local evidence file; no implicit LLM call."""
+        evidence_path = inputs.get("evidence_database_path")
+        question = inputs.get("literature_question")
+        if not isinstance(evidence_path, str) or not isinstance(question, str) or not question.strip():
+            return
+        if "igem.literature.qa" not in available_tools:
+            return
+        steps.append(PlanStep(
+            step_id="query_literature_evidence",
+            objective="Retrieve DOI-linked local evidence for the stated literature question.",
+            tool_name="igem.literature.qa",
+            arguments={"question": question, "evidence_path": evidence_path, "top_k": int(inputs.get("literature_top_k", 5))},
+            depends_on=validate_dependencies,
+            priority=95,
+            rationale="Retrieval returns quoted evidence and provenance; it does not validate a kinetic parameter.",
+        ))
 
     @staticmethod
     def _select_structure_step(
@@ -208,7 +231,7 @@ class RuleBasedDryLabPlanner:
     @staticmethod
     def _select_ode(task: AgentTask, available_tools: set[str], candidate_id: str, m2_step: str | None, docking_step: str | None, steps: list[PlanStep]) -> None:
         objective = task.objective.lower()
-        if not any(token in objective for token in ("ode", "timing", "oc", "dmt", "glabridin")):
+        if not any(token in objective for token in ("ode", "timing", "simulate", "simulation", "时序", "动力学")):
             return
         params = task.inputs.get("ode_params")
         if not isinstance(params, dict) or not params:

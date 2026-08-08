@@ -5,7 +5,8 @@ from pathlib import Path
 
 import typer
 
-from igem_drylab.literature import build_prompt, load_schema
+from igem_drylab.literature import answer_question, build_prompt, load_schema
+from igem_drylab.literature.qa_server import serve as serve_literature_qa
 from igem_drylab.agent import AgentRuntime, AgentTask, OpenAICompatiblePlanningBackend
 from igem_drylab.agent.env import load_local_env
 from igem_drylab.literature.database import build_database_from_manifest
@@ -86,6 +87,26 @@ def build_literature_database(
         max_contexts_per_paper=max_contexts_per_paper,
     )
     typer.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+@literature_app.command("qa")
+def literature_qa_command(
+    question: str,
+    evidence: Path = typer.Option(..., "--evidence", "-e"),
+    top_k: int = typer.Option(5, "--top-k", min=1),
+) -> None:
+    """Search only the supplied local evidence file and print its provenance."""
+    typer.echo(json.dumps(answer_question(question, evidence, top_k=top_k), ensure_ascii=False, indent=2))
+
+
+@literature_app.command("serve-qa")
+def serve_literature_qa_command(
+    evidence: Path = typer.Option(..., "--evidence", "-e"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+) -> None:
+    """Serve the local QA page; use a non-local host only behind your own access control."""
+    serve_literature_qa(evidence, host=host, port=port)
 
 
 @literature_app.command("search")
