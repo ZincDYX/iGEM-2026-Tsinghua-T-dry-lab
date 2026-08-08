@@ -77,6 +77,7 @@ class M3ConcentrationAssessment(ScientificResult):
 
 class M4ReactionPrediction(ScientificResult):
     candidate_id: str
+    condition_id: str
     target_product: str
     final_15: float | None = Field(default=None, ge=0)
     final_13: float | None = Field(default=None, ge=0)
@@ -85,6 +86,8 @@ class M4ReactionPrediction(ScientificResult):
     recommendation: Literal["drop", "iterate", "test", "insufficient_data"] = "insufficient_data"
     baseline_comparison: dict[str, float] = Field(default_factory=dict)
     bottleneck: str = "insufficient_data"
+    trajectory_artifact: Path | None = None
+    recommendation_evidence: list[str] = Field(default_factory=list)
     notes: str = ""
 
 

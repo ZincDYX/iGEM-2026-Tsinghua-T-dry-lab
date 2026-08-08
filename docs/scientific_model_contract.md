@@ -18,7 +18,7 @@ record eligible for real M3/M4 calculation. Conflicting values remain visible
 in the registry and make a model input unresolved.
 
 Parameter requirements declare a dimension and canonical unit: concentrations
-are normalized to `uM`, rates to `1/s`, and `phi`/Kp/activity ratios are
+are normalized to `uM`, kinetic rates to `1/h`, and `phi`/Kp/activity ratios are
 dimensionless. Exact enzyme/substrate/product and stated compatible conditions
 are required for real-model resolution. A value with a mismatched unit,
 identity, host, mutant, or unsupported condition is unresolved rather than
@@ -29,8 +29,8 @@ silently converted or selected.
 - M1 computes explicit linker features and negative-screen flags. It does not predict LLPS probability.
 - M2 reports supplied SASA/RMSD/clash/confidence metrics and project-heuristic thresholds. Missing metrics produce `insufficient_data`.
 - M3 calculates independent species concentrations from explicit `phi`, total concentration, and partition coefficient using mass conservation.
-- M4 simulates PT `9 -> 10`, OC `10 -> 11`, and competitive DMT `9 -> 13` / `11 -> 15`, with per-enzyme abundance, partitioning, dense/dilute activity, explicit initial state, and segmented gates. Real mode has no default initial state or gates.
-- M5 matches an M4 candidate to a wet-lab construct ID, reports the final-product residual, trend agreement and within-series variation, and uses the existing bounded one-parameter fit only when data are sufficient. Explicit scalar-field mappings can produce `validated` wet-lab candidates, never automatically approved parameters.
+- M4 uses hours for its simulation and gate axis, writes a machine-readable trajectory artifact (`time`, `x9`, `x10`, `x11`, `x13`, `x15`), and requires explicit initial state/gates in real mode.
+- M5 matches a prediction by `(construct_id, condition_id)`, interpolates the M4 `x15` trajectory to observed time points, and only runs a one-parameter fit with at least two aligned points. Endpoint-only data are labelled as such and are not treated as a trajectory fit.
 
 ## Experimental inputs required for real mode
 

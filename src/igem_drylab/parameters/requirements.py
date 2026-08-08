@@ -27,7 +27,7 @@ def _requirement(name: str, parameter_type: str, **identity: str | None) -> Para
     if parameter_type in {"km", "kd", "abundance"}:
         return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="concentration", canonical_unit="uM", **identity)
     if parameter_type in {"kcat", "degradation_rate", "export_rate"}:
-        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="rate", canonical_unit="1/s", **identity)
+        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="rate", canonical_unit="1/h", **identity)
     return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="dimensionless", **identity)
 
 

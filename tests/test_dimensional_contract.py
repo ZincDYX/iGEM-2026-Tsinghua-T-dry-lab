@@ -10,10 +10,10 @@ def _requirement(name: str):
 
 def test_resolver_normalizes_concentration_and_rate_units():
     km = ParameterRecord(parameter_id="km", name="km_pt", value=1, unit="mM", parameter_type="km", enzyme_id="PT", substrate_id="9", source_type="wetlab", source_reference="E", review_status="approved")
-    rate = ParameterRecord(parameter_id="rate", name="kcat_pt", value=3600, unit="h^-1", parameter_type="kcat", enzyme_id="PT", substrate_id="9", product_id="10", source_type="wetlab", source_reference="E", review_status="approved")
+    rate = ParameterRecord(parameter_id="rate", name="kcat_pt", value=1, unit="1/s", parameter_type="kcat", enzyme_id="PT", substrate_id="9", product_id="10", source_type="wetlab", source_reference="E", review_status="approved")
     registry = ParameterRegistry([km, rate])
     assert registry.resolve(_requirement("km_pt")).canonical_value == pytest.approx(1000)
-    assert registry.resolve(_requirement("kcat_pt")).canonical_value == pytest.approx(1)
+    assert registry.resolve(_requirement("kcat_pt")).canonical_value == pytest.approx(3600)
 
 
 def test_dimension_and_identity_mismatches_are_unresolved():

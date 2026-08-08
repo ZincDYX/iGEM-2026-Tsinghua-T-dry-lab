@@ -5,16 +5,16 @@ from pathlib import Path
 
 from igem_drylab.parameters import ParameterRecord, m4_requirements
 from igem_drylab.pipeline import load_config, run_pipeline
-from igem_drylab.pipeline.config import InitialStateConfig
+from igem_drylab.pipeline.config import InductionGateConfig, InitialStateConfig
 
 
 def test_synthetic_m1_to_m5_workflow_has_no_network(tmp_path):
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
     config.run.output_dir = tmp_path
     config.execution.allow_assumptions = True
-    config.stages.m4_reaction.pt_gate = {"on_time": 0, "basal": 0, "induced": 1}
-    config.stages.m4_reaction.oc_gate = {"on_time": 0, "basal": 0, "induced": 1}
-    config.stages.m4_reaction.dmt_gate = {"on_time": 3, "basal": 0, "induced": 1}
+    config.stages.m4_reaction.pt_gate = InductionGateConfig(on_time=0, basal=0, induced=1)
+    config.stages.m4_reaction.oc_gate = InductionGateConfig(on_time=0, basal=0, induced=1)
+    config.stages.m4_reaction.dmt_gate = InductionGateConfig(on_time=3, basal=0, induced=1)
     config.stages.m4_reaction.initial_state = InitialStateConfig(x9=10)
     values = {
         "phi": .1, "pt_total": 1, "oc_total": 1, "dmt_total": 1,

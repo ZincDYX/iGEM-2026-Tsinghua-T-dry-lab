@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
@@ -152,17 +153,22 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 records.append(_m4_insufficient(item.candidate_id, config, ["initial_state"]))
                 continue
             params = GlabridinKineticParameters(**_glabridin_parameter_values(selected))
-            pt_gate, oc_gate, dmt_gate = InductionGate(**gates.pt_gate), InductionGate(**gates.oc_gate), InductionGate(**gates.dmt_gate)  # type: ignore[arg-type]
+            pt_gate, oc_gate, dmt_gate = InductionGate(**gates.pt_gate.model_dump(exclude={"time_unit"})), InductionGate(**gates.oc_gate.model_dump(exclude={"time_unit"})), InductionGate(**gates.dmt_gate.model_dump(exclude={"time_unit"}))
             delayed = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=dmt_gate, initial=initial.as_tuple(), t_end=gates.t_end)
             baseline = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=InductionGate(on_time=0.0, basal=dmt_gate.basal, induced=dmt_gate.induced, off_time=dmt_gate.off_time, mode=dmt_gate.mode, transition_width=dmt_gate.transition_width), initial=initial.as_tuple(), t_end=gates.t_end)
             final_15, final_13 = float(delayed.x15[-1]), float(delayed.x13[-1])
             baseline_13, baseline_15 = float(baseline.x13[-1]), float(baseline.x15[-1])
             leakage = final_13 / (final_13 + final_15) if final_13 + final_15 else 0.0
-            records.append(M4ReactionPrediction(candidate_id=item.candidate_id, target_product=gates.target_product, status="valid", data_quality=_data_quality(selected.values()),
+            trajectory = stage_dir / f"{item.candidate_id}_trajectory.json"
+            trajectory.parent.mkdir(parents=True, exist_ok=True)
+            trajectory.write_text(json.dumps({"time_unit": "h", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
+            condition_id = gates.condition_id or _condition_id(gates)
+            recommendation, recommendation_evidence = _recommend_m4(leakage, final_15 / gates.t_end, baseline_13, final_13, final_15, baseline_15, gates)
+            records.append(M4ReactionPrediction(candidate_id=item.candidate_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality(selected.values()),
                 final_15=final_15, final_13=final_13, leakage_fraction=leakage, productivity=final_15 / gates.t_end,
-                recommendation=_recommend_m4(leakage, final_15 / gates.t_end, baseline_13, final_13),
+                recommendation=recommendation,
                 baseline_comparison={"13_reduction": (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0, "15_improvement": (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
-                bottleneck="dmt_leakage" if leakage > 0.35 else "review_time_course", assumptions=["rapid partition equilibrium", "competitive DMT kinetics"],
+                bottleneck="dmt_leakage" if leakage > gates.max_leakage_fraction else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics"],
                 parameter_ids=sorted(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter),
                 notes=f"Mass-balance error={delayed.mass_balance_error:.3g}; docking scores were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
@@ -177,16 +183,16 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
         records = [M5FeedbackAssessment(experiment_id="unavailable", construct_id="unavailable", status="insufficient_data", data_quality="heuristic", missing_inputs=["wetlab_results_file"], recommended_next_action=["provide structured wet-lab measurements"], notes="No wet-lab feedback file was configured.")]
     else:
         results = load_wetlab_results(path); reports = quality_control(results); records = []
-        prediction_by_construct = {item.candidate_id.removeprefix("M1-"): item for item in predictions or [] if item.status == "valid"}
+        prediction_by_context = {(item.candidate_id.removeprefix("M1-"), item.condition_id): item for item in predictions or [] if item.status == "valid"}
         residuals: list[float] = []
         for result, report in zip(results, reports):
-            prediction = prediction_by_construct.get(result.construct_id)
-            residual, trend, variation, fit = compare_prediction(prediction.final_15, result) if prediction and prediction.final_15 is not None else (None, None, None, None)
+            prediction = prediction_by_context.get((result.construct_id, result.condition_id))
+            residual, trend, variation, fit, comparison_status = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else (None, None, None, None, "unmatched_condition")
             if residual is not None:
                 residuals.append(residual)
             systematic = len(residuals) >= 2 and all(value > 0 for value in residuals) or len(residuals) >= 2 and all(value < 0 for value in residuals)
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic)
-            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed else "invalid_input", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes="Raw outliers are retained and only flagged; unmatched constructs have no model comparison."))
+            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and comparison_status != "unmatched_condition" else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}."))
     write_models(stage_dir, "feedback", records)
     return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
 
@@ -211,7 +217,7 @@ def _parameter_key(species: str) -> str:
 
 
 def _m4_insufficient(candidate_id: str, config: ProjectConfig, missing: list[str]) -> M4ReactionPrediction:
-    return M4ReactionPrediction(candidate_id=candidate_id, target_product=config.stages.m4_reaction.target_product,
+    return M4ReactionPrediction(candidate_id=candidate_id, condition_id=config.stages.m4_reaction.condition_id or "unresolved", target_product=config.stages.m4_reaction.target_product,
         status="insufficient_data", data_quality="heuristic", missing_inputs=sorted(set(missing)),
         recommended_next_action=["supply reviewed glabridin kinetics and explicit induction gates"],
         notes="M4 does not use docking, M2, or M3 proxy scores as enzyme kinetic parameters.")
@@ -241,11 +247,14 @@ def _data_quality(records: object) -> str:
     return "heuristic"
 
 
-def _recommend_m4(leakage: float, productivity: float, baseline_13: float, final_13: float) -> str:
-    if leakage > 0.35:
-        return "drop"
-    if productivity <= 0:
-        return "iterate"
-    if baseline_13 > 0 and final_13 < baseline_13:
-        return "test"
-    return "iterate"
+def _recommend_m4(leakage: float, productivity: float, baseline_13: float, final_13: float, final_15: float, baseline_15: float, gates: object) -> tuple[str, list[str]]:
+    reduction = (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0
+    improvement = (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0
+    if leakage > gates.max_leakage_fraction: return "drop", ["leakage_exceeds_project_heuristic"]
+    if productivity < gates.min_productivity: return "iterate", ["productivity_below_project_heuristic"]
+    if reduction >= gates.min_13_reduction and improvement >= gates.min_15_improvement: return "test", ["13_reduction_and_15_preservation_pass_project_heuristics"]
+    return "iterate", ["baseline_improvement_criteria_not_met"]
+
+
+def _condition_id(gates: object) -> str:
+    return f"pt{gates.pt_gate.on_time:g}_oc{gates.oc_gate.on_time:g}_dmt{gates.dmt_gate.on_time:g}h"

@@ -119,13 +119,28 @@ class InitialStateConfig(BaseModel):
         return self.x9, self.x10, self.x11, self.x13, self.x15
 
 
+class InductionGateConfig(BaseModel):
+    on_time: float = Field(ge=0)
+    off_time: float | None = Field(default=None, gt=0)
+    basal: float = Field(default=0, ge=0)
+    induced: float = Field(default=1, ge=0)
+    mode: Literal["step", "sigmoid"] = "step"
+    transition_width: float = Field(default=0.25, gt=0)
+    time_unit: Literal["h"] = "h"
+
+
 class M4Config(BaseModel):
     target_product: str = "glabridin"
     t_end: float = Field(default=24.0, gt=0)
     initial_state: InitialStateConfig | None = None
-    pt_gate: dict[str, Any] | None = None
-    oc_gate: dict[str, Any] | None = None
-    dmt_gate: dict[str, Any] | None = None
+    pt_gate: InductionGateConfig | None = None
+    oc_gate: InductionGateConfig | None = None
+    dmt_gate: InductionGateConfig | None = None
+    condition_id: str | None = None
+    max_leakage_fraction: float = Field(default=0.35, ge=0, le=1)
+    min_13_reduction: float = Field(default=0.05, ge=0, le=1)
+    min_15_improvement: float = Field(default=0, ge=-1)
+    min_productivity: float = Field(default=0, ge=0)
 
 
 class M5Config(BaseModel):
