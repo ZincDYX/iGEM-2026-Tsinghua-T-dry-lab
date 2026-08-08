@@ -123,8 +123,18 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
         for entry in config.stages.m3_concentration.recruitment:
             enzyme = entry.enzyme_id
             hill = selected[entry.hill_coefficient_parameter].canonical_value if entry.hill_coefficient_parameter else config.stages.m3_concentration.hill_coefficient
+            if config.stages.m3_concentration.binding_model == "hill" and hill is None:
+                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient or switch to independent binding model"], notes="Hill recruitment was not calculated without an explicit reviewed value or allowed assumption."))
+                break
+            if config.stages.m3_concentration.binding_model == "hill" and entry.hill_coefficient_parameter is None and not config.execution.allow_assumptions:
+                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient"], notes="Config Hill coefficient is an assumption and is disabled in real mode."))
+                break
             recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=selected[entry.enzyme_total_parameter].canonical_value, site_total=selected[entry.site_total_parameter].canonical_value, kd=selected[entry.kd_parameter].canonical_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=hill))
             recruitment[enzyme] = recruitment_result.recruited_fraction; occupancy[enzyme] = recruitment_result.site_occupancy
+        else:
+            pass
+        if records and records[-1].candidate_id == assessment.candidate_id and records[-1].status == "insufficient_data":
+            continue
         records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="valid", data_quality=_data_quality(selected.values()),
             concentrations={key: value.model_dump() for key, value in result.items()},
             dense_oc_dmt_ratio=oc.dense_concentration / dmt.dense_concentration if dmt.dense_concentration else None,

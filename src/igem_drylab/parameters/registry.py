@@ -12,6 +12,11 @@ from .requirements import ParameterRequirement
 from .validation import condition_compatibility, identity_compatibility
 
 
+def resolve_requirement(registry: "ParameterRegistry", requirement: ParameterRequirement, context: object, *, allow_assumptions: bool) -> ParameterResolution:
+    """Shared production resolution entry point for pipeline, MCP, and agent."""
+    return registry.resolve(requirement, host=getattr(context, "host", None), temperature_c=getattr(context, "temperature_c", None), allow_assumptions=allow_assumptions)
+
+
 class ParameterResolution(BaseModel):
     status: str
     selected_parameter: ParameterRecord | None = None

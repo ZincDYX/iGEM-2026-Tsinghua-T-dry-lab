@@ -26,7 +26,7 @@ from igem_drylab.scoring.m4_reaction import (
 from igem_drylab.kinetics import CascadeParameters, CompetitiveCascadeParameters, InductionGate
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
-from igem_drylab.parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements, parameter_from_evidence
+from igem_drylab.parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements, parameter_from_evidence, resolve_requirement
 from igem_drylab.project_state import ProjectState
 from igem_drylab.constructs import ConstructRegistry
 from igem_drylab.wetlab import MeasurementMapping, load_wetlab_results, parameter_updates_from_measurements, quality_control
@@ -501,7 +501,7 @@ def parameters_resolve(arguments: JsonObject) -> McpToolResult:
     requirement = next((item for item in requirements if item.name == requirement_name), None)
     if requirement is None:
         raise ValueError("Unknown requirement_name for stage")
-    result = ParameterRegistry(project.parameters).resolve(requirement, allow_assumptions=project.execution.allow_assumptions)
+    result = resolve_requirement(ParameterRegistry(project.parameters), requirement, project.experimental_context, allow_assumptions=project.execution.allow_assumptions)
     return McpToolResult.ok({"ok": result.status == "resolved", "resolution": result.model_dump(mode="json")})
 
 
@@ -533,7 +533,7 @@ def constructs_generate_candidates(arguments: JsonObject) -> McpToolResult:
 
 def project_get_state(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
-    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"])
+    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"], experimental_context=project.experimental_context)
     return McpToolResult.ok({"ok": True, "state": state.model_dump(mode="json")})
 
 
