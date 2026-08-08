@@ -24,6 +24,7 @@ class AgentTask(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     artifacts_dir: str = "outputs/agent_runs"
     require_human_approval: bool = True
+    max_replans: int = Field(default=2, ge=0, le=5)
 
 
 class ResultCondition(BaseModel):
@@ -65,6 +66,8 @@ class PlanStep(BaseModel):
 class Plan(BaseModel):
     task_id: str
     steps: list[PlanStep]
+    plan_id: str = Field(default_factory=lambda: datetime.now(timezone.utc).strftime("plan-%Y%m%dT%H%M%S%f"))
+    previous_plan_id: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -84,4 +87,6 @@ class AgentTrace(BaseModel):
     calls: list[ToolCallRecord] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     context_summary: dict[str, Any] = Field(default_factory=dict)
+    replan_count: int = 0
+    replan_reasons: list[str] = Field(default_factory=list)
     final_status: Literal["completed", "waiting_for_human", "blocked", "failed"] = "completed"

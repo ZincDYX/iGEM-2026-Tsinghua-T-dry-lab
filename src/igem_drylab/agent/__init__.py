@@ -8,6 +8,7 @@ from .artifacts import ArtifactRecord, ArtifactStore
 from .budget import BudgetManager, BudgetState
 from .context import ContextBuilder, ContextBundle
 from .human import ApprovalDecision, HumanApprovalGate
+from .hypothesis import HypothesisRecord
 from .memory import AgentMemory, MemoryRecord
 from .llm_planner import OpenAICompatiblePlanningBackend
 from .models import AgentTask, AgentTrace, Plan, PlanStep, ResultBinding, ResultCondition
@@ -30,6 +31,7 @@ __all__ = [
     "ContextBundle",
     "EventLogger",
     "HumanApprovalGate",
+    "HypothesisRecord",
     "MemoryRecord",
     "OpenAICompatiblePlanningBackend",
     "Plan",

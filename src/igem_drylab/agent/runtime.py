@@ -78,8 +78,26 @@ class AgentRuntime:
             if not batch:
                 break
             progress = False
+            replan_reason: str | None = None
             for step in batch:
                 progress = self._run_step(task, trace, step) or progress
+                if step.status == "blocked" and any(note.startswith(f"{step.step_id}:recovery=replan:") for note in trace.notes):
+                    replan_reason = next(note.rsplit(":", 1)[-1] for note in reversed(trace.notes) if note.startswith(f"{step.step_id}:recovery=replan:"))
+            if replan_reason is not None:
+                if trace.replan_count >= task.max_replans:
+                    trace.notes.append("replan_limit_reached")
+                    break
+                old_plan = trace.plan
+                trace.replan_count += 1
+                trace.replan_reasons.append(replan_reason)
+                context = self.context_builder.build_for_task(task)
+                plan = self.planner.create_plan(task, context)
+                plan.previous_plan_id = old_plan.plan_id
+                trace.plan = plan
+                trace.context_summary = _context_summary(context)
+                trace.notes.append(f"replanned:{old_plan.plan_id}->{plan.plan_id}:{replan_reason}")
+                self.events.emit("agent_replanned", task_id=task.task_id, reason=replan_reason, replan_count=trace.replan_count)
+                continue
             if not progress:
                 break
 

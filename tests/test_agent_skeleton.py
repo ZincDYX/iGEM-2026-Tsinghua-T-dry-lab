@@ -67,6 +67,20 @@ def test_agent_blocks_when_required_input_is_missing(tmp_path):
     assert "missing_input_path:path" in trace.notes[0]
 
 
+def test_agent_replans_after_recoverable_failure_and_stops_at_limit(tmp_path):
+    registry = ToolRegistry()
+    tool = McpTool(name="test.malformed", title="test", description="test", input_schema={"type": "object"}, output_schema=None)
+    registry.register(tool, lambda _arguments: McpToolResult.error("malformed structure artifact"))
+
+    class PlannerBackend:
+        def create_plan(self, task, context, available_tools):
+            return Plan(task_id=task.task_id, steps=[PlanStep(step_id="broken", objective="parse", tool_name="test.malformed")])
+
+    trace = AgentRuntime(memory_path=tmp_path / "memory.jsonl", registry=registry, planning_backend=PlannerBackend()).run_once(AgentTask(task_id="replan", objective="parse", max_replans=1))
+    assert trace.replan_count == 1
+    assert "replan_limit_reached" in trace.notes
+
+
 def test_approval_gate_and_budget_enforce_cost_limits():
     gate = HumanApprovalGate()
     expensive = PlanStep(step_id="gpu", objective="run GPU", tool_name="igem.compute.run_tool", estimated_gpu_minutes=30)
