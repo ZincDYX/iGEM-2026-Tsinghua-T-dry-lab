@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from igem_drylab.constructs import assess_linker
+from igem_drylab.enrichment import EnrichmentInput, calculate_many
+from igem_drylab.parameters import validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 
 from .adapters import create_tool_adapter
@@ -90,11 +92,34 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
 
 
 def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAssessment]) -> tuple[list[M3ConcentrationAssessment], StageOutput]:
-    """Temporary explicit block until the Kp/phi model is supplied by the next stage."""
+    """Calculate species-specific two-phase concentrations from reviewed inputs."""
     stage_dir = run_dir / "m3_enrichment"
-    records = [M3ConcentrationAssessment(candidate_id=item.candidate_id, status="insufficient_data", data_quality="heuristic",
-        missing_inputs=["phi", "species-specific partition coefficients", "enzyme abundance", "binding inputs"],
-        recommended_next_action=["provide reviewed M3 parameter records"], notes="M3 does not infer concentration from M2 structure scores.") for item in assessments if item.recommended_for_m3]
+    species = ("PT", "OC", "DMT", "9", "10", "11", "13", "15")
+    required = {"phi"} | {f"{_parameter_key(item)}_total" for item in species} | {f"partition_{_parameter_key(item)}" for item in species}
+    selected, missing = validate_parameters(config.parameters, required_names=required, allow_assumptions=config.execution.allow_assumptions)
+    records: list[M3ConcentrationAssessment] = []
+    for assessment in assessments:
+        if not assessment.recommended_for_m3:
+            continue
+        if missing:
+            records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="insufficient_data", data_quality="heuristic",
+                missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
+                notes="M3 does not infer partitioning from M1/M2 scores."))
+            continue
+        phi = selected["phi"].value
+        inputs = [EnrichmentInput(species_id=item, total_concentration=selected[f"{_parameter_key(item)}_total"].value,
+            partition_coefficient=selected[f"partition_{_parameter_key(item)}"].value,
+            partition_source=selected[f"partition_{_parameter_key(item)}"].source_reference,
+            uncertainty=selected[f"partition_{_parameter_key(item)}"].uncertainty) for item in species]
+        result = calculate_many(inputs, phi=phi)
+        oc = result["OC"]
+        dmt = result["DMT"]
+        records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="valid", data_quality=_data_quality(selected.values()),
+            concentrations={key: value.model_dump() for key, value in result.items()},
+            dense_oc_dmt_ratio=oc.dense_concentration / dmt.dense_concentration if dmt.dense_concentration else None,
+            whole_cell_oc_dmt_ratio=selected["oc_total"].value / selected["dmt_total"].value if selected["dmt_total"].value else None,
+            recruitment_fraction={key: value.fraction_in_dense for key, value in result.items()},
+            recommended_for_m4=True, notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
     write_models(stage_dir, "concentration_assessments", records)
     return records, _stage_output("m3_enrichment", stage_dir, "concentration_assessments", len(records))
 
@@ -117,3 +142,18 @@ def _legacy_demo_definitions(config: ProjectConfig) -> list[ConstructDefinition]
 
 def _stage_output(stage: str, directory: Path, stem: str, count: int) -> StageOutput:
     return StageOutput(stage=stage, directory=directory, json_file=directory / f"{stem}.json", csv_file=directory / f"{stem}.csv", record_count=count)
+
+
+def _parameter_key(species: str) -> str:
+    return f"x{species}" if species.isdigit() else species.lower()
+
+
+def _data_quality(records: object) -> str:
+    values = list(records)  # type: ignore[arg-type]
+    if any(getattr(item, "source_type", None) == "wetlab" for item in values):
+        return "measured"
+    if any(getattr(item, "source_type", None) == "literature" for item in values):
+        return "literature"
+    if any(getattr(item, "source_type", None) == "prediction" for item in values):
+        return "predicted"
+    return "heuristic"

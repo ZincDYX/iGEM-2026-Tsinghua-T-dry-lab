@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
+from igem_drylab.parameters import ParameterRecord
 
 
 class RunConfig(BaseModel):
@@ -48,6 +49,20 @@ class LinkerConfig(BaseModel):
     source: str = "unknown"
 
 
+class ConstructDefinition(BaseModel):
+    """A wet-lab construct description; no fusion topology is inferred by code."""
+
+    id: str
+    components: list[str] = Field(min_length=1)
+    domain_order: list[str] = Field(default_factory=list)
+    fusion_orientation: str | None = None
+    linker_ids: list[str] = Field(default_factory=list)
+    scaffold_id: str | None = None
+    recruitment_tags: list[str] = Field(default_factory=list)
+    enzyme_ids: list[str] = Field(default_factory=list)
+    oc_n_terminal_truncation: bool | None = None
+
+
 class InputsConfig(BaseModel):
     protein_fasta: Path
     ligands: list[LigandConfig] = Field(default_factory=list)
@@ -55,6 +70,7 @@ class InputsConfig(BaseModel):
     scaffolds: list[ScaffoldConfig]
     linkers: list[LinkerConfig]
     idr_id: str | None = None
+    constructs: list[ConstructDefinition] = Field(default_factory=list)
 
 
 class ToolConfig(BaseModel):
@@ -67,7 +83,7 @@ class ToolConfig(BaseModel):
 
 class M1Config(BaseModel):
     top_n: int = Field(default=10, ge=1)
-    min_llps_score: float = Field(default=0.45, ge=0, le=1)
+    forbidden_motifs: list[str] = Field(default_factory=list)
 
 
 class M2Config(BaseModel):
@@ -77,8 +93,8 @@ class M2Config(BaseModel):
 
 
 class M3Config(BaseModel):
-    saturation_threshold: float = Field(default=0.70, ge=0, le=1)
-    leakage_threshold: float = Field(default=0.35, ge=0, le=1)
+    binding_model: Literal["independent", "hill"] = "independent"
+    hill_coefficient: float | None = Field(default=None, gt=0)
 
 
 class M4Config(BaseModel):
@@ -101,6 +117,7 @@ class ProjectConfig(BaseModel):
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     inputs: InputsConfig
     tools: dict[str, ToolConfig] = Field(default_factory=dict)
+    parameters: list[ParameterRecord] = Field(default_factory=list)
     stages: StagesConfig = Field(default_factory=StagesConfig)
 
 

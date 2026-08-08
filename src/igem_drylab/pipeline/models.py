@@ -64,7 +64,7 @@ class M2FusionAssessment(ScientificResult):
 
 class M3ConcentrationAssessment(ScientificResult):
     candidate_id: str
-    concentrations: dict[str, dict[str, float]] = Field(default_factory=dict)
+    concentrations: dict[str, dict[str, Any]] = Field(default_factory=dict)
     dense_oc_dmt_ratio: float | None = Field(default=None, ge=0)
     whole_cell_oc_dmt_ratio: float | None = Field(default=None, ge=0)
     recruitment_fraction: dict[str, float] = Field(default_factory=dict)

@@ -70,14 +70,10 @@ tools:
 stages:
   m1_llps:
     top_n: 6
-    min_llps_score: 0.45
   m2_fusion:
     activity_penalty_weight: 0.35
     clash_penalty_weight: 0.25
   m3_concentration:
-    saturation_threshold: 0.70
-    leakage_threshold: 0.35
+    binding_model: independent
   m4_reaction:
     target_product: glabridin
-    oc_first_weight: 0.60
-    dmt_later_weight: 0.40
