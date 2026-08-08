@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from .constructs import ConstructRecord
-from .parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements
+from .parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements, resolve_requirement
 from .pipeline.config import ExperimentalContext
 
 
@@ -25,7 +25,7 @@ class ProjectState(BaseModel):
     def missing_inputs(self, stage: str, *, allow_assumptions: bool = False) -> list[str]:
         requirements = m3_requirements() if stage == "m3" else m4_requirements() if stage == "m4" else []
         registry = ParameterRegistry(self.approved_parameters)
-        return [item.name for item in requirements if registry.resolve(item, allow_assumptions=allow_assumptions, host=self.experimental_context.host, temperature_c=self.experimental_context.temperature_c).status != "resolved"]
+        return [item.name for item in requirements if resolve_requirement(registry, item, self.experimental_context, allow_assumptions=allow_assumptions).status != "resolved"]
 
     def approve_parameter(self, candidate: ParameterRecord, *, reviewer: str) -> "ProjectState":
         """Return updated state; persistence remains an explicit caller action."""

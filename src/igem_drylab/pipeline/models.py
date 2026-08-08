@@ -81,6 +81,8 @@ class M4ReactionPrediction(ScientificResult):
     target_product: str
     final_15: float | None = Field(default=None, ge=0)
     final_13: float | None = Field(default=None, ge=0)
+    side_product_fraction_13: float | None = Field(default=None, ge=0, le=1)
+    # Deprecated compatibility alias.  This model has no extracellular export term.
     leakage_fraction: float | None = Field(default=None, ge=0, le=1)
     productivity: float | None = Field(default=None, ge=0)
     recommendation: Literal["drop", "iterate", "test", "insufficient_data"] = "insufficient_data"
@@ -102,5 +104,6 @@ class M5FeedbackAssessment(ScientificResult):
     replicate_variation: float | None = None
     fit: dict[str, Any] | None = None
     metabolite_comparisons: dict[str, Any] = Field(default_factory=dict)
+    diagnosis_evidence: dict[str, Any] = Field(default_factory=dict)
     next_measurement: str | None = None
     notes: str = ""

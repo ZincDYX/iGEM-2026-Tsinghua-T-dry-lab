@@ -71,6 +71,7 @@ fast rule-based scoring and ODE scan
 ```bash
 igem-drylab tools call igem.parsers.structure_prediction --arguments-file examples/mcp/parse_structure_prediction.json
 igem-drylab tools call igem.parsers.structure_prediction --arguments-file examples/mcp/parse_colabfold.json
+# Legacy generic A/B/P/Q demonstration only; production M4 is igem.pipeline.run_stage with stage=m4.
 igem-drylab tools call igem.scoring.m4_piecewise_ode --arguments-file examples/mcp/score_m4_piecewise_ode.json
 ```
 

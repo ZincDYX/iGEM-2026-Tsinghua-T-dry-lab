@@ -169,19 +169,19 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             baseline = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=InductionGate(on_time=0.0, basal=dmt_gate.basal, induced=dmt_gate.induced, off_time=dmt_gate.off_time, mode=dmt_gate.mode, transition_width=dmt_gate.transition_width), initial=initial.as_tuple(), t_end=gates.t_end)
             final_15, final_13 = float(delayed.x15[-1]), float(delayed.x13[-1])
             baseline_13, baseline_15 = float(baseline.x13[-1]), float(baseline.x15[-1])
-            leakage = final_13 / (final_13 + final_15) if final_13 + final_15 else 0.0
+            side_product_fraction = final_13 / (final_13 + final_15) if final_13 + final_15 else 0.0
             trajectory = stage_dir / f"{item.candidate_id}_trajectory.json"
             trajectory.parent.mkdir(parents=True, exist_ok=True)
             trajectory.write_text(json.dumps({"time_unit": "h", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
             condition_id = gates.condition_id or _condition_id(gates)
-            recommendation, recommendation_evidence = _recommend_m4(leakage, final_15 / gates.t_end, baseline_13, final_13, final_15, baseline_15, gates)
+            recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, final_15 / gates.t_end, baseline_13, final_13, final_15, baseline_15, gates)
             records.append(M4ReactionPrediction(candidate_id=item.candidate_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality(selected.values()),
-                final_15=final_15, final_13=final_13, leakage_fraction=leakage, productivity=final_15 / gates.t_end,
+                final_15=final_15, final_13=final_13, side_product_fraction_13=side_product_fraction, leakage_fraction=side_product_fraction, productivity=final_15 / gates.t_end,
                 recommendation=recommendation,
                 baseline_comparison={"13_reduction": (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0, "15_improvement": (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
-                bottleneck="dmt_leakage" if leakage > gates.max_leakage_fraction else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics"],
+                bottleneck="premature_dmt_side_reaction" if side_product_fraction > gates.max_side_product_fraction_13 else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics", "no explicit metabolite export model", "degradation is set to zero in this minimal model"],
                 parameter_ids=sorted(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter),
-                notes=f"Mass-balance error={delayed.mass_balance_error:.3g}; docking scores were not converted into enzyme activity."))
+                notes=f"Mass-balance error={delayed.mass_balance_error:.3g}; compound 13 is a side-product proxy, not extracellular leakage; docking scores were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
 
@@ -200,19 +200,22 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
             prediction = prediction_by_context.get((result.construct_id, result.condition_id))
             comparisons = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else {}
             usable = [item for item in comparisons.values() if item.comparison_status in {"trajectory_aligned", "endpoint_only"}]
-            product = comparisons.get("15") or comparisons.get("13")
-            residual = product.residual_final if product else None
-            trend = product.trend_agreement if product else None
-            variation = variations.get((result.construct_id, result.condition_id, product.metabolite_id)) if product else None
-            fit = product.fit if product else None
-            comparison_status = product.comparison_status if product else ("unmatched_condition" if prediction is None else "no_observed_metabolite")
-            prepared.append((result, report, comparisons, product, residual, trend, variation, fit, comparison_status, usable))
+            evidence = _joint_diagnosis_evidence(result, comparisons, variations)
+            residuals = [item["residual_final"] for item in evidence.values() if item["residual_final"] is not None]
+            trends = [item["trend_agreement"] for item in evidence.values() if item["trend_agreement"] is not None]
+            variations_for_result = [item["replicate_variation"] for item in evidence.values() if item["replicate_variation"] is not None]
+            residual = sum(residuals) / len(residuals) if residuals else None
+            trend = all(trends) if trends else None
+            variation = max(variations_for_result) if variations_for_result else None
+            comparison_status = "joint_13_15" if set(evidence) == {"13", "15"} else (next(iter(evidence.values()))["comparison_status"] if evidence else ("unmatched_condition" if prediction is None else "no_observed_metabolite"))
+            prepared.append((result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable))
         systematic_rows = [(result.construct_id, result.condition_id, metabolite, comparison.residual_final, report.passed) for result, report, comparisons, *_ in prepared for metabolite, comparison in comparisons.items()]
         systematic = systematic_directional_errors(systematic_rows)
-        for result, report, comparisons, product, residual, trend, variation, fit, comparison_status, usable in prepared:
-            systematic_error = any((result.construct_id, result.condition_id, metabolite) in systematic for metabolite in comparisons)
+        for result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable in prepared:
+            systematic_error = any((result.construct_id, metabolite) in systematic for metabolite in comparisons)
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic_error)
-            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and usable else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=diagnosis.category, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fit.model_dump() if fit else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, next_measurement="measure OC/DMT abundance and metabolite time course" if diagnosis.category != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}; diagnosis_metabolites={','.join(item.metabolite_id for item in usable)}."))
+            joint_diagnosis = _joint_diagnosis_label(evidence, diagnosis.category)
+            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and usable else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=joint_diagnosis, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, diagnosis_evidence=evidence, next_measurement="measure OC/DMT abundance and metabolite time course" if joint_diagnosis != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}; diagnosis_metabolites={','.join(item.metabolite_id for item in usable)}."))
     write_models(stage_dir, "feedback", records)
     return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
 
@@ -267,10 +270,10 @@ def _data_quality(records: object) -> str:
     return "heuristic"
 
 
-def _recommend_m4(leakage: float, productivity: float, baseline_13: float, final_13: float, final_15: float, baseline_15: float, gates: object) -> tuple[str, list[str]]:
+def _recommend_m4(side_product_fraction: float, productivity: float, baseline_13: float, final_13: float, final_15: float, baseline_15: float, gates: object) -> tuple[str, list[str]]:
     reduction = (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0
     improvement = (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0
-    if leakage > gates.max_leakage_fraction: return "drop", ["leakage_exceeds_project_heuristic"]
+    if side_product_fraction > gates.max_side_product_fraction_13: return "drop", ["side_product_fraction_13_exceeds_project_heuristic"]
     if productivity < gates.min_productivity: return "iterate", ["productivity_below_project_heuristic"]
     if reduction >= gates.min_13_reduction and improvement >= gates.min_15_improvement: return "test", ["13_reduction_and_15_preservation_pass_project_heuristics"]
     return "iterate", ["baseline_improvement_criteria_not_met"]
@@ -278,3 +281,40 @@ def _recommend_m4(leakage: float, productivity: float, baseline_13: float, final
 
 def _condition_id(gates: object) -> str:
     return f"pt{gates.pt_gate.on_time:g}_oc{gates.oc_gate.on_time:g}_dmt{gates.dmt_gate.on_time:g}h"
+
+
+def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], variations: dict[tuple[str, str, str, float], float | None]) -> dict[str, dict[str, object]]:
+    evidence: dict[str, dict[str, object]] = {}
+    for metabolite in ("13", "15"):
+        comparison = comparisons.get(metabolite)
+        if comparison is None:
+            continue
+        time_h = result.time_hours()[-1] if result.time_hours() else None
+        evidence[metabolite] = {
+            "metabolite_id": metabolite,
+            "comparison_status": comparison.comparison_status,
+            "residual_final": comparison.residual_final,
+            "trend_agreement": comparison.trend_agreement,
+            "replicate_variation": variations.get((result.construct_id, result.condition_id, metabolite, time_h)) if time_h is not None else None,
+            "fit_status": comparison.fit.status if comparison.fit else None,
+        }
+    return evidence
+
+
+def _joint_diagnosis_label(evidence: dict[str, dict[str, object]], fallback: str) -> str:
+    usable = {name: item for name, item in evidence.items() if item["comparison_status"] in {"trajectory_aligned", "endpoint_only"}}
+    if not usable:
+        return "INSUFFICIENT_INFORMATION"
+    if set(usable) != {"13", "15"}:
+        return fallback
+    mismatched = {name for name, item in usable.items() if item["trend_agreement"] is False}
+    if not mismatched:
+        return fallback
+    if mismatched == {"13"}:
+        return "SIDE_REACTION_OR_PARTITION_PARAMETER_MISMATCH"
+    if mismatched == {"15"}:
+        return "PRODUCTIVE_BRANCH_PARAMETER_MISMATCH"
+    signs = [item["residual_final"] for item in usable.values()]
+    if all(value is not None and value > 0 for value in signs) or all(value is not None and value < 0 for value in signs):
+        return "POSSIBLE_GLOBAL_PARAMETER_OR_MODEL_MISMATCH"
+    return fallback

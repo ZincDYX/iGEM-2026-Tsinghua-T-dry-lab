@@ -25,7 +25,7 @@ from igem_drylab.scoring.m4_reaction import (
 )
 from igem_drylab.kinetics import CascadeParameters, CompetitiveCascadeParameters, InductionGate
 from igem_drylab.pipeline.adapters import create_tool_adapter
-from igem_drylab.pipeline import load_config, run_pipeline
+from igem_drylab.pipeline import load_config, run_pipeline, run_through_m4
 from igem_drylab.parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements, parameter_from_evidence, resolve_requirement
 from igem_drylab.project_state import ProjectState
 from igem_drylab.constructs import ConstructRegistry
@@ -134,7 +134,7 @@ def pipeline_run(arguments: JsonObject) -> McpToolResult:
 
 
 def pipeline_run_stage(arguments: JsonObject) -> McpToolResult:
-    """Run the production pipeline and expose a selected stage without new equations."""
+    """Run M1--M3 prerequisites and production M4, without running M5."""
     stage = _require_str(arguments, "stage")
     if stage != "m4":
         raise ValueError("Only production stage 'm4' is exposed through this tool")
@@ -143,9 +143,8 @@ def pipeline_run_stage(arguments: JsonObject) -> McpToolResult:
     output_dir = _optional_path(arguments, "output_dir")
     if output_dir is not None:
         config.run.output_dir = output_dir
-    manifest = run_pipeline(config)
-    output = next(item for item in manifest.stages if item.stage == "m4_glabridin_kinetics")
-    return McpToolResult.ok({"ok": True, "run_dir": str(manifest.run_dir), "stage": "m4", "records": json.loads(output.json_file.read_text(encoding="utf-8"))})
+    manifest, records = run_through_m4(config)
+    return McpToolResult.ok({"ok": True, "run_dir": str(manifest.run_dir), "stage": "m4", "records": [record.model_dump(mode="json") for record in records]})
 
 
 def compute_check_tool(arguments: JsonObject) -> McpToolResult:
@@ -601,7 +600,7 @@ PIPELINE_RUN_TOOL = McpTool(
 PIPELINE_RUN_STAGE_TOOL = McpTool(
     name="igem.pipeline.run_stage",
     title="Run production M4 glabridin stage",
-    description="Run the same reviewed-parameter five-state glabridin M4 used by the production pipeline; it is not the generic legacy ODE.",
+    description="Run M1-M3 prerequisites through the reviewed-parameter five-state glabridin M4; does not execute M5 or the generic legacy ODE.",
     input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m4"]}, "output_dir": {"type": "string"}}, ["config_path", "stage"]),
     output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True),
 )

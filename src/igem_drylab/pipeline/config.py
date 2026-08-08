@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.constructs import ConstructRecord
 
@@ -23,7 +23,13 @@ class ExecutionConfig(BaseModel):
     allow_assumptions: bool = False
 
 
-class ExperimentalContext(BaseModel):
+class StrictScientificConfig(BaseModel):
+    """Reject misspelled or retired scientific settings rather than ignoring them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ExperimentalContext(StrictScientificConfig):
     host: str | None = None
     strain: str | None = None
     temperature_c: float | None = None
@@ -91,24 +97,24 @@ class ToolConfig(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
-class M1Config(BaseModel):
+class M1Config(StrictScientificConfig):
     top_n: int = Field(default=10, ge=1)
     forbidden_motifs: list[str] = Field(default_factory=list)
 
 
-class M2Config(BaseModel):
+class M2Config(StrictScientificConfig):
     activity_penalty_weight: float = Field(default=0.35, ge=0, le=1)
     clash_penalty_weight: float = Field(default=0.25, ge=0, le=1)
     structure_metrics_file: Path | None = None
 
 
-class M3Config(BaseModel):
+class M3Config(StrictScientificConfig):
     binding_model: Literal["independent", "hill"] = "independent"
     hill_coefficient: float | None = Field(default=None, gt=0)
     recruitment: list["RecruitmentConfig"] = Field(default_factory=list)
 
 
-class RecruitmentConfig(BaseModel):
+class RecruitmentConfig(StrictScientificConfig):
     enzyme_id: str
     enzyme_total_parameter: str
     site_total_parameter: str
@@ -116,7 +122,7 @@ class RecruitmentConfig(BaseModel):
     hill_coefficient_parameter: str | None = None
 
 
-class InitialStateConfig(BaseModel):
+class InitialStateConfig(StrictScientificConfig):
     x9: float = Field(ge=0)
     x10: float = Field(default=0, ge=0)
     x11: float = Field(default=0, ge=0)
@@ -127,7 +133,7 @@ class InitialStateConfig(BaseModel):
         return self.x9, self.x10, self.x11, self.x13, self.x15
 
 
-class InductionGateConfig(BaseModel):
+class InductionGateConfig(StrictScientificConfig):
     on_time: float = Field(ge=0)
     off_time: float | None = Field(default=None, gt=0)
     basal: float = Field(default=0, ge=0)
@@ -137,7 +143,7 @@ class InductionGateConfig(BaseModel):
     time_unit: Literal["h"] = "h"
 
 
-class M4Config(BaseModel):
+class M4Config(StrictScientificConfig):
     target_product: str = "glabridin"
     t_end: float = Field(default=24.0, gt=0)
     initial_state: InitialStateConfig | None = None
@@ -145,17 +151,17 @@ class M4Config(BaseModel):
     oc_gate: InductionGateConfig | None = None
     dmt_gate: InductionGateConfig | None = None
     condition_id: str | None = None
-    max_leakage_fraction: float = Field(default=0.35, ge=0, le=1)
+    max_side_product_fraction_13: float = Field(default=0.35, ge=0, le=1)
     min_13_reduction: float = Field(default=0.05, ge=0, le=1)
     min_15_improvement: float = Field(default=0, ge=-1)
     min_productivity: float = Field(default=0, ge=0)
 
 
-class M5Config(BaseModel):
+class M5Config(StrictScientificConfig):
     wetlab_results_file: Path | None = None
 
 
-class StagesConfig(BaseModel):
+class StagesConfig(StrictScientificConfig):
     m1_llps: M1Config = Field(default_factory=M1Config)
     m2_fusion: M2Config = Field(default_factory=M2Config)
     m3_concentration: M3Config = Field(default_factory=M3Config)
@@ -163,7 +169,7 @@ class StagesConfig(BaseModel):
     m5_feedback: M5Config = Field(default_factory=M5Config)
 
 
-class ProjectConfig(BaseModel):
+class ProjectConfig(StrictScientificConfig):
     run: RunConfig
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     experimental_context: ExperimentalContext = Field(default_factory=ExperimentalContext)

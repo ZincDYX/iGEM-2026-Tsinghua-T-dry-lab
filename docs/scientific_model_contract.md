@@ -30,7 +30,8 @@ silently converted or selected.
 - M2 reports supplied SASA/RMSD/clash/confidence metrics and project-heuristic thresholds. Missing metrics produce `insufficient_data`.
 - M3 calculates independent species concentrations from explicit `phi`, total concentration, and partition coefficient using mass conservation.
 - M4 uses hours for its simulation and gate axis, writes a machine-readable trajectory artifact (`time`, `x9`, `x10`, `x11`, `x13`, `x15`), and requires explicit initial state/gates in real mode.
-- M5 matches a prediction by `(construct_id, condition_id)`, interpolates the M4 `x15` trajectory to observed time points, and only runs a one-parameter fit with at least two aligned points. Endpoint-only data are labelled as such and are not treated as a trajectory fit.
+- M5 matches a prediction by `(construct_id, condition_id)` and compares each available M4 `x13` and `x15` trajectory to observed time points. Endpoint-only data are labelled as such and are not treated as a trajectory fit. Replicates are aggregated only within an identical construct, condition, metabolite, and final timepoint; systematic directional discrepancy requires multiple independent conditions.
+- `final_13 / (final_13 + final_15)` is reported as `side_product_fraction_13`. Compound 13 is a side-product proxy in this minimal model, not a prediction of extracellular export: no explicit export kinetic term is present.
 - Validated wet-lab parameter candidates require an explicit human approval action before `approve_and_persist_parameter` appends an approved, provenance-bearing record to project YAML. Agent replanning after that external action is explicit, not autonomous.
 
 ## Experimental inputs required for real mode

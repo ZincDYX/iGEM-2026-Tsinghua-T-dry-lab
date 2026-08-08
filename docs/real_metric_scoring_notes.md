@@ -64,9 +64,9 @@ Vina output is parsed into best affinity. The docking penalty compares fusion an
 
 If fusion docking is worse, flag it as a possible binding-risk construct. Do not derive an activity multiplier or any enzyme-rate parameter from Vina; activity requires wet-lab measurement, reviewed literature, or an explicitly allowed assumption.
 
-The complete M4 piecewise model is now implemented as `simulate_piecewise_induction` and `score_m4_piecewise_ode`.
+The production M4 model is the five-state glabridin system (`9`, `10`, `11`, `13`, `15`) used by the pipeline. `simulate_piecewise_induction` and `score_m4_piecewise_ode` are retained only as legacy, generic A/B/P/Q demonstration utilities and are not used by the production Agent route.
 
-State variables:
+Legacy generic demonstration state variables (not the production glabridin state):
 
 - A: substrate that OC should consume, and DMT can leak into byproduct 13;
 - B: OC-generated intermediate that DMT should convert into product 15;

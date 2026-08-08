@@ -75,5 +75,4 @@ stages:
     binding_model: independent
   m4_reaction:
     target_product: glabridin
-    docking_penalties_file: ../examples/real_metrics/docking_penalties.json
     t_end: 24.0

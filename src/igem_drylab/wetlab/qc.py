@@ -32,10 +32,13 @@ def quality_control(records: list[WetLabResult]) -> list[QcReport]:
 
 
 def _flag_replicate_outliers(records: list[WetLabResult], reports: list[QcReport]) -> None:
-    grouped: dict[tuple[str, str], list[tuple[int, float]]] = {}
+    grouped: dict[tuple[str, str, str, float], list[tuple[int, float]]] = {}
     for index, record in enumerate(records):
         for species, values in record.metabolites.items():
-            if values: grouped.setdefault((record.construct_id, species), []).append((index, values[-1]))
+            times = record.time_hours()
+            if values and len(values) == len(times):
+                key = (record.construct_id, record.condition_id, species, times[-1])
+                grouped.setdefault(key, []).append((index, values[-1]))
     for values in grouped.values():
         if len(values) < 3: continue
         centre = median(value for _, value in values); deviations = [abs(value - centre) for _, value in values]; mad = median(deviations)

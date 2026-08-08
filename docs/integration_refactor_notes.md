@@ -142,7 +142,7 @@ Added:
 The pipeline now supports optional real metric files:
 
 - `stages.m2_fusion.structure_metrics_file`
-- `stages.m4_reaction.docking_penalties_file`
+Historical note: `stages.m4_reaction.docking_penalties_file` was removed. Docking remains an independent M2 negative screen and is not a kinetic input to production M4.
 
 If files are present, M2/M4 use transparent rule-based scoring. If files are absent, the pipeline uses the previous lightweight fallback. This avoids re-running heavy tools every time.
 
