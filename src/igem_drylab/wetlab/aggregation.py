@@ -21,3 +21,12 @@ def replicate_variation(records: list[WetLabResult]) -> dict[tuple[str, str, str
         avg = mean(finals) if finals else 0
         result[key] = stdev(finals) / abs(avg) if len(finals) >= 2 and avg else None
     return result
+
+
+def systematic_directional_errors(rows: list[tuple[str, str, str, float | None, bool]]) -> set[tuple[str, str, str]]:
+    """Order-invariant flag: >=2 QC-passing same-direction residuals per group."""
+    grouped: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+    for construct, condition, metabolite, residual, qc_passed in rows:
+        if qc_passed and residual is not None:
+            grouped[(construct, condition, metabolite)].append(residual)
+    return {key for key, values in grouped.items() if len(values) >= 2 and (all(value > 0 for value in values) or all(value < 0 for value in values))}
