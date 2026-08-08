@@ -5,6 +5,7 @@ from typing import Any, Protocol
 
 from igem_drylab.mcp import ToolRegistry
 from igem_drylab.pipeline import load_config
+from igem_drylab.parameters import ParameterRegistry, m4_requirements
 
 from .context import ContextBundle
 from .models import AgentTask, Plan, PlanStep, ResultBinding, ResultCondition
@@ -48,6 +49,7 @@ class RuleBasedDryLabPlanner:
             validate_dependencies = ["validate_config"]
 
         self._select_literature_qa(inputs, available_tools, validate_dependencies, steps)
+        self._select_missing_parameter_evidence(task, config, available_tools, validate_dependencies, steps)
 
         structure_step = self._select_structure_step(task, available_tools, config, candidate_id, validate_dependencies, steps)
         fth1_step = self._select_fth1_expansion(inputs, available_tools, structure_step, steps)
@@ -66,6 +68,25 @@ class RuleBasedDryLabPlanner:
                 )
             )
         return Plan(task_id=task.task_id, steps=steps)
+
+    @staticmethod
+    def _select_missing_parameter_evidence(task: AgentTask, config: Any, available_tools: set[str], dependencies: list[str], steps: list[PlanStep]) -> None:
+        """Route missing declared M4 inputs to registry/evidence, never invent values."""
+        objective = task.objective.lower()
+        requested = task.inputs.get("target_stage") == "m4" or any(token in objective for token in ("dmt", "glabridin", "timing", "kinetic"))
+        if config is None or not requested or "igem.parameters.resolve" not in available_tools:
+            return
+        registry = ParameterRegistry(config.parameters)
+        missing = [item.name for item in m4_requirements() if registry.resolve_for_model(item.name, allow_assumptions=config.execution.allow_assumptions).status != "resolved"]
+        max_queries = int(task.inputs.get("max_literature_queries", 3))
+        evidence_path = task.inputs.get("evidence_database_path")
+        for index, name in enumerate(missing[:max_queries]):
+            resolve_id = f"resolve_{name}"
+            steps.append(PlanStep(step_id=resolve_id, objective=f"Resolve approved parameter '{name}' from the registry.", tool_name="igem.parameters.resolve", arguments={"config_path": task.inputs.get("config_path"), "name": name}, depends_on=dependencies, priority=96, rationale="Only approved registry records can enter real M4."))
+            if isinstance(evidence_path, str) and "igem.literature.qa" in available_tools:
+                steps.append(PlanStep(step_id=f"find_evidence_{name}", objective=f"Retrieve local evidence relevant to missing parameter '{name}'.", tool_name="igem.literature.qa", arguments={"question": f"Find evidence for parameter {name}; preserve enzyme/substrate/condition identity and DOI.", "evidence_path": evidence_path, "top_k": 5}, depends_on=[resolve_id], run_conditions=[ResultCondition(source_step_id=resolve_id, source_path=["structuredContent", "resolution", "status"], allowed_values=["missing", "conflict", "needs_review"])], priority=90, rationale="Evidence retrieval creates a review candidate, never an automatic parameter update."))
+        if missing:
+            steps.append(PlanStep(step_id="review_missing_parameters", objective="Review compatible evidence or request wet-lab measurement for unresolved M4 parameters.", depends_on=[step.step_id for step in steps if step.step_id.startswith("find_evidence_")], priority=85, status="blocked", rationale="Human approval is required before literature evidence becomes an approved model parameter."))
 
     @staticmethod
     def _select_literature_qa(

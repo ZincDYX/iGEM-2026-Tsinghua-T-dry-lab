@@ -160,6 +160,26 @@ def test_planner_selects_colabfold_only_after_explicit_compute_request(tmp_path)
     assert next(step for step in trace.plan.steps if step.step_id == "parse_structure").depends_on == ["run_colabfold"]
 
 
+def test_agent_queries_registry_then_evidence_for_missing_m4_parameters(tmp_path):
+    evidence = tmp_path / "evidence.jsonl"
+    evidence.write_text('{"record_id":"e1","doi":"10.1/example","evidence":"A kinetic measurement."}\n', encoding="utf-8")
+    trace = AgentRuntime(memory_path=tmp_path / "memory.jsonl").dry_run(
+        AgentTask(
+            task_id="m4-missing", objective="Simulate glabridin DMT timing",
+            inputs={
+                "config_path": "configs/m1_m4_real_scoring_example.yaml",
+                "target_stage": "m4", "evidence_database_path": str(evidence),
+            },
+        )
+    )
+    resolve_steps = [step for step in trace.plan.steps if step.tool_name == "igem.parameters.resolve"]
+    evidence_steps = [step for step in trace.plan.steps if step.tool_name == "igem.literature.qa"]
+    assert resolve_steps
+    assert evidence_steps
+    assert all("value" not in step.arguments for step in resolve_steps)
+    assert any(step.step_id == "review_missing_parameters" and step.status == "blocked" for step in trace.plan.steps)
+
+
 def test_runtime_binds_results_and_skips_failed_gate(tmp_path):
     registry = ToolRegistry()
     source_tool = McpTool("test.source", "source", "", {"type": "object"}, None)

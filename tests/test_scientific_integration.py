@@ -22,7 +22,7 @@ def test_synthetic_m1_to_m5_workflow_has_no_network(tmp_path):
         **{f"activity_{phase}_{enzyme}": 1 for phase in ("dense", "dilute") for enzyme in ("pt", "oc", "dmt")},
         **{f"x{name}_total": 10 for name in ("9", "10", "11", "13", "15")},
     }
-    config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit="arbitrary", source_type="assumption", source_reference="synthetic integration fixture", review_status="reviewed") for name, value in values.items()]
+    config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit="arbitrary", source_type="assumption", source_reference="synthetic integration fixture", review_status="approved") for name, value in values.items()]
     wetlab = tmp_path / "wetlab.json"
     wetlab.write_text(json.dumps([{"experiment_id": "e", "construct_id": "M1-FTH1-pgl3_3x_ggggs", "condition_id": "c", "replicate_id": "1", "metabolite_time": [0, 1], "metabolites": {"15": [0, 1]}, "control_available": True, "biological_replicate_count": 2}]), encoding="utf-8")
     config.stages.m5_feedback.wetlab_results_file = wetlab

@@ -17,6 +17,7 @@ class ScientificResult(BaseModel):
     missing_inputs: list[str] = Field(default_factory=list)
     recommended_next_action: list[str] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
+    parameter_ids: list[str] = Field(default_factory=list)
 
 
 class StageOutput(BaseModel):

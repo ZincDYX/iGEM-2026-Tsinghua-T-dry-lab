@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from igem_drylab.constructs import assess_linker
-from igem_drylab.enrichment import EnrichmentInput, calculate_many
+from igem_drylab.constructs import ConstructRegistry, assess_linker
+from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
-from igem_drylab.parameters import validate_parameters
+from igem_drylab.parameters import m3_requirements, m4_requirements, validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import diagnose_discrepancy, load_wetlab_results, quality_control
 
@@ -18,7 +18,8 @@ from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, 
 def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], StageOutput]:
     """Perform sequence/definition negative screening, not LLPS prediction."""
     stage_dir = run_dir / "m1_construct_screen"
-    definitions = config.inputs.constructs or _legacy_demo_definitions(config)
+    definitions = config.inputs.constructs + [_definition_from_registry(item) for item in ConstructRegistry(config.inputs.construct_records).query()]
+    definitions = definitions or _legacy_demo_definitions(config)
     candidates: list[M1Candidate] = []
     for definition in definitions:
         linker_id = definition.linker_ids[0] if definition.linker_ids else None
@@ -97,7 +98,9 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
     """Calculate species-specific two-phase concentrations from reviewed inputs."""
     stage_dir = run_dir / "m3_enrichment"
     species = ("PT", "OC", "DMT", "9", "10", "11", "13", "15")
-    required = {"phi"} | {f"{_parameter_key(item)}_total" for item in species} | {f"partition_{_parameter_key(item)}" for item in species}
+    required = {item.name for item in m3_requirements()}
+    for entry in config.stages.m3_concentration.recruitment:
+        required.update(value for key, value in entry.items() if key.endswith("_parameter"))
     selected, missing = validate_parameters(config.parameters, required_names=required, allow_assumptions=config.execution.allow_assumptions)
     records: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
@@ -116,19 +119,27 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
         result = calculate_many(inputs, phi=phi)
         oc = result["OC"]
         dmt = result["DMT"]
+        recruitment = {}
+        occupancy = {}
+        for entry in config.stages.m3_concentration.recruitment:
+            enzyme = entry["enzyme_id"]
+            recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=selected[entry["enzyme_total_parameter"]].numeric_value, site_total=selected[entry["site_total_parameter"]].numeric_value, kd=selected[entry["kd_parameter"]].numeric_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=selected[entry["hill_coefficient_parameter"]].numeric_value if entry.get("hill_coefficient_parameter") else config.stages.m3_concentration.hill_coefficient))
+            recruitment[enzyme] = recruitment_result.recruited_fraction; occupancy[enzyme] = recruitment_result.site_occupancy
         records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="valid", data_quality=_data_quality(selected.values()),
             concentrations={key: value.model_dump() for key, value in result.items()},
             dense_oc_dmt_ratio=oc.dense_concentration / dmt.dense_concentration if dmt.dense_concentration else None,
             whole_cell_oc_dmt_ratio=selected["oc_total"].value / selected["dmt_total"].value if selected["dmt_total"].value else None,
-            recruitment_fraction={key: value.fraction_in_dense for key, value in result.items()},
-            recommended_for_m4=True, notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
+            recruitment_fraction={key: value.fraction_in_dense for key, value in result.items()} | recruitment,
+            site_occupancy=occupancy,
+            recommended_for_m4=True, parameter_ids=sorted(record.parameter_id for record in selected.values()),
+            notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
     write_models(stage_dir, "concentration_assessments", records)
     return records, _stage_output("m3_enrichment", stage_dir, "concentration_assessments", len(records))
 
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
     stage_dir = run_dir / "m4_glabridin_kinetics"
-    parameter_names = {"phi"} | {f"{key}_total" for key in ("pt", "oc", "dmt")} | {f"kcat_{key}" for key in ("pt", "oc", "dmt_9", "dmt_11")} | {f"km_{key}" for key in ("pt", "oc", "dmt_9", "dmt_11")} | {f"partition_{key}" for key in ("pt", "oc", "dmt", "x9", "x10", "x11", "x13", "x15")} | {f"activity_{phase}_{enzyme}" for phase in ("dense", "dilute") for enzyme in ("pt", "oc", "dmt")}
+    parameter_names = {item.name for item in m4_requirements()}
     selected, missing = validate_parameters(config.parameters, required_names=parameter_names, allow_assumptions=config.execution.allow_assumptions)
     gates = config.stages.m4_reaction
     gate_missing = [name for name in ("pt_gate", "oc_gate", "dmt_gate") if getattr(gates, name) is None]
@@ -151,6 +162,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 recommendation="test" if config.execution.mode == "real" else "iterate",
                 baseline_comparison={"13_reduction": (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0, "15_improvement": (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
                 bottleneck="dmt_leakage" if leakage > 0.35 else "review_time_course", assumptions=["rapid partition equilibrium", "competitive DMT kinetics"],
+                parameter_ids=sorted(record.parameter_id for record in selected.values()),
                 notes=f"Mass-balance error={delayed.mass_balance_error:.3g}; docking scores were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
@@ -176,6 +188,10 @@ def _legacy_demo_definitions(config: ProjectConfig) -> list[ConstructDefinition]
     if config.execution.mode != "demo":
         return []
     return [ConstructDefinition(id=f"{scaffold.id}-{linker.id}", components=[scaffold.id, linker.id], linker_ids=[linker.id], scaffold_id=scaffold.id) for scaffold in config.inputs.scaffolds for linker in config.inputs.linkers]
+
+
+def _definition_from_registry(record: object) -> ConstructDefinition:
+    return ConstructDefinition.model_validate(record.candidate_definition())  # type: ignore[attr-defined]
 
 
 def _stage_output(stage: str, directory: Path, stem: str, count: int) -> StageOutput:

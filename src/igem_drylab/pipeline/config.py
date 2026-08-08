@@ -6,6 +6,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field
 from igem_drylab.parameters import ParameterRecord
+from igem_drylab.constructs import ConstructRecord
 
 
 class RunConfig(BaseModel):
@@ -71,6 +72,7 @@ class InputsConfig(BaseModel):
     linkers: list[LinkerConfig]
     idr_id: str | None = None
     constructs: list[ConstructDefinition] = Field(default_factory=list)
+    construct_records: list[ConstructRecord] = Field(default_factory=list)
 
 
 class ToolConfig(BaseModel):
@@ -95,6 +97,7 @@ class M2Config(BaseModel):
 class M3Config(BaseModel):
     binding_model: Literal["independent", "hill"] = "independent"
     hill_coefficient: float | None = Field(default=None, gt=0)
+    recruitment: list[dict[str, str]] = Field(default_factory=list)
 
 
 class M4Config(BaseModel):

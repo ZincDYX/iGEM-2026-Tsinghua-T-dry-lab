@@ -26,6 +26,10 @@ from igem_drylab.scoring.m4_reaction import (
 from igem_drylab.kinetics import CascadeParameters, CompetitiveCascadeParameters, InductionGate
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline
+from igem_drylab.parameters import ParameterRecord, ParameterRegistry, parameter_from_evidence
+from igem_drylab.project_state import ProjectState
+from igem_drylab.constructs import ConstructRegistry
+from igem_drylab.wetlab import MeasurementMapping, load_wetlab_results, parameter_updates_from_measurements, quality_control
 
 from .types import JsonObject, McpTool, McpToolResult, ToolHandler
 
@@ -468,6 +472,60 @@ def literature_qa(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok(result)
 
 
+def parameters_query(arguments: JsonObject) -> McpToolResult:
+    project = load_config(Path(_require_str(arguments, "config_path")))
+    registry = ParameterRegistry(project.parameters)
+    return McpToolResult.ok({"ok": True, "records": [item.model_dump(mode="json") for item in registry.query(name=arguments.get("name") if isinstance(arguments.get("name"), str) else None, parameter_type=arguments.get("parameter_type") if isinstance(arguments.get("parameter_type"), str) else None, enzyme_id=arguments.get("enzyme_id") if isinstance(arguments.get("enzyme_id"), str) else None, substrate_id=arguments.get("substrate_id") if isinstance(arguments.get("substrate_id"), str) else None)]})
+
+
+def parameters_resolve(arguments: JsonObject) -> McpToolResult:
+    project = load_config(Path(_require_str(arguments, "config_path")))
+    result = ParameterRegistry(project.parameters).resolve_for_model(_require_str(arguments, "name"), allow_assumptions=project.execution.allow_assumptions)
+    return McpToolResult.ok({"ok": result.status == "resolved", "resolution": result.model_dump(mode="json")})
+
+
+def parameters_provenance(arguments: JsonObject) -> McpToolResult:
+    project = load_config(Path(_require_str(arguments, "config_path")))
+    return McpToolResult.ok({"ok": True, "records": [item.model_dump(mode="json") for item in ParameterRegistry(project.parameters).provenance(_require_str(arguments, "parameter_id"))]})
+
+
+def parameters_validate_evidence(arguments: JsonObject) -> McpToolResult:
+    source = arguments.get("source")
+    identity = arguments.get("identity", {})
+    if not isinstance(source, dict) or not isinstance(identity, dict): raise ValueError("source and identity must be objects")
+    record = parameter_from_evidence(parameter_id=_require_str(arguments, "parameter_id"), name=_require_str(arguments, "name"), value=arguments.get("value"), unit=arguments.get("unit") if isinstance(arguments.get("unit"), str) else None, source=source, parameter_type=_require_str(arguments, "parameter_type"), **identity)
+    return McpToolResult.ok({"ok": True, "parameter_candidate": record.model_dump(mode="json"), "approval_required": True})
+
+
+def constructs_query(arguments: JsonObject) -> McpToolResult:
+    project = load_config(Path(_require_str(arguments, "config_path")))
+    registry = ConstructRegistry(project.inputs.construct_records)
+    return McpToolResult.ok({"ok": True, "records": [item.model_dump(mode="json") for item in registry.query(scaffold=arguments.get("scaffold") if isinstance(arguments.get("scaffold"), str) else None)]})
+
+
+def constructs_generate_candidates(arguments: JsonObject) -> McpToolResult:
+    project = load_config(Path(_require_str(arguments, "config_path")))
+    explicit = [item.model_dump(mode="json") for item in project.inputs.constructs]
+    approved = ConstructRegistry(project.inputs.construct_records).candidates()
+    return McpToolResult.ok({"ok": True, "candidates": explicit + approved, "provenance": ["explicit_config"] * len(explicit) + ["approved_construct_registry"] * len(approved)})
+
+
+def project_get_state(arguments: JsonObject) -> McpToolResult:
+    project = load_config(Path(_require_str(arguments, "config_path")))
+    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"])
+    return McpToolResult.ok({"ok": True, "state": state.model_dump(mode="json")})
+
+
+def wetlab_ingest_result(arguments: JsonObject) -> McpToolResult:
+    records = load_wetlab_results(Path(_require_str(arguments, "results_path")))
+    reports = quality_control(records)
+    raw_mappings = arguments.get("mappings", [])
+    if not isinstance(raw_mappings, list):
+        raise ValueError("Argument 'mappings' must be a list")
+    updates = parameter_updates_from_measurements(records, reports, [MeasurementMapping.model_validate(item) for item in raw_mappings])
+    return McpToolResult.ok({"ok": True, "records": len(records), "qc_reports": [item.model_dump(mode="json") for item in reports], "parameter_candidates": [item.model_dump(mode="json") for item in updates], "approval_required": bool(updates)})
+
+
 def elsevier_search(arguments: JsonObject) -> McpToolResult:
     query = _require_str(arguments, "query")
     count = _optional_int(arguments, "count", 10, minimum=1)
@@ -714,7 +772,7 @@ PARSER_CALVADOS_TOOL = McpTool(
 SCORING_DOCKING_PENALTY_TOOL = McpTool(
     name="igem.scoring.docking_penalty",
     title="Calculate Vina docking penalty",
-    description="Parse wild-type and fusion Vina outputs and convert affinity loss into an activity multiplier.",
+    description="Parse wild-type and fusion Vina outputs as a binding-pose negative screen; it does not convert affinity into activity.",
     input_schema=_schema(
         {
             "candidate_id": {"type": "string"},
@@ -730,7 +788,7 @@ SCORING_DOCKING_PENALTY_TOOL = McpTool(
 SCORING_M4_ODE_TOOL = McpTool(
     name="igem.scoring.m4_ode",
     title="Score M4 lightweight ODE",
-    description="Run lightweight two-phase ODE scoring with optional docking penalty.",
+    description="Run lightweight two-phase ODE scoring from explicit kinetic inputs; docking is not an activity parameter.",
     input_schema=_schema(
         {
             "candidate_id": {"type": "string"},
@@ -873,6 +931,15 @@ LITERATURE_QA_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "status": {"type": "string"}, "answer": {"type": "string"}, "sources": {"type": "array"}}, additional_properties=True),
 )
 
+PARAMETERS_QUERY_TOOL = McpTool(name="igem.parameters.query", title="Query parameter registry", description="Query records from project config; raw literature extraction is not implicitly approved.", input_schema=_schema({"config_path": {"type": "string"}, "name": {"type": "string"}, "parameter_type": {"type": "string"}, "enzyme_id": {"type": "string"}, "substrate_id": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
+PARAMETERS_RESOLVE_TOOL = McpTool(name="igem.parameters.resolve", title="Resolve approved parameter", description="Resolve one approved, provenance-bearing parameter or return missing/conflict without guessing.", input_schema=_schema({"config_path": {"type": "string"}, "name": {"type": "string"}}, ["config_path", "name"]), output_schema=_schema({"ok": {"type": "boolean"}, "resolution": {"type": "object"}}, additional_properties=True))
+PARAMETERS_PROVENANCE_TOOL = McpTool(name="igem.parameters.provenance", title="Show parameter provenance", description="Return selected parameter and superseded lineage.", input_schema=_schema({"config_path": {"type": "string"}, "parameter_id": {"type": "string"}}, ["config_path", "parameter_id"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
+PARAMETERS_VALIDATE_EVIDENCE_TOOL = McpTool(name="igem.parameters.validate_evidence", title="Create extracted parameter candidate", description="Normalize raw evidence into an extracted candidate; it cannot approve or write a model parameter.", input_schema=_schema({"parameter_id": {"type": "string"}, "name": {"type": "string"}, "value": {}, "unit": {"type": "string"}, "parameter_type": {"type": "string"}, "source": {"type": "object"}, "identity": {"type": "object"}}, ["parameter_id", "name", "value", "parameter_type", "source"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
+CONSTRUCTS_QUERY_TOOL = McpTool(name="igem.constructs.query", title="Query approved construct registry", description="Return approved construct records from project config.", input_schema=_schema({"config_path": {"type": "string"}, "scaffold": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
+CONSTRUCTS_GENERATE_TOOL = McpTool(name="igem.constructs.generate_candidates", title="Generate construct candidates", description="Combine explicit config constructs with approved construct-registry records and preserve provenance.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "candidates": {"type": "array"}}, additional_properties=True))
+PROJECT_GET_STATE_TOOL = McpTool(name="igem.project.get_state", title="Get registry-backed project state", description="Return constructs and approved parameters available to agent/workflow modes.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "state": {"type": "object"}}, additional_properties=True))
+WETLAB_INGEST_TOOL = McpTool(name="igem.wetlab.ingest_result", title="Ingest wet-lab result", description="Load and QC wet-lab records. Optional mappings create only validated, explicitly mapped candidates; no update is auto-approved.", input_schema=_schema({"results_path": {"type": "string"}, "mappings": {"type": "array", "items": {"type": "object"}}}, ["results_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "qc_reports": {"type": "array"}, "parameter_candidates": {"type": "array"}}, additional_properties=True))
+
 ELSEVIER_SEARCH_TOOL = McpTool(
     name="igem.elsevier.search_scopus",
     title="Search Elsevier Scopus",
@@ -930,6 +997,14 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (LITERATURE_EXTRACT_RECORDS_TOOL, literature_extract_records),
     (LITERATURE_EXTRACT_CHUNKED_RECORDS_TOOL, literature_extract_chunked_records),
     (LITERATURE_QA_TOOL, literature_qa),
+    (PARAMETERS_QUERY_TOOL, parameters_query),
+    (PARAMETERS_RESOLVE_TOOL, parameters_resolve),
+    (PARAMETERS_PROVENANCE_TOOL, parameters_provenance),
+    (PARAMETERS_VALIDATE_EVIDENCE_TOOL, parameters_validate_evidence),
+    (CONSTRUCTS_QUERY_TOOL, constructs_query),
+    (CONSTRUCTS_GENERATE_TOOL, constructs_generate_candidates),
+    (PROJECT_GET_STATE_TOOL, project_get_state),
+    (WETLAB_INGEST_TOOL, wetlab_ingest_result),
     (ELSEVIER_SEARCH_TOOL, elsevier_search),
     (ELSEVIER_FETCH_ARTICLE_TEXT_TOOL, elsevier_fetch_article_text),
 ]

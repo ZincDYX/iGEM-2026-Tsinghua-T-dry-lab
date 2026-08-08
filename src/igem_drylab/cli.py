@@ -15,7 +15,9 @@ from igem_drylab.literature.sources import LiteratureSearchQuery, search_literat
 from igem_drylab.mcp import create_default_registry
 from igem_drylab.multichain import assess_interface, solve_binding_equilibrium
 from igem_drylab.pipeline import load_config, run_pipeline
+from igem_drylab.project_state import ProjectState
 from igem_drylab.parameters import validate_parameters
+from igem_drylab.parameters import ParameterRegistry
 
 app = typer.Typer(help="iGEM 2026 Tsinghua-T dry-lab utilities.")
 pipeline_app = typer.Typer(help="Run M1-M4 pipeline skeleton.")
@@ -24,12 +26,14 @@ multichain_app = typer.Typer(help="Build and inspect multichain module designs."
 tools_app = typer.Typer(help="Inspect and call MCP-style local tools.")
 agent_app = typer.Typer(help="Plan and run conservative dry-lab agent workflows.")
 parameters_app = typer.Typer(help="Inspect reviewed scientific parameters and provenance.")
+project_app = typer.Typer(help="Inspect the registry-backed project state.")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(literature_app, name="literature")
 app.add_typer(multichain_app, name="multichain")
 app.add_typer(tools_app, name="tools")
 app.add_typer(agent_app, name="agent")
 app.add_typer(parameters_app, name="parameters")
+app.add_typer(project_app, name="project")
 
 
 @pipeline_app.command("validate")
@@ -160,6 +164,37 @@ def parameter_provenance(config: Path, parameter_id: str) -> None:
         if item.parameter_id == parameter_id:
             typer.echo(item.model_dump_json(indent=2)); return
     raise typer.BadParameter(f"Unknown parameter_id: {parameter_id}")
+
+
+@parameters_app.command("query")
+def query_parameters(
+    config: Path,
+    parameter_type: str | None = typer.Option(None, "--type"),
+    enzyme: str | None = typer.Option(None, "--enzyme"),
+    substrate: str | None = typer.Option(None, "--substrate"),
+) -> None:
+    registry = ParameterRegistry(load_config(config).parameters)
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in registry.query(parameter_type=parameter_type, enzyme_id=enzyme, substrate_id=substrate)], ensure_ascii=False, indent=2))
+
+
+@parameters_app.command("conflicts")
+def parameter_conflicts(config: Path) -> None:
+    registry = ParameterRegistry(load_config(config).parameters)
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in registry.list_conflicts()], ensure_ascii=False, indent=2))
+
+
+@project_app.command("state")
+def project_state(config: Path) -> None:
+    project = load_config(config)
+    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"])
+    typer.echo(state.model_dump_json(indent=2))
+
+
+@project_app.command("missing-inputs")
+def project_missing_inputs(config: Path, stage: str = typer.Option("m4", "--stage")) -> None:
+    project = load_config(config)
+    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=project.parameters)
+    typer.echo(json.dumps({"stage": stage, "missing": state.missing_inputs(stage, allow_assumptions=project.execution.allow_assumptions)}, ensure_ascii=False, indent=2))
     if output_manifest is not None:
         write_search_manifest(output_manifest, results)
     typer.echo(

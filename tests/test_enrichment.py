@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from igem_drylab.enrichment import EnrichmentInput, calculate_enrichment
+from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_enrichment, calculate_recruitment
 from igem_drylab.pipeline import load_config
 from igem_drylab.pipeline.stages import run_m1, run_m2, run_m3
 from igem_drylab.parameters import ParameterRecord
@@ -19,10 +19,17 @@ def test_fraction_dense_bounds_and_partition_one():
     assert result.fraction_in_dense == pytest.approx(0.2)
 
 
+def test_finite_site_and_hill_recruitment_require_explicit_inputs():
+    independent = calculate_recruitment(RecruitmentInput(enzyme_id="OC", enzyme_total=5, site_total=3, kd=1))
+    hill = calculate_recruitment(RecruitmentInput(enzyme_id="DMT", enzyme_total=5, site_total=3, kd=1, binding_model="hill", hill_coefficient=2))
+    assert 0 <= independent.recruited_fraction <= 1
+    assert 0 <= hill.site_occupancy <= 1
+
+
 def test_m3_uses_independent_oc_and_dmt_partition_inputs(tmp_path):
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
     config.execution.allow_assumptions = True
-    config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit="uM", source_type="assumption", source_reference="synthetic test", review_status="reviewed") for name, value in {
+    config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit="uM", source_type="assumption", source_reference="synthetic test", review_status="approved") for name, value in {
         "phi": 0.1, **{f"x{species}_total": 10.0 for species in ("9", "10", "11", "13", "15")},
         "pt_total": 1.0, "oc_total": 2.0, "dmt_total": 3.0,
         **{f"partition_x{species}": 1.0 for species in ("9", "10", "11", "13", "15")},
