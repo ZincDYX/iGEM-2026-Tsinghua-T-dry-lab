@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 ScientificStatus = Literal["valid", "insufficient_data", "invalid_input", "failed"]
-DataQuality = Literal["measured", "literature", "predicted", "heuristic", "demo_fixture"]
+DataQuality = Literal["measured", "literature", "predicted", "heuristic", "demo_fixture", "mixed"]
 
 
 class ScientificResult(BaseModel):
@@ -18,6 +18,7 @@ class ScientificResult(BaseModel):
     recommended_next_action: list[str] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
     parameter_ids: list[str] = Field(default_factory=list)
+    provenance_summary: dict[str, int] = Field(default_factory=dict)
 
 
 class StageOutput(BaseModel):

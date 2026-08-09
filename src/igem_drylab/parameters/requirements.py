@@ -59,6 +59,12 @@ def m4_requirements(*, include_degradation: bool = False) -> list[ParameterRequi
     return requirements
 
 
+def m4_kinetic_requirements(*, include_degradation: bool = False) -> list[ParameterRequirement]:
+    """M4-only requirements: M3 context is the sole source of phi/enzyme abundance/Kp."""
+    m3_names = {item.name for item in m3_requirements()}
+    return [item for item in m4_requirements(include_degradation=include_degradation) if item.name not in m3_names]
+
+
 def recruitment_requirements(recruitment: object, *, binding_model: str) -> list[ParameterRequirement]:
     enzyme = recruitment.enzyme_id
     requirements = [

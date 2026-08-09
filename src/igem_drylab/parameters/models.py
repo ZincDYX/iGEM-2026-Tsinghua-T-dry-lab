@@ -37,6 +37,7 @@ class ParameterRecord(BaseModel):
     condition_id: str | None = None
     parameter_type: ParameterType = "other"
     source_type: ParameterSourceType
+    derivation_type: Literal["direct_measurement", "model_fit", "literature_extraction", "other"] = "other"
     source_reference: str | None = None
     doi: str | None = None
     evidence_text: str | None = None

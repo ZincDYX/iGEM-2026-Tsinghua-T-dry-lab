@@ -79,6 +79,8 @@ The default structure backend is ColabFold AlphaFold2-Multimer. Its `ranking_deb
 
 Production M3 passes a candidate-specific, mass-conserving enzyme distribution to M4. Construct/condition-scoped reviewed parameters override global records; recruitment, docking, and structure scores are not kinetic multipliers. The optional M5 FitPlan fits exactly one declared mechanistic parameter and emits a validated candidate requiring human approval.
 
+Before pilot ingestion, use the typed evidence contracts for enzyme kinetics, LLPS partitioning, abundance, and recruitment. Evidence extraction remains review-only; it cannot write an approved production parameter.
+
 ## Build a literature extraction prompt
 
 This command does not call an LLM. It only builds the schema-first prompt.

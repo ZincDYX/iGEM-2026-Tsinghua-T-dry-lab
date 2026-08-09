@@ -8,7 +8,7 @@ import json
 from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
-from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_requirements, recruitment_requirements, validate_parameters
+from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
 
@@ -153,6 +153,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             recruitment_fraction={key: value.fraction_in_dense for key, value in result.items()} | recruitment,
             site_occupancy=occupancy,
             recommended_for_m4=True, parameter_ids=sorted(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter),
+            provenance_summary=_provenance_summary(selected.values()),
             m4_candidate_context=context,
             notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
     write_models(stage_dir, "concentration_assessments", records)
@@ -174,7 +175,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
         else:
             construct_id = item.m4_candidate_context.construct_id
             condition_id = item.m4_candidate_context.condition_id
-            selected, missing = validate_parameters(config.parameters, requirements=m4_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id)
+            selected, missing = validate_parameters(config.parameters, requirements=m4_kinetic_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id)
             if missing or gate_missing:
                 records.append(_m4_insufficient(item.candidate_id, config, missing + gate_missing))
                 continue
@@ -202,6 +203,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 baseline_comparison={"13_reduction": (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0, "15_improvement": (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
                 bottleneck="premature_dmt_side_reaction" if side_product_fraction > gates.max_side_product_fraction_13 else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics", "no explicit metabolite export model", *( ["approved degradation rates enabled"] if gates.enable_degradation else ["degradation kernel disabled; all kdeg values set to zero"] )],
                 parameter_ids=sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}),
+                provenance_summary=_provenance_summary(selected.values()),
                 notes=f"M4 consumed candidate-specific M3 enzyme distributions; mass-balance error={delayed.mass_balance_error:.3g}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
@@ -215,7 +217,7 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
         records = [M5FeedbackAssessment(experiment_id="unavailable", construct_id="unavailable", status="insufficient_data", data_quality="heuristic", missing_inputs=["wetlab_results_file"], recommended_next_action=["provide structured wet-lab measurements"], notes="No wet-lab feedback file was configured.")]
     else:
         results = load_wetlab_results(path); reports = quality_control(results); records = []; variations = replicate_variation(results)
-        prediction_by_context = {(item.candidate_id.removeprefix("M1-"), item.condition_id): item for item in predictions or [] if item.status == "valid"}
+        prediction_by_context = {(item.candidate_context.construct_id, item.condition_id): item for item in predictions or [] if item.status == "valid" and item.candidate_context is not None}
         prepared = []
         for result, report in zip(results, reports):
             prediction = prediction_by_context.get((result.construct_id, result.condition_id))
@@ -271,8 +273,8 @@ def _m4_insufficient(candidate_id: str, config: ProjectConfig, missing: list[str
 
 def _glabridin_parameter_values(selected: dict[str, object]) -> dict[str, float]:
     accepted = {
-        "phi", "pt_total", "oc_total", "dmt_total", "kcat_pt", "km_pt", "kcat_oc", "km_oc", "kcat_dmt_9", "km_dmt_9", "kcat_dmt_11", "km_dmt_11",
-        "partition_pt", "partition_oc", "partition_dmt", "partition_x9", "partition_x10", "partition_x11", "partition_x13", "partition_x15",
+        "kcat_pt", "km_pt", "kcat_oc", "km_oc", "kcat_dmt_9", "km_dmt_9", "kcat_dmt_11", "km_dmt_11",
+        "partition_x9", "partition_x10", "partition_x11", "partition_x13", "partition_x15",
         "activity_dense_pt", "activity_dilute_pt", "activity_dense_oc", "activity_dilute_oc", "activity_dense_dmt", "activity_dilute_dmt", "kdeg_9", "kdeg_10", "kdeg_11", "kdeg_13", "kdeg_15",
     }
     values = {name: float(getattr(record, "canonical_value")) for name, record in selected.items() if name in accepted}
@@ -295,13 +297,27 @@ def _candidate_enzyme_values(context: M4CandidateContext) -> dict[str, float]:
 def _data_quality(records: object) -> str:
     values = list(records)  # type: ignore[arg-type]
     values = [getattr(item, "selected_parameter", item) for item in values]
-    if any(getattr(item, "source_type", None) == "wetlab" for item in values):
+    kinds = {getattr(item, "source_type", None) for item in values}
+    if len(kinds - {None}) > 1:
+        return "mixed"
+    if "wetlab" in kinds:
         return "measured"
     if any(getattr(item, "source_type", None) == "literature" for item in values):
         return "literature"
     if any(getattr(item, "source_type", None) == "prediction" for item in values):
         return "predicted"
     return "heuristic"
+
+
+def _provenance_summary(records: object) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for item in records:  # type: ignore[union-attr]
+        record = getattr(item, "selected_parameter", item)
+        key = getattr(record, "source_type", "unknown")
+        if getattr(record, "derivation_type", None) == "model_fit":
+            key = "fitted"
+        summary[key] = summary.get(key, 0) + 1
+    return summary
 
 
 def _recommend_m4(side_product_fraction: float, productivity: float, baseline_13: float, final_13: float, final_15: float, baseline_15: float, gates: object) -> tuple[str, list[str]]:
@@ -399,7 +415,8 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
         fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[plan.parameter_name], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=plan.bootstrap_samples)
     except ValueError as error:
         return {"fit": None, "candidate": None, "warning": str(error)}
-    parameter_type = "kcat" if plan.parameter_name.startswith("kcat_") else "km" if plan.parameter_name.startswith("km_") else "degradation_rate" if plan.parameter_name.startswith("kdeg_") else "abundance" if plan.parameter_name.endswith("_total") else "kp" if plan.parameter_name.startswith("partition_") else "activity_ratio"
-    unit = "1/h" if parameter_type in {"kcat", "degradation_rate"} else "uM" if parameter_type in {"km", "abundance"} else "1"
-    candidate = ParameterRecord(parameter_id=f"fit:{prediction.candidate_id}:{prediction.condition_id}:{plan.parameter_name}", name=plan.parameter_name, value=fit.best_fit, unit=unit, parameter_type=parameter_type, source_type="wetlab", source_reference=result.experiment_id, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, derived_from=prediction.parameter_ids, notes="FitPlan candidate only; human approval is required before registry use.")
+    requirement = next((item for item in m4_kinetic_requirements(include_degradation=True) if item.name == plan.parameter_name), None)
+    if requirement is None:
+        return {"fit": None, "candidate": None, "warning": "FitPlan parameter is not an approved M4 requirement"}
+    candidate = ParameterRecord(parameter_id=f"fit:{prediction.candidate_id}:{prediction.condition_id}:{plan.parameter_name}", name=requirement.name, value=fit.best_fit, unit=requirement.canonical_unit, parameter_type=requirement.parameter_type, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, source_type="wetlab", derivation_type="model_fit", source_reference=result.experiment_id, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, derived_from=prediction.parameter_ids, notes="model_fit derived from wet-lab observations; human approval is required before registry use.")
     return {"fit": fit.model_dump(), "candidate": candidate.model_dump(mode="json")}

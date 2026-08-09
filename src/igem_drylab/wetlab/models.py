@@ -19,6 +19,11 @@ class WetLabResult(BaseModel):
     enzyme_activity: dict[str, float] = Field(default_factory=dict)
     metabolite_time: list[float] = Field(default_factory=list)
     metabolite_time_unit: Literal["h", "min", "s"] = "h"
+    metabolite_concentration_unit: str | None = None
+    metabolite_uncertainty: dict[str, list[float]] = Field(default_factory=dict)
+    metabolite_uncertainty_type: Literal["sd", "sem", "ci"] | None = None
+    metabolite_lod: dict[str, float] = Field(default_factory=dict)
+    metabolite_loq: dict[str, float] = Field(default_factory=dict)
     metabolites: dict[str, list[float]] = Field(default_factory=dict)
     biological_replicate_count: int = Field(default=1, ge=1)
     technical_replicate_count: int = Field(default=1, ge=1)
