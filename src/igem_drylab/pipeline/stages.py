@@ -225,7 +225,8 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
         for result, report in zip(results, reports):
             prediction = prediction_by_context.get((result.construct_id, result.condition_id))
             comparisons = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else {}
-            usable = [item for item in comparisons.values() if item.comparison_status in {"trajectory_aligned", "endpoint_only"}]
+            censored = {flag.rsplit(":", 1)[-1] for flag in report.flags if flag.startswith(("below_detection_censored:", "below_quantification_censored:"))}
+            usable = [item for item in comparisons.values() if item.comparison_status in {"trajectory_aligned", "endpoint_only"} and item.metabolite_id not in censored]
             evidence = _joint_diagnosis_evidence(result, comparisons, variations)
             residuals = [item["residual_final"] for item in evidence.values() if item["residual_final"] is not None]
             trends = [item["trend_agreement"] for item in evidence.values() if item["trend_agreement"] is not None]
@@ -235,7 +236,7 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
             variation = max(variations_for_result) if variations_for_result else None
             comparison_status = "joint_13_15" if set(evidence) == {"13", "15"} else (next(iter(evidence.values()))["comparison_status"] if evidence else ("unmatched_condition" if prediction is None else "no_observed_metabolite"))
             prepared.append((result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable))
-        systematic_rows = [(result.construct_id, result.condition_id, metabolite, comparison.residual_final, report.passed) for result, report, comparisons, *_ in prepared for metabolite, comparison in comparisons.items()]
+        systematic_rows = [(result.construct_id, result.condition_id, metabolite, comparison.residual_final, report.passed and metabolite not in {flag.rsplit(":", 1)[-1] for flag in report.flags if flag.startswith(("below_detection_censored:", "below_quantification_censored:"))}) for result, report, comparisons, *_ in prepared for metabolite, comparison in comparisons.items()]
         systematic = systematic_directional_errors(systematic_rows)
         fit_groups = _aggregate_fit_groups(results)
         fitted_by_group: dict[tuple[str, str], dict[str, object] | None] = {}
