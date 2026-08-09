@@ -2,30 +2,30 @@
 from __future__ import annotations
 from collections import defaultdict
 from statistics import mean, stdev
+from .canonical import canonicalize_metabolite
 from .models import WetLabResult
 
 def replicate_variation(records: list[WetLabResult]) -> dict[tuple[str, str, str, float], float | None]:
     """CV only for biological replicates sharing construct, condition, metabolite, and final time."""
-    grouped: dict[tuple[str, str, str], list[tuple[str, float, float]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, float], list[tuple[str, float]]] = defaultdict(list)
+    observed_keys: set[tuple[str, str, str, float]] = set()
     for record in records:
-        for metabolite, values in record.metabolites.items():
-            times = record.time_hours()
-            if values and len(values) == len(times):
-                grouped[(record.construct_id, record.condition_id, metabolite)].append((record.replicate_id, times[-1], values[-1]))
+        for metabolite in record.metabolites:
+            series = canonicalize_metabolite(record, metabolite)
+            for time_h, value, censor in zip(series.time_h, series.concentration_uM, series.censor_mask, strict=True):
+                observed_keys.add((record.construct_id, record.condition_id, metabolite, time_h))
+                if censor == "quantified":
+                    grouped[(record.construct_id, record.condition_id, metabolite, time_h)].append((record.replicate_id, value))
     result: dict[tuple[str, str, str, float], float | None] = {}
-    for key, group in grouped.items():
-        by_time: dict[float, list[tuple[str, float]]] = defaultdict(list)
-        for replicate, time_h, value in group:
-            by_time[time_h].append((replicate, value))
-        for time_h, values in by_time.items():
-            ids = {replicate for replicate, _ in values}
-            output_key = (*key, time_h)
-            if len(ids) < 2:
-                result[output_key] = None
-                continue
-            finals = [value for _, value in values]
-            avg = mean(finals) if finals else 0
-            result[output_key] = stdev(finals) / abs(avg) if len(finals) >= 2 and avg else None
+    for key in observed_keys:
+        values = grouped[key]
+        ids = {replicate for replicate, _ in values}
+        if len(ids) < 2:
+            result[key] = None
+            continue
+        quantified = [value for _, value in values]
+        avg = mean(quantified) if quantified else 0
+        result[key] = stdev(quantified) / abs(avg) if len(quantified) >= 2 and avg else None
     return result
 
 

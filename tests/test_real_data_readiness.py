@@ -65,7 +65,7 @@ def test_typed_evidence_rejects_wrong_species_and_phase() -> None:
 
 def test_mcp_recognizes_degradation_requirement_when_enabled(tmp_path: Path) -> None:
     source = Path("configs/m1_m4_real_scoring_example.yaml")
-    config = source.read_text(encoding="utf-8").replace("    target_product: glabridin", "    target_product: glabridin\n    enable_degradation: true")
+    config = source.read_text(encoding="utf-8").replace("../examples/", str((Path("examples").resolve())).replace("\\", "/") + "/").replace("    target_product: glabridin", "    target_product: glabridin\n    enable_degradation: true")
     path = tmp_path / "project.yaml"; path.write_text(config, encoding="utf-8")
     result = create_default_registry().call("igem.parameters.resolve", {"config_path": str(path), "stage": "m4", "requirement_name": "kdeg_13"})
     assert result.is_error is False

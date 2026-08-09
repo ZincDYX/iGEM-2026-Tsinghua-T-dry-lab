@@ -39,7 +39,7 @@ class ParameterRegistry:
                 raise ValueError("dangling_supersedes")
             if record.supersedes:
                 parent = self.get(record.supersedes)
-                if parent and (record.name != parent.name or record.parameter_type != parent.parameter_type or record.construct_id != parent.construct_id or record.condition_id != parent.condition_id):
+                if parent and not _lineage_compatible(record, parent):
                     raise ValueError("incompatible_supersedes")
         for record in self._records:
             seen: set[str] = set(); current = record
@@ -181,6 +181,25 @@ def evidence_priority(record: ParameterRecord) -> int:
     if record.source_type == "literature":
         return 2 if record.derivation_type != "literature_extraction" else 3
     return 4 if record.source_type == "prediction" else 5
+
+
+def _lineage_compatible(child: ParameterRecord, parent: ParameterRecord) -> bool:
+    """A replacement may update a value, never silently change its scientific identity."""
+    fields = (
+        "name", "parameter_type", "enzyme_id", "substrate_id", "product_id",
+        "species_id", "construct_id", "condition_id",
+    )
+    # Legacy records may be sparse.  They remain queryable through the legacy
+    # API, while strict production approval requires the complete identity.
+    if any(
+        getattr(child, field) is not None
+        and getattr(parent, field) is not None
+        and getattr(child, field) != getattr(parent, field)
+        for field in fields
+    ):
+        return False
+    child_phase, parent_phase = child.conditions.get("phase"), parent.conditions.get("phase")
+    return child_phase is None or parent_phase is None or child_phase == parent_phase
 
 
 def has_required_provenance(record: ParameterRecord) -> bool:

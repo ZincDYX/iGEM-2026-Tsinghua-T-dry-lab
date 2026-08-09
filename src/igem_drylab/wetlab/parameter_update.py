@@ -78,7 +78,8 @@ def _requirement(project: ProjectConfig, stage: str, name: str) -> ParameterRequ
     return requirement
 
 
-def validate_candidate_for_approval(project: ProjectConfig, candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str) -> None:
+def validate_candidate_against_registry(records: list[ParameterRecord], candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str) -> None:
+    """Validate the one approval boundary shared by state, CLI, MCP and YAML writes."""
     if not reviewer.strip() or candidate.review_status != "validated": raise ValueError("validated_candidate_and_reviewer_required")
     if candidate.name != requirement.name or candidate.parameter_type != requirement.parameter_type: raise ValueError("candidate_requirement_mismatch")
     if candidate.enzyme_id != requirement.enzyme_id or candidate.substrate_id != requirement.substrate_id or candidate.product_id != requirement.product_id or candidate.species_id != requirement.species_id: raise ValueError("candidate_identity_mismatch")
@@ -86,7 +87,12 @@ def validate_candidate_for_approval(project: ProjectConfig, candidate: Parameter
     normalize_for_requirement(candidate.numeric_value, candidate.unit, requirement)
     if candidate.source_type == "wetlab" and not candidate.source_reference: raise ValueError("wetlab_source_required")
     if candidate.derivation_type == "model_fit" and not candidate.derived_from: raise ValueError("model_fit_lineage_required")
-    ParameterRegistry(project.parameters + [candidate])
+    ParameterRegistry([*records, candidate])
+
+
+def validate_candidate_for_approval(project: ProjectConfig, candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str) -> None:
+    """Project-config convenience wrapper around the shared approval boundary."""
+    validate_candidate_against_registry(project.parameters, candidate, requirement, reviewer)
 
 
 def approve_and_persist_parameter(project_path: Path, candidate: ParameterRecord, *, reviewer: str, target_stage: str, target_requirement_name: str) -> ParameterRecord:

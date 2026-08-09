@@ -18,6 +18,9 @@ from igem_drylab.pipeline import load_config, run_pipeline
 from igem_drylab.project_state import ProjectState
 from igem_drylab.parameters import validate_parameters
 from igem_drylab.parameters import ParameterRegistry
+from igem_drylab.parameters import ParameterRecord
+from igem_drylab.parameters.requirements import requirements_for_stage
+from igem_drylab.wetlab.parameter_update import approve_and_persist_parameter, validate_candidate_for_approval
 
 app = typer.Typer(help="iGEM 2026 Tsinghua-T dry-lab utilities.")
 pipeline_app = typer.Typer(help="Run M1-M4 pipeline skeleton.")
@@ -184,6 +187,38 @@ def query_parameters(
 def parameter_conflicts(config: Path) -> None:
     registry = ParameterRegistry(load_config(config).parameters)
     typer.echo(json.dumps([item.model_dump(mode="json") for item in registry.list_conflicts()], ensure_ascii=False, indent=2))
+
+
+@parameters_app.command("validate-candidate")
+def validate_parameter_candidate(
+    config: Path,
+    candidate_file: Path,
+    stage: str = typer.Option(..., "--stage"),
+    requirement_name: str = typer.Option(..., "--requirement-name"),
+    reviewer: str = typer.Option(..., "--reviewer"),
+) -> None:
+    """Validate a candidate at the same approval boundary used by persistence."""
+    project = load_config(config)
+    candidate = ParameterRecord.model_validate_json(candidate_file.read_text(encoding="utf-8"))
+    requirement = next((item for item in requirements_for_stage(project, stage) if item.name == requirement_name), None)
+    if requirement is None:
+        raise typer.BadParameter("Unknown declared requirement")
+    validate_candidate_for_approval(project, candidate, requirement, reviewer)
+    typer.echo(json.dumps({"ok": True, "approval_required": True}, ensure_ascii=False))
+
+
+@parameters_app.command("approve")
+def approve_parameter_candidate(
+    config: Path,
+    candidate_file: Path,
+    stage: str = typer.Option(..., "--stage"),
+    requirement_name: str = typer.Option(..., "--requirement-name"),
+    reviewer: str = typer.Option(..., "--reviewer"),
+) -> None:
+    """Persist one reviewed candidate; this is deliberately an explicit human action."""
+    candidate = ParameterRecord.model_validate_json(candidate_file.read_text(encoding="utf-8"))
+    approved = approve_and_persist_parameter(config, candidate, reviewer=reviewer, target_stage=stage, target_requirement_name=requirement_name)
+    typer.echo(approved.model_dump_json(indent=2))
 
 
 @project_app.command("state")

@@ -77,7 +77,7 @@ igem-drylab tools call igem.scoring.m4_piecewise_ode --arguments-file examples/m
 
 The default structure backend is ColabFold AlphaFold2-Multimer. Its `ranking_debug.json` parser extracts pLDDT, pTM and ipTM. It deliberately does not claim an inter-chain PAE value without chain boundaries. AF3/Boltz/Chai/ABCFold/CALVADOS parsers are retained as optional compatibility tools, not required dependencies.
 
-Production M3 passes a candidate-specific, mass-conserving enzyme distribution to M4. Construct/condition-scoped reviewed parameters override global records; recruitment, docking, and structure scores are not kinetic multipliers. The optional M5 FitPlan fits exactly one declared mechanistic parameter and emits a validated candidate requiring human approval.
+Production M3 passes a candidate-specific, mass-conserving enzyme distribution to M4. Exact construct+condition, construct-only, condition-only, then global reviewed parameters are the only scope fallbacks; recruitment, docking, and structure scores are not kinetic multipliers. The optional M5 FitPlan fits exactly one declared mechanistic parameter and emits a validated candidate requiring human approval.
 
 Before pilot ingestion, use the typed evidence contracts for enzyme kinetics, LLPS partitioning, abundance, and recruitment. Evidence extraction remains review-only; it cannot write an approved production parameter.
 
@@ -135,6 +135,8 @@ summary.json
 ## Inspect and call MCP-style tools
 
 The repository does not run a network MCP server yet. It exposes a small local registry whose tool definitions follow the core MCP tool shape: `name`, `title`, `description`, `inputSchema`, optional `outputSchema`, and tool-call results with `content`, `structuredContent`, and optional `isError`.
+
+Approval is a deliberate human mutation step. The same validation boundary is available through `igem-drylab parameters validate-candidate`, `igem-drylab parameters approve`, and the local MCP-style `igem.parameters.approve` tool; agents do not call it automatically.
 
 ```bash
 igem-drylab tools list

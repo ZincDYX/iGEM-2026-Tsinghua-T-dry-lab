@@ -10,11 +10,13 @@ from igem_drylab.constructs import ConstructRecord
 
 
 class RunConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     id: str = "demo-run"
     output_dir: Path = Path("outputs")
 
 
 class ExecutionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     """Controls whether fixture values may be used as non-scientific demonstrations."""
 
     mode: Literal["demo", "real"] = "demo"
@@ -37,6 +39,7 @@ class ExperimentalContext(StrictScientificConfig):
 
 
 class LigandConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     id: str
     name: str
     role: str
@@ -44,6 +47,7 @@ class LigandConfig(BaseModel):
 
 
 class EnzymeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     id: str
     protein_id: str
     reaction_role: str
@@ -51,6 +55,7 @@ class EnzymeConfig(BaseModel):
 
 
 class ScaffoldConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     id: str
     description: str
     oligomeric_state: int = Field(ge=1)
@@ -58,6 +63,7 @@ class ScaffoldConfig(BaseModel):
 
 
 class LinkerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     id: str
     sequence: str
     source: str = "unknown"
@@ -67,6 +73,7 @@ class ConstructDefinition(BaseModel):
     """A wet-lab construct description; no fusion topology is inferred by code."""
 
     id: str
+    model_config = ConfigDict(extra="forbid")
     components: list[str] = Field(min_length=1)
     domain_order: list[str] = Field(default_factory=list)
     fusion_orientation: str | None = None
@@ -84,6 +91,7 @@ class ConstructDefinition(BaseModel):
 
 
 class InputsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     protein_fasta: Path
     ligands: list[LigandConfig] = Field(default_factory=list)
     enzymes: list[EnzymeConfig]
@@ -95,6 +103,7 @@ class InputsConfig(BaseModel):
 
 
 class ToolConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     enabled: bool = False
     mode: Literal["mock", "external"] = "mock"
     repo_path: Path | None = None
@@ -268,4 +277,12 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         base_dir,
     )  # type: ignore[assignment]
     config.stages.m5_feedback.wetlab_results_file = _resolve_path(config.stages.m5_feedback.wetlab_results_file, base_dir)  # type: ignore[assignment]
+    if config.execution.mode == "real":
+        required_files = [config.inputs.protein_fasta]
+        required_files.extend(item.sdf for item in config.inputs.ligands if item.sdf is not None)
+        required_files.extend(item.structure_pdb for item in [*config.inputs.enzymes, *config.inputs.scaffolds] if item.structure_pdb is not None)
+        required_files.extend([config.stages.m2_fusion.structure_metrics_file, config.stages.m5_feedback.wetlab_results_file])
+        missing = [str(item) for item in required_files if item is not None and not item.exists()]
+        if missing:
+            raise ValueError(f"real_mode_references_missing_file:{','.join(missing)}")
     return config

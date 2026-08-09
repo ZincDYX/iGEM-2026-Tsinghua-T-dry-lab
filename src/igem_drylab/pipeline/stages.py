@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from dataclasses import replace
+from hashlib import sha256
 import numpy as np
 import json
 
@@ -13,6 +14,7 @@ from igem_drylab.parameters.requirements import requirements_for_stage
 from igem_drylab.parameters.dimensions import normalize_concentration
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
+from igem_drylab.wetlab.canonical import canonicalize_metabolite
 
 from .config import ConstructDefinition, ProjectConfig, canonical_m4_condition_id
 from .io import write_models
@@ -174,24 +176,25 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
     records: list[M4ReactionPrediction] = []
     for item in assessments:
         if item.status != "valid":
-            records.append(_m4_insufficient(item.candidate_id, config, ["validated M3 enrichment"]))
+            records.append(_m4_insufficient(item.candidate_id, config, ["validated M3 enrichment"], construct_id=item.construct_id))
             continue
         elif item.m4_candidate_context is None:
-            records.append(_m4_insufficient(item.candidate_id, config, ["candidate-specific M3 context"]))
+            records.append(_m4_insufficient(item.candidate_id, config, ["candidate-specific M3 context"], construct_id=item.construct_id))
             continue
         else:
             construct_id = item.m4_candidate_context.construct_id
             condition_id = item.m4_candidate_context.condition_id
             selected, missing = validate_parameters(config.parameters, requirements=m4_kinetic_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
-            if missing or gate_missing:
-                records.append(_m4_insufficient(item.candidate_id, config, missing + gate_missing))
+            explicit_condition_missing = config.execution.mode == "real" and not gates.condition_id
+            if missing or gate_missing or explicit_condition_missing:
+                records.append(_m4_insufficient(item.candidate_id, config, missing + gate_missing + (["explicit_condition_id"] if explicit_condition_missing else []), construct_id=construct_id))
                 continue
             initial = gates.initial_state
             if initial is None:
-                records.append(_m4_insufficient(item.candidate_id, config, ["initial_state"]))
+                records.append(_m4_insufficient(item.candidate_id, config, ["initial_state"], construct_id=construct_id))
                 continue
             if config.execution.mode == "real" and (initial.x13 != 0 or initial.x15 != 0):
-                records.append(_m4_insufficient(item.candidate_id, config, ["real_mode_requires_zero_initial_x13_x15_for_net_production_semantics"]))
+                records.append(_m4_insufficient(item.candidate_id, config, ["real_mode_requires_zero_initial_x13_x15_for_net_production_semantics"], construct_id=construct_id))
                 continue
             values = _glabridin_parameter_values(selected)
             values.update(_candidate_enzyme_values(item.m4_candidate_context))
@@ -204,7 +207,8 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             baseline_13, baseline_15 = float(baseline.x13[-1]), float(baseline.x15[-1])
             delta_13, delta_15 = final_13 - initial.x13, final_15 - initial.x15
             side_product_fraction = delta_13 / (delta_13 + delta_15) if delta_13 + delta_15 > 0 else 0.0
-            trajectory = stage_dir / f"{item.candidate_id}_trajectory.json"
+            condition_fingerprint = sha256(condition_id.encode("utf-8")).hexdigest()[:10]
+            trajectory = stage_dir / f"{item.candidate_id}_{condition_fingerprint}_trajectory.json"
             trajectory.parent.mkdir(parents=True, exist_ok=True)
             trajectory.write_text(json.dumps({"scientific_contract_version": "pre-real-data-frozen", "candidate_id": item.candidate_id, "construct_id": construct_id, "condition_id": condition_id, "parameter_ids": sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}), "time_unit": "h", "concentration_unit": "uM", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
             recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, delta_15 / gates.t_end, baseline_13 - initial.x13, delta_13, delta_15, baseline_15 - initial.x15, gates)
@@ -493,7 +497,12 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
 
 
 def _aggregate_fit_groups(results: list[object]) -> dict[tuple[str, str], object]:
-    """Mean biological replicates only when their time grids are identical; otherwise no fit dataset."""
+    """Create a canonical fit dataset only from aligned, fully quantified replicates.
+
+    Censored values are intentionally not replaced by a LOD/2 heuristic.  A
+    metabolite lacking a complete quantified biological-replicate series is
+    withheld from fitting rather than silently averaged as though quantified.
+    """
     groups: dict[tuple[str, str], list[object]] = {}
     for result in results:
         groups.setdefault((result.construct_id, result.condition_id), []).append(result)
@@ -503,7 +512,19 @@ def _aggregate_fit_groups(results: list[object]) -> dict[tuple[str, str], object
         if len(records) < 2 or any(record.time_hours() != reference.time_hours() for record in records[1:]):
             continue
         shared = set.intersection(*(set(record.metabolites) for record in records))
-        metabolites = {name: [float(np.mean([record.metabolites[name][index] for record in records])) for index in range(len(reference.metabolites[name]))] for name in shared if all(len(record.metabolites[name]) == len(reference.metabolites[name]) for record in records)}
+        metabolites: dict[str, list[float]] = {}
+        uncertainties: dict[str, list[float]] = {}
+        uncertainty_type: str | None = None
+        for name in shared:
+            canonical = [canonicalize_metabolite(record, name) for record in records]
+            if any(series.time_h != canonical[0].time_h for series in canonical[1:]):
+                continue
+            if any(censor != "quantified" for series in canonical for censor in series.censor_mask):
+                continue
+            metabolites[name] = [float(np.mean([series.concentration_uM[index] for series in canonical])) for index in range(len(canonical[0].time_h))]
+            if all(series.uncertainty_uM is not None and series.uncertainty_type == canonical[0].uncertainty_type for series in canonical):
+                uncertainty_type = canonical[0].uncertainty_type
+                uncertainties[name] = [float(np.sqrt(sum(series.uncertainty_uM[index] ** 2 for series in canonical if series.uncertainty_uM is not None)) / len(canonical)) for index in range(len(canonical[0].time_h))]
         if metabolites:
-            aggregated[key] = reference.model_copy(update={"experiment_id": f"fit_group:{key[0]}:{key[1]}", "replicate_id": "biological_mean", "metabolites": metabolites, "biological_replicate_count": len(records)})
+            aggregated[key] = reference.model_copy(update={"experiment_id": f"fit_group:{key[0]}:{key[1]}", "replicate_id": "biological_mean", "metabolites": metabolites, "metabolite_concentration_unit": "uM", "metabolite_uncertainty": uncertainties, "metabolite_uncertainty_type": uncertainty_type, "metabolite_lod": {}, "metabolite_loq": {}, "biological_replicate_count": len(records)})
     return aggregated

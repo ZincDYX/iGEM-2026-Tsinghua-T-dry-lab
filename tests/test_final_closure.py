@@ -19,7 +19,9 @@ def test_wetlab_time_and_horizon_are_explicit(tmp_path):
 def test_human_approval_persists_and_reloads(tmp_path):
     source = Path("configs/m1_m4_real_scoring_example.yaml")
     project = tmp_path / "project.yaml"
-    project.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    # Keep relative real-data inputs valid after moving the fixture into tmp_path.
+    raw = source.read_text(encoding="utf-8").replace("../examples/", str((Path("examples").resolve())).replace("\\", "/") + "/")
+    project.write_text(raw, encoding="utf-8")
     candidate = ParameterRecord(parameter_id="p", name="phi", value=0.1, unit="1", parameter_type="phi", source_type="wetlab", source_reference="E", review_status="validated")
     approved = approve_and_persist_parameter(project, candidate, reviewer="human", target_stage="m3", target_requirement_name="phi")
     assert approved.approved_by == "human"
@@ -27,7 +29,7 @@ def test_human_approval_persists_and_reloads(tmp_path):
 
 
 def test_replicate_variation_uses_replicate_ids_not_time_series():
-    base = {"construct_id": "c", "condition_id": "x", "metabolite_time": [0, 1], "metabolites": {"15": [0, 2]}}
+    base = {"construct_id": "c", "condition_id": "x", "metabolite_time": [0, 1], "metabolite_concentration_unit": "uM", "metabolites": {"15": [0, 2]}}
     one = WetLabResult(experiment_id="e1", replicate_id="r1", **base)
     assert replicate_variation([one])[("c", "x", "15", 1.0)] is None
     two = WetLabResult(experiment_id="e2", replicate_id="r2", **{**base, "metabolites": {"15": [0, 4]}})

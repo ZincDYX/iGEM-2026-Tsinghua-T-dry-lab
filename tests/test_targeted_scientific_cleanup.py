@@ -12,7 +12,7 @@ from igem_drylab.wetlab import WetLabResult, quality_control, replicate_variatio
 
 
 def _result(experiment: str, condition: str, replicate: str, *, time: float = 24, value: float = 1.0) -> WetLabResult:
-    return WetLabResult(experiment_id=experiment, construct_id="c", condition_id=condition, replicate_id=replicate, metabolite_time=[0, time], metabolites={"13": [0, value]})
+    return WetLabResult(experiment_id=experiment, construct_id="c", condition_id=condition, replicate_id=replicate, metabolite_time=[0, time], metabolite_concentration_unit="uM", metabolites={"13": [0, value]})
 
 
 def test_missing_parameter_does_not_schedule_production_m4(tmp_path: Path):

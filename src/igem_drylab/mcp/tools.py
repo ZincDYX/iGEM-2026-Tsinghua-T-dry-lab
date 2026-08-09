@@ -32,6 +32,7 @@ from igem_drylab.literature.evidence_contract import DegradationRateEvidence, En
 from igem_drylab.project_state import ProjectState
 from igem_drylab.constructs import ConstructRegistry
 from igem_drylab.wetlab import MeasurementMapping, load_wetlab_results, parameter_updates_from_measurements, quality_control
+from igem_drylab.wetlab.parameter_update import approve_and_persist_parameter
 
 from .types import JsonObject, McpTool, McpToolResult, ToolHandler
 
@@ -542,6 +543,21 @@ def parameters_map_typed_evidence(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok({"ok": True, "parameter_candidate": candidate.model_dump(mode="json"), "approval_required": True, "production_path": "typed_evidence_to_declared_requirement"})
 
 
+def parameters_approve(arguments: JsonObject) -> McpToolResult:
+    """Explicit human approval endpoint; no agent path invokes this automatically."""
+    candidate_payload = arguments.get("candidate")
+    if not isinstance(candidate_payload, dict):
+        raise ValueError("candidate must be an object")
+    approved = approve_and_persist_parameter(
+        Path(_require_str(arguments, "config_path")),
+        ParameterRecord.model_validate(candidate_payload),
+        reviewer=_require_str(arguments, "reviewer"),
+        target_stage=_require_str(arguments, "stage"),
+        target_requirement_name=_require_str(arguments, "requirement_name"),
+    )
+    return McpToolResult.ok({"ok": True, "approved_parameter": approved.model_dump(mode="json"), "replan_required": True})
+
+
 def constructs_query(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
     registry = ConstructRegistry(project.inputs.construct_records)
@@ -990,6 +1006,7 @@ PARAMETERS_RESOLVE_TOOL = McpTool(name="igem.parameters.resolve", title="Resolve
 PARAMETERS_PROVENANCE_TOOL = McpTool(name="igem.parameters.provenance", title="Show parameter provenance", description="Return selected parameter and superseded lineage.", input_schema=_schema({"config_path": {"type": "string"}, "parameter_id": {"type": "string"}}, ["config_path", "parameter_id"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 PARAMETERS_VALIDATE_EVIDENCE_TOOL = McpTool(name="igem.parameters.validate_evidence", title="Legacy generic evidence inspection", description="Legacy inspection helper only; use igem.parameters.map_typed_evidence for production candidates.", input_schema=_schema({"parameter_id": {"type": "string"}, "name": {"type": "string"}, "value": {}, "unit": {"type": "string"}, "parameter_type": {"type": "string"}, "source": {"type": "object"}, "identity": {"type": "object"}}, ["parameter_id", "name", "value", "parameter_type", "source"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
 PARAMETERS_MAP_TYPED_EVIDENCE_TOOL = McpTool(name="igem.parameters.map_typed_evidence", title="Map typed evidence to a declared production requirement", description="Validate typed evidence against a declared M3/M4 requirement and emit only an extracted candidate for human review.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "evidence_type": {"type": "string", "enum": ["enzyme_kinetics", "llps_partitioning", "phase_volume", "protein_abundance", "recruitment_binding", "phase_activity", "degradation_rate"]}, "evidence": {"type": "object"}}, ["config_path", "stage", "requirement_name", "evidence_type", "evidence"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
+PARAMETERS_APPROVE_TOOL = McpTool(name="igem.parameters.approve", title="Approve and persist reviewed parameter", description="Human-only mutation endpoint. Revalidates candidate identity, unit, lineage and reviewer before appending it to project YAML.", input_schema=_schema({"config_path": {"type": "string"}, "candidate": {"type": "object"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "reviewer": {"type": "string"}}, ["config_path", "candidate", "stage", "requirement_name", "reviewer"]), output_schema=_schema({"ok": {"type": "boolean"}, "approved_parameter": {"type": "object"}, "replan_required": {"type": "boolean"}}, additional_properties=True))
 CONSTRUCTS_QUERY_TOOL = McpTool(name="igem.constructs.query", title="Query approved construct registry", description="Return approved construct records from project config.", input_schema=_schema({"config_path": {"type": "string"}, "scaffold": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 CONSTRUCTS_GENERATE_TOOL = McpTool(name="igem.constructs.generate_candidates", title="Generate construct candidates", description="Combine explicit config constructs with approved construct-registry records and preserve provenance.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "candidates": {"type": "array"}}, additional_properties=True))
 PROJECT_GET_STATE_TOOL = McpTool(name="igem.project.get_state", title="Get registry-backed project state", description="Return constructs and approved parameters available to agent/workflow modes.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "state": {"type": "object"}}, additional_properties=True))
@@ -1058,6 +1075,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PARAMETERS_PROVENANCE_TOOL, parameters_provenance),
     (PARAMETERS_VALIDATE_EVIDENCE_TOOL, parameters_validate_evidence),
     (PARAMETERS_MAP_TYPED_EVIDENCE_TOOL, parameters_map_typed_evidence),
+    (PARAMETERS_APPROVE_TOOL, parameters_approve),
     (CONSTRUCTS_QUERY_TOOL, constructs_query),
     (CONSTRUCTS_GENERATE_TOOL, constructs_generate_candidates),
     (PROJECT_GET_STATE_TOOL, project_get_state),

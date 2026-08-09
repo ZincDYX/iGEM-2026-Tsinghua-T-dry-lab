@@ -33,9 +33,14 @@ class ProjectState(BaseModel):
     def from_project(cls, project: object) -> "ProjectState":
         return cls(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"], experimental_context=project.experimental_context, requirements_by_stage={stage: requirements_for_stage(project, stage) for stage in ("m3", "m4")})
 
-    def approve_parameter(self, candidate: ParameterRecord, *, reviewer: str) -> "ProjectState":
+    def approve_parameter(self, candidate: ParameterRecord, *, reviewer: str, target_stage: str = "m4", target_requirement_name: str | None = None) -> "ProjectState":
         """Return updated state; persistence remains an explicit caller action."""
-        if candidate.review_status not in {"validated", "approved"}:
-            raise ValueError("only validated parameter candidates can be approved")
+        requirement_name = target_requirement_name or candidate.name
+        requirement = next((item for item in self.requirements_by_stage.get(target_stage, []) if item.name == requirement_name), None)
+        if requirement is None:
+            raise ValueError("unknown_target_requirement")
+        # Local import avoids a pipeline/wet-lab import cycle during package startup.
+        from .wetlab.parameter_update import validate_candidate_against_registry
+        validate_candidate_against_registry(self.approved_parameters, candidate, requirement, reviewer)
         approved = candidate.model_copy(update={"review_status": "approved", "approved_by": reviewer, "validation_flags": [*candidate.validation_flags, f"approved_by:{reviewer}"]})
         return self.model_copy(update={"approved_parameters": [*self.approved_parameters, approved]})
