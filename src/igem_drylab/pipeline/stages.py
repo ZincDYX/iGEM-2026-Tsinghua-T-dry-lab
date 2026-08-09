@@ -437,7 +437,11 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
         simulation = simulate_glabridin(GlabridinKineticParameters(**changed), pt_gate=InductionGate(**{k: v for k, v in inputs["pt_gate"].items() if k != "time_unit"}), oc_gate=InductionGate(**{k: v for k, v in inputs["oc_gate"].items() if k != "time_unit"}), dmt_gate=InductionGate(**{k: v for k, v in inputs["dmt_gate"].items() if k != "time_unit"}), initial=tuple(inputs["initial"][f"x{key}"] for key in ("9", "10", "11", "13", "15")), t_end=inputs["t_end"])
         return np.concatenate([np.interp(result.time_hours(), simulation.time, getattr(simulation, f"x{observable}")) for observable in plan.observables if result.metabolites.get(observable) is not None])
     try:
-        fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[plan.parameter_name], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=plan.bootstrap_samples)
+        # The input is an aggregate trajectory. Time points are correlated, so they
+        # are not valid IID bootstrap units. A replicate-block bootstrap requires
+        # retained individual replicate trajectories and is intentionally withheld.
+        fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[plan.parameter_name], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=0)
+        fit = fit.model_copy(update={"confidence_interval": None, "identifiability_warning": "replicate_block_bootstrap_unavailable_from_aggregated_trajectory"})
     except ValueError as error:
         return {"fit": None, "candidate": None, "warning": str(error)}
     requirement = next((item for item in m4_kinetic_requirements(include_degradation=True) if item.name == plan.parameter_name), None)
