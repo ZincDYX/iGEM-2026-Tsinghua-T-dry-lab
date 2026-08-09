@@ -40,11 +40,14 @@ class ParameterRegistry:
     def query(self, **filters: str | None) -> list[ParameterRecord]:
         return [item for item in self._records if all(value is None or getattr(item, key) == value for key, value in filters.items())]
 
-    def resolve(self, requirement: ParameterRequirement, *, host: str | None = None, temperature_c: float | None = None, mutant_allowed: bool = False, allow_assumptions: bool = False, construct_id: str | None = None, condition_id: str | None = None) -> ParameterResolution:
+    def resolve(self, requirement: ParameterRequirement, *, host: str | None = None, temperature_c: float | None = None, mutant_allowed: bool = False, allow_assumptions: bool = False, construct_id: str | None = None, condition_id: str | None = None, require_provenance: bool = False) -> ParameterResolution:
         candidates = [item for item in self.query(name=requirement.name) if item.review_status == "approved" and (allow_assumptions or item.source_type != "assumption")]
         compatible: list[tuple[ParameterRecord, float]] = []
         rejected: list[str] = []
         for record in candidates:
+            if require_provenance and not has_required_provenance(record):
+                rejected.append("incomplete_required_provenance")
+                continue
             if record.construct_id is not None and record.construct_id != construct_id:
                 rejected.append("construct_scope_mismatch")
                 continue
@@ -113,12 +116,22 @@ def evidence_priority(record: ParameterRecord) -> int:
     return 4 if record.source_type == "prediction" else 5
 
 
-def validate_parameters(records: list[ParameterRecord], *, requirements: list[ParameterRequirement] | None = None, required_names: set[str] | None = None, allow_assumptions: bool = False, host: str | None = None, temperature_c: float | None = None, construct_id: str | None = None, condition_id: str | None = None) -> tuple[dict[str, ParameterResolution], list[str]]:
+def has_required_provenance(record: ParameterRecord) -> bool:
+    if record.source_type == "literature":
+        return bool(record.doi and record.evidence_text)
+    if record.source_type == "wetlab":
+        if not record.source_reference:
+            return False
+        return bool(record.derived_from) if record.derivation_type == "model_fit" else True
+    return record.source_type in {"prediction", "assumption"} and bool(record.source_reference)
+
+
+def validate_parameters(records: list[ParameterRecord], *, requirements: list[ParameterRequirement] | None = None, required_names: set[str] | None = None, allow_assumptions: bool = False, host: str | None = None, temperature_c: float | None = None, construct_id: str | None = None, condition_id: str | None = None, require_provenance: bool = False) -> tuple[dict[str, ParameterResolution], list[str]]:
     legacy = requirements is None
     if requirements is None:
         requirements = [ParameterRequirement(name=name, parameter_type="other", dimension="dimensionless") for name in sorted(required_names or set())]
     registry = ParameterRegistry(records)
-    resolutions = {item.name: (registry.resolve_for_model(item.name, allow_assumptions=allow_assumptions) if legacy else registry.resolve(item, host=host, temperature_c=temperature_c, allow_assumptions=allow_assumptions, construct_id=construct_id, condition_id=condition_id)) for item in requirements}
+    resolutions = {item.name: (registry.resolve_for_model(item.name, allow_assumptions=allow_assumptions) if legacy else registry.resolve(item, host=host, temperature_c=temperature_c, allow_assumptions=allow_assumptions, construct_id=construct_id, condition_id=condition_id, require_provenance=require_provenance)) for item in requirements}
     if legacy:
         selected = {name: result.selected_parameter for name, result in resolutions.items() if result.selected_parameter is not None}
         return selected, [f"{name} ({result.status})" for name, result in resolutions.items() if result.status != "resolved"]  # type: ignore[return-value]

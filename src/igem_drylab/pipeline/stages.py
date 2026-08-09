@@ -108,7 +108,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             continue
         construct_id = assessment.construct_id
         condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)
-        selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id)
+        selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
         if missing:
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic",
                 missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
@@ -176,7 +176,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
         else:
             construct_id = item.m4_candidate_context.construct_id
             condition_id = item.m4_candidate_context.condition_id
-            selected, missing = validate_parameters(config.parameters, requirements=m4_kinetic_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id)
+            selected, missing = validate_parameters(config.parameters, requirements=m4_kinetic_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
             if missing or gate_missing:
                 records.append(_m4_insufficient(item.candidate_id, config, missing + gate_missing))
                 continue
