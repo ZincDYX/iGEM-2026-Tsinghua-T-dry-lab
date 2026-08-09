@@ -33,6 +33,7 @@ BM25_B = 0.75
 RRF_K = 60
 METADATA_BONUS_PER_MATCH = 0.01
 MMR_LAMBDA = 0.7
+DEFAULT_EMBEDDING_BATCH_SIZE = 64
 
 FIELD_ALIASES = {
     "enzyme": ("enzyme", "enzyme_name"),
@@ -40,6 +41,7 @@ FIELD_ALIASES = {
     "product": ("product", "product_name", "main_product_name"),
     "parameter_type": ("parameter_type", "metric", "parameter", "measurement_type"),
     "host": ("host", "host_species", "organism", "assay_host"),
+    "condition": ("condition", "assay_condition", "experimental_condition"),
 }
 INDEX_FIELD_NAMES = tuple({name for names in FIELD_ALIASES.values() for name in names})
 QUERY_ALIASES = {
@@ -50,6 +52,7 @@ QUERY_ALIASES = {
     },
     "host": {"yeast": "yeast", "saccharomyces cerevisiae": "yeast"},
 }
+EXPLICIT_RELAXATION_PRIORITY = ("host", "condition", "product", "substrate", "parameter_type", "enzyme")
 
 
 class EvidenceDatabaseUnavailable(FileNotFoundError):
@@ -148,16 +151,24 @@ def extract_query_constraints(question: str, documents: Sequence[EvidenceDocumen
     return constraints
 
 
-def bm25_search(question: str, documents: Sequence[EvidenceDocument], *, constraints: dict[str, str] | None = None) -> list[RankedEvidence]:
+def bm25_search(
+    question: str,
+    documents: Sequence[EvidenceDocument],
+    *,
+    constraints: dict[str, str] | None = None,
+    candidate_indices: Sequence[int] | None = None,
+) -> list[RankedEvidence]:
     """Rank evidence with a compact BM25 implementation and bounded metadata boost."""
     query_terms = _tokens(question)
-    if not query_terms or not documents:
+    indices = _candidate_indices(documents, candidate_indices)
+    if not query_terms or not indices:
         return []
-    corpus = [Counter(_tokens(_index_text(document))) for document in documents]
+    corpus = [Counter(_tokens(_index_text(documents[index]))) for index in indices]
     average_length = sum(sum(vector.values()) for vector in corpus) / len(corpus)
     document_frequency = Counter(term for vector in corpus for term in vector)
     scored: list[tuple[int, float, tuple[str, ...]]] = []
-    for index, vector in enumerate(corpus):
+    for local_index, vector in enumerate(corpus):
+        index = indices[local_index]
         length = sum(vector.values())
         score = 0.0
         for term in query_terms:
@@ -183,13 +194,15 @@ def semantic_search(
     *,
     backend: EmbeddingBackend,
     evidence_path: Path | None = None,
+    candidate_indices: Sequence[int] | None = None,
 ) -> tuple[list[RankedEvidence], dict[int, list[float]]]:
     """Rank by embedding cosine similarity, reusing a valid local document cache."""
     document_vectors = _document_embeddings(documents, backend=backend, evidence_path=evidence_path)
     query_vectors = backend.embed([question])
     if len(query_vectors) != 1:
         raise SemanticBackendError("embedding backend did not return one query vector")
-    scores = [(index, _cosine(query_vectors[0], vector)) for index, vector in enumerate(document_vectors)]
+    indices = _candidate_indices(documents, candidate_indices)
+    scores = [(index, _cosine(query_vectors[0], document_vectors[index])) for index in indices]
     ranked = sorted(((index, score) for index, score in scores if score > 0), key=lambda item: (-item[1], documents[item[0]].record_id))
     return [RankedEvidence(index=index, semantic_score=score, semantic_rank=rank) for rank, (index, score) in enumerate(ranked, start=1)], {index: vector for index, vector in enumerate(document_vectors)}
 
@@ -278,9 +291,10 @@ def retrieve_evidence(
     evidence_path: Path | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Execute BM25, optional semantic retrieval, RRF, deduplication, and MMR."""
-    normalized = extract_query_constraints(question, documents)
-    normalized.update(_validated_constraints(constraints))
-    lexical = bm25_search(question, documents, constraints=normalized)
+    inferred_constraints = extract_query_constraints(question, documents)
+    explicit_constraints = _validated_constraints(constraints)
+    candidate_indices, active_constraints, relaxed_constraints = _select_candidate_indices(documents, explicit_constraints)
+    lexical = bm25_search(question, documents, constraints=inferred_constraints, candidate_indices=candidate_indices)
     semantic: list[RankedEvidence] = []
     semantic_vectors: dict[int, list[float]] | None = None
     semantic_status = "disabled"
@@ -290,7 +304,9 @@ def retrieve_evidence(
             semantic_status = "unavailable"
         else:
             try:
-                semantic, semantic_vectors = semantic_search(question, documents, backend=backend, evidence_path=evidence_path)
+                semantic, semantic_vectors = semantic_search(
+                    question, documents, backend=backend, evidence_path=evidence_path, candidate_indices=candidate_indices,
+                )
                 semantic_status = "used"
             except Exception:  # Optional backends must never break deterministic retrieval.
                 semantic_status = "unavailable"
@@ -310,14 +326,20 @@ def retrieve_evidence(
         )
         for hit in selected
     ]
-    relaxed = [f"{key}={value}" for key, value in normalized.items() if not any(key in hit.matched_metadata for hit in lexical)]
-    query_analysis = {"constraints": normalized, "relaxed_constraints": relaxed}
+    legacy_constraints = {**inferred_constraints, **active_constraints}
+    query_analysis = {
+        "constraints": legacy_constraints,
+        "inferred_constraints": inferred_constraints,
+        "explicit_constraints": explicit_constraints,
+        "active_constraints": active_constraints,
+        "relaxed_constraints": relaxed_constraints,
+    }
     retrieval = {
         "lexical": "bm25",
         "semantic": semantic_status,
         "fusion": "rrf" if semantic_status == "used" else "rrf_fallback",
         "diversity": "doi_dedup+mmr",
-        "candidate_count": len(fused),
+        "candidate_count": len(candidate_indices),
         "final_count": len(sources),
     }
     return sources, query_analysis, retrieval
@@ -433,10 +455,61 @@ def _document_embeddings(documents: Sequence[EvidenceDocument], *, backend: Embe
         cached = load_embedding_cache(evidence_path, fingerprint=fingerprint, model=backend.cache_identity, record_ids=record_ids)
         if cached is not None:
             return cached
-        vectors = backend.embed([_index_text(document) for document in documents])
+        vectors = _embed_in_batches(backend, [_index_text(document) for document in documents])
         write_embedding_cache(evidence_path, fingerprint=fingerprint, model=backend.cache_identity, record_ids=record_ids, vectors=vectors)
         return vectors
-    return backend.embed([_index_text(document) for document in documents])
+    return _embed_in_batches(backend, [_index_text(document) for document in documents])
+
+
+def _embed_in_batches(
+    backend: EmbeddingBackend,
+    texts: Sequence[str],
+    *,
+    batch_size: int = DEFAULT_EMBEDDING_BATCH_SIZE,
+) -> list[list[float]]:
+    """Embed a corpus sequentially; never expose an API to an unbounded batch."""
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), batch_size):
+        batch = backend.embed(texts[start : start + batch_size])
+        if len(batch) != len(texts[start : start + batch_size]) or any(not _valid_embedding(vector) for vector in batch):
+            raise SemanticBackendError("embedding backend did not return one numeric vector per input")
+        vectors.extend([[float(value) for value in vector] for vector in batch])
+    if len(vectors) != len(texts):
+        raise SemanticBackendError("embedding vector count does not match corpus")
+    if vectors and any(len(vector) != len(vectors[0]) for vector in vectors):
+        raise SemanticBackendError("embedding vectors have inconsistent dimensions")
+    return vectors
+
+
+def _valid_embedding(vector: object) -> bool:
+    return isinstance(vector, Sequence) and bool(vector) and all(isinstance(value, (int, float)) for value in vector)
+
+
+def _candidate_indices(documents: Sequence[EvidenceDocument], candidate_indices: Sequence[int] | None) -> list[int]:
+    if candidate_indices is None:
+        return list(range(len(documents)))
+    return [index for index in candidate_indices if 0 <= index < len(documents)]
+
+
+def _select_candidate_indices(
+    documents: Sequence[EvidenceDocument], explicit_constraints: dict[str, str],
+) -> tuple[list[int], dict[str, str], list[str]]:
+    """Apply caller constraints first, relaxing in a documented deterministic order."""
+    active = dict(explicit_constraints)
+    relaxed: list[str] = []
+    while active:
+        indices = [index for index, document in enumerate(documents) if _matches_all_constraints(document, active)]
+        if indices:
+            return indices, active, relaxed
+        key = next((item for item in EXPLICIT_RELAXATION_PRIORITY if item in active), next(iter(active)))
+        relaxed.append(f"{key}={active.pop(key)}")
+    return list(range(len(documents))), active, relaxed
+
+
+def _matches_all_constraints(document: EvidenceDocument, constraints: dict[str, str]) -> bool:
+    return len(_metadata_matches(document, constraints)) == len(constraints)
 
 
 def _metadata(document: EvidenceDocument) -> dict[str, Any]:

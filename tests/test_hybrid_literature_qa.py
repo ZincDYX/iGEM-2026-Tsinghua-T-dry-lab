@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 
 from igem_drylab.literature.qa import (
+    DEFAULT_EMBEDDING_BATCH_SIZE,
     EvidenceDocument,
     RankedEvidence,
+    _document_embeddings,
     answer_question,
     bm25_search,
     deduplicate_sources,
@@ -14,7 +16,7 @@ from igem_drylab.literature.qa import (
     retrieve_evidence,
     rrf_fuse,
 )
-from igem_drylab.literature.semantic import evidence_fingerprint, load_embedding_cache, write_embedding_cache
+from igem_drylab.literature.semantic import EmbeddingApiBackend, SemanticBackendError, cache_path_for, evidence_fingerprint, load_embedding_cache, write_embedding_cache
 
 
 def _evidence_file(tmp_path: Path) -> Path:
@@ -52,6 +54,18 @@ class FakeChatClient:
         self.calls += 1
         assert "Retrieved evidence is not a validated model parameter" in prompt
         return self.response
+
+
+class RecordingEmbeddingBackend:
+    def __init__(self, *, fail_on_call: int | None = None) -> None:
+        self.calls: list[int] = []
+        self.fail_on_call = fail_on_call
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(len(texts))
+        if self.fail_on_call == len(self.calls):
+            raise SemanticBackendError("illustrative embedding failure")
+        return [[float(index), 1.0] for index, _text in enumerate(texts)]
 
 
 def test_bm25_exact_tokens_and_metadata_conditioning() -> None:
@@ -127,3 +141,78 @@ def test_embedding_cache_tracks_evidence_fingerprint_and_model(tmp_path: Path) -
     assert load_embedding_cache(path, fingerprint=fingerprint, model="test-model", record_ids=record_ids) == vectors
     path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     assert load_embedding_cache(path, fingerprint=evidence_fingerprint(path), model="test-model", record_ids=record_ids) is None
+
+
+def test_embedding_corpus_is_batched_and_cache_is_written_only_after_success(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / "large.jsonl"
+    path.write_text("\n".join(json.dumps({"record_id": f"r-{index}", "title": "Evidence", "doi": f"10.1/{index}", "evidence": f"record {index}"}) for index in range(DEFAULT_EMBEDDING_BATCH_SIZE + 2)), encoding="utf-8")
+    documents = load_evidence_documents(path)
+    calls: list[int] = []
+
+    def successful_embed(_self, texts):
+        calls.append(len(texts))
+        return [[float(index), 1.0] for index, _text in enumerate(texts)]
+
+    monkeypatch.setattr(EmbeddingApiBackend, "embed", successful_embed)
+    backend = EmbeddingApiBackend(api_base="https://example.invalid", api_key="unused", model="batch-test")
+    vectors = _document_embeddings(documents, backend=backend, evidence_path=path)
+    assert calls == [DEFAULT_EMBEDDING_BATCH_SIZE, 2]
+    assert len(vectors) == len(documents)
+    assert cache_path_for(path).is_file()
+
+    calls.clear()
+    assert _document_embeddings(documents, backend=backend, evidence_path=path) == vectors
+    assert calls == []
+
+    cache_path_for(path).unlink()
+    failed_calls: list[int] = []
+
+    def failing_embed(_self, texts):
+        failed_calls.append(len(texts))
+        if len(failed_calls) == 2:
+            raise SemanticBackendError("batch failed")
+        return [[1.0, 0.0] for _text in texts]
+
+    monkeypatch.setattr(EmbeddingApiBackend, "embed", failing_embed)
+    try:
+        _document_embeddings(documents, backend=backend, evidence_path=path)
+    except SemanticBackendError:
+        pass
+    else:
+        raise AssertionError("a failed embedding batch must propagate to semantic fallback")
+    assert not cache_path_for(path).exists()
+
+
+def test_explicit_constraints_filter_candidates_but_inferred_constraints_remain_soft(tmp_path: Path) -> None:
+    path = _evidence_file(tmp_path)
+    documents = load_evidence_documents(path)
+    sources, analysis, _retrieval = retrieve_evidence("kinetics compound 11", documents, constraints={"enzyme": "DMT"})
+    assert sources and {source["record_id"] for source in sources} <= {"dmt-km", "dmt-repeat", "transferable"}
+    assert analysis["explicit_constraints"] == {"enzyme": "DMT"}
+    assert analysis["active_constraints"] == {"enzyme": "DMT"}
+
+    soft_documents = [
+        EvidenceDocument("missing-metadata", "DMT promiscuity", "10.1/missing", "DMT promiscuity evidence reports multiple products."),
+        EvidenceDocument("tagged", "Other evidence", "10.1/tagged", "Less relevant evidence.", fields={"enzyme": "DMT"}),
+    ]
+    soft_sources, soft_analysis, _retrieval = retrieve_evidence("What evidence supports DMT promiscuity?", soft_documents)
+    assert "missing-metadata" in [source["record_id"] for source in soft_sources]
+    assert soft_analysis["inferred_constraints"] == {"enzyme": "DMT"}
+    assert soft_analysis["explicit_constraints"] == {}
+
+
+def test_explicit_constraint_relaxation_is_visible_and_semantic_uses_same_subset(tmp_path: Path) -> None:
+    path = _evidence_file(tmp_path)
+    documents = load_evidence_documents(path)
+    sources, analysis, retrieval = retrieve_evidence(
+        "DMT compound 11 kinetics",
+        documents,
+        constraints={"enzyme": "DMT", "substrate": "11", "parameter_type": "kcat"},
+        semantic_enabled=True,
+        semantic_backend=FakeSemanticBackend(),
+        evidence_path=path,
+    )
+    assert sources and {source["record_id"] for source in sources} <= {"dmt-km", "dmt-repeat", "transferable"}
+    assert analysis["active_constraints"] == {"enzyme": "DMT"}
+    assert analysis["relaxed_constraints"] == ["substrate=11", "parameter_type=kcat"]
+    assert retrieval["semantic"] == "used"
