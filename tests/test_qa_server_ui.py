@@ -28,6 +28,11 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert "AGENT TOOL" not in PAGE
     assert "Retrieval</b> → Review → Approval" not in PAGE
     assert 'class="help"' in PAGE
+    assert 'class="topbar"' in PAGE
+    assert 'class="glass search-panel"' not in PAGE
+    assert 'id="chips"' not in PAGE
+    assert "setupChips" not in PAGE
+    assert "e.g. OC activity, DMT kinetics, glabridin production" in PAGE
 
 
 def test_health_contract_is_unchanged(tmp_path: Path) -> None:
