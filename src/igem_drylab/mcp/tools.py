@@ -496,13 +496,14 @@ def parameters_resolve(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
     stage = _require_str(arguments, "stage")
     requirement_name = _require_str(arguments, "requirement_name")
-    requirements = m3_requirements() if stage == "m3" else m4_requirements() if stage == "m4" else []
+    requirements = m3_requirements() if stage == "m3" else m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation) if stage == "m4" else []
     requirement = next((item for item in requirements if item.name == requirement_name), None)
     if requirement is None:
         raise ValueError("Unknown requirement_name for stage")
     construct_id = arguments.get("construct_id") if isinstance(arguments.get("construct_id"), str) else None
-    condition_id = arguments.get("condition_id") if isinstance(arguments.get("condition_id"), str) else project.stages.m4_reaction.condition_id
-    result = resolve_requirement(ParameterRegistry(project.parameters), requirement, project.experimental_context, allow_assumptions=project.execution.allow_assumptions, construct_id=construct_id, condition_id=condition_id)
+    from igem_drylab.pipeline.config import canonical_m4_condition_id
+    condition_id = arguments.get("condition_id") if isinstance(arguments.get("condition_id"), str) else canonical_m4_condition_id(project.stages.m4_reaction)
+    result = resolve_requirement(ParameterRegistry(project.parameters), requirement, project.experimental_context, allow_assumptions=project.execution.allow_assumptions, construct_id=construct_id, condition_id=condition_id, require_provenance=project.execution.mode == "real" and project.execution.require_provenance)
     return McpToolResult.ok({"ok": result.status == "resolved", "resolution": result.model_dump(mode="json")})
 
 

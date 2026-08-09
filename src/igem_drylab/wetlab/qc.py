@@ -9,9 +9,11 @@ from .models import WetLabResult
 
 class QcReport(BaseModel):
     experiment_id: str
+    replicate_id: str
     passed: bool
     flags: list[str] = Field(default_factory=list)
     outlier_flags: dict[str, bool] = Field(default_factory=dict)
+    censor_masks: dict[str, list[str]] = Field(default_factory=dict)
 
 
 def quality_control(records: list[WetLabResult]) -> list[QcReport]:
@@ -22,14 +24,19 @@ def quality_control(records: list[WetLabResult]) -> list[QcReport]:
         if not record.control_available: flags.append("control_unavailable")
         if record.biological_replicate_count < 2: flags.append("fewer_than_two_biological_replicates")
         if not record.metabolite_time: flags.append("metabolite_time_missing")
+        masks: dict[str, list[str]] = {}
         for species, values in record.metabolites.items():
             if len(values) != len(record.metabolite_time): flags.append(f"time_length_mismatch:{species}")
             if any(value < 0 for value in values): flags.append(f"negative_metabolite:{species}")
             lod = record.metabolite_lod.get(species); loq = record.metabolite_loq.get(species)
-            if lod is not None and any(value < lod for value in values): flags.append(f"below_detection_censored:{species}")
-            if loq is not None and any(value < loq for value in values): flags.append(f"below_quantification_censored:{species}")
+            masks[species] = [
+                "below_lod" if lod is not None and value < lod
+                else "below_loq" if loq is not None and value < loq
+                else "quantified"
+                for value in values
+            ]
         if any(value < 0 for value in record.protein_abundance.values()): flags.append("negative_protein_abundance")
-        reports.append(QcReport(experiment_id=record.experiment_id, passed=not any(flag.startswith(("negative", "metabolite_time", "time_length")) for flag in flags), flags=flags))
+        reports.append(QcReport(experiment_id=record.experiment_id, replicate_id=record.replicate_id, passed=not any(flag.startswith(("negative", "metabolite_time", "time_length")) for flag in flags), flags=flags, censor_masks=masks))
     _flag_replicate_outliers(records, reports)
     return reports
 

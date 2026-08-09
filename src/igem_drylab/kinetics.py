@@ -254,6 +254,7 @@ class GlabridinSimulationResult:
     pt_gate: np.ndarray
     oc_gate: np.ndarray
     dmt_gate: np.ndarray
+    degradation_loss: float = 0.0
 
     @property
     def x9(self) -> np.ndarray: return self.concentrations[0]
@@ -268,12 +269,14 @@ class GlabridinSimulationResult:
 
     @property
     def mass_balance_error(self) -> float:
-        return float(np.max(np.abs(self.concentrations.sum(axis=0) - self.concentrations.sum(axis=0)[0])))
+        """Numerical conservation residual after subtracting modeled sinks."""
+        total = self.concentrations.sum(axis=0)
+        return abs(float((total[0] - total[-1]) - self.degradation_loss))
 
     @property
     def modeled_degradation_loss(self) -> float:
         """Net pathway mass removed by enabled first-order degradation sinks."""
-        return max(0.0, float(self.concentrations.sum(axis=0)[0] - self.concentrations.sum(axis=0)[-1]))
+        return self.degradation_loss
 
 
 def phase_concentrations(average: float, partition: float, phi: float) -> tuple[float, float]:
@@ -444,7 +447,9 @@ def simulate_glabridin(
         all_t.append(times); all_y.append(values); state = values[:, -1]
     time = np.concatenate(all_t); concentrations = np.concatenate(all_y, axis=1); order = np.argsort(time)
     time, concentrations = time[order], concentrations[:, order]
-    return GlabridinSimulationResult(time, concentrations, np.asarray([gate_value(float(t), pt_gate) for t in time]), np.asarray([gate_value(float(t), oc_gate) for t in time]), np.asarray([gate_value(float(t), dmt_gate) for t in time]))
+    degradation_rate = params.kdeg_9 * concentrations[0] + params.kdeg_10 * concentrations[1] + params.kdeg_11 * concentrations[2] + params.kdeg_13 * concentrations[3] + params.kdeg_15 * concentrations[4]
+    degradation_loss = float(np.trapezoid(degradation_rate, time))
+    return GlabridinSimulationResult(time, concentrations, np.asarray([gate_value(float(t), pt_gate) for t in time]), np.asarray([gate_value(float(t), oc_gate) for t in time]), np.asarray([gate_value(float(t), dmt_gate) for t in time]), degradation_loss)
 
 
 def simulate_cascade(

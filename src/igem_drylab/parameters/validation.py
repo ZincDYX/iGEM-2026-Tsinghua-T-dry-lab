@@ -79,13 +79,20 @@ def identity_compatibility(
 
 
 def condition_compatibility(
-    record: ParameterRecord, *, host: str | None = None, temperature_c: float | None = None,
+    record: ParameterRecord, *, host: str | None = None, strain: str | None = None,
+    assay_system: str | None = None, pH: float | None = None, temperature_c: float | None = None,
 ) -> Compatibility:
     """Classify stated assay-condition agreement without silently correcting it."""
     observed_host = record.conditions.get("host")
     if host and observed_host and observed_host != host:
         return Compatibility("incompatible", ("host_mismatch",))
     reasons: list[str] = []
+    for name, requested in (("strain", strain), ("assay_system", assay_system)):
+        observed = record.conditions.get(name)
+        if requested is not None and observed is not None and observed != requested:
+            reasons.append(f"{name}_mismatch_requires_review")
+        elif requested is not None and observed is None:
+            reasons.append(f"{name}_not_reported")
     observed_temperature = record.conditions.get("temperature_c")
     if temperature_c is not None and isinstance(observed_temperature, (int, float)):
         delta = abs(float(observed_temperature) - temperature_c)
@@ -95,4 +102,13 @@ def condition_compatibility(
             reasons.append("temperature_difference_gt_2C")
     elif temperature_c is not None:
         reasons.append("temperature_not_reported")
+    observed_ph = record.conditions.get("pH")
+    if pH is not None and isinstance(observed_ph, (int, float)):
+        delta = abs(float(observed_ph) - pH)
+        if delta > 1.0:
+            return Compatibility("incompatible", ("pH_difference_gt_1",))
+        if delta > 0.3:
+            reasons.append("pH_difference_gt_0.3_requires_review")
+    elif pH is not None:
+        reasons.append("pH_not_reported")
     return Compatibility("exact" if not reasons else "weak", tuple(reasons))

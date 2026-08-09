@@ -138,6 +138,9 @@ def search_literature_command(
             api_key_env=api_key_env,
         ),
     )
+    if output_manifest is not None:
+        write_search_manifest(output_manifest, results)
+    typer.echo(json.dumps({"query": query, "providers": provider, "results": len(results), "output_manifest": str(output_manifest) if output_manifest else None}, ensure_ascii=False, indent=2))
 
 
 @parameters_app.command("list")
@@ -194,21 +197,9 @@ def project_state(config: Path) -> None:
 def project_missing_inputs(config: Path, stage: str = typer.Option("m4", "--stage")) -> None:
     project = load_config(config)
     state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=project.parameters)
-    typer.echo(json.dumps({"stage": stage, "missing": state.missing_inputs(stage, allow_assumptions=project.execution.allow_assumptions)}, ensure_ascii=False, indent=2))
-    if output_manifest is not None:
-        write_search_manifest(output_manifest, results)
-    typer.echo(
-        json.dumps(
-            {
-                "query": query,
-                "providers": provider,
-                "results": len(results),
-                "output_manifest": str(output_manifest) if output_manifest else None,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    from igem_drylab.pipeline.config import canonical_m4_condition_id
+    condition_id = canonical_m4_condition_id(project.stages.m4_reaction)
+    typer.echo(json.dumps({"stage": stage, "missing": state.missing_inputs(stage, allow_assumptions=project.execution.allow_assumptions, condition_id=condition_id, enable_degradation=project.stages.m4_reaction.enable_degradation, require_provenance=project.execution.mode == "real" and project.execution.require_provenance)}, ensure_ascii=False, indent=2))
 
 
 @multichain_app.command("binding-equilibrium")

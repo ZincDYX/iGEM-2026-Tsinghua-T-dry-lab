@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from .kinetics import phase_concentrations
 from .multichain import solve_binding_equilibrium
+from .parameters.models import ParameterUncertainty
 
 
 class EnrichmentInput(BaseModel):
@@ -19,7 +20,7 @@ class EnrichmentInput(BaseModel):
     partition_source: str
     activity_dense: float | None = Field(default=None, ge=0)
     activity_dilute: float | None = Field(default=None, ge=0)
-    uncertainty: float | None = Field(default=None, ge=0)
+    uncertainty: ParameterUncertainty | None = None
 
 
 class EnrichmentResult(BaseModel):
@@ -30,7 +31,7 @@ class EnrichmentResult(BaseModel):
     partition_coefficient: float = Field(gt=0)
     phi: float = Field(ge=0, le=1)
     provenance: str
-    uncertainty: float | None = Field(default=None, ge=0)
+    uncertainty: ParameterUncertainty | None = None
 
 
 class RecruitmentInput(BaseModel):

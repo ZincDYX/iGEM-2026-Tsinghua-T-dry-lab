@@ -17,6 +17,8 @@ def test_wetlab_parameter_candidate_keeps_scope_and_direct_provenance():
     assert (candidate.construct_id, candidate.condition_id, candidate.derivation_type) == ("construct", "condition", "direct_measurement")
 
 
-def test_lod_loq_are_censored_qc_flags():
+def test_lod_loq_are_per_timepoint_censor_masks():
     result = WetLabResult(experiment_id="e", construct_id="c", condition_id="x", replicate_id="r", metabolite_time=[0], metabolites={"13": [0.2]}, metabolite_lod={"13": 0.3}, metabolite_loq={"13": 0.4})
-    assert {"below_detection_censored:13", "below_quantification_censored:13"} <= set(quality_control([result])[0].flags)
+    report = quality_control([result])[0]
+    assert report.censor_masks["13"] == ["below_lod"]
+    assert not any("censored:13" in flag for flag in report.flags)

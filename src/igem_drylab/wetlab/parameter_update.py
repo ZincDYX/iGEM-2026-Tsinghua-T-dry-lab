@@ -36,10 +36,10 @@ def parameter_updates_from_measurements(
     The output is intentionally *not approved*. A scientific reviewer must
     decide whether the measured quantity is a usable model parameter.
     """
-    qc_by_experiment = {report.experiment_id: report for report in qc_reports}
+    qc_by_experiment = {(report.experiment_id, report.replicate_id): report for report in qc_reports}
     updates: list[ParameterRecord] = []
     for result in results:
-        report = qc_by_experiment.get(result.experiment_id)
+        report = qc_by_experiment.get((result.experiment_id, result.replicate_id))
         if report is None or not report.passed:
             continue
         for mapping in mappings:

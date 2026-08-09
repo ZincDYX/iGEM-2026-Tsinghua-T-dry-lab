@@ -9,10 +9,11 @@ from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
+from igem_drylab.parameters.dimensions import normalize_concentration
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
 
-from .config import ConstructDefinition, ProjectConfig
+from .config import ConstructDefinition, ProjectConfig, canonical_m4_condition_id
 from .io import write_models
 from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, M4CandidateContext, M4ReactionPrediction, M5FeedbackAssessment, StageOutput
 
@@ -107,7 +108,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             continue
         construct_id = assessment.construct_id
         condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)
-        selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
+        selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
         if missing:
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic",
                 missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
@@ -175,13 +176,16 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
         else:
             construct_id = item.m4_candidate_context.construct_id
             condition_id = item.m4_candidate_context.condition_id
-            selected, missing = validate_parameters(config.parameters, requirements=m4_kinetic_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
+            selected, missing = validate_parameters(config.parameters, requirements=m4_kinetic_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
             if missing or gate_missing:
                 records.append(_m4_insufficient(item.candidate_id, config, missing + gate_missing))
                 continue
             initial = gates.initial_state
             if initial is None:
                 records.append(_m4_insufficient(item.candidate_id, config, ["initial_state"]))
+                continue
+            if config.execution.mode == "real" and (initial.x13 != 0 or initial.x15 != 0):
+                records.append(_m4_insufficient(item.candidate_id, config, ["real_mode_requires_zero_initial_x13_x15_for_net_production_semantics"]))
                 continue
             values = _glabridin_parameter_values(selected)
             values.update(_candidate_enzyme_values(item.m4_candidate_context))
@@ -196,7 +200,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             side_product_fraction = delta_13 / (delta_13 + delta_15) if delta_13 + delta_15 > 0 else 0.0
             trajectory = stage_dir / f"{item.candidate_id}_trajectory.json"
             trajectory.parent.mkdir(parents=True, exist_ok=True)
-            trajectory.write_text(json.dumps({"time_unit": "h", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
+            trajectory.write_text(json.dumps({"time_unit": "h", "concentration_unit": "uM", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
             recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, delta_15 / gates.t_end, baseline_13 - initial.x13, delta_13, delta_15, baseline_15 - initial.x15, gates)
             records.append(M4ReactionPrediction(candidate_id=item.candidate_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality(selected.values()),
                 final_15=final_15, final_13=final_13, side_product_fraction_13=side_product_fraction, leakage_fraction=side_product_fraction, productivity=delta_15 / gates.t_end,
@@ -223,9 +227,12 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
         prepared = []
         for result, report in zip(results, reports):
             prediction = prediction_by_context.get((result.construct_id, result.condition_id))
-            comparisons = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else {}
-            censored = {flag.rsplit(":", 1)[-1] for flag in report.flags if flag.startswith(("below_detection_censored:", "below_quantification_censored:"))}
-            usable = [item for item in comparisons.values() if item.comparison_status in {"trajectory_aligned", "endpoint_only"} and item.metabolite_id not in censored]
+            try:
+                comparisons = compare_prediction(prediction.trajectory_artifact, result) if prediction and prediction.trajectory_artifact else {}
+            except ValueError as error:
+                comparisons = {}
+                report.flags.append(f"comparison_contract_error:{error}")
+            usable = [item for item in comparisons.values() if item.comparison_status in {"trajectory_aligned", "endpoint_only"}]
             evidence = _joint_diagnosis_evidence(result, comparisons, variations)
             residuals = [item["residual_final"] for item in evidence.values() if item["residual_final"] is not None]
             trends = [item["trend_agreement"] for item in evidence.values() if item["trend_agreement"] is not None]
@@ -235,14 +242,24 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
             variation = max(variations_for_result) if variations_for_result else None
             comparison_status = "joint_13_15" if set(evidence) == {"13", "15"} else (next(iter(evidence.values()))["comparison_status"] if evidence else ("unmatched_condition" if prediction is None else "no_observed_metabolite"))
             prepared.append((result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable))
-        systematic_rows = [(result.construct_id, result.condition_id, metabolite, comparison.residual_final, report.passed and metabolite not in {flag.rsplit(":", 1)[-1] for flag in report.flags if flag.startswith(("below_detection_censored:", "below_quantification_censored:"))}) for result, report, comparisons, *_ in prepared for metabolite, comparison in comparisons.items()]
+        systematic_rows = [
+            (result.construct_id, result.condition_id, metabolite, comparison.residual_final,
+             report.passed and comparison.residual_final is not None and _residual_exceeds_tolerance(
+                 {metabolite: _joint_diagnosis_evidence(result, comparisons, variations)[metabolite]},
+                 config.stages.m5_feedback.absolute_residual_tolerance,
+                 config.stages.m5_feedback.relative_residual_tolerance,
+             ))
+            for result, report, comparisons, *_ in prepared
+            for metabolite, comparison in comparisons.items()
+        ]
         systematic = systematic_directional_errors(systematic_rows)
         fit_groups = _aggregate_fit_groups(results)
         fitted_by_group: dict[tuple[str, str], dict[str, object] | None] = {}
         for result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable in prepared:
             systematic_error = any((result.construct_id, metabolite) in systematic for metabolite in comparisons)
             systematic_error = systematic_error and _residual_exceeds_tolerance(evidence, config.stages.m5_feedback.absolute_residual_tolerance, config.stages.m5_feedback.relative_residual_tolerance)
-            diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic_error)
+            significant = _residual_exceeds_tolerance(evidence, config.stages.m5_feedback.absolute_residual_tolerance, config.stages.m5_feedback.relative_residual_tolerance)
+            diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic_error, significant_residual=significant)
             joint_diagnosis = _joint_diagnosis_label(evidence, diagnosis.category)
             group_key = (result.construct_id, result.condition_id)
             if group_key not in fitted_by_group:
@@ -348,16 +365,8 @@ def _recommend_m4(side_product_fraction: float, productivity: float, baseline_13
     return "iterate", ["baseline_improvement_criteria_not_met"]
 
 
-def _condition_id(gates: object) -> str:
-    def encode(name: str, gate: object) -> str:
-        return f"{name}[on={gate.on_time:g},off={gate.off_time},basal={gate.basal:g},induced={gate.induced:g},mode={gate.mode},width={gate.transition_width:g}]"
-    return "|".join((encode("pt", gates.pt_gate), encode("oc", gates.oc_gate), encode("dmt", gates.dmt_gate)))
-
-
 def _condition_id_if_defined(gates: object) -> str:
-    if all(getattr(gates, name) is not None for name in ("pt_gate", "oc_gate", "dmt_gate")):
-        return _condition_id(gates)
-    return "unresolved"
+    return canonical_m4_condition_id(gates) or "unresolved"
 
 
 def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], variations: dict[tuple[str, str, str, float], float | None]) -> dict[str, dict[str, object]]:
@@ -374,6 +383,7 @@ def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], va
             "observed_final": comparison.observed_final,
             "predicted_final": comparison.predicted_final,
             "measurement_uncertainty": result.metabolite_uncertainty.get(metabolite, [None])[-1] if result.metabolite_uncertainty.get(metabolite) else None,
+            "measurement_uncertainty_type": result.metabolite_uncertainty_type,
             "trend_agreement": comparison.trend_agreement,
             "replicate_variation": variations.get((result.construct_id, result.condition_id, metabolite, time_h)) if time_h is not None else None,
             "fit_status": comparison.fit.status if comparison.fit else None,
@@ -406,7 +416,8 @@ def _residual_exceeds_tolerance(evidence: dict[str, dict[str, object]], absolute
         if residual is None:
             continue
         scale = max(abs(float(item.get("observed_final") or 0)), abs(float(item.get("predicted_final") or 0)), 1e-12)
-        uncertainty = float(item.get("measurement_uncertainty") or 0)
+        raw_uncertainty = float(item.get("measurement_uncertainty") or 0)
+        uncertainty = raw_uncertainty * 1.96 if item.get("measurement_uncertainty_type") == "sem" else raw_uncertainty
         if abs(float(residual)) > absolute + relative * scale + uncertainty:
             return True
     return False
@@ -421,12 +432,17 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
     if plan.parameter_name in {"recruitment_fraction", "site_occupancy", "docking_score", "structure_score"}:
         return {"fit": None, "candidate": None, "warning": "FitPlan parameter is not a mechanistic M4 parameter"}
     observed: list[float] = []
-    times: list[float] = []
+    fit_points: list[tuple[str, float]] = []
     for observable in plan.observables:
         values = result.metabolites.get(observable)
-        if values is not None:
-            observed.extend(values); times.extend(result.time_hours())
-    if len(observed) < 4 or len(times) != len(observed):
+        comparison = comparisons.get(observable)
+        if values is None or comparison is None or result.metabolite_concentration_unit is None:
+            continue
+        for value, time_h, censor in zip(values, result.time_hours(), comparison.censor_mask, strict=True):
+            if censor == "quantified":
+                observed.append(normalize_concentration(value, result.metabolite_concentration_unit))
+                fit_points.append((observable, time_h))
+    if len(observed) < 4 or len(fit_points) != len(observed):
         return {"fit": None, "candidate": None, "warning": "identifiability_warning:fewer_than_four_declared_observations"}
     values = dict(prediction.simulation_inputs["parameters"])
     if plan.parameter_name not in values or plan.parameter_name in plan.fixed_parameter_names:
@@ -435,7 +451,7 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
     def predictor(value: float) -> np.ndarray:
         changed = dict(values); changed[plan.parameter_name] = value
         simulation = simulate_glabridin(GlabridinKineticParameters(**changed), pt_gate=InductionGate(**{k: v for k, v in inputs["pt_gate"].items() if k != "time_unit"}), oc_gate=InductionGate(**{k: v for k, v in inputs["oc_gate"].items() if k != "time_unit"}), dmt_gate=InductionGate(**{k: v for k, v in inputs["dmt_gate"].items() if k != "time_unit"}), initial=tuple(inputs["initial"][f"x{key}"] for key in ("9", "10", "11", "13", "15")), t_end=inputs["t_end"])
-        return np.concatenate([np.interp(result.time_hours(), simulation.time, getattr(simulation, f"x{observable}")) for observable in plan.observables if result.metabolites.get(observable) is not None])
+        return np.asarray([np.interp(time_h, simulation.time, getattr(simulation, f"x{observable}")) for observable, time_h in fit_points])
     try:
         # The input is an aggregate trajectory. Time points are correlated, so they
         # are not valid IID bootstrap units. A replicate-block bootstrap requires

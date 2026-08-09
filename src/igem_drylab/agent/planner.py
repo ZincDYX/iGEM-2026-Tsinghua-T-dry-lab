@@ -78,9 +78,10 @@ class RuleBasedDryLabPlanner:
             return False
         registry = ParameterRegistry(config.parameters)
         construct_id = task.inputs.get("construct_id") if isinstance(task.inputs.get("construct_id"), str) else None
-        condition_id = task.inputs.get("condition_id") if isinstance(task.inputs.get("condition_id"), str) else config.stages.m4_reaction.condition_id
+        from igem_drylab.pipeline.config import canonical_m4_condition_id
+        condition_id = task.inputs.get("condition_id") if isinstance(task.inputs.get("condition_id"), str) else canonical_m4_condition_id(config.stages.m4_reaction)
         requirements = m4_requirements(include_degradation=config.stages.m4_reaction.enable_degradation)
-        missing = [item.name for item in requirements if resolve_requirement(registry, item, config.experimental_context, allow_assumptions=config.execution.allow_assumptions, construct_id=construct_id, condition_id=condition_id).status != "resolved"]
+        missing = [item.name for item in requirements if resolve_requirement(registry, item, config.experimental_context, allow_assumptions=config.execution.allow_assumptions, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance).status != "resolved"]
         max_queries = int(task.inputs.get("max_literature_queries", 3))
         evidence_path = task.inputs.get("evidence_database_path")
         for index, name in enumerate(missing[:max_queries]):

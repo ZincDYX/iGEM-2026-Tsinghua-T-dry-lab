@@ -9,6 +9,13 @@ _RATE_TO_PER_HOUR = {"1/h": 1.0, "h^-1": 1.0, "h-1": 1.0, "1/min": 60.0, "1/s": 
 _DIMENSIONLESS = {"1", "dimensionless", None}
 
 
+def normalize_concentration(value: float, unit: str | None) -> float:
+    """Convert a declared concentration to the production canonical unit (uM)."""
+    if unit not in _CONCENTRATION:
+        raise ValueError(f"unsupported_concentration_unit:{unit}")
+    return float(value) * _CONCENTRATION[unit]
+
+
 def normalize_for_requirement(value: float, unit: str | None, requirement: ParameterRequirement) -> float:
     """Return a canonical numeric value or raise; never infer dimensions."""
     if requirement.dimension == "dimensionless":

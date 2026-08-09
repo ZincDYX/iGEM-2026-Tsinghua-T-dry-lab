@@ -123,6 +123,7 @@ class RecruitmentConfig(StrictScientificConfig):
 
 
 class InitialStateConfig(StrictScientificConfig):
+    concentration_unit: Literal["uM"] = "uM"
     x9: float = Field(ge=0)
     x10: float = Field(default=0, ge=0)
     x11: float = Field(default=0, ge=0)
@@ -156,6 +157,18 @@ class M4Config(StrictScientificConfig):
     min_15_improvement: float = Field(default=0, ge=-1)
     min_productivity: float = Field(default=0, ge=0)
     enable_degradation: bool = False
+
+
+def canonical_m4_condition_id(config: M4Config) -> str | None:
+    """Stable condition scope shared by M3/M4, MCP, agent and ProjectState."""
+    if config.condition_id:
+        return config.condition_id
+    gates = (config.pt_gate, config.oc_gate, config.dmt_gate)
+    if any(gate is None for gate in gates):
+        return None
+    def encode(name: str, gate: InductionGateConfig) -> str:
+        return f"{name}[on={gate.on_time:g},off={gate.off_time},basal={gate.basal:g},induced={gate.induced:g},mode={gate.mode},width={gate.transition_width:g}]"
+    return "|".join(encode(name, gate) for name, gate in zip(("pt", "oc", "dmt"), gates, strict=True))
 
 
 class FitPlanConfig(StrictScientificConfig):

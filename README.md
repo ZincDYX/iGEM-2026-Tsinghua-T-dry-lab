@@ -83,6 +83,8 @@ Before pilot ingestion, use the typed evidence contracts for enzyme kinetics, LL
 
 Production ingestion is: raw source → typed Evidence → `map_evidence_to_requirement` (identity/unit validation) → extracted ParameterCandidate → human validation/approval → scoped Registry. Phase-specific residual activity uses `PhaseActivityEvidence`; no evidence path can auto-approve a parameter.
 
+M4/M5 production quantities have a strict unit contract: concentrations are `uM`, time is `h`, and rates are `1/h`. M4 trajectory JSON explicitly declares both units. Wet-lab comparisons convert declared `M`/`mM`/`uM`/`nM` observations to `uM`; unsupported or missing units are a comparison-contract failure, not an implicit numeric comparison. LOD/LOQ are applied per timepoint, so a 0 h value below LOD does not discard later quantified observations.
+
 ## Build a literature extraction prompt
 
 This command does not call an LLM. It only builds the schema-first prompt.

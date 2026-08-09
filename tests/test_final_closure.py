@@ -9,8 +9,8 @@ from igem_drylab.wetlab import replicate_variation
 
 def test_wetlab_time_and_horizon_are_explicit(tmp_path):
     trajectory = tmp_path / "trajectory.json"
-    trajectory.write_text(json.dumps({"time_unit": "h", "time": [0, 4], "x13": [0, 2], "x15": [0, 4]}), encoding="utf-8")
-    minute = WetLabResult(experiment_id="e", construct_id="c", condition_id="x", replicate_id="r", metabolite_time=[0, 240], metabolite_time_unit="min", metabolites={"13": [0, 2]})
+    trajectory.write_text(json.dumps({"time_unit": "h", "concentration_unit": "uM", "time": [0, 4], "x13": [0, 2], "x15": [0, 4]}), encoding="utf-8")
+    minute = WetLabResult(experiment_id="e", construct_id="c", condition_id="x", replicate_id="r", metabolite_time=[0, 240], metabolite_time_unit="min", metabolite_concentration_unit="uM", metabolites={"13": [0, 2]})
     assert compare_prediction(trajectory, minute)["13"].comparison_status == "trajectory_aligned"
     outside = minute.model_copy(update={"metabolite_time": [0, 300]})
     assert compare_prediction(trajectory, outside)["13"].comparison_status == "measurement_outside_simulation_horizon"

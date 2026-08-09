@@ -22,10 +22,10 @@ class ProjectState(BaseModel):
     unresolved_conflicts: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
 
-    def missing_inputs(self, stage: str, *, allow_assumptions: bool = False, construct_id: str | None = None, condition_id: str | None = None, enable_degradation: bool = False) -> list[str]:
+    def missing_inputs(self, stage: str, *, allow_assumptions: bool = False, construct_id: str | None = None, condition_id: str | None = None, enable_degradation: bool = False, require_provenance: bool = False) -> list[str]:
         requirements = m3_requirements() if stage == "m3" else m4_requirements(include_degradation=enable_degradation) if stage == "m4" else []
         registry = ParameterRegistry(self.approved_parameters)
-        return [item.name for item in requirements if resolve_requirement(registry, item, self.experimental_context, allow_assumptions=allow_assumptions, construct_id=construct_id, condition_id=condition_id).status != "resolved"]
+        return [item.name for item in requirements if resolve_requirement(registry, item, self.experimental_context, allow_assumptions=allow_assumptions, construct_id=construct_id, condition_id=condition_id, require_provenance=require_provenance).status != "resolved"]
 
     def approve_parameter(self, candidate: ParameterRecord, *, reviewer: str) -> "ProjectState":
         """Return updated state; persistence remains an explicit caller action."""

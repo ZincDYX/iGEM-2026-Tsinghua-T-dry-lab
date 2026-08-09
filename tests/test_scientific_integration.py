@@ -26,7 +26,7 @@ def test_synthetic_m1_to_m5_workflow_has_no_network(tmp_path):
     requirements = {item.name: item for item in m4_requirements()}
     config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit=requirements[name].canonical_unit, parameter_type=requirements[name].parameter_type, enzyme_id=requirements[name].enzyme_id, substrate_id=requirements[name].substrate_id, product_id=requirements[name].product_id, source_type="assumption", source_reference="synthetic integration fixture", review_status="approved") for name, value in values.items()]
     wetlab = tmp_path / "wetlab.json"
-    wetlab.write_text(json.dumps([{"experiment_id": "e", "construct_id": "M1-FTH1-pgl3_3x_ggggs", "condition_id": "c", "replicate_id": "1", "metabolite_time": [0, 1], "metabolites": {"15": [0, 1]}, "control_available": True, "biological_replicate_count": 2}]), encoding="utf-8")
+    wetlab.write_text(json.dumps([{"experiment_id": "e", "construct_id": "M1-FTH1-pgl3_3x_ggggs", "condition_id": "c", "replicate_id": "1", "metabolite_time": [0, 1], "metabolite_concentration_unit": "uM", "metabolites": {"15": [0, 1]}, "control_available": True, "biological_replicate_count": 2}]), encoding="utf-8")
     config.stages.m5_feedback.wetlab_results_file = wetlab
     manifest = run_pipeline(config)
     assert [item.stage for item in manifest.stages] == ["m1_construct_screen", "m2_structure_screen", "m3_enrichment", "m4_glabridin_kinetics", "m5_wetlab_feedback"]
