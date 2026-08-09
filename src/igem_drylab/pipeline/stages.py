@@ -234,12 +234,20 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
             prepared.append((result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable))
         systematic_rows = [(result.construct_id, result.condition_id, metabolite, comparison.residual_final, report.passed) for result, report, comparisons, *_ in prepared for metabolite, comparison in comparisons.items()]
         systematic = systematic_directional_errors(systematic_rows)
+        fit_groups = _aggregate_fit_groups(results)
+        fitted_by_group: dict[tuple[str, str], dict[str, object] | None] = {}
         for result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable in prepared:
             systematic_error = any((result.construct_id, metabolite) in systematic for metabolite in comparisons)
             systematic_error = systematic_error and _residual_exceeds_tolerance(evidence, config.stages.m5_feedback.absolute_residual_tolerance, config.stages.m5_feedback.relative_residual_tolerance)
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic_error)
             joint_diagnosis = _joint_diagnosis_label(evidence, diagnosis.category)
-            fitted = _fit_plan_candidate(config, prediction, result, comparisons)
+            group_key = (result.construct_id, result.condition_id)
+            if group_key not in fitted_by_group:
+                aggregate = fit_groups.get(group_key)
+                aggregate_prediction = prediction_by_context.get(group_key)
+                aggregate_comparisons = compare_prediction(aggregate_prediction.trajectory_artifact, aggregate) if aggregate and aggregate_prediction and aggregate_prediction.trajectory_artifact else {}
+                fitted_by_group[group_key] = _fit_plan_candidate(config, aggregate_prediction, aggregate, aggregate_comparisons) if aggregate else None
+            fitted = fitted_by_group[group_key]
             records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and usable else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=joint_diagnosis, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fitted.get("fit") if fitted else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, diagnosis_evidence=evidence, fitted_parameter_candidate=fitted.get("candidate") if fitted else None, next_measurement="measure OC/DMT abundance and metabolite time course" if joint_diagnosis != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}; diagnosis_metabolites={','.join(item.metabolite_id for item in usable)}."))
     write_models(stage_dir, "feedback", records)
     return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
@@ -424,3 +432,20 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
         return {"fit": None, "candidate": None, "warning": "FitPlan parameter is not an approved M4 requirement"}
     candidate = ParameterRecord(parameter_id=f"fit:{prediction.candidate_id}:{prediction.condition_id}:{plan.parameter_name}", name=requirement.name, value=fit.best_fit, unit=requirement.canonical_unit, parameter_type=requirement.parameter_type, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, source_type="wetlab", derivation_type="model_fit", source_reference=result.experiment_id, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, derived_from=prediction.parameter_ids, notes="model_fit derived from wet-lab observations; human approval is required before registry use.")
     return {"fit": fit.model_dump(), "candidate": candidate.model_dump(mode="json")}
+
+
+def _aggregate_fit_groups(results: list[object]) -> dict[tuple[str, str], object]:
+    """Mean biological replicates only when their time grids are identical; otherwise no fit dataset."""
+    groups: dict[tuple[str, str], list[object]] = {}
+    for result in results:
+        groups.setdefault((result.construct_id, result.condition_id), []).append(result)
+    aggregated: dict[tuple[str, str], object] = {}
+    for key, records in groups.items():
+        reference = records[0]
+        if len(records) < 2 or any(record.time_hours() != reference.time_hours() for record in records[1:]):
+            continue
+        shared = set.intersection(*(set(record.metabolites) for record in records))
+        metabolites = {name: [float(np.mean([record.metabolites[name][index] for record in records])) for index in range(len(reference.metabolites[name]))] for name in shared if all(len(record.metabolites[name]) == len(reference.metabolites[name]) for record in records)}
+        if metabolites:
+            aggregated[key] = reference.model_copy(update={"experiment_id": f"fit_group:{key[0]}:{key[1]}", "replicate_id": "biological_mean", "metabolites": metabolites, "biological_replicate_count": len(records)})
+    return aggregated
