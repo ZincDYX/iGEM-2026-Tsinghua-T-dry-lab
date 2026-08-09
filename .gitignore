@@ -9,6 +9,7 @@ results/
 outputs/
 outputs_test/
 outputs*/
+*.qa_embeddings.json
 third_party/downloads/
 .env
 .env.*
