@@ -46,7 +46,7 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
         if config.execution.mode == "demo" and features is not None:
             priority = round(max(0.0, 1.0 - 0.45 * len(flags) - 0.55 * float(features["hydrophobic_fraction"])), 3)
         candidates.append(M1Candidate(
-            candidate_id=f"M1-{definition.id}", construct_definition=definition.model_dump(), scaffold_id=definition.scaffold_id,
+            candidate_id=f"M1-{definition.id}", construct_id=definition.id, construct_definition=definition.model_dump(), scaffold_id=definition.scaffold_id,
             linker_id=linker_id, idr_id=config.inputs.idr_id, linker_features=features, screen_flags=flags,
             engineering_priority_score=priority, recommended_for_m2=not flags,
             status="valid" if not flags else "insufficient_data",
@@ -70,7 +70,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     for candidate in candidates:
         if not candidate.recommended_for_m2:
             assessments.append(M2FusionAssessment(
-                candidate_id=candidate.candidate_id, construct_definition=candidate.construct_definition, status="insufficient_data",
+                candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, status="insufficient_data",
                 data_quality=candidate.data_quality, missing_inputs=["M1 construct screen must pass"],
                 recommended_next_action=["resolve M1 screen flags before structural prediction"], notes="M2 skipped after M1 negative screen.",
             ))
@@ -78,7 +78,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
         row = metrics.get(candidate.candidate_id)
         if row is None:
             assessments.append(M2FusionAssessment(
-                candidate_id=candidate.candidate_id, construct_definition=candidate.construct_definition, status="insufficient_data",
+                candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, status="insufficient_data",
                 data_quality="demo_fixture" if config.execution.mode == "demo" else "predicted",
                 structure_model=adapter.describe("abcfold predict <input>").tool,
                 missing_inputs=["structure metrics: SASA, pocket RMSD, clashes, ipTM, pLDDT"],
@@ -87,7 +87,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             continue
         scored = score_m2_structure(row)
         assessments.append(M2FusionAssessment(
-            candidate_id=candidate.candidate_id, construct_definition=candidate.construct_definition, structure_model=adapter.describe("abcfold predict <input>").tool,
+            candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, structure_model=adapter.describe("abcfold predict <input>").tool,
             status=scored.status, data_quality="predicted", available_metrics=scored.available_metrics, missing_metrics=scored.missing_metrics,
             confidence_level="complete" if not scored.missing_metrics else "partial", heuristic_structure_risk=scored.heuristic_structure_risk,
             pocket_sasa_retention=row.sasa_retention, pocket_rmsd_angstrom=row.pocket_rmsd_angstrom, clash_count=row.clash_count,
@@ -106,11 +106,11 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
     for assessment in assessments:
         if not assessment.recommended_for_m3:
             continue
-        construct_id = assessment.candidate_id.removeprefix("M1-")
+        construct_id = assessment.construct_id
         condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)
         selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id)
         if missing:
-            records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="insufficient_data", data_quality="heuristic",
+            records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic",
                 missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
                 notes="M3 does not infer partitioning from M1/M2 scores."))
             continue
@@ -128,10 +128,10 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             enzyme = entry.enzyme_id
             hill = selected[entry.hill_coefficient_parameter].canonical_value if entry.hill_coefficient_parameter else config.stages.m3_concentration.hill_coefficient
             if config.stages.m3_concentration.binding_model == "hill" and hill is None:
-                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient or switch to independent binding model"], notes="Hill recruitment was not calculated without an explicit reviewed value or allowed assumption."))
+                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient or switch to independent binding model"], notes="Hill recruitment was not calculated without an explicit reviewed value or allowed assumption."))
                 break
             if config.stages.m3_concentration.binding_model == "hill" and entry.hill_coefficient_parameter is None and not config.execution.allow_assumptions:
-                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient"], notes="Config Hill coefficient is an assumption and is disabled in real mode."))
+                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient"], notes="Config Hill coefficient is an assumption and is disabled in real mode."))
                 break
             recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=selected[entry.enzyme_total_parameter].canonical_value, site_total=selected[entry.site_total_parameter].canonical_value, kd=selected[entry.kd_parameter].canonical_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=hill))
             recruitment[enzyme] = recruitment_result.recruited_fraction; occupancy[enzyme] = recruitment_result.site_occupancy
@@ -146,7 +146,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             parameter_ids=sorted(resolution.selected_parameter.parameter_id for resolution in selected.values() if resolution.selected_parameter),
             assumptions=["rapid_partition_equilibrium", "enzyme distribution is computed from approved abundance and Kp; recruitment is reported separately and does not modify kcat or abundance"],
         )
-        records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="valid", data_quality=_data_quality(selected.values()),
+        records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="valid", data_quality=_data_quality(selected.values()),
             concentrations={key: value.model_dump() for key, value in result.items()},
             dense_oc_dmt_ratio=oc.dense_concentration / dmt.dense_concentration if dmt.dense_concentration else None,
             whole_cell_oc_dmt_ratio=selected["oc_total"].canonical_value / selected["dmt_total"].canonical_value if selected["dmt_total"].canonical_value else None,

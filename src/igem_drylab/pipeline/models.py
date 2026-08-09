@@ -37,6 +37,7 @@ class PipelineManifest(BaseModel):
 
 class M1Candidate(ScientificResult):
     candidate_id: str
+    construct_id: str
     construct_definition: dict[str, Any]
     scaffold_id: str | None = None
     linker_id: str | None = None
@@ -50,6 +51,7 @@ class M1Candidate(ScientificResult):
 
 class M2FusionAssessment(ScientificResult):
     candidate_id: str
+    construct_id: str
     construct_definition: dict[str, Any]
     structure_model: str | None = None
     available_metrics: list[str] = Field(default_factory=list)
@@ -66,6 +68,7 @@ class M2FusionAssessment(ScientificResult):
 
 class M3ConcentrationAssessment(ScientificResult):
     candidate_id: str
+    construct_id: str
     concentrations: dict[str, dict[str, Any]] = Field(default_factory=dict)
     dense_oc_dmt_ratio: float | None = Field(default=None, ge=0)
     whole_cell_oc_dmt_ratio: float | None = Field(default=None, ge=0)
