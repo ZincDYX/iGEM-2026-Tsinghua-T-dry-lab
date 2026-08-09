@@ -25,6 +25,9 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert "No matching local evidence found." in PAGE
     assert "Evidence database unavailable." in PAGE
     assert "innerHTML" not in PAGE
+    assert "AGENT TOOL" not in PAGE
+    assert "Retrieval</b> → Review → Approval" not in PAGE
+    assert 'class="help"' in PAGE
 
 
 def test_health_contract_is_unchanged(tmp_path: Path) -> None:
