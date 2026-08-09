@@ -72,9 +72,9 @@ class ParameterRegistry:
             if record.construct_id == construct_id and record.condition_id is None and construct_id is not None: return 1
             if record.construct_id is None and record.condition_id == condition_id and condition_id is not None: return 2
             return 3
-        ranked = sorted(compatible, key=lambda pair: (scope_rank(pair[0]), {"wetlab": 0, "literature": 1, "prediction": 2, "assumption": 3}[pair[0].source_type], -pair[0].parameter_version, pair[0].parameter_id))
+        ranked = sorted(compatible, key=lambda pair: (scope_rank(pair[0]), evidence_priority(pair[0]), -pair[0].parameter_version, pair[0].parameter_id))
         best, value = ranked[0]
-        tied = [pair for pair in ranked if scope_rank(pair[0]) == scope_rank(best) and pair[0].source_type == best.source_type and pair[0].parameter_version == best.parameter_version]
+        tied = [pair for pair in ranked if scope_rank(pair[0]) == scope_rank(best) and evidence_priority(pair[0]) == evidence_priority(best) and pair[0].parameter_version == best.parameter_version]
         if len({round(pair[1], 12) for pair in tied}) > 1:
             return ParameterResolution(status="conflict", alternatives=[pair[0] for pair in tied], reasons=["conflicting_equally_ranked_compatible_records"])
         return ParameterResolution(status="resolved", selected_parameter=best, canonical_value=value, alternatives=[pair[0] for pair in ranked[1:]], reasons=["approved_exact_identity_condition_dimension_and_scope_match"])
@@ -102,6 +102,15 @@ class ParameterRegistry:
     @classmethod
     def from_jsonl(cls, path: Path) -> "ParameterRegistry": return cls([ParameterRecord.model_validate_json(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()])
     def to_jsonl(self, path: Path) -> None: path.write_text("\n".join(item.model_dump_json() for item in self._records) + "\n", encoding="utf-8")
+
+
+def evidence_priority(record: ParameterRecord) -> int:
+    """Central production evidence policy; lower is stronger and ties conflict."""
+    if record.source_type == "wetlab":
+        return 0 if record.derivation_type == "direct_measurement" else 1
+    if record.source_type == "literature":
+        return 2 if record.derivation_type != "literature_extraction" else 3
+    return 4 if record.source_type == "prediction" else 5
 
 
 def validate_parameters(records: list[ParameterRecord], *, requirements: list[ParameterRequirement] | None = None, required_names: set[str] | None = None, allow_assumptions: bool = False, host: str | None = None, temperature_c: float | None = None, construct_id: str | None = None, condition_id: str | None = None) -> tuple[dict[str, ParameterResolution], list[str]]:
