@@ -77,12 +77,15 @@ class RuleBasedDryLabPlanner:
         if config is None or not requested or "igem.parameters.resolve" not in available_tools:
             return False
         registry = ParameterRegistry(config.parameters)
-        missing = [item.name for item in m4_requirements() if resolve_requirement(registry, item, config.experimental_context, allow_assumptions=config.execution.allow_assumptions).status != "resolved"]
+        construct_id = task.inputs.get("construct_id") if isinstance(task.inputs.get("construct_id"), str) else None
+        condition_id = task.inputs.get("condition_id") if isinstance(task.inputs.get("condition_id"), str) else config.stages.m4_reaction.condition_id
+        requirements = m4_requirements(include_degradation=config.stages.m4_reaction.enable_degradation)
+        missing = [item.name for item in requirements if resolve_requirement(registry, item, config.experimental_context, allow_assumptions=config.execution.allow_assumptions, construct_id=construct_id, condition_id=condition_id).status != "resolved"]
         max_queries = int(task.inputs.get("max_literature_queries", 3))
         evidence_path = task.inputs.get("evidence_database_path")
         for index, name in enumerate(missing[:max_queries]):
             resolve_id = f"resolve_{name}"
-            steps.append(PlanStep(step_id=resolve_id, objective=f"Resolve approved parameter '{name}' from the registry.", tool_name="igem.parameters.resolve", arguments={"config_path": task.inputs.get("config_path"), "stage": "m4", "requirement_name": name}, depends_on=dependencies, priority=96, rationale="Only approved, identity-compatible registry records can enter real M4."))
+            steps.append(PlanStep(step_id=resolve_id, objective=f"Resolve approved parameter '{name}' from the registry.", tool_name="igem.parameters.resolve", arguments={"config_path": task.inputs.get("config_path"), "stage": "m4", "requirement_name": name, "construct_id": construct_id, "condition_id": condition_id}, depends_on=dependencies, priority=96, rationale="Only approved, identity-compatible registry records can enter real M4."))
             if isinstance(evidence_path, str) and "igem.literature.qa" in available_tools:
                 steps.append(PlanStep(step_id=f"find_evidence_{name}", objective=f"Retrieve local evidence relevant to missing parameter '{name}'.", tool_name="igem.literature.qa", arguments={"question": f"Find evidence for parameter {name}; preserve enzyme/substrate/condition identity and DOI.", "evidence_path": evidence_path, "top_k": 5}, depends_on=[resolve_id], run_conditions=[ResultCondition(source_step_id=resolve_id, source_path=["structuredContent", "resolution", "status"], allowed_values=["missing", "conflict", "needs_review"])], priority=90, rationale="Evidence retrieval creates a review candidate, never an automatic parameter update."))
         if missing:

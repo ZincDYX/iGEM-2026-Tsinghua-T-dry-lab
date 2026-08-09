@@ -25,6 +25,9 @@ def quality_control(records: list[WetLabResult]) -> list[QcReport]:
         for species, values in record.metabolites.items():
             if len(values) != len(record.metabolite_time): flags.append(f"time_length_mismatch:{species}")
             if any(value < 0 for value in values): flags.append(f"negative_metabolite:{species}")
+            lod = record.metabolite_lod.get(species); loq = record.metabolite_loq.get(species)
+            if lod is not None and any(value < lod for value in values): flags.append(f"below_detection_censored:{species}")
+            if loq is not None and any(value < loq for value in values): flags.append(f"below_quantification_censored:{species}")
         if any(value < 0 for value in record.protein_abundance.values()): flags.append("negative_protein_abundance")
         reports.append(QcReport(experiment_id=record.experiment_id, passed=not any(flag.startswith(("negative", "metabolite_time", "time_length")) for flag in flags), flags=flags))
     _flag_replicate_outliers(records, reports)
