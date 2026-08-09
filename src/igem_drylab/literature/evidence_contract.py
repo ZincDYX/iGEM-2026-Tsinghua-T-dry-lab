@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel, Field
 from igem_drylab.parameters import ParameterRecord
+from igem_drylab.parameters.requirements import ParameterRequirement
+from igem_drylab.parameters.dimensions import normalize_for_requirement
 
 
 class EvidenceMetadata(BaseModel):
@@ -46,6 +48,27 @@ class ProteinAbundanceEvidence(QuantitativeEvidence):
 class RecruitmentBindingEvidence(QuantitativeEvidence):
     enzyme_id: str | None = None
     parameter: Literal["kd", "site_abundance", "hill_coefficient"]
+
+
+class PhaseActivityEvidence(QuantitativeEvidence):
+    enzyme_id: str
+    phase: Literal["dense", "dilute"]
+    parameter: Literal["residual_activity"] = "residual_activity"
+
+
+def map_evidence_to_requirement(evidence: QuantitativeEvidence, requirement: ParameterRequirement) -> ParameterRecord:
+    """Validate typed evidence against one declared requirement and create an extracted candidate."""
+    enzyme = getattr(evidence, "enzyme_id", None)
+    substrate = getattr(evidence, "substrate_id", None)
+    product = getattr(evidence, "product_id", None)
+    if requirement.enzyme_id and enzyme != requirement.enzyme_id:
+        raise ValueError("evidence enzyme identity does not match requirement")
+    if requirement.substrate_id and substrate != requirement.substrate_id:
+        raise ValueError("evidence substrate identity does not match requirement")
+    if requirement.product_id and product != requirement.product_id:
+        raise ValueError("evidence product identity does not match requirement")
+    normalize_for_requirement(evidence.value, evidence.unit, requirement)
+    return evidence_to_parameter_candidate(evidence, requirement_name=requirement.name, parameter_type=requirement.parameter_type, canonical_unit=requirement.canonical_unit, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id)
 
 
 def evidence_to_parameter_candidate(evidence: QuantitativeEvidence, *, requirement_name: str, parameter_type: str, canonical_unit: str, enzyme_id: str | None = None, substrate_id: str | None = None, product_id: str | None = None) -> ParameterRecord:
