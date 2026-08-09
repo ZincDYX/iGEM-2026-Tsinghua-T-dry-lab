@@ -220,14 +220,15 @@ class GlabridinKineticParameters:
     partition_9: float
     partition_10: float
     partition_11: float
-    partition_13: float
-    partition_15: float
     activity_dense_pt: float
     activity_dilute_pt: float
     activity_dense_oc: float
     activity_dilute_oc: float
     activity_dense_dmt: float
     activity_dilute_dmt: float
+    # Deprecated compatibility aliases; production equations do not consume them.
+    partition_13: float = 1.0
+    partition_15: float = 1.0
     kdeg_9: float = 0.0
     kdeg_10: float = 0.0
     kdeg_11: float = 0.0
@@ -242,7 +243,7 @@ class GlabridinKineticParameters:
             raise ValueError("glabridin parameters must be nonnegative")
         if any(value == 0 for value in (self.km_pt, self.km_oc, self.km_dmt_9, self.km_dmt_11)):
             raise ValueError("Km values must be positive")
-        if any(value <= 0 for value in (self.partition_pt, self.partition_oc, self.partition_dmt, self.partition_9, self.partition_10, self.partition_11, self.partition_13, self.partition_15)):
+        if any(value <= 0 for value in (self.partition_pt, self.partition_oc, self.partition_dmt, self.partition_9, self.partition_10, self.partition_11)):
             raise ValueError("partition coefficients must be positive")
 
 

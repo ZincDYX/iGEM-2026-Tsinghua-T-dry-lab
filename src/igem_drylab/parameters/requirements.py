@@ -51,7 +51,7 @@ def m4_requirements(*, include_degradation: bool = False) -> list[ParameterRequi
         _requirement("km_dmt_9", "km", enzyme_id="DMT", substrate_id="9"),
         _requirement("kcat_dmt_11", "kcat", enzyme_id="DMT", substrate_id="11", product_id="15"),
         _requirement("km_dmt_11", "km", enzyme_id="DMT", substrate_id="11"),
-        *[_requirement(f"partition_x{species}", "kp") for species in ("9", "10", "11", "13", "15")],
+        *[_requirement(f"partition_x{species}", "kp") for species in ("9", "10", "11")],
         *[_requirement(f"activity_{phase}_{enzyme}", "activity_ratio", enzyme_id=enzyme.upper()) for phase in ("dense", "dilute") for enzyme in ("pt", "oc", "dmt")],
     ]
     if include_degradation:

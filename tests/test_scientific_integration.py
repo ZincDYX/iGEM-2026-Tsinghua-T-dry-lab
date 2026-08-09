@@ -20,7 +20,7 @@ def test_synthetic_m1_to_m5_workflow_has_no_network(tmp_path):
         "phi": .1, "pt_total": 1, "oc_total": 1, "dmt_total": 1,
         "kcat_pt": 1, "km_pt": 1, "kcat_oc": 1, "km_oc": 1,
         "kcat_dmt_9": .4, "km_dmt_9": 1, "kcat_dmt_11": 1, "km_dmt_11": 1,
-        **{f"partition_{name}": 1 for name in ("pt", "oc", "dmt", "x9", "x10", "x11", "x13", "x15")},
+            **{f"partition_{name}": 1 for name in ("pt", "oc", "dmt", "x9", "x10", "x11")},
         **{f"activity_{phase}_{enzyme}": 1 for phase in ("dense", "dilute") for enzyme in ("pt", "oc", "dmt")},
     }
     requirements = {item.name: item for item in m4_requirements()}
