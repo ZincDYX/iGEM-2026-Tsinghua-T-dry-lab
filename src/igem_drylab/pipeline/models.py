@@ -75,7 +75,8 @@ class M3ConcentrationAssessment(ScientificResult):
     concentrations: dict[str, dict[str, Any]] = Field(default_factory=dict)
     dense_oc_dmt_ratio: float | None = Field(default=None, ge=0)
     whole_cell_oc_dmt_ratio: float | None = Field(default=None, ge=0)
-    recruitment_fraction: dict[str, float] = Field(default_factory=dict)
+    fraction_in_dense: dict[str, float] = Field(default_factory=dict)
+    binding_recruited_fraction: dict[str, float] = Field(default_factory=dict)
     site_occupancy: dict[str, float] = Field(default_factory=dict)
     saturation: bool | None = None
     recommended_for_m4: bool = False
@@ -91,7 +92,7 @@ class M4CandidateContext(BaseModel):
     condition_id: str
     phi: float = Field(ge=0, le=1)
     enzyme_distribution: dict[str, dict[str, float]]
-    recruitment_fraction: dict[str, float] = Field(default_factory=dict)
+    binding_recruited_fraction: dict[str, float] = Field(default_factory=dict)
     site_occupancy: dict[str, float] = Field(default_factory=dict)
     parameter_ids: list[str] = Field(default_factory=list)
     provenance_summary: dict[str, int] = Field(default_factory=dict)
@@ -100,6 +101,7 @@ class M4CandidateContext(BaseModel):
 
 class M4ReactionPrediction(ScientificResult):
     candidate_id: str
+    construct_id: str
     condition_id: str
     target_product: str
     final_15: float | None = Field(default=None, ge=0)
@@ -121,6 +123,8 @@ class M4ReactionPrediction(ScientificResult):
 class M5FeedbackAssessment(ScientificResult):
     experiment_id: str
     construct_id: str
+    condition_id: str = "unresolved"
+    replicate_id: str = "unresolved"
     qc_passed: bool | None = None
     qc_flags: list[str] = Field(default_factory=list)
     diagnosis: str | None = None

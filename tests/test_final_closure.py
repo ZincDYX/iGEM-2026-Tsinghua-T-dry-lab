@@ -21,7 +21,7 @@ def test_human_approval_persists_and_reloads(tmp_path):
     project = tmp_path / "project.yaml"
     project.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     candidate = ParameterRecord(parameter_id="p", name="phi", value=0.1, unit="1", parameter_type="phi", source_type="wetlab", source_reference="E", review_status="validated")
-    approved = approve_and_persist_parameter(project, candidate, reviewer="human")
+    approved = approve_and_persist_parameter(project, candidate, reviewer="human", target_stage="m3", target_requirement_name="phi")
     assert approved.approved_by == "human"
     assert any(record.parameter_id == "p" for record in load_config(project).parameters)
 

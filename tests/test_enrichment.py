@@ -28,6 +28,8 @@ def test_finite_site_and_hill_recruitment_require_explicit_inputs():
 
 def test_m3_uses_independent_oc_and_dmt_partition_inputs(tmp_path):
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
+    config.execution.mode = "demo"
+    config.execution.require_provenance = False
     config.execution.allow_assumptions = True
     values = {"phi": 0.1, "pt_total": 1.0, "oc_total": 2.0, "dmt_total": 3.0, "partition_pt": 1.0, "partition_oc": 20.0, "partition_dmt": 2.0}
     requirements = {item.name: item for item in m3_requirements()}

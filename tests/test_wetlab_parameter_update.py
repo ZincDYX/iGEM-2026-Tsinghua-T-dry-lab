@@ -1,4 +1,6 @@
 from igem_drylab.wetlab import MeasurementMapping, WetLabResult, parameter_updates_from_measurements, quality_control
+from igem_drylab.pipeline import load_config
+from pathlib import Path
 
 
 def test_explicit_qc_passed_measurement_mapping_creates_unapproved_candidate():
@@ -9,8 +11,8 @@ def test_explicit_qc_passed_measurement_mapping_creates_unapproved_candidate():
     )
     reports = quality_control([result])
     updates = parameter_updates_from_measurements(
-        [result], reports,
-        [MeasurementMapping(parameter_id="wet_dmt", name="activity_dense_dmt", source_field="enzyme_activity.DMT", unit="1/s")],
+        load_config(Path("configs/m1_m4_real_scoring_example.yaml")), [result], reports,
+        [MeasurementMapping(target_stage="m4", target_requirement_name="activity_dense_dmt", source_field="enzyme_activity.DMT", unit="1")],
     )
     assert len(updates) == 1
     assert updates[0].review_status == "validated"

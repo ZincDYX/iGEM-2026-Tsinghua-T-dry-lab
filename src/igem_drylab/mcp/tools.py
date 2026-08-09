@@ -27,7 +27,8 @@ from igem_drylab.kinetics import CascadeParameters, CompetitiveCascadeParameters
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline, run_through_m4
 from igem_drylab.parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements, parameter_from_evidence, resolve_requirement
-from igem_drylab.literature.evidence_contract import EnzymeKineticsEvidence, LlpsPartitioningEvidence, PhaseActivityEvidence, ProteinAbundanceEvidence, RecruitmentBindingEvidence, map_evidence_to_requirement
+from igem_drylab.parameters.requirements import requirements_for_stage
+from igem_drylab.literature.evidence_contract import DegradationRateEvidence, EnzymeKineticsEvidence, LlpsPartitioningEvidence, PhaseActivityEvidence, PhaseVolumeEvidence, ProteinAbundanceEvidence, RecruitmentBindingEvidence, map_evidence_to_requirement
 from igem_drylab.project_state import ProjectState
 from igem_drylab.constructs import ConstructRegistry
 from igem_drylab.wetlab import MeasurementMapping, load_wetlab_results, parameter_updates_from_measurements, quality_control
@@ -497,7 +498,7 @@ def parameters_resolve(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
     stage = _require_str(arguments, "stage")
     requirement_name = _require_str(arguments, "requirement_name")
-    requirements = m3_requirements() if stage == "m3" else m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation) if stage == "m4" else []
+    requirements = requirements_for_stage(project, stage)
     requirement = next((item for item in requirements if item.name == requirement_name), None)
     if requirement is None:
         raise ValueError("Unknown requirement_name for stage")
@@ -526,7 +527,7 @@ def parameters_map_typed_evidence(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
     stage = _require_str(arguments, "stage")
     name = _require_str(arguments, "requirement_name")
-    requirements = m3_requirements() if stage == "m3" else m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation) if stage == "m4" else []
+    requirements = requirements_for_stage(project, stage)
     requirement = next((item for item in requirements if item.name == name), None)
     if requirement is None:
         raise ValueError("Unknown requirement_name for stage")
@@ -534,7 +535,7 @@ def parameters_map_typed_evidence(arguments: JsonObject) -> McpToolResult:
     if not isinstance(payload, dict):
         raise ValueError("evidence must be an object")
     kind = _require_str(arguments, "evidence_type")
-    models = {"enzyme_kinetics": EnzymeKineticsEvidence, "llps_partitioning": LlpsPartitioningEvidence, "protein_abundance": ProteinAbundanceEvidence, "recruitment_binding": RecruitmentBindingEvidence, "phase_activity": PhaseActivityEvidence}
+    models = {"enzyme_kinetics": EnzymeKineticsEvidence, "llps_partitioning": LlpsPartitioningEvidence, "phase_volume": PhaseVolumeEvidence, "protein_abundance": ProteinAbundanceEvidence, "recruitment_binding": RecruitmentBindingEvidence, "phase_activity": PhaseActivityEvidence, "degradation_rate": DegradationRateEvidence}
     if kind not in models:
         raise ValueError("unsupported typed evidence_type")
     candidate = map_evidence_to_requirement(models[kind].model_validate(payload), requirement)
@@ -561,12 +562,13 @@ def project_get_state(arguments: JsonObject) -> McpToolResult:
 
 
 def wetlab_ingest_result(arguments: JsonObject) -> McpToolResult:
+    project = load_config(Path(_require_str(arguments, "config_path")))
     records = load_wetlab_results(Path(_require_str(arguments, "results_path")))
     reports = quality_control(records)
     raw_mappings = arguments.get("mappings", [])
     if not isinstance(raw_mappings, list):
         raise ValueError("Argument 'mappings' must be a list")
-    updates = parameter_updates_from_measurements(records, reports, [MeasurementMapping.model_validate(item) for item in raw_mappings])
+    updates = parameter_updates_from_measurements(project, records, reports, [MeasurementMapping.model_validate(item) for item in raw_mappings])
     return McpToolResult.ok({"ok": True, "records": len(records), "qc_reports": [item.model_dump(mode="json") for item in reports], "parameter_candidates": [item.model_dump(mode="json") for item in updates], "approval_required": bool(updates)})
 
 
@@ -987,11 +989,11 @@ PARAMETERS_QUERY_TOOL = McpTool(name="igem.parameters.query", title="Query param
 PARAMETERS_RESOLVE_TOOL = McpTool(name="igem.parameters.resolve", title="Resolve approved parameter", description="Resolve one declared M3/M4 requirement with identity, construct/condition scope, and dimension checks.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "construct_id": {"type": "string"}, "condition_id": {"type": "string"}}, ["config_path", "stage", "requirement_name"]), output_schema=_schema({"ok": {"type": "boolean"}, "resolution": {"type": "object"}}, additional_properties=True))
 PARAMETERS_PROVENANCE_TOOL = McpTool(name="igem.parameters.provenance", title="Show parameter provenance", description="Return selected parameter and superseded lineage.", input_schema=_schema({"config_path": {"type": "string"}, "parameter_id": {"type": "string"}}, ["config_path", "parameter_id"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 PARAMETERS_VALIDATE_EVIDENCE_TOOL = McpTool(name="igem.parameters.validate_evidence", title="Legacy generic evidence inspection", description="Legacy inspection helper only; use igem.parameters.map_typed_evidence for production candidates.", input_schema=_schema({"parameter_id": {"type": "string"}, "name": {"type": "string"}, "value": {}, "unit": {"type": "string"}, "parameter_type": {"type": "string"}, "source": {"type": "object"}, "identity": {"type": "object"}}, ["parameter_id", "name", "value", "parameter_type", "source"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
-PARAMETERS_MAP_TYPED_EVIDENCE_TOOL = McpTool(name="igem.parameters.map_typed_evidence", title="Map typed evidence to a declared production requirement", description="Validate typed evidence against a declared M3/M4 requirement and emit only an extracted candidate for human review.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "evidence_type": {"type": "string", "enum": ["enzyme_kinetics", "llps_partitioning", "protein_abundance", "recruitment_binding", "phase_activity"]}, "evidence": {"type": "object"}}, ["config_path", "stage", "requirement_name", "evidence_type", "evidence"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
+PARAMETERS_MAP_TYPED_EVIDENCE_TOOL = McpTool(name="igem.parameters.map_typed_evidence", title="Map typed evidence to a declared production requirement", description="Validate typed evidence against a declared M3/M4 requirement and emit only an extracted candidate for human review.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "evidence_type": {"type": "string", "enum": ["enzyme_kinetics", "llps_partitioning", "phase_volume", "protein_abundance", "recruitment_binding", "phase_activity", "degradation_rate"]}, "evidence": {"type": "object"}}, ["config_path", "stage", "requirement_name", "evidence_type", "evidence"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
 CONSTRUCTS_QUERY_TOOL = McpTool(name="igem.constructs.query", title="Query approved construct registry", description="Return approved construct records from project config.", input_schema=_schema({"config_path": {"type": "string"}, "scaffold": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 CONSTRUCTS_GENERATE_TOOL = McpTool(name="igem.constructs.generate_candidates", title="Generate construct candidates", description="Combine explicit config constructs with approved construct-registry records and preserve provenance.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "candidates": {"type": "array"}}, additional_properties=True))
 PROJECT_GET_STATE_TOOL = McpTool(name="igem.project.get_state", title="Get registry-backed project state", description="Return constructs and approved parameters available to agent/workflow modes.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "state": {"type": "object"}}, additional_properties=True))
-WETLAB_INGEST_TOOL = McpTool(name="igem.wetlab.ingest_result", title="Ingest wet-lab result", description="Load and QC wet-lab records. Optional mappings create only validated, explicitly mapped candidates; no update is auto-approved.", input_schema=_schema({"results_path": {"type": "string"}, "mappings": {"type": "array", "items": {"type": "object"}}}, ["results_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "qc_reports": {"type": "array"}, "parameter_candidates": {"type": "array"}}, additional_properties=True))
+WETLAB_INGEST_TOOL = McpTool(name="igem.wetlab.ingest_result", title="Ingest wet-lab result", description="Load and QC wet-lab records. Mappings target declared requirements and create only validated candidates; no update is auto-approved.", input_schema=_schema({"config_path": {"type": "string"}, "results_path": {"type": "string"}, "mappings": {"type": "array", "items": {"type": "object"}}}, ["config_path", "results_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "qc_reports": {"type": "array"}, "parameter_candidates": {"type": "array"}}, additional_properties=True))
 
 ELSEVIER_SEARCH_TOOL = McpTool(
     name="igem.elsevier.search_scopus",

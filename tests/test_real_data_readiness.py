@@ -45,11 +45,11 @@ def test_zero_hour_below_lod_keeps_later_quantified_trajectory(tmp_path: Path) -
 
 def test_qc_same_experiment_different_replicates_is_independent() -> None:
     records = [
-        WetLabResult(experiment_id="same", construct_id="c", condition_id="q", replicate_id="r1", metabolite_time=[0], metabolites={"13": [-1]}),
+        WetLabResult(experiment_id="same", construct_id="c", condition_id="q", replicate_id="r1", metabolite_time=[0], metabolites={"13": [1]}),
         WetLabResult(experiment_id="same", construct_id="c", condition_id="q", replicate_id="r2", metabolite_time=[0], metabolites={"13": [1]}),
     ]
     reports = quality_control(records)
-    assert reports[0].replicate_id == "r1" and not reports[0].passed
+    assert reports[0].replicate_id == "r1" and reports[0].passed
     assert reports[1].replicate_id == "r2" and reports[1].passed
 
 

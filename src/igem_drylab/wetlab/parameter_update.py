@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 from pathlib import Path
 import yaml
 
-from igem_drylab.parameters import ParameterRecord
+from igem_drylab.parameters import ParameterRecord, ParameterRegistry
+from igem_drylab.parameters.dimensions import normalize_for_requirement
+from igem_drylab.parameters.requirements import ParameterRequirement, requirements_for_stage
+from igem_drylab.pipeline.config import ProjectConfig, load_config
 
 from .models import WetLabResult
 from .qc import QcReport
@@ -15,21 +18,17 @@ from .qc import QcReport
 class MeasurementMapping(BaseModel):
     """Human-declared mapping; the software never infers biology from a column."""
 
-    parameter_id: str
-    name: str
     source_field: str
+    target_stage: str
+    target_requirement_name: str
     unit: str
-    parameter_type: str = "other"
-    enzyme_id: str | None = None
-    substrate_id: str | None = None
-    product_id: str | None = None
+    parameter_id_prefix: str = "wetlab"
     supersedes: str | None = None
-    conditions: dict[str, str | float] = Field(default_factory=dict)
-    review_status: str = "validated"
+    model_config = ConfigDict(extra="forbid")
 
 
 def parameter_updates_from_measurements(
-    results: list[WetLabResult], qc_reports: list[QcReport], mappings: list[MeasurementMapping]
+    project: ProjectConfig, results: list[WetLabResult], qc_reports: list[QcReport], mappings: list[MeasurementMapping]
 ) -> list[ParameterRecord]:
     """Make validated wet-lab candidates from explicit scalar fields only.
 
@@ -46,17 +45,19 @@ def parameter_updates_from_measurements(
             value = _scalar_field(result, mapping.source_field)
             if value is None:
                 continue
+            requirement = _requirement(project, mapping.target_stage, mapping.target_requirement_name)
+            canonical = normalize_for_requirement(value, mapping.unit, requirement)
             updates.append(ParameterRecord(
-                parameter_id=f"{mapping.parameter_id}:{result.experiment_id}:{result.replicate_id}",
-                name=mapping.name, value=value, unit=mapping.unit,
-                parameter_type=mapping.parameter_type, source_type="wetlab",
-                derivation_type="direct_measurement", source_reference=result.experiment_id, conditions=mapping.conditions,
-                enzyme_id=mapping.enzyme_id, substrate_id=mapping.substrate_id,
-                product_id=mapping.product_id, review_status="validated",
+                parameter_id=f"{mapping.parameter_id_prefix}:{mapping.target_requirement_name}:{result.experiment_id}:{result.replicate_id}",
+                name=requirement.name, value=canonical, unit=requirement.canonical_unit,
+                parameter_type=requirement.parameter_type, species_id=requirement.species_id, source_type="wetlab",
+                derivation_type="direct_measurement", source_reference=f"{result.experiment_id}:{result.replicate_id}", conditions={"phase": requirement.phase} if requirement.phase else {},
+                enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id,
+                product_id=requirement.product_id, review_status="validated",
                 construct_id=result.construct_id, condition_id=result.condition_id,
                 supersedes=mapping.supersedes,
                 validation_flags=["requires_human_approval_before_model_use"],
-                notes=f"Explicit mapping from wetlab field '{mapping.source_field}'.",
+                notes=f"Requirement-aware mapping from wetlab field '{mapping.source_field}'.",
             ))
     return updates
 
@@ -70,11 +71,28 @@ def _scalar_field(result: WetLabResult, field: str) -> float | None:
     return float(value) if value is not None else None
 
 
-def approve_and_persist_parameter(project_path: Path, candidate: ParameterRecord, *, reviewer: str) -> ParameterRecord:
+def _requirement(project: ProjectConfig, stage: str, name: str) -> ParameterRequirement:
+    requirement = next((item for item in requirements_for_stage(project, stage) if item.name == name), None)
+    if requirement is None:
+        raise ValueError("unknown_target_requirement")
+    return requirement
+
+
+def validate_candidate_for_approval(project: ProjectConfig, candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str) -> None:
+    if not reviewer.strip() or candidate.review_status != "validated": raise ValueError("validated_candidate_and_reviewer_required")
+    if candidate.name != requirement.name or candidate.parameter_type != requirement.parameter_type: raise ValueError("candidate_requirement_mismatch")
+    if candidate.enzyme_id != requirement.enzyme_id or candidate.substrate_id != requirement.substrate_id or candidate.product_id != requirement.product_id or candidate.species_id != requirement.species_id: raise ValueError("candidate_identity_mismatch")
+    if requirement.phase and candidate.conditions.get("phase") != requirement.phase: raise ValueError("candidate_phase_mismatch")
+    normalize_for_requirement(candidate.numeric_value, candidate.unit, requirement)
+    if candidate.source_type == "wetlab" and not candidate.source_reference: raise ValueError("wetlab_source_required")
+    if candidate.derivation_type == "model_fit" and not candidate.derived_from: raise ValueError("model_fit_lineage_required")
+    ParameterRegistry(project.parameters + [candidate])
+
+
+def approve_and_persist_parameter(project_path: Path, candidate: ParameterRecord, *, reviewer: str, target_stage: str, target_requirement_name: str) -> ParameterRecord:
     """Human-triggered YAML update retaining old records and provenance."""
-    if candidate.review_status != "validated":
-        raise ValueError("only validated candidates may be approved")
-    raw = yaml.safe_load(project_path.read_text(encoding="utf-8"))
+    project = load_config(project_path); raw = yaml.safe_load(project_path.read_text(encoding="utf-8"))
+    validate_candidate_for_approval(project, candidate, _requirement(project, target_stage, target_requirement_name), reviewer)
     records = raw.setdefault("parameters", [])
     approved = candidate.model_copy(update={"review_status": "approved", "approved_by": reviewer, "validation_flags": [*candidate.validation_flags, f"approved_by:{reviewer}"]})
     records.append(approved.model_dump(mode="json"))

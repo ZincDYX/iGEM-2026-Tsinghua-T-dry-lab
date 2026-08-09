@@ -18,9 +18,7 @@ class EnrichmentInput(BaseModel):
     total_concentration: float = Field(ge=0)
     partition_coefficient: float = Field(gt=0)
     partition_source: str
-    activity_dense: float | None = Field(default=None, ge=0)
-    activity_dilute: float | None = Field(default=None, ge=0)
-    uncertainty: ParameterUncertainty | None = None
+    partition_uncertainty: ParameterUncertainty | None = None
 
 
 class EnrichmentResult(BaseModel):
@@ -31,7 +29,7 @@ class EnrichmentResult(BaseModel):
     partition_coefficient: float = Field(gt=0)
     phi: float = Field(ge=0, le=1)
     provenance: str
-    uncertainty: ParameterUncertainty | None = None
+    partition_uncertainty: ParameterUncertainty | None = None
 
 
 class RecruitmentInput(BaseModel):
@@ -65,7 +63,7 @@ def calculate_enrichment(item: EnrichmentInput, *, phi: float) -> EnrichmentResu
     return EnrichmentResult(
         species_id=item.species_id, dense_concentration=dense, dilute_concentration=dilute,
         fraction_in_dense=fraction, partition_coefficient=item.partition_coefficient, phi=phi,
-        provenance=item.partition_source, uncertainty=item.uncertainty,
+        provenance=item.partition_source, partition_uncertainty=item.partition_uncertainty,
     )
 
 

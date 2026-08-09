@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.constructs import ConstructRecord
 
@@ -143,6 +143,12 @@ class InductionGateConfig(StrictScientificConfig):
     transition_width: float = Field(default=0.25, gt=0)
     time_unit: Literal["h"] = "h"
 
+    @model_validator(mode="after")
+    def _validate_interval(self) -> "InductionGateConfig":
+        if self.off_time is not None and self.off_time <= self.on_time:
+            raise ValueError("off_time_must_be_greater_than_on_time")
+        return self
+
 
 class M4Config(StrictScientificConfig):
     target_product: str = "glabridin"
@@ -177,6 +183,16 @@ class FitPlanConfig(StrictScientificConfig):
     bounds: tuple[float, float]
     observables: list[Literal["13", "15"]] = Field(min_length=1)
     bootstrap_samples: int = Field(default=100, ge=0)
+
+    @model_validator(mode="after")
+    def _validate_plan(self) -> "FitPlanConfig":
+        if self.bounds[0] >= self.bounds[1]:
+            raise ValueError("fit_bounds_must_be_strictly_increasing")
+        if len(set(self.fixed_parameter_names)) != len(self.fixed_parameter_names):
+            raise ValueError("fixed_parameter_names_must_be_unique")
+        if self.parameter_name in self.fixed_parameter_names:
+            raise ValueError("fit_target_cannot_be_fixed")
+        return self
 
 
 class M5Config(StrictScientificConfig):

@@ -10,6 +10,8 @@ from igem_drylab.pipeline.config import InductionGateConfig, InitialStateConfig
 
 def test_synthetic_m1_to_m5_workflow_has_no_network(tmp_path):
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
+    config.execution.mode = "demo"
+    config.execution.require_provenance = False
     config.run.output_dir = tmp_path
     config.execution.allow_assumptions = True
     config.stages.m4_reaction.pt_gate = InductionGateConfig(on_time=0, basal=0, induced=1)

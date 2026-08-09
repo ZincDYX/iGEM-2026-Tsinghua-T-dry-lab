@@ -5,6 +5,7 @@ from statistics import median
 from pydantic import BaseModel, Field
 
 from .models import WetLabResult
+from .canonical import canonicalize_metabolite
 
 
 class QcReport(BaseModel):
@@ -28,13 +29,10 @@ def quality_control(records: list[WetLabResult]) -> list[QcReport]:
         for species, values in record.metabolites.items():
             if len(values) != len(record.metabolite_time): flags.append(f"time_length_mismatch:{species}")
             if any(value < 0 for value in values): flags.append(f"negative_metabolite:{species}")
-            lod = record.metabolite_lod.get(species); loq = record.metabolite_loq.get(species)
-            masks[species] = [
-                "below_lod" if lod is not None and value < lod
-                else "below_loq" if loq is not None and value < loq
-                else "quantified"
-                for value in values
-            ]
+            try:
+                masks[species] = canonicalize_metabolite(record, species).censor_mask
+            except ValueError as error:
+                flags.append(f"canonical_contract_error:{error}")
         if any(value < 0 for value in record.protein_abundance.values()): flags.append("negative_protein_abundance")
         reports.append(QcReport(experiment_id=record.experiment_id, replicate_id=record.replicate_id, passed=not any(flag.startswith(("negative", "metabolite_time", "time_length")) for flag in flags), flags=flags, censor_masks=masks))
     _flag_replicate_outliers(records, reports)

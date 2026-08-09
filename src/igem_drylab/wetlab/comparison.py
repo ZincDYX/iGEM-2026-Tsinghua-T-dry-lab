@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 from pydantic import BaseModel, Field
 
-from igem_drylab.parameters.dimensions import normalize_concentration
 from .fit import FitResult, fit_scale_parameter
 from .models import WetLabResult
+from .canonical import canonicalize_metabolite
 
 
 class MetaboliteComparison(BaseModel):
@@ -19,6 +19,10 @@ class MetaboliteComparison(BaseModel):
     predicted_final: float | None = None
     trend_agreement: bool | None = None
     aligned_timepoints: int = 0
+    quantified_indices: list[int] = Field(default_factory=list)
+    final_quantified_index: int | None = None
+    final_quantified_time_h: float | None = None
+    residual_unit: str = "uM"
     censor_mask: list[str] = Field(default_factory=list)
     comparison_status: str
     fit: FitResult | None = None
@@ -53,9 +57,8 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
         if raw_observed is None:
             continue
         try:
-            observed = [normalize_concentration(value, result.metabolite_concentration_unit) for value in raw_observed]
-            lod = normalize_concentration(result.metabolite_lod[metabolite], result.metabolite_concentration_unit) if metabolite in result.metabolite_lod else None
-            loq = normalize_concentration(result.metabolite_loq[metabolite], result.metabolite_concentration_unit) if metabolite in result.metabolite_loq else None
+            canonical = canonicalize_metabolite(result, metabolite)
+            observed, lod, loq = canonical.concentration_uM, canonical.lod_uM, canonical.loq_uM
         except ValueError as error:
             comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, comparison_status=str(error))
             continue
@@ -69,7 +72,7 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
             comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, comparison_status="measurement_outside_simulation_horizon")
             continue
         predicted_all = np.interp(observed_time, time, np.asarray(data[f"x{metabolite}"], dtype=float))
-        mask = _censor_mask(observed, lod, loq)
+        mask = canonical.censor_mask
         selected = [index for index, flag in enumerate(mask) if flag == "quantified"]
         if not selected:
             comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, censor_mask=mask, comparison_status="all_observations_censored")
@@ -88,6 +91,9 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
             predicted_final=float(predicted_all[final_index]),
             trend_agreement=trend,
             aligned_timepoints=len(selected),
+            quantified_indices=selected,
+            final_quantified_index=final_index,
+            final_quantified_time_h=float(observed_time[final_index]),
             censor_mask=mask,
             comparison_status="trajectory_aligned" if len(selected) >= 2 else "endpoint_only",
             fit=fit,

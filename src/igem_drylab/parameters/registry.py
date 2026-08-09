@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import math
 
 from pydantic import BaseModel, Field
 
@@ -28,11 +29,35 @@ class ParameterResolution(BaseModel):
 class ParameterRegistry:
     def __init__(self, records: list[ParameterRecord] | None = None) -> None:
         self._records = list(records or [])
+        identifiers = [record.parameter_id for record in self._records]
+        if len(set(identifiers)) != len(identifiers):
+            raise ValueError("duplicate_parameter_id")
+        for record in self._records:
+            if record.supersedes == record.parameter_id:
+                raise ValueError("self_supersedes")
+            if record.supersedes and self.get(record.supersedes) is None:
+                raise ValueError("dangling_supersedes")
+            if record.supersedes:
+                parent = self.get(record.supersedes)
+                if parent and (record.name != parent.name or record.parameter_type != parent.parameter_type or record.construct_id != parent.construct_id or record.condition_id != parent.condition_id):
+                    raise ValueError("incompatible_supersedes")
+        for record in self._records:
+            seen: set[str] = set(); current = record
+            while current.supersedes:
+                if current.parameter_id in seen:
+                    raise ValueError("supersedes_cycle")
+                seen.add(current.parameter_id)
+                current = self.get(current.supersedes)  # validated above
 
     def add(self, record: ParameterRecord) -> None:
         if self.get(record.parameter_id):
             raise ValueError(f"duplicate parameter_id: {record.parameter_id}")
         self._records.append(record)
+        try:
+            ParameterRegistry(self._records)
+        except Exception:
+            self._records.pop()
+            raise
 
     def get(self, parameter_id: str) -> ParameterRecord | None:
         return next((item for item in self._records if item.parameter_id == parameter_id), None)
@@ -45,8 +70,11 @@ class ParameterRegistry:
         compatible: list[tuple[ParameterRecord, float]] = []
         rejected: list[str] = []
         for record in candidates:
-            if require_provenance and not has_required_provenance(record):
+            if require_provenance and (not has_required_provenance(record) or not record.approved_by):
                 rejected.append("incomplete_required_provenance")
+                continue
+            if record.parameter_type != requirement.parameter_type:
+                rejected.append("parameter_type_mismatch")
                 continue
             if record.construct_id is not None and record.construct_id != construct_id:
                 rejected.append("construct_scope_mismatch")
@@ -54,13 +82,10 @@ class ParameterRegistry:
             if record.condition_id is not None and record.condition_id != condition_id:
                 rejected.append("condition_scope_mismatch")
                 continue
-            # Legacy reviewed records predate the explicit species field; their
-            # declared requirement name remains the identity anchor.  New typed
-            # evidence must supply species and is checked by the mapper.
-            if requirement.species_id and record.species_id is not None and record.species_id != requirement.species_id:
+            if requirement.species_id and record.species_id != requirement.species_id and (require_provenance or record.species_id is not None):
                 rejected.append("species_mismatch")
                 continue
-            if requirement.phase and record.conditions.get("phase") is not None and record.conditions.get("phase") != requirement.phase:
+            if requirement.phase and record.conditions.get("phase") != requirement.phase and (require_provenance or record.conditions.get("phase") is not None):
                 rejected.append("phase_mismatch")
                 continue
             identity = identity_compatibility(record, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, host=host, mutant_allowed=mutant_allowed)
@@ -76,6 +101,15 @@ class ParameterRegistry:
             except ValueError as error:
                 rejected.append(str(error))
                 continue
+            if not math.isfinite(value):
+                rejected.append("nonfinite_value")
+                continue
+            if requirement.minimum is not None and (value < requirement.minimum or (value == requirement.minimum and not requirement.minimum_inclusive)):
+                rejected.append("physical_lower_bound_violation")
+                continue
+            if requirement.maximum is not None and value > requirement.maximum:
+                rejected.append("physical_upper_bound_violation")
+                continue
             compatible.append((record, value))
         if not compatible:
             return ParameterResolution(status="unresolved", reasons=sorted(set(rejected or ["no_approved_exact_compatible_parameter"])))
@@ -90,7 +124,7 @@ class ParameterRegistry:
         best, value = ranked[0]
         tied = [pair for pair in ranked if scope_rank(pair[0]) == scope_rank(best) and evidence_priority(pair[0]) == evidence_priority(best)]
         if len(tied) > 1 and len({round(pair[1], 12) for pair in tied}) > 1:
-            replacement = [pair for pair in tied if all(pair[0].supersedes == other[0].parameter_id or pair[0].parameter_id == other[0].parameter_id for other in tied)]
+            replacement = [pair for pair in tied if all(self._supersedes_transitively(pair[0], other[0]) or pair[0].parameter_id == other[0].parameter_id for other in tied)]
             if len(replacement) == 1:
                 best, value = replacement[0]
             else:
@@ -116,14 +150,23 @@ class ParameterRegistry:
             current = self.get(current.supersedes) if current.supersedes else None
         return lineage
 
+    def _supersedes_transitively(self, child: ParameterRecord, ancestor: ParameterRecord) -> bool:
+        return ancestor.parameter_id in {item.parameter_id for item in self.provenance(child.parameter_id)[1:]}
+
     def records(self) -> list[ParameterRecord]: return list(self._records)
     def list_conflicts(self) -> list[ParameterRecord]:
         """Return records participating in same-scope/same-tier unresolved value conflicts."""
         conflicts: list[ParameterRecord] = []
         for record in self._records:
             peers = [other for other in self._records if other.name == record.name and other.review_status == "approved" and other.construct_id == record.construct_id and other.condition_id == record.condition_id and evidence_priority(other) == evidence_priority(record)]
-            values = {str(item.value) + ":" + str(item.unit) for item in peers}
-            if len(values) > 1 and not any(item.supersedes == record.parameter_id for item in peers):
+            values = set()
+            for item in peers:
+                try:
+                    requirement = ParameterRequirement(name=item.name, parameter_type=item.parameter_type, dimension="concentration" if item.unit in {"M", "mM", "uM", "nM"} else "rate" if item.unit in {"1/h", "h^-1", "h-1", "1/min", "1/s", "s^-1"} else "dimensionless", canonical_unit="uM" if item.unit in {"M", "mM", "uM", "nM"} else "1/h" if item.unit in {"1/h", "h^-1", "h-1", "1/min", "1/s", "s^-1"} else "1")
+                    values.add(round(normalize_for_requirement(item.numeric_value, item.unit, requirement), 12))
+                except ValueError:
+                    values.add((str(item.value), item.unit))
+            if len(values) > 1 and not any(self._supersedes_transitively(item, record) for item in peers if item.parameter_id != record.parameter_id):
                 conflicts.append(record)
         return conflicts
     @classmethod

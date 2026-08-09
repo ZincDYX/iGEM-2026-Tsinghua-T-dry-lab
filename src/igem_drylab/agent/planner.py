@@ -5,7 +5,8 @@ from typing import Any, Protocol
 
 from igem_drylab.mcp import ToolRegistry
 from igem_drylab.pipeline import load_config
-from igem_drylab.parameters import ParameterRegistry, m4_requirements, resolve_requirement
+from igem_drylab.parameters import ParameterRegistry, resolve_requirement
+from igem_drylab.parameters.requirements import requirements_for_stage
 
 from .context import ContextBundle
 from .models import AgentTask, Plan, PlanStep, ResultBinding, ResultCondition
@@ -80,7 +81,7 @@ class RuleBasedDryLabPlanner:
         construct_id = task.inputs.get("construct_id") if isinstance(task.inputs.get("construct_id"), str) else None
         from igem_drylab.pipeline.config import canonical_m4_condition_id
         condition_id = task.inputs.get("condition_id") if isinstance(task.inputs.get("condition_id"), str) else canonical_m4_condition_id(config.stages.m4_reaction)
-        requirements = m4_requirements(include_degradation=config.stages.m4_reaction.enable_degradation)
+        requirements = requirements_for_stage(config, "m4")
         missing = [item.name for item in requirements if resolve_requirement(registry, item, config.experimental_context, allow_assumptions=config.execution.allow_assumptions, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance).status != "resolved"]
         max_queries = int(task.inputs.get("max_literature_queries", 3))
         evidence_path = task.inputs.get("evidence_database_path")
@@ -88,7 +89,7 @@ class RuleBasedDryLabPlanner:
             resolve_id = f"resolve_{name}"
             steps.append(PlanStep(step_id=resolve_id, objective=f"Resolve approved parameter '{name}' from the registry.", tool_name="igem.parameters.resolve", arguments={"config_path": task.inputs.get("config_path"), "stage": "m4", "requirement_name": name, "construct_id": construct_id, "condition_id": condition_id}, depends_on=dependencies, priority=96, rationale="Only approved, identity-compatible registry records can enter real M4."))
             if isinstance(evidence_path, str) and "igem.literature.qa" in available_tools:
-                steps.append(PlanStep(step_id=f"find_evidence_{name}", objective=f"Retrieve local evidence relevant to missing parameter '{name}'.", tool_name="igem.literature.qa", arguments={"question": f"Find evidence for parameter {name}; preserve enzyme/substrate/condition identity and DOI.", "evidence_path": evidence_path, "top_k": 5}, depends_on=[resolve_id], run_conditions=[ResultCondition(source_step_id=resolve_id, source_path=["structuredContent", "resolution", "status"], allowed_values=["missing", "conflict", "needs_review"])], priority=90, rationale="Evidence retrieval creates a review candidate, never an automatic parameter update."))
+                steps.append(PlanStep(step_id=f"find_evidence_{name}", objective=f"Retrieve local evidence relevant to missing parameter '{name}'.", tool_name="igem.literature.qa", arguments={"question": f"Find evidence for parameter {name}; preserve enzyme/substrate/condition identity and DOI.", "evidence_path": evidence_path, "top_k": 5}, depends_on=[resolve_id], run_conditions=[ResultCondition(source_step_id=resolve_id, source_path=["structuredContent", "resolution", "status"], allowed_values=["unresolved", "conflict", "needs_review"])], priority=90, rationale="Evidence retrieval creates a review candidate, never an automatic parameter update."))
         if missing:
             steps.append(PlanStep(step_id="review_missing_parameters", objective="Review compatible evidence or request wet-lab measurement for unresolved M4 parameters.", depends_on=[step.step_id for step in steps if step.step_id.startswith("find_evidence_")], priority=85, status="blocked", rationale="Human approval is required before literature evidence becomes an approved model parameter."))
         return bool(missing)

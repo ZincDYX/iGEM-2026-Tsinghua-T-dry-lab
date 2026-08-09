@@ -9,6 +9,7 @@ from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
+from igem_drylab.parameters.requirements import requirements_for_stage
 from igem_drylab.parameters.dimensions import normalize_concentration
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
@@ -100,15 +101,15 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
 def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAssessment]) -> tuple[list[M3ConcentrationAssessment], StageOutput]:
     """Calculate species-specific two-phase concentrations from reviewed inputs."""
     stage_dir = run_dir / "m3_enrichment"
-    species = ("PT", "OC", "DMT", "9", "10", "11", "13", "15")
-    requirements = m3_requirements() + [requirement for entry in config.stages.m3_concentration.recruitment for requirement in recruitment_requirements(entry, binding_model=config.stages.m3_concentration.binding_model)]
+    requirements = requirements_for_stage(config, "m3")
+    core_requirements = [item for item in requirements if item.blocking]
     records: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
         if not assessment.recommended_for_m3:
             continue
         construct_id = assessment.construct_id
         condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)
-        selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
+        selected, missing = validate_parameters(config.parameters, requirements=core_requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
         if missing:
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic",
                 missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
@@ -118,23 +119,27 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
         inputs = [EnrichmentInput(species_id=item, total_concentration=selected[f"{item.lower()}_total"].canonical_value,
             partition_coefficient=selected[f"partition_{item.lower()}"].canonical_value,
             partition_source=selected[f"partition_{item.lower()}"].selected_parameter.source_reference,
-            uncertainty=selected[f"partition_{item.lower()}"].selected_parameter.uncertainty) for item in ("PT", "OC", "DMT")]
+            partition_uncertainty=selected[f"partition_{item.lower()}"].selected_parameter.uncertainty) for item in ("PT", "OC", "DMT")]
         result = calculate_many(inputs, phi=phi)
         oc = result["OC"]
         dmt = result["DMT"]
-        recruitment = {}
+        binding_recruitment = {}
         occupancy = {}
+        auxiliary, _ = validate_parameters(config.parameters, requirements=[item for item in requirements if not item.blocking], allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
         for entry in config.stages.m3_concentration.recruitment:
+            needed = [entry.enzyme_total_parameter, entry.site_total_parameter, entry.kd_parameter, *([entry.hill_coefficient_parameter] if entry.hill_coefficient_parameter else [])]
+            if any(auxiliary.get(name) is None or auxiliary[name].status != "resolved" for name in needed):
+                continue
             enzyme = entry.enzyme_id
-            hill = selected[entry.hill_coefficient_parameter].canonical_value if entry.hill_coefficient_parameter else config.stages.m3_concentration.hill_coefficient
+            hill = auxiliary[entry.hill_coefficient_parameter].canonical_value if entry.hill_coefficient_parameter else config.stages.m3_concentration.hill_coefficient
             if config.stages.m3_concentration.binding_model == "hill" and hill is None:
                 records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient or switch to independent binding model"], notes="Hill recruitment was not calculated without an explicit reviewed value or allowed assumption."))
                 break
             if config.stages.m3_concentration.binding_model == "hill" and entry.hill_coefficient_parameter is None and not config.execution.allow_assumptions:
                 records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient"], notes="Config Hill coefficient is an assumption and is disabled in real mode."))
                 break
-            recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=selected[entry.enzyme_total_parameter].canonical_value, site_total=selected[entry.site_total_parameter].canonical_value, kd=selected[entry.kd_parameter].canonical_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=hill))
-            recruitment[enzyme] = recruitment_result.recruited_fraction; occupancy[enzyme] = recruitment_result.site_occupancy
+            recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=auxiliary[entry.enzyme_total_parameter].canonical_value, site_total=auxiliary[entry.site_total_parameter].canonical_value, kd=auxiliary[entry.kd_parameter].canonical_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=hill))
+            binding_recruitment[enzyme] = recruitment_result.recruited_fraction; occupancy[enzyme] = recruitment_result.site_occupancy
         else:
             pass
         if records and records[-1].candidate_id == assessment.candidate_id and records[-1].status == "insufficient_data":
@@ -142,7 +147,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
         context = M4CandidateContext(candidate_id=assessment.candidate_id, construct_id=construct_id, condition_id=condition_id,
             phi=phi,
             enzyme_distribution={name: {"dense": value.dense_concentration, "dilute": value.dilute_concentration, "partition_coefficient": value.partition_coefficient} for name, value in result.items()},
-            recruitment_fraction=recruitment, site_occupancy=occupancy,
+            binding_recruited_fraction=binding_recruitment, site_occupancy=occupancy,
             parameter_ids=sorted(resolution.selected_parameter.parameter_id for resolution in selected.values() if resolution.selected_parameter),
             provenance_summary=_provenance_summary(selected.values()),
             assumptions=["rapid_partition_equilibrium", "enzyme distribution is computed from approved abundance and Kp; recruitment is reported separately and does not modify kcat or abundance"],
@@ -151,7 +156,8 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             concentrations={key: value.model_dump() for key, value in result.items()},
             dense_oc_dmt_ratio=oc.dense_concentration / dmt.dense_concentration if dmt.dense_concentration else None,
             whole_cell_oc_dmt_ratio=selected["oc_total"].canonical_value / selected["dmt_total"].canonical_value if selected["dmt_total"].canonical_value else None,
-            recruitment_fraction={key: value.fraction_in_dense for key, value in result.items()} | recruitment,
+            fraction_in_dense={key: value.fraction_in_dense for key, value in result.items()},
+            binding_recruited_fraction=binding_recruitment,
             site_occupancy=occupancy,
             recommended_for_m4=True, parameter_ids=sorted(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter),
             provenance_summary=_provenance_summary(selected.values()),
@@ -200,16 +206,17 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             side_product_fraction = delta_13 / (delta_13 + delta_15) if delta_13 + delta_15 > 0 else 0.0
             trajectory = stage_dir / f"{item.candidate_id}_trajectory.json"
             trajectory.parent.mkdir(parents=True, exist_ok=True)
-            trajectory.write_text(json.dumps({"time_unit": "h", "concentration_unit": "uM", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
+            trajectory.write_text(json.dumps({"scientific_contract_version": "pre-real-data-frozen", "candidate_id": item.candidate_id, "construct_id": construct_id, "condition_id": condition_id, "parameter_ids": sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}), "time_unit": "h", "concentration_unit": "uM", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
             recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, delta_15 / gates.t_end, baseline_13 - initial.x13, delta_13, delta_15, baseline_15 - initial.x15, gates)
-            records.append(M4ReactionPrediction(candidate_id=item.candidate_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality(selected.values()),
+            combined_provenance = _merge_provenance(item.m4_candidate_context.provenance_summary, _provenance_summary(selected.values()))
+            records.append(M4ReactionPrediction(candidate_id=item.candidate_id, construct_id=construct_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality_from_summary(combined_provenance),
                 final_15=final_15, final_13=final_13, side_product_fraction_13=side_product_fraction, leakage_fraction=side_product_fraction, productivity=delta_15 / gates.t_end,
                 recommendation=recommendation, candidate_context=item.m4_candidate_context,
                 simulation_inputs={"parameters": values, "initial": initial.model_dump(), "pt_gate": gates.pt_gate.model_dump(), "oc_gate": gates.oc_gate.model_dump(), "dmt_gate": gates.dmt_gate.model_dump(), "t_end": gates.t_end},
                 baseline_comparison={"13_reduction": ((baseline_13 - initial.x13) - delta_13) / (baseline_13 - initial.x13) if baseline_13 != initial.x13 else 0.0, "15_improvement": (delta_15 - (baseline_15 - initial.x15)) / (baseline_15 - initial.x15) if baseline_15 != initial.x15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
                 bottleneck="premature_dmt_side_reaction" if side_product_fraction > gates.max_side_product_fraction_13 else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics", "no explicit metabolite export model", *( ["approved degradation rates enabled"] if gates.enable_degradation else ["degradation kernel disabled; all kdeg values set to zero"] )],
                 parameter_ids=sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}),
-                provenance_summary=_merge_provenance(item.m4_candidate_context.provenance_summary, _provenance_summary(selected.values())),
+                provenance_summary=combined_provenance,
                 notes=f"M4 consumed candidate-specific M3 enzyme distributions; {'modeled degradation loss=' + format(delayed.modeled_degradation_loss, '.3g') if gates.enable_degradation else 'mass-balance error=' + format(delayed.mass_balance_error, '.3g')}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
@@ -292,8 +299,8 @@ def _parameter_key(species: str) -> str:
     return f"x{species}" if species.isdigit() else species.lower()
 
 
-def _m4_insufficient(candidate_id: str, config: ProjectConfig, missing: list[str]) -> M4ReactionPrediction:
-    return M4ReactionPrediction(candidate_id=candidate_id, condition_id=config.stages.m4_reaction.condition_id or "unresolved", target_product=config.stages.m4_reaction.target_product,
+def _m4_insufficient(candidate_id: str, config: ProjectConfig, missing: list[str], construct_id: str = "unresolved") -> M4ReactionPrediction:
+    return M4ReactionPrediction(candidate_id=candidate_id, construct_id=construct_id, condition_id=canonical_m4_condition_id(config.stages.m4_reaction) or "unresolved", target_product=config.stages.m4_reaction.target_product,
         status="insufficient_data", data_quality="heuristic", missing_inputs=sorted(set(missing)),
         recommended_next_action=["supply reviewed glabridin kinetics and explicit induction gates"],
         notes="M4 does not use docking, M2, or M3 proxy scores as enzyme kinetic parameters.")
@@ -337,6 +344,21 @@ def _data_quality(records: object) -> str:
     return "heuristic"
 
 
+def _data_quality_from_summary(summary: dict[str, int]) -> str:
+    kinds = {key for key, value in summary.items() if value}
+    if len(kinds) > 1:
+        return "mixed"
+    if kinds == {"wetlab"}:
+        return "measured"
+    if kinds == {"fitted"}:
+        return "predicted"
+    if kinds == {"literature"}:
+        return "literature"
+    if kinds == {"prediction"}:
+        return "predicted"
+    return "heuristic"
+
+
 def _provenance_summary(records: object) -> dict[str, int]:
     summary: dict[str, int] = {}
     for item in records:  # type: ignore[union-attr]
@@ -375,14 +397,14 @@ def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], va
         comparison = comparisons.get(metabolite)
         if comparison is None:
             continue
-        time_h = result.time_hours()[-1] if result.time_hours() else None
+        time_h = comparison.final_quantified_time_h
         evidence[metabolite] = {
             "metabolite_id": metabolite,
             "comparison_status": comparison.comparison_status,
             "residual_final": comparison.residual_final,
             "observed_final": comparison.observed_final,
             "predicted_final": comparison.predicted_final,
-            "measurement_uncertainty": normalize_concentration(result.metabolite_uncertainty[metabolite][-1], result.metabolite_concentration_unit) if result.metabolite_uncertainty.get(metabolite) and result.metabolite_concentration_unit else None,
+            "measurement_uncertainty": normalize_concentration(result.metabolite_uncertainty[metabolite][comparison.final_quantified_index], result.metabolite_concentration_unit) if result.metabolite_uncertainty.get(metabolite) and result.metabolite_concentration_unit and comparison.final_quantified_index is not None else None,
             "measurement_uncertainty_type": result.metabolite_uncertainty_type,
             "trend_agreement": comparison.trend_agreement,
             "replicate_variation": variations.get((result.construct_id, result.condition_id, metabolite, time_h)) if time_h is not None else None,

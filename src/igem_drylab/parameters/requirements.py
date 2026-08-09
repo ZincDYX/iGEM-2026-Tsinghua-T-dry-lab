@@ -20,16 +20,21 @@ class ParameterRequirement(BaseModel):
     product_id: str | None = None
     species_id: str | None = None
     phase: Literal["dense", "dilute"] | None = None
-    optional: bool = False
+    minimum: float | None = None
+    minimum_inclusive: bool = True
+    maximum: float | None = None
+    blocking: bool = True
 
 
 def _requirement(name: str, parameter_type: str, **identity: str | None) -> ParameterRequirement:
     if parameter_type in {"phi", "kp", "activity_ratio", "hill_coefficient"}:
-        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="dimensionless", **identity)
+        minimum, inclusive = (0.0, True) if parameter_type in {"phi", "activity_ratio"} else (0.0, False)
+        maximum = 1.0 if parameter_type == "phi" else None
+        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="dimensionless", minimum=minimum, minimum_inclusive=inclusive, maximum=maximum, **identity)
     if parameter_type in {"km", "kd", "abundance"}:
-        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="concentration", canonical_unit="uM", **identity)
+        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="concentration", canonical_unit="uM", minimum=0.0, minimum_inclusive=parameter_type == "abundance", **identity)
     if parameter_type in {"kcat", "degradation_rate", "export_rate"}:
-        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="rate", canonical_unit="1/h", **identity)
+        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="rate", canonical_unit="1/h", minimum=0.0, **identity)
     return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="dimensionless", **identity)
 
 
@@ -57,7 +62,7 @@ def m4_requirements(*, include_degradation: bool = False) -> list[ParameterRequi
         *[_requirement(f"activity_{phase}_{enzyme}", "activity_ratio", enzyme_id=enzyme.upper(), phase=phase) for phase in ("dense", "dilute") for enzyme in ("pt", "oc", "dmt")],
     ]
     if include_degradation:
-        requirements.extend(_requirement(f"kdeg_{species}", "degradation_rate") for species in ("9", "10", "11", "13", "15"))
+        requirements.extend(_requirement(f"kdeg_{species}", "degradation_rate", species_id=species) for species in ("9", "10", "11", "13", "15"))
     return requirements
 
 
@@ -70,10 +75,21 @@ def m4_kinetic_requirements(*, include_degradation: bool = False) -> list[Parame
 def recruitment_requirements(recruitment: object, *, binding_model: str) -> list[ParameterRequirement]:
     enzyme = recruitment.enzyme_id
     requirements = [
-        _requirement(recruitment.enzyme_total_parameter, "abundance", enzyme_id=enzyme),
-        _requirement(recruitment.site_total_parameter, "abundance"),
-        _requirement(recruitment.kd_parameter, "kd", enzyme_id=enzyme),
+        _requirement(recruitment.enzyme_total_parameter, "abundance", enzyme_id=enzyme).model_copy(update={"blocking": False}),
+        _requirement(recruitment.site_total_parameter, "abundance").model_copy(update={"blocking": False}),
+        _requirement(recruitment.kd_parameter, "kd", enzyme_id=enzyme).model_copy(update={"blocking": False}),
     ]
     if binding_model == "hill" and recruitment.hill_coefficient_parameter:
-        requirements.append(_requirement(recruitment.hill_coefficient_parameter, "hill_coefficient", enzyme_id=enzyme))
+        requirements.append(_requirement(recruitment.hill_coefficient_parameter, "hill_coefficient", enzyme_id=enzyme).model_copy(update={"blocking": False}))
     return requirements
+
+
+def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
+    """Project-aware, single catalog used by every production entry point."""
+    if stage == "m3":
+        core = m3_requirements()
+        auxiliary = [item for recruitment in getattr(project.stages.m3_concentration, "recruitment", []) for item in recruitment_requirements(recruitment, binding_model=project.stages.m3_concentration.binding_model)]
+        return core + auxiliary if include_auxiliary else core
+    if stage == "m4":
+        return m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation)
+    return []
