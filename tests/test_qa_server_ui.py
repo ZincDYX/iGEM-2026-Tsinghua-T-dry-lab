@@ -40,6 +40,9 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert "fieldLabel(key)+':'" in PAGE
     assert "function renderQuote" in PAGE
     assert "Illustrative preview record:" in PAGE
+    assert 'id="mode"' in PAGE
+    assert "Evidence-grounded answer" in PAGE
+    assert "function renderRetrievalInfo" in PAGE
 
 
 def test_health_contract_is_unchanged(tmp_path: Path) -> None:
@@ -60,6 +63,11 @@ def test_local_http_demo_smoke_preserves_root_health_and_qa_routes(tmp_path: Pat
         request = Request(base + "/api/qa", data=json.dumps({"question": "OC activity"}).encode(), headers={"Content-Type": "application/json"}, method="POST")
         with urlopen(request) as response:
             assert json.loads(response.read())["status"] == "retrieved"
+        synthesis_request = Request(base + "/api/qa", data=json.dumps({"question": "OC activity", "mode": "synthesize", "semantic_enabled": True}).encode(), headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(synthesis_request) as response:
+            payload = json.loads(response.read())
+            assert payload["status"] == "synthesis_error"
+            assert payload["sources"]
         with urlopen(base + "/") as response:
             assert b"Literature Evidence Explorer" in response.read()
     finally:

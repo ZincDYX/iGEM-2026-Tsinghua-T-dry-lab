@@ -482,9 +482,21 @@ def literature_extract_chunked_records(arguments: JsonObject) -> McpToolResult:
 
 
 def literature_qa(arguments: JsonObject) -> McpToolResult:
+    mode = arguments.get("mode", "retrieve_only")
+    if mode not in {"retrieve_only", "synthesize"}:
+        raise ValueError("Argument 'mode' must be 'retrieve_only' or 'synthesize'")
+    constraints = arguments.get("constraints")
+    if constraints is not None and not isinstance(constraints, dict):
+        raise ValueError("Argument 'constraints' must be an object")
+    semantic_enabled = arguments.get("semantic_enabled", False)
+    if not isinstance(semantic_enabled, bool):
+        raise ValueError("Argument 'semantic_enabled' must be a boolean")
     result = answer_question(
         _require_str(arguments, "question"), Path(_require_str(arguments, "evidence_path")),
         top_k=_optional_int(arguments, "top_k", 5, minimum=1),
+        mode=mode,
+        constraints=constraints,
+        semantic_enabled=semantic_enabled,
     )
     return McpToolResult.ok(result)
 
@@ -996,8 +1008,8 @@ LITERATURE_EXTRACT_CHUNKED_RECORDS_TOOL = McpTool(
 LITERATURE_QA_TOOL = McpTool(
     name="igem.literature.qa",
     title="Query a local literature evidence database",
-    description="Use transparent local TF-IDF retrieval and return evidence, DOI, and score. It does not make a scientific conclusion or call an LLM.",
-    input_schema=_schema({"question": {"type": "string"}, "evidence_path": {"type": "string"}, "top_k": {"type": "integer", "minimum": 1}}, ["question", "evidence_path"]),
+    description="Retrieve provenance-bearing local evidence. Default retrieval does not call an LLM; synthesis never approves a scientific parameter.",
+    input_schema=_schema({"question": {"type": "string"}, "evidence_path": {"type": "string"}, "top_k": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "enum": ["retrieve_only", "synthesize"]}, "constraints": {"type": "object"}, "semantic_enabled": {"type": "boolean", "default": False}}, ["question", "evidence_path"]),
     output_schema=_schema({"ok": {"type": "boolean"}, "status": {"type": "string"}, "answer": {"type": "string"}, "sources": {"type": "array"}}, additional_properties=True),
 )
 

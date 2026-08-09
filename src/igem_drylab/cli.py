@@ -104,9 +104,12 @@ def literature_qa_command(
     question: str,
     evidence: Path = typer.Option(..., "--evidence", "-e"),
     top_k: int = typer.Option(5, "--top-k", min=1),
+    mode: str = typer.Option("retrieve_only", "--mode", help="retrieve_only or synthesize"),
+    semantic_enabled: bool = typer.Option(False, "--semantic", help="Use the optional embedding backend configured in the environment."),
 ) -> None:
-    """Search only the supplied local evidence file and print its provenance."""
-    typer.echo(json.dumps(answer_question(question, evidence, top_k=top_k), ensure_ascii=False, indent=2))
+    """Search a local evidence file and print provenance-bearing results."""
+    load_local_env()
+    typer.echo(json.dumps(answer_question(question, evidence, top_k=top_k, mode=mode, semantic_enabled=semantic_enabled), ensure_ascii=False, indent=2))
 
 
 @literature_app.command("serve-qa")
@@ -116,6 +119,7 @@ def serve_literature_qa_command(
     port: int = typer.Option(8765, "--port", min=1, max=65535),
 ) -> None:
     """Serve the local QA page; use a non-local host only behind your own access control."""
+    load_local_env()
     serve_literature_qa(evidence, host=host, port=port)
 
 

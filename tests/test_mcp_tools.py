@@ -88,6 +88,22 @@ def test_literature_qa_tool_returns_provenance(tmp_path):
     structured = result.as_protocol_dict()["structuredContent"]
     assert structured["ok"] is True
     assert structured["sources"][0]["doi"] == "10.1/oc"
+    assert structured["mode"] == "retrieve_only"
+    assert structured["retrieval"]["lexical"] == "bm25"
+
+
+def test_literature_qa_tool_exposes_opt_in_semantic_flag(tmp_path):
+    evidence = tmp_path / "evidence.jsonl"
+    evidence.write_text(json.dumps({"record_id": "r1", "title": "OC study", "doi": "10.1/oc", "evidence": "OC converts compound 11."}) + "\n", encoding="utf-8")
+    registry = create_default_registry()
+    schema = next(tool["inputSchema"] for tool in registry.list_tools() if tool["name"] == "igem.literature.qa")
+    assert schema["properties"]["semantic_enabled"] == {"type": "boolean", "default": False}
+    result = registry.call(
+        "igem.literature.qa", {"question": "OC activity", "evidence_path": str(evidence), "semantic_enabled": True},
+    )
+    structured = result.as_protocol_dict()["structuredContent"]
+    assert structured["ok"] is True
+    assert structured["retrieval"]["semantic"] == "unavailable"
 
 
 def test_literature_search_tool_writes_manifest(monkeypatch, tmp_path):
