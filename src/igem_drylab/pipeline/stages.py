@@ -350,6 +350,9 @@ def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], va
             "metabolite_id": metabolite,
             "comparison_status": comparison.comparison_status,
             "residual_final": comparison.residual_final,
+            "observed_final": comparison.observed_final,
+            "predicted_final": comparison.predicted_final,
+            "measurement_uncertainty": result.metabolite_uncertainty.get(metabolite, [None])[-1] if result.metabolite_uncertainty.get(metabolite) else None,
             "trend_agreement": comparison.trend_agreement,
             "replicate_variation": variations.get((result.construct_id, result.condition_id, metabolite, time_h)) if time_h is not None else None,
             "fit_status": comparison.fit.status if comparison.fit else None,
@@ -381,8 +384,9 @@ def _residual_exceeds_tolerance(evidence: dict[str, dict[str, object]], absolute
         residual = item.get("residual_final")
         if residual is None:
             continue
-        scale = max(abs(float(residual)), 1.0)
-        if abs(float(residual)) > absolute + relative * scale:
+        scale = max(abs(float(item.get("observed_final") or 0)), abs(float(item.get("predicted_final") or 0)), 1e-12)
+        uncertainty = float(item.get("measurement_uncertainty") or 0)
+        if abs(float(residual)) > absolute + relative * scale + uncertainty:
             return True
     return False
 

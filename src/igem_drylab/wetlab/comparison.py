@@ -10,6 +10,8 @@ from .models import WetLabResult
 class MetaboliteComparison(BaseModel):
     metabolite_id: str
     residual_final: float | None = None
+    observed_final: float | None = None
+    predicted_final: float | None = None
     trend_agreement: bool | None = None
     aligned_timepoints: int = 0
     comparison_status: str
@@ -36,5 +38,5 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
         predicted = np.interp(observed_time, time, np.asarray(data[f"x{metabolite}"], dtype=float))
         trend = bool((observed[-1] - observed[0]) * (predicted[-1] - predicted[0]) >= 0) if len(observed) >= 2 else None
         fit = fit_scale_parameter(predicted.tolist(), observed, bootstrap_samples=20) if len(observed) >= 2 and np.any(predicted > 0) else None
-        comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, residual_final=float(observed[-1] - predicted[-1]), trend_agreement=trend, aligned_timepoints=len(observed), comparison_status="trajectory_aligned" if len(observed) >= 2 else "endpoint_only", fit=fit)
+        comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, residual_final=float(observed[-1] - predicted[-1]), observed_final=float(observed[-1]), predicted_final=float(predicted[-1]), trend_agreement=trend, aligned_timepoints=len(observed), comparison_status="trajectory_aligned" if len(observed) >= 2 else "endpoint_only", fit=fit)
     return comparisons
