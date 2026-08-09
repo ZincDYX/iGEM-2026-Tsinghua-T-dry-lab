@@ -91,6 +91,7 @@ class M4CandidateContext(BaseModel):
     recruitment_fraction: dict[str, float] = Field(default_factory=dict)
     site_occupancy: dict[str, float] = Field(default_factory=dict)
     parameter_ids: list[str] = Field(default_factory=list)
+    provenance_summary: dict[str, int] = Field(default_factory=dict)
     assumptions: list[str] = Field(default_factory=list)
 
 

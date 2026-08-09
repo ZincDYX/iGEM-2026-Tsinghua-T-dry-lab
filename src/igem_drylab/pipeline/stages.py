@@ -144,6 +144,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             enzyme_distribution={name: {"dense": value.dense_concentration, "dilute": value.dilute_concentration, "partition_coefficient": value.partition_coefficient} for name, value in result.items()},
             recruitment_fraction=recruitment, site_occupancy=occupancy,
             parameter_ids=sorted(resolution.selected_parameter.parameter_id for resolution in selected.values() if resolution.selected_parameter),
+            provenance_summary=_provenance_summary(selected.values()),
             assumptions=["rapid_partition_equilibrium", "enzyme distribution is computed from approved abundance and Kp; recruitment is reported separately and does not modify kcat or abundance"],
         )
         records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="valid", data_quality=_data_quality(selected.values()),
@@ -188,22 +189,24 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             params = GlabridinKineticParameters(**values)
             pt_gate, oc_gate, dmt_gate = InductionGate(**gates.pt_gate.model_dump(exclude={"time_unit"})), InductionGate(**gates.oc_gate.model_dump(exclude={"time_unit"})), InductionGate(**gates.dmt_gate.model_dump(exclude={"time_unit"}))
             delayed = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=dmt_gate, initial=initial.as_tuple(), t_end=gates.t_end)
-            baseline = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=InductionGate(on_time=0.0, basal=dmt_gate.basal, induced=dmt_gate.induced, off_time=dmt_gate.off_time, mode=dmt_gate.mode, transition_width=dmt_gate.transition_width), initial=initial.as_tuple(), t_end=gates.t_end)
+            baseline_off = max(0.0, dmt_gate.off_time - dmt_gate.on_time) if dmt_gate.off_time is not None else None
+            baseline = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=InductionGate(on_time=0.0, basal=dmt_gate.basal, induced=dmt_gate.induced, off_time=baseline_off, mode=dmt_gate.mode, transition_width=dmt_gate.transition_width), initial=initial.as_tuple(), t_end=gates.t_end)
             final_15, final_13 = float(delayed.x15[-1]), float(delayed.x13[-1])
             baseline_13, baseline_15 = float(baseline.x13[-1]), float(baseline.x15[-1])
-            side_product_fraction = final_13 / (final_13 + final_15) if final_13 + final_15 else 0.0
+            delta_13, delta_15 = final_13 - initial.x13, final_15 - initial.x15
+            side_product_fraction = delta_13 / (delta_13 + delta_15) if delta_13 + delta_15 > 0 else 0.0
             trajectory = stage_dir / f"{item.candidate_id}_trajectory.json"
             trajectory.parent.mkdir(parents=True, exist_ok=True)
             trajectory.write_text(json.dumps({"time_unit": "h", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
-            recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, final_15 / gates.t_end, baseline_13, final_13, final_15, baseline_15, gates)
+            recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, delta_15 / gates.t_end, baseline_13 - initial.x13, delta_13, delta_15, baseline_15 - initial.x15, gates)
             records.append(M4ReactionPrediction(candidate_id=item.candidate_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality(selected.values()),
-                final_15=final_15, final_13=final_13, side_product_fraction_13=side_product_fraction, leakage_fraction=side_product_fraction, productivity=final_15 / gates.t_end,
+                final_15=final_15, final_13=final_13, side_product_fraction_13=side_product_fraction, leakage_fraction=side_product_fraction, productivity=delta_15 / gates.t_end,
                 recommendation=recommendation, candidate_context=item.m4_candidate_context,
                 simulation_inputs={"parameters": values, "initial": initial.model_dump(), "pt_gate": gates.pt_gate.model_dump(), "oc_gate": gates.oc_gate.model_dump(), "dmt_gate": gates.dmt_gate.model_dump(), "t_end": gates.t_end},
-                baseline_comparison={"13_reduction": (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0, "15_improvement": (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
+                baseline_comparison={"13_reduction": ((baseline_13 - initial.x13) - delta_13) / (baseline_13 - initial.x13) if baseline_13 != initial.x13 else 0.0, "15_improvement": (delta_15 - (baseline_15 - initial.x15)) / (baseline_15 - initial.x15) if baseline_15 != initial.x15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
                 bottleneck="premature_dmt_side_reaction" if side_product_fraction > gates.max_side_product_fraction_13 else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics", "no explicit metabolite export model", *( ["approved degradation rates enabled"] if gates.enable_degradation else ["degradation kernel disabled; all kdeg values set to zero"] )],
                 parameter_ids=sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}),
-                provenance_summary=_provenance_summary(selected.values()),
+                provenance_summary=_merge_provenance(item.m4_candidate_context.provenance_summary, _provenance_summary(selected.values())),
                 notes=f"M4 consumed candidate-specific M3 enzyme distributions; mass-balance error={delayed.mass_balance_error:.3g}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
@@ -328,6 +331,14 @@ def _provenance_summary(records: object) -> dict[str, int]:
     return summary
 
 
+def _merge_provenance(*summaries: dict[str, int]) -> dict[str, int]:
+    merged: dict[str, int] = {}
+    for summary in summaries:
+        for key, value in summary.items():
+            merged[key] = merged.get(key, 0) + value
+    return merged
+
+
 def _recommend_m4(side_product_fraction: float, productivity: float, baseline_13: float, final_13: float, final_15: float, baseline_15: float, gates: object) -> tuple[str, list[str]]:
     reduction = (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0
     improvement = (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0
@@ -338,7 +349,9 @@ def _recommend_m4(side_product_fraction: float, productivity: float, baseline_13
 
 
 def _condition_id(gates: object) -> str:
-    return f"pt{gates.pt_gate.on_time:g}_oc{gates.oc_gate.on_time:g}_dmt{gates.dmt_gate.on_time:g}h"
+    def encode(name: str, gate: object) -> str:
+        return f"{name}[on={gate.on_time:g},off={gate.off_time},basal={gate.basal:g},induced={gate.induced:g},mode={gate.mode},width={gate.transition_width:g}]"
+    return "|".join((encode("pt", gates.pt_gate), encode("oc", gates.oc_gate), encode("dmt", gates.dmt_gate)))
 
 
 def _condition_id_if_defined(gates: object) -> str:
