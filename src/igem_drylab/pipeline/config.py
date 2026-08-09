@@ -76,6 +76,12 @@ class ConstructDefinition(BaseModel):
     enzyme_ids: list[str] = Field(default_factory=list)
     oc_n_terminal_truncation: bool | None = None
 
+    @model_validator(mode="after")
+    def _one_linker_contract(self) -> "ConstructDefinition":
+        if len(self.linker_ids) > 1:
+            raise ValueError("current_m1_contract_allows_exactly_one_linker_id")
+        return self
+
 
 class InputsConfig(BaseModel):
     protein_fasta: Path
@@ -215,6 +221,24 @@ class ProjectConfig(StrictScientificConfig):
     tools: dict[str, ToolConfig] = Field(default_factory=dict)
     parameters: list[ParameterRecord] = Field(default_factory=list)
     stages: StagesConfig = Field(default_factory=StagesConfig)
+
+    @model_validator(mode="after")
+    def _validate_references(self) -> "ProjectConfig":
+        def unique(items: list[object], label: str) -> None:
+            values = [getattr(item, "id", getattr(item, "construct_id", None)) for item in items]
+            if len(values) != len(set(values)):
+                raise ValueError(f"duplicate_{label}_id")
+        unique(self.inputs.linkers, "linker"); unique(self.inputs.scaffolds, "scaffold"); unique(self.inputs.enzymes, "enzyme"); unique(self.inputs.constructs, "construct")
+        ParameterRegistry = __import__("igem_drylab.parameters", fromlist=["ParameterRegistry"]).ParameterRegistry
+        ParameterRegistry(self.parameters)
+        linker_ids, scaffold_ids, enzyme_ids = {item.id for item in self.inputs.linkers}, {item.id for item in self.inputs.scaffolds}, {item.id for item in self.inputs.enzymes}
+        for construct in self.inputs.constructs:
+            if any(item not in linker_ids for item in construct.linker_ids): raise ValueError("construct_references_unknown_linker")
+            if construct.scaffold_id and construct.scaffold_id not in scaffold_ids: raise ValueError("construct_references_unknown_scaffold")
+            if any(item not in enzyme_ids for item in construct.enzyme_ids): raise ValueError("construct_references_unknown_enzyme")
+        if self.execution.mode == "real" and self.stages.m4_reaction.condition_id is None and any((self.stages.m4_reaction.initial_state, self.stages.m4_reaction.pt_gate, self.stages.m4_reaction.oc_gate, self.stages.m4_reaction.dmt_gate)):
+            raise ValueError("real_mode_requires_explicit_condition_id")
+        return self
 
 
 def load_config(path: Path) -> ProjectConfig:

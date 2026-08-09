@@ -557,7 +557,7 @@ def constructs_generate_candidates(arguments: JsonObject) -> McpToolResult:
 
 def project_get_state(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
-    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"], experimental_context=project.experimental_context)
+    state = ProjectState.from_project(project)
     return McpToolResult.ok({"ok": True, "state": state.model_dump(mode="json")})
 
 

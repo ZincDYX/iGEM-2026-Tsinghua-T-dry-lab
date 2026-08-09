@@ -189,14 +189,14 @@ def parameter_conflicts(config: Path) -> None:
 @project_app.command("state")
 def project_state(config: Path) -> None:
     project = load_config(config)
-    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"])
+    state = ProjectState.from_project(project)
     typer.echo(state.model_dump_json(indent=2))
 
 
 @project_app.command("missing-inputs")
 def project_missing_inputs(config: Path, stage: str = typer.Option("m4", "--stage")) -> None:
     project = load_config(config)
-    state = ProjectState(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=project.parameters)
+    state = ProjectState.from_project(project)
     from igem_drylab.pipeline.config import canonical_m4_condition_id
     condition_id = canonical_m4_condition_id(project.stages.m4_reaction)
     typer.echo(json.dumps({"stage": stage, "missing": state.missing_inputs(stage, allow_assumptions=project.execution.allow_assumptions, condition_id=condition_id, enable_degradation=project.stages.m4_reaction.enable_degradation, require_provenance=project.execution.mode == "real" and project.execution.require_provenance)}, ensure_ascii=False, indent=2))

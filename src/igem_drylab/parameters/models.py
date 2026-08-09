@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+import math
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ParameterSourceType = Literal["literature", "wetlab", "prediction", "assumption"]
 ParameterType = Literal["kcat", "km", "kd", "kp", "phi", "abundance", "activity_ratio", "degradation_rate", "export_rate", "hill_coefficient", "other"]
@@ -17,6 +18,7 @@ class ParameterValidationError(ValueError):
 
 
 class ParameterUncertainty(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     value: float | None = Field(default=None, ge=0)
     lower: float | None = None
     upper: float | None = None
@@ -24,6 +26,7 @@ class ParameterUncertainty(BaseModel):
 
 
 class ParameterRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     parameter_id: str
     name: str
     value: float | str
@@ -63,6 +66,10 @@ class ParameterRecord(BaseModel):
             raise ValueError("approved literature parameters require evidence_text")
         if isinstance(self.value, (int, float)) and self.unit is None:
             raise ValueError("numeric parameter values require an explicit unit")
+        if isinstance(self.value, (int, float)) and not math.isfinite(float(self.value)):
+            raise ValueError("numeric parameter values must be finite")
+        if self.source_type == "prediction" and self.derivation_type == "direct_measurement":
+            raise ValueError("prediction cannot be direct_measurement")
         return self
 
     @property
