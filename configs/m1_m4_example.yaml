@@ -69,7 +69,7 @@ tools:
 stages:
   m1_llps:
     top_n: 6
-  m2_fusion:
+  m2_fusion: {}
   m3_concentration:
     binding_model: independent
   m4_reaction:
