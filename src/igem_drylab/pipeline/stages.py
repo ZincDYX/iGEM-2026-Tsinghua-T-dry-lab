@@ -8,7 +8,7 @@ import json
 from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
-from igem_drylab.parameters import m3_requirements, m4_requirements, recruitment_requirements, validate_parameters
+from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
 
@@ -399,4 +399,7 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
         fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[plan.parameter_name], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=plan.bootstrap_samples)
     except ValueError as error:
         return {"fit": None, "candidate": None, "warning": str(error)}
-    return {"fit": fit.model_dump(), "candidate": {"name": plan.parameter_name, "value": fit.best_fit, "review_status": "validated", "source_type": "wetlab", "derived_from": prediction.parameter_ids, "notes": "FitPlan candidate only; human approval is required before registry use."}}
+    parameter_type = "kcat" if plan.parameter_name.startswith("kcat_") else "km" if plan.parameter_name.startswith("km_") else "degradation_rate" if plan.parameter_name.startswith("kdeg_") else "abundance" if plan.parameter_name.endswith("_total") else "kp" if plan.parameter_name.startswith("partition_") else "activity_ratio"
+    unit = "1/h" if parameter_type in {"kcat", "degradation_rate"} else "uM" if parameter_type in {"km", "abundance"} else "1"
+    candidate = ParameterRecord(parameter_id=f"fit:{prediction.candidate_id}:{prediction.condition_id}:{plan.parameter_name}", name=plan.parameter_name, value=fit.best_fit, unit=unit, parameter_type=parameter_type, source_type="wetlab", source_reference=result.experiment_id, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, derived_from=prediction.parameter_ids, notes="FitPlan candidate only; human approval is required before registry use.")
+    return {"fit": fit.model_dump(), "candidate": candidate.model_dump(mode="json")}
