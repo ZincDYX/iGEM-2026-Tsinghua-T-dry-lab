@@ -33,6 +33,13 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert 'id="chips"' not in PAGE
     assert "setupChips" not in PAGE
     assert "e.g. OC activity, DMT kinetics, glabridin production" in PAGE
+    assert "window.setTimeout(renderLoading,180)" in PAGE
+    assert 'id="health-text">Checking evidence database' in PAGE
+    assert "function appendFieldRows" in PAGE
+    assert "fields-nested" in PAGE
+    assert "fieldLabel(key)+':'" in PAGE
+    assert "function renderQuote" in PAGE
+    assert "Illustrative preview record:" in PAGE
 
 
 def test_health_contract_is_unchanged(tmp_path: Path) -> None:
