@@ -155,10 +155,22 @@ class M4Config(StrictScientificConfig):
     min_13_reduction: float = Field(default=0.05, ge=0, le=1)
     min_15_improvement: float = Field(default=0, ge=-1)
     min_productivity: float = Field(default=0, ge=0)
+    enable_degradation: bool = False
+
+
+class FitPlanConfig(StrictScientificConfig):
+    parameter_name: str
+    fixed_parameter_names: list[str] = Field(default_factory=list)
+    bounds: tuple[float, float]
+    observables: list[Literal["13", "15"]] = Field(min_length=1)
+    bootstrap_samples: int = Field(default=100, ge=0)
 
 
 class M5Config(StrictScientificConfig):
     wetlab_results_file: Path | None = None
+    absolute_residual_tolerance: float = Field(default=0.0, ge=0)
+    relative_residual_tolerance: float = Field(default=0.0, ge=0)
+    fit_plan: FitPlanConfig | None = None
 
 
 class StagesConfig(StrictScientificConfig):

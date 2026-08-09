@@ -72,7 +72,22 @@ class M3ConcentrationAssessment(ScientificResult):
     site_occupancy: dict[str, float] = Field(default_factory=dict)
     saturation: bool | None = None
     recommended_for_m4: bool = False
+    m4_candidate_context: M4CandidateContext | None = None
     notes: str = ""
+
+
+class M4CandidateContext(BaseModel):
+    """Mass-conserving candidate-specific enzyme distribution passed from M3 to M4."""
+
+    candidate_id: str
+    construct_id: str
+    condition_id: str
+    phi: float = Field(ge=0, le=1)
+    enzyme_distribution: dict[str, dict[str, float]]
+    recruitment_fraction: dict[str, float] = Field(default_factory=dict)
+    site_occupancy: dict[str, float] = Field(default_factory=dict)
+    parameter_ids: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
 
 
 class M4ReactionPrediction(ScientificResult):
@@ -89,6 +104,8 @@ class M4ReactionPrediction(ScientificResult):
     baseline_comparison: dict[str, float] = Field(default_factory=dict)
     bottleneck: str = "insufficient_data"
     trajectory_artifact: Path | None = None
+    candidate_context: M4CandidateContext | None = None
+    simulation_inputs: dict[str, Any] = Field(default_factory=dict)
     recommendation_evidence: list[str] = Field(default_factory=list)
     notes: str = ""
 
@@ -105,5 +122,6 @@ class M5FeedbackAssessment(ScientificResult):
     fit: dict[str, Any] | None = None
     metabolite_comparisons: dict[str, Any] = Field(default_factory=dict)
     diagnosis_evidence: dict[str, Any] = Field(default_factory=dict)
+    fitted_parameter_candidate: dict[str, Any] | None = None
     next_measurement: str | None = None
     notes: str = ""

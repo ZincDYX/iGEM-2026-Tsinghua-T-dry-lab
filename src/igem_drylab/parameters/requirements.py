@@ -40,8 +40,8 @@ def m3_requirements() -> list[ParameterRequirement]:
     ]
 
 
-def m4_requirements() -> list[ParameterRequirement]:
-    return [
+def m4_requirements(*, include_degradation: bool = False) -> list[ParameterRequirement]:
+    requirements = [
         *m3_requirements(),
         _requirement("kcat_pt", "kcat", enzyme_id="PT", substrate_id="9", product_id="10"),
         _requirement("km_pt", "km", enzyme_id="PT", substrate_id="9"),
@@ -54,6 +54,9 @@ def m4_requirements() -> list[ParameterRequirement]:
         *[_requirement(f"partition_x{species}", "kp") for species in ("9", "10", "11", "13", "15")],
         *[_requirement(f"activity_{phase}_{enzyme}", "activity_ratio", enzyme_id=enzyme.upper()) for phase in ("dense", "dilute") for enzyme in ("pt", "oc", "dmt")],
     ]
+    if include_degradation:
+        requirements.extend(_requirement(f"kdeg_{species}", "degradation_rate") for species in ("9", "10", "11", "13", "15"))
+    return requirements
 
 
 def recruitment_requirements(recruitment: object, *, binding_model: str) -> list[ParameterRequirement]:

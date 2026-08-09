@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import replace
+import numpy as np
 import json
 
 from igem_drylab.constructs import ConstructRegistry, assess_linker
@@ -8,12 +10,12 @@ from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.parameters import m3_requirements, m4_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
-from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors
+from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
 
 from .adapters import create_tool_adapter
 from .config import ConstructDefinition, ProjectConfig
 from .io import write_models
-from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, M4ReactionPrediction, M5FeedbackAssessment, StageOutput
+from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, M4CandidateContext, M4ReactionPrediction, M5FeedbackAssessment, StageOutput
 
 
 def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], StageOutput]:
@@ -100,11 +102,13 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
     stage_dir = run_dir / "m3_enrichment"
     species = ("PT", "OC", "DMT", "9", "10", "11", "13", "15")
     requirements = m3_requirements() + [requirement for entry in config.stages.m3_concentration.recruitment for requirement in recruitment_requirements(entry, binding_model=config.stages.m3_concentration.binding_model)]
-    selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c)
     records: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
         if not assessment.recommended_for_m3:
             continue
+        construct_id = assessment.candidate_id.removeprefix("M1-")
+        condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)
+        selected, missing = validate_parameters(config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id)
         if missing:
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="insufficient_data", data_quality="heuristic",
                 missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
@@ -135,6 +139,13 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             pass
         if records and records[-1].candidate_id == assessment.candidate_id and records[-1].status == "insufficient_data":
             continue
+        context = M4CandidateContext(candidate_id=assessment.candidate_id, construct_id=construct_id, condition_id=condition_id,
+            phi=phi,
+            enzyme_distribution={name: {"dense": value.dense_concentration, "dilute": value.dilute_concentration, "partition_coefficient": value.partition_coefficient} for name, value in result.items()},
+            recruitment_fraction=recruitment, site_occupancy=occupancy,
+            parameter_ids=sorted(resolution.selected_parameter.parameter_id for resolution in selected.values() if resolution.selected_parameter),
+            assumptions=["rapid_partition_equilibrium", "enzyme distribution is computed from approved abundance and Kp; recruitment is reported separately and does not modify kcat or abundance"],
+        )
         records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, status="valid", data_quality=_data_quality(selected.values()),
             concentrations={key: value.model_dump() for key, value in result.items()},
             dense_oc_dmt_ratio=oc.dense_concentration / dmt.dense_concentration if dmt.dense_concentration else None,
@@ -142,6 +153,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             recruitment_fraction={key: value.fraction_in_dense for key, value in result.items()} | recruitment,
             site_occupancy=occupancy,
             recommended_for_m4=True, parameter_ids=sorted(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter),
+            m4_candidate_context=context,
             notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
     write_models(stage_dir, "concentration_assessments", records)
     return records, _stage_output("m3_enrichment", stage_dir, "concentration_assessments", len(records))
@@ -149,21 +161,30 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
     stage_dir = run_dir / "m4_glabridin_kinetics"
-    selected, missing = validate_parameters(config.parameters, requirements=m4_requirements(), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c)
     gates = config.stages.m4_reaction
     gate_missing = [name for name in ("pt_gate", "oc_gate", "dmt_gate") if getattr(gates, name) is None]
     records: list[M4ReactionPrediction] = []
     for item in assessments:
         if item.status != "valid":
             records.append(_m4_insufficient(item.candidate_id, config, ["validated M3 enrichment"]))
-        elif missing or gate_missing:
-            records.append(_m4_insufficient(item.candidate_id, config, missing + gate_missing))
+            continue
+        elif item.m4_candidate_context is None:
+            records.append(_m4_insufficient(item.candidate_id, config, ["candidate-specific M3 context"]))
+            continue
         else:
+            construct_id = item.m4_candidate_context.construct_id
+            condition_id = item.m4_candidate_context.condition_id
+            selected, missing = validate_parameters(config.parameters, requirements=m4_requirements(include_degradation=gates.enable_degradation), allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id)
+            if missing or gate_missing:
+                records.append(_m4_insufficient(item.candidate_id, config, missing + gate_missing))
+                continue
             initial = gates.initial_state
             if initial is None:
                 records.append(_m4_insufficient(item.candidate_id, config, ["initial_state"]))
                 continue
-            params = GlabridinKineticParameters(**_glabridin_parameter_values(selected))
+            values = _glabridin_parameter_values(selected)
+            values.update(_candidate_enzyme_values(item.m4_candidate_context))
+            params = GlabridinKineticParameters(**values)
             pt_gate, oc_gate, dmt_gate = InductionGate(**gates.pt_gate.model_dump(exclude={"time_unit"})), InductionGate(**gates.oc_gate.model_dump(exclude={"time_unit"})), InductionGate(**gates.dmt_gate.model_dump(exclude={"time_unit"}))
             delayed = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=dmt_gate, initial=initial.as_tuple(), t_end=gates.t_end)
             baseline = simulate_glabridin(params, pt_gate=pt_gate, oc_gate=oc_gate, dmt_gate=InductionGate(on_time=0.0, basal=dmt_gate.basal, induced=dmt_gate.induced, off_time=dmt_gate.off_time, mode=dmt_gate.mode, transition_width=dmt_gate.transition_width), initial=initial.as_tuple(), t_end=gates.t_end)
@@ -173,15 +194,15 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             trajectory = stage_dir / f"{item.candidate_id}_trajectory.json"
             trajectory.parent.mkdir(parents=True, exist_ok=True)
             trajectory.write_text(json.dumps({"time_unit": "h", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
-            condition_id = gates.condition_id or _condition_id(gates)
             recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, final_15 / gates.t_end, baseline_13, final_13, final_15, baseline_15, gates)
             records.append(M4ReactionPrediction(candidate_id=item.candidate_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality(selected.values()),
                 final_15=final_15, final_13=final_13, side_product_fraction_13=side_product_fraction, leakage_fraction=side_product_fraction, productivity=final_15 / gates.t_end,
-                recommendation=recommendation,
+                recommendation=recommendation, candidate_context=item.m4_candidate_context,
+                simulation_inputs={"parameters": values, "initial": initial.model_dump(), "pt_gate": gates.pt_gate.model_dump(), "oc_gate": gates.oc_gate.model_dump(), "dmt_gate": gates.dmt_gate.model_dump(), "t_end": gates.t_end},
                 baseline_comparison={"13_reduction": (baseline_13 - final_13) / baseline_13 if baseline_13 else 0.0, "15_improvement": (final_15 - baseline_15) / baseline_15 if baseline_15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
-                bottleneck="premature_dmt_side_reaction" if side_product_fraction > gates.max_side_product_fraction_13 else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics", "no explicit metabolite export model", "degradation is set to zero in this minimal model"],
-                parameter_ids=sorted(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter),
-                notes=f"Mass-balance error={delayed.mass_balance_error:.3g}; compound 13 is a side-product proxy, not extracellular leakage; docking scores were not converted into enzyme activity."))
+                bottleneck="premature_dmt_side_reaction" if side_product_fraction > gates.max_side_product_fraction_13 else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics", "no explicit metabolite export model", *( ["approved degradation rates enabled"] if gates.enable_degradation else ["degradation kernel disabled; all kdeg values set to zero"] )],
+                parameter_ids=sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}),
+                notes=f"M4 consumed candidate-specific M3 enzyme distributions; mass-balance error={delayed.mass_balance_error:.3g}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
 
@@ -213,9 +234,11 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
         systematic = systematic_directional_errors(systematic_rows)
         for result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable in prepared:
             systematic_error = any((result.construct_id, metabolite) in systematic for metabolite in comparisons)
+            systematic_error = systematic_error and _residual_exceeds_tolerance(evidence, config.stages.m5_feedback.absolute_residual_tolerance, config.stages.m5_feedback.relative_residual_tolerance)
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic_error)
             joint_diagnosis = _joint_diagnosis_label(evidence, diagnosis.category)
-            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and usable else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=joint_diagnosis, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, diagnosis_evidence=evidence, next_measurement="measure OC/DMT abundance and metabolite time course" if joint_diagnosis != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}; diagnosis_metabolites={','.join(item.metabolite_id for item in usable)}."))
+            fitted = _fit_plan_candidate(config, prediction, result, comparisons)
+            records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, status="valid" if report.passed and usable else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=joint_diagnosis, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fitted.get("fit") if fitted else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, diagnosis_evidence=evidence, fitted_parameter_candidate=fitted.get("candidate") if fitted else None, next_measurement="measure OC/DMT abundance and metabolite time course" if joint_diagnosis != "INSUFFICIENT_INFORMATION" else None, notes=f"Raw outliers retained; comparison={comparison_status}; diagnosis_metabolites={','.join(item.metabolite_id for item in usable)}."))
     write_models(stage_dir, "feedback", records)
     return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
 
@@ -250,11 +273,22 @@ def _glabridin_parameter_values(selected: dict[str, object]) -> dict[str, float]
     accepted = {
         "phi", "pt_total", "oc_total", "dmt_total", "kcat_pt", "km_pt", "kcat_oc", "km_oc", "kcat_dmt_9", "km_dmt_9", "kcat_dmt_11", "km_dmt_11",
         "partition_pt", "partition_oc", "partition_dmt", "partition_x9", "partition_x10", "partition_x11", "partition_x13", "partition_x15",
-        "activity_dense_pt", "activity_dilute_pt", "activity_dense_oc", "activity_dilute_oc", "activity_dense_dmt", "activity_dilute_dmt",
+        "activity_dense_pt", "activity_dilute_pt", "activity_dense_oc", "activity_dilute_oc", "activity_dense_dmt", "activity_dilute_dmt", "kdeg_9", "kdeg_10", "kdeg_11", "kdeg_13", "kdeg_15",
     }
     values = {name: float(getattr(record, "canonical_value")) for name, record in selected.items() if name in accepted}
     for species in ("9", "10", "11", "13", "15"):
         values[f"partition_{species}"] = values.pop(f"partition_x{species}")
+    return values
+
+
+def _candidate_enzyme_values(context: M4CandidateContext) -> dict[str, float]:
+    """Recover cell-average totals/Kp from M3's explicit mass-conserving distribution."""
+    values: dict[str, float] = {"phi": context.phi}
+    for enzyme, target in (("PT", "pt"), ("OC", "oc"), ("DMT", "dmt")):
+        distribution = context.enzyme_distribution[enzyme]
+        dense, dilute = distribution["dense"], distribution["dilute"]
+        values[f"{target}_total"] = context.phi * dense + (1.0 - context.phi) * dilute
+        values[f"partition_{target}"] = distribution["partition_coefficient"]
     return values
 
 
@@ -281,6 +315,12 @@ def _recommend_m4(side_product_fraction: float, productivity: float, baseline_13
 
 def _condition_id(gates: object) -> str:
     return f"pt{gates.pt_gate.on_time:g}_oc{gates.oc_gate.on_time:g}_dmt{gates.dmt_gate.on_time:g}h"
+
+
+def _condition_id_if_defined(gates: object) -> str:
+    if all(getattr(gates, name) is not None for name in ("pt_gate", "oc_gate", "dmt_gate")):
+        return _condition_id(gates)
+    return "unresolved"
 
 
 def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], variations: dict[tuple[str, str, str, float], float | None]) -> dict[str, dict[str, object]]:
@@ -318,3 +358,45 @@ def _joint_diagnosis_label(evidence: dict[str, dict[str, object]], fallback: str
     if all(value is not None and value > 0 for value in signs) or all(value is not None and value < 0 for value in signs):
         return "POSSIBLE_GLOBAL_PARAMETER_OR_MODEL_MISMATCH"
     return fallback
+
+
+def _residual_exceeds_tolerance(evidence: dict[str, dict[str, object]], absolute: float, relative: float) -> bool:
+    for item in evidence.values():
+        residual = item.get("residual_final")
+        if residual is None:
+            continue
+        scale = max(abs(float(residual)), 1.0)
+        if abs(float(residual)) > absolute + relative * scale:
+            return True
+    return False
+
+
+def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction | None, result: object, comparisons: dict[str, object]) -> dict[str, object] | None:
+    plan = config.stages.m5_feedback.fit_plan
+    if plan is None:
+        return None
+    if prediction is None or not prediction.simulation_inputs:
+        return {"fit": None, "candidate": None, "warning": "missing_production_m4_simulation_inputs"}
+    if plan.parameter_name in {"recruitment_fraction", "site_occupancy", "docking_score", "structure_score"}:
+        return {"fit": None, "candidate": None, "warning": "FitPlan parameter is not a mechanistic M4 parameter"}
+    observed: list[float] = []
+    times: list[float] = []
+    for observable in plan.observables:
+        values = result.metabolites.get(observable)
+        if values is not None:
+            observed.extend(values); times.extend(result.time_hours())
+    if len(observed) < 4 or len(times) != len(observed):
+        return {"fit": None, "candidate": None, "warning": "identifiability_warning:fewer_than_four_declared_observations"}
+    values = dict(prediction.simulation_inputs["parameters"])
+    if plan.parameter_name not in values or plan.parameter_name in plan.fixed_parameter_names:
+        return {"fit": None, "candidate": None, "warning": "FitPlan parameter absent_or_declared_fixed"}
+    inputs = prediction.simulation_inputs
+    def predictor(value: float) -> np.ndarray:
+        changed = dict(values); changed[plan.parameter_name] = value
+        simulation = simulate_glabridin(GlabridinKineticParameters(**changed), pt_gate=InductionGate(**{k: v for k, v in inputs["pt_gate"].items() if k != "time_unit"}), oc_gate=InductionGate(**{k: v for k, v in inputs["oc_gate"].items() if k != "time_unit"}), dmt_gate=InductionGate(**{k: v for k, v in inputs["dmt_gate"].items() if k != "time_unit"}), initial=tuple(inputs["initial"][f"x{key}"] for key in ("9", "10", "11", "13", "15")), t_end=inputs["t_end"])
+        return np.concatenate([np.interp(result.time_hours(), simulation.time, getattr(simulation, f"x{observable}")) for observable in plan.observables if result.metabolites.get(observable) is not None])
+    try:
+        fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[plan.parameter_name], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=plan.bootstrap_samples)
+    except ValueError as error:
+        return {"fit": None, "candidate": None, "warning": str(error)}
+    return {"fit": fit.model_dump(), "candidate": {"name": plan.parameter_name, "value": fit.best_fit, "review_status": "validated", "source_type": "wetlab", "derived_from": prediction.parameter_ids, "notes": "FitPlan candidate only; human approval is required before registry use."}}

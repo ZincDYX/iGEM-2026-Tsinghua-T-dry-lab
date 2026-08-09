@@ -77,6 +77,8 @@ igem-drylab tools call igem.scoring.m4_piecewise_ode --arguments-file examples/m
 
 The default structure backend is ColabFold AlphaFold2-Multimer. Its `ranking_debug.json` parser extracts pLDDT, pTM and ipTM. It deliberately does not claim an inter-chain PAE value without chain boundaries. AF3/Boltz/Chai/ABCFold/CALVADOS parsers are retained as optional compatibility tools, not required dependencies.
 
+Production M3 passes a candidate-specific, mass-conserving enzyme distribution to M4. Construct/condition-scoped reviewed parameters override global records; recruitment, docking, and structure scores are not kinetic multipliers. The optional M5 FitPlan fits exactly one declared mechanistic parameter and emits a validated candidate requiring human approval.
+
 ## Build a literature extraction prompt
 
 This command does not call an LLM. It only builds the schema-first prompt.

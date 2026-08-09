@@ -32,6 +32,9 @@ class ParameterRecord(BaseModel):
     enzyme_id: str | None = None
     substrate_id: str | None = None
     product_id: str | None = None
+    # ``None`` denotes a global parameter. Scoped records must match exactly.
+    construct_id: str | None = None
+    condition_id: str | None = None
     parameter_type: ParameterType = "other"
     source_type: ParameterSourceType
     source_reference: str | None = None

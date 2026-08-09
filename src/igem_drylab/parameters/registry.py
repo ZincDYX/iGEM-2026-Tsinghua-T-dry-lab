@@ -12,9 +12,9 @@ from .requirements import ParameterRequirement
 from .validation import condition_compatibility, identity_compatibility
 
 
-def resolve_requirement(registry: "ParameterRegistry", requirement: ParameterRequirement, context: object, *, allow_assumptions: bool) -> ParameterResolution:
+def resolve_requirement(registry: "ParameterRegistry", requirement: ParameterRequirement, context: object, *, allow_assumptions: bool, construct_id: str | None = None, condition_id: str | None = None) -> ParameterResolution:
     """Shared production resolution entry point for pipeline, MCP, and agent."""
-    return registry.resolve(requirement, host=getattr(context, "host", None), temperature_c=getattr(context, "temperature_c", None), allow_assumptions=allow_assumptions)
+    return registry.resolve(requirement, host=getattr(context, "host", None), temperature_c=getattr(context, "temperature_c", None), allow_assumptions=allow_assumptions, construct_id=construct_id, condition_id=condition_id)
 
 
 class ParameterResolution(BaseModel):
@@ -40,11 +40,17 @@ class ParameterRegistry:
     def query(self, **filters: str | None) -> list[ParameterRecord]:
         return [item for item in self._records if all(value is None or getattr(item, key) == value for key, value in filters.items())]
 
-    def resolve(self, requirement: ParameterRequirement, *, host: str | None = None, temperature_c: float | None = None, mutant_allowed: bool = False, allow_assumptions: bool = False) -> ParameterResolution:
+    def resolve(self, requirement: ParameterRequirement, *, host: str | None = None, temperature_c: float | None = None, mutant_allowed: bool = False, allow_assumptions: bool = False, construct_id: str | None = None, condition_id: str | None = None) -> ParameterResolution:
         candidates = [item for item in self.query(name=requirement.name) if item.review_status == "approved" and (allow_assumptions or item.source_type != "assumption")]
         compatible: list[tuple[ParameterRecord, float]] = []
         rejected: list[str] = []
         for record in candidates:
+            if record.construct_id is not None and record.construct_id != construct_id:
+                rejected.append("construct_scope_mismatch")
+                continue
+            if record.condition_id is not None and record.condition_id != condition_id:
+                rejected.append("condition_scope_mismatch")
+                continue
             identity = identity_compatibility(record, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, host=host, mutant_allowed=mutant_allowed)
             condition = condition_compatibility(record, host=host, temperature_c=temperature_c)
             if identity.level == "incompatible" or condition.level == "incompatible":
@@ -61,12 +67,17 @@ class ParameterRegistry:
             compatible.append((record, value))
         if not compatible:
             return ParameterResolution(status="unresolved", reasons=sorted(set(rejected or ["no_approved_exact_compatible_parameter"])))
-        ranked = sorted(compatible, key=lambda pair: ({"wetlab": 0, "literature": 1, "prediction": 2, "assumption": 3}[pair[0].source_type], -pair[0].parameter_version, pair[0].parameter_id))
+        def scope_rank(record: ParameterRecord) -> int:
+            if record.construct_id == construct_id and record.condition_id == condition_id and construct_id is not None and condition_id is not None: return 0
+            if record.construct_id == construct_id and record.condition_id is None and construct_id is not None: return 1
+            if record.construct_id is None and record.condition_id == condition_id and condition_id is not None: return 2
+            return 3
+        ranked = sorted(compatible, key=lambda pair: (scope_rank(pair[0]), {"wetlab": 0, "literature": 1, "prediction": 2, "assumption": 3}[pair[0].source_type], -pair[0].parameter_version, pair[0].parameter_id))
         best, value = ranked[0]
-        tied = [pair for pair in ranked if pair[0].source_type == best.source_type and pair[0].parameter_version == best.parameter_version]
+        tied = [pair for pair in ranked if scope_rank(pair[0]) == scope_rank(best) and pair[0].source_type == best.source_type and pair[0].parameter_version == best.parameter_version]
         if len({round(pair[1], 12) for pair in tied}) > 1:
             return ParameterResolution(status="conflict", alternatives=[pair[0] for pair in tied], reasons=["conflicting_equally_ranked_compatible_records"])
-        return ParameterResolution(status="resolved", selected_parameter=best, canonical_value=value, alternatives=[pair[0] for pair in ranked[1:]], reasons=["approved_exact_identity_condition_and_dimension_match"])
+        return ParameterResolution(status="resolved", selected_parameter=best, canonical_value=value, alternatives=[pair[0] for pair in ranked[1:]], reasons=["approved_exact_identity_condition_dimension_and_scope_match"])
 
     def resolve_for_model(self, name: str, *, allow_assumptions: bool = False) -> ParameterResolution:
         """Legacy name-only inspection API; scientific stages must call ``resolve``."""
@@ -93,12 +104,12 @@ class ParameterRegistry:
     def to_jsonl(self, path: Path) -> None: path.write_text("\n".join(item.model_dump_json() for item in self._records) + "\n", encoding="utf-8")
 
 
-def validate_parameters(records: list[ParameterRecord], *, requirements: list[ParameterRequirement] | None = None, required_names: set[str] | None = None, allow_assumptions: bool = False, host: str | None = None, temperature_c: float | None = None) -> tuple[dict[str, ParameterResolution], list[str]]:
+def validate_parameters(records: list[ParameterRecord], *, requirements: list[ParameterRequirement] | None = None, required_names: set[str] | None = None, allow_assumptions: bool = False, host: str | None = None, temperature_c: float | None = None, construct_id: str | None = None, condition_id: str | None = None) -> tuple[dict[str, ParameterResolution], list[str]]:
     legacy = requirements is None
     if requirements is None:
         requirements = [ParameterRequirement(name=name, parameter_type="other", dimension="dimensionless") for name in sorted(required_names or set())]
     registry = ParameterRegistry(records)
-    resolutions = {item.name: (registry.resolve_for_model(item.name, allow_assumptions=allow_assumptions) if legacy else registry.resolve(item, host=host, temperature_c=temperature_c, allow_assumptions=allow_assumptions)) for item in requirements}
+    resolutions = {item.name: (registry.resolve_for_model(item.name, allow_assumptions=allow_assumptions) if legacy else registry.resolve(item, host=host, temperature_c=temperature_c, allow_assumptions=allow_assumptions, construct_id=construct_id, condition_id=condition_id)) for item in requirements}
     if legacy:
         selected = {name: result.selected_parameter for name, result in resolutions.items() if result.selected_parameter is not None}
         return selected, [f"{name} ({result.status})" for name, result in resolutions.items() if result.status != "resolved"]  # type: ignore[return-value]
