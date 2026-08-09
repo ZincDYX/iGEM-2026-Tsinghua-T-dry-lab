@@ -54,6 +54,9 @@ class M2FusionAssessment(ScientificResult):
     construct_id: str
     construct_definition: dict[str, Any]
     structure_model: str | None = None
+    structure_source_tool: str | None = None
+    structure_artifact_path: str | None = None
+    structure_artifact_sha256: str | None = None
     available_metrics: list[str] = Field(default_factory=list)
     missing_metrics: list[str] = Field(default_factory=list)
     confidence_level: Literal["none", "partial", "complete"] = "none"

@@ -270,6 +270,11 @@ class GlabridinSimulationResult:
     def mass_balance_error(self) -> float:
         return float(np.max(np.abs(self.concentrations.sum(axis=0) - self.concentrations.sum(axis=0)[0])))
 
+    @property
+    def modeled_degradation_loss(self) -> float:
+        """Net pathway mass removed by enabled first-order degradation sinks."""
+        return max(0.0, float(self.concentrations.sum(axis=0)[0] - self.concentrations.sum(axis=0)[-1]))
+
 
 def phase_concentrations(average: float, partition: float, phi: float) -> tuple[float, float]:
     """Return dense- and dilute-phase concentrations under mass conservation."""

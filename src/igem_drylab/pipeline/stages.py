@@ -12,7 +12,6 @@ from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_kinetic_
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
 
-from .adapters import create_tool_adapter
 from .config import ConstructDefinition, ProjectConfig
 from .io import write_models
 from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, M4CandidateContext, M4ReactionPrediction, M5FeedbackAssessment, StageOutput
@@ -64,7 +63,6 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
 def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) -> tuple[list[M2FusionAssessment], StageOutput]:
     """Report observed structural negative-screen metrics; never fill absent metrics."""
     stage_dir = run_dir / "m2_structure_screen"
-    adapter = create_tool_adapter("abcfold", config.tools.get("abcfold"))
     metrics = load_m2_structure_metrics(config.stages.m2_fusion.structure_metrics_file) if config.stages.m2_fusion.structure_metrics_file else {}
     assessments: list[M2FusionAssessment] = []
     for candidate in candidates:
@@ -80,14 +78,15 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             assessments.append(M2FusionAssessment(
                 candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, status="insufficient_data",
                 data_quality="demo_fixture" if config.execution.mode == "demo" else "predicted",
-                structure_model=adapter.describe("abcfold predict <input>").tool,
+                structure_model=None,
                 missing_inputs=["structure metrics: SASA, pocket RMSD, clashes, ipTM, pLDDT"],
                 recommended_next_action=["supply parsed structure-prediction and pocket-screen metrics"], notes="No structure metrics were supplied; no risk score was generated.",
             ))
             continue
         scored = score_m2_structure(row)
         assessments.append(M2FusionAssessment(
-            candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, structure_model=adapter.describe("abcfold predict <input>").tool,
+            candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, structure_model=row.source_model or row.source_tool,
+            structure_source_tool=row.source_tool, structure_artifact_path=row.artifact_path, structure_artifact_sha256=row.artifact_sha256,
             status=scored.status, data_quality="predicted", available_metrics=scored.available_metrics, missing_metrics=scored.missing_metrics,
             confidence_level="complete" if not scored.missing_metrics else "partial", heuristic_structure_risk=scored.heuristic_structure_risk,
             pocket_sasa_retention=row.sasa_retention, pocket_rmsd_angstrom=row.pocket_rmsd_angstrom, clash_count=row.clash_count,
@@ -207,7 +206,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 bottleneck="premature_dmt_side_reaction" if side_product_fraction > gates.max_side_product_fraction_13 else "review_time_course", trajectory_artifact=trajectory, recommendation_evidence=recommendation_evidence, assumptions=["rapid partition equilibrium", "competitive DMT kinetics", "no explicit metabolite export model", *( ["approved degradation rates enabled"] if gates.enable_degradation else ["degradation kernel disabled; all kdeg values set to zero"] )],
                 parameter_ids=sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}),
                 provenance_summary=_merge_provenance(item.m4_candidate_context.provenance_summary, _provenance_summary(selected.values())),
-                notes=f"M4 consumed candidate-specific M3 enzyme distributions; mass-balance error={delayed.mass_balance_error:.3g}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
+                notes=f"M4 consumed candidate-specific M3 enzyme distributions; {'modeled degradation loss=' + format(delayed.modeled_degradation_loss, '.3g') if gates.enable_degradation else 'mass-balance error=' + format(delayed.mass_balance_error, '.3g')}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
 

@@ -9,6 +9,10 @@ from pydantic import BaseModel, Field
 
 class M2StructureMetrics(BaseModel):
     candidate_id: str
+    source_tool: str | None = None
+    source_model: str | None = None
+    artifact_path: str | None = None
+    artifact_sha256: str | None = None
     sasa_retention: float | None = Field(default=None, ge=0)
     pocket_rmsd_angstrom: float | None = Field(default=None, ge=0)
     mean_interdomain_pae: float | None = Field(default=None, ge=0)
@@ -94,7 +98,7 @@ def score_m2_structure(metrics: M2StructureMetrics) -> M2StructureScore:
         else:
             confidence_terms.append(0.85)
 
-    present = [name for name, value in metrics.model_dump().items() if value is not None and name not in {"candidate_id", "notes"}]
+    present = [name for name, value in metrics.model_dump().items() if value is not None and name not in {"candidate_id", "notes", "source_tool", "source_model", "artifact_path", "artifact_sha256"}]
     required = {"sasa_retention", "pocket_rmsd_angstrom", "clash_count", "iptm", "mean_plddt"}
     missing = sorted(required - set(present))
     if missing:
