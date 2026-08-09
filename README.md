@@ -82,6 +82,7 @@ Production M3 passes a candidate-specific, mass-conserving enzyme distribution t
 Before pilot ingestion, use the typed evidence contracts for enzyme kinetics, LLPS partitioning, abundance, and recruitment. Evidence extraction remains review-only; it cannot write an approved production parameter.
 
 Production ingestion is: raw source → typed Evidence → `map_evidence_to_requirement` (identity/unit validation) → extracted ParameterCandidate → human validation/approval → scoped Registry. Phase-specific residual activity uses `PhaseActivityEvidence`; no evidence path can auto-approve a parameter.
+For MCP users, `igem.parameters.map_typed_evidence` is the production entry point; `igem.parameters.validate_evidence` remains a legacy inspection helper and must not be used to recommend a production parameter.
 
 M4/M5 production quantities have a strict unit contract: concentrations are `uM`, time is `h`, and rates are `1/h`. M4 trajectory JSON explicitly declares both units. Wet-lab comparisons convert declared `M`/`mM`/`uM`/`nM` observations to `uM`; unsupported or missing units are a comparison-contract failure, not an implicit numeric comparison. LOD/LOQ are applied per timepoint, so a 0 h value below LOD does not discard later quantified observations.
 

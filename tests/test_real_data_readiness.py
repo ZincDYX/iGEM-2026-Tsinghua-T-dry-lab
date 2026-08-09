@@ -72,6 +72,16 @@ def test_mcp_recognizes_degradation_requirement_when_enabled(tmp_path: Path) -> 
     assert result.as_protocol_dict()["structuredContent"]["resolution"]["status"] == "unresolved"
 
 
+def test_mcp_typed_evidence_uses_declared_requirement() -> None:
+    result = create_default_registry().call("igem.parameters.map_typed_evidence", {
+        "config_path": "configs/m1_m4_real_scoring_example.yaml", "stage": "m4", "requirement_name": "kcat_dmt_11", "evidence_type": "enzyme_kinetics",
+        "evidence": {"doi": "10.1/x", "evidence_text": "table", "value": 2, "unit": "1/h", "enzyme_id": "DMT", "substrate_id": "11", "product_id": "15", "parameter": "kcat"},
+    })
+    payload = result.as_protocol_dict()["structuredContent"]
+    assert payload["ok"] is True
+    assert payload["parameter_candidate"]["review_status"] == "extracted"
+
+
 def test_same_tier_conflicts_need_explicit_supersedes() -> None:
     req = next(item for item in m4_requirements() if item.name == "km_dmt_11")
     records = [

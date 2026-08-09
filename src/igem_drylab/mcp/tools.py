@@ -27,6 +27,7 @@ from igem_drylab.kinetics import CascadeParameters, CompetitiveCascadeParameters
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline import load_config, run_pipeline, run_through_m4
 from igem_drylab.parameters import ParameterRecord, ParameterRegistry, m3_requirements, m4_requirements, parameter_from_evidence, resolve_requirement
+from igem_drylab.literature.evidence_contract import EnzymeKineticsEvidence, LlpsPartitioningEvidence, PhaseActivityEvidence, ProteinAbundanceEvidence, RecruitmentBindingEvidence, map_evidence_to_requirement
 from igem_drylab.project_state import ProjectState
 from igem_drylab.constructs import ConstructRegistry
 from igem_drylab.wetlab import MeasurementMapping, load_wetlab_results, parameter_updates_from_measurements, quality_control
@@ -520,6 +521,26 @@ def parameters_validate_evidence(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok({"ok": True, "parameter_candidate": record.model_dump(mode="json"), "approval_required": True})
 
 
+def parameters_map_typed_evidence(arguments: JsonObject) -> McpToolResult:
+    """Production evidence entry point: declared requirement before candidate."""
+    project = load_config(Path(_require_str(arguments, "config_path")))
+    stage = _require_str(arguments, "stage")
+    name = _require_str(arguments, "requirement_name")
+    requirements = m3_requirements() if stage == "m3" else m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation) if stage == "m4" else []
+    requirement = next((item for item in requirements if item.name == name), None)
+    if requirement is None:
+        raise ValueError("Unknown requirement_name for stage")
+    payload = arguments.get("evidence")
+    if not isinstance(payload, dict):
+        raise ValueError("evidence must be an object")
+    kind = _require_str(arguments, "evidence_type")
+    models = {"enzyme_kinetics": EnzymeKineticsEvidence, "llps_partitioning": LlpsPartitioningEvidence, "protein_abundance": ProteinAbundanceEvidence, "recruitment_binding": RecruitmentBindingEvidence, "phase_activity": PhaseActivityEvidence}
+    if kind not in models:
+        raise ValueError("unsupported typed evidence_type")
+    candidate = map_evidence_to_requirement(models[kind].model_validate(payload), requirement)
+    return McpToolResult.ok({"ok": True, "parameter_candidate": candidate.model_dump(mode="json"), "approval_required": True, "production_path": "typed_evidence_to_declared_requirement"})
+
+
 def constructs_query(arguments: JsonObject) -> McpToolResult:
     project = load_config(Path(_require_str(arguments, "config_path")))
     registry = ConstructRegistry(project.inputs.construct_records)
@@ -965,7 +986,8 @@ LITERATURE_QA_TOOL = McpTool(
 PARAMETERS_QUERY_TOOL = McpTool(name="igem.parameters.query", title="Query parameter registry", description="Query records from project config; raw literature extraction is not implicitly approved.", input_schema=_schema({"config_path": {"type": "string"}, "name": {"type": "string"}, "parameter_type": {"type": "string"}, "enzyme_id": {"type": "string"}, "substrate_id": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 PARAMETERS_RESOLVE_TOOL = McpTool(name="igem.parameters.resolve", title="Resolve approved parameter", description="Resolve one declared M3/M4 requirement with identity, construct/condition scope, and dimension checks.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "construct_id": {"type": "string"}, "condition_id": {"type": "string"}}, ["config_path", "stage", "requirement_name"]), output_schema=_schema({"ok": {"type": "boolean"}, "resolution": {"type": "object"}}, additional_properties=True))
 PARAMETERS_PROVENANCE_TOOL = McpTool(name="igem.parameters.provenance", title="Show parameter provenance", description="Return selected parameter and superseded lineage.", input_schema=_schema({"config_path": {"type": "string"}, "parameter_id": {"type": "string"}}, ["config_path", "parameter_id"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
-PARAMETERS_VALIDATE_EVIDENCE_TOOL = McpTool(name="igem.parameters.validate_evidence", title="Create extracted parameter candidate", description="Normalize raw evidence into an extracted candidate; it cannot approve or write a model parameter.", input_schema=_schema({"parameter_id": {"type": "string"}, "name": {"type": "string"}, "value": {}, "unit": {"type": "string"}, "parameter_type": {"type": "string"}, "source": {"type": "object"}, "identity": {"type": "object"}}, ["parameter_id", "name", "value", "parameter_type", "source"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
+PARAMETERS_VALIDATE_EVIDENCE_TOOL = McpTool(name="igem.parameters.validate_evidence", title="Legacy generic evidence inspection", description="Legacy inspection helper only; use igem.parameters.map_typed_evidence for production candidates.", input_schema=_schema({"parameter_id": {"type": "string"}, "name": {"type": "string"}, "value": {}, "unit": {"type": "string"}, "parameter_type": {"type": "string"}, "source": {"type": "object"}, "identity": {"type": "object"}}, ["parameter_id", "name", "value", "parameter_type", "source"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
+PARAMETERS_MAP_TYPED_EVIDENCE_TOOL = McpTool(name="igem.parameters.map_typed_evidence", title="Map typed evidence to a declared production requirement", description="Validate typed evidence against a declared M3/M4 requirement and emit only an extracted candidate for human review.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "evidence_type": {"type": "string", "enum": ["enzyme_kinetics", "llps_partitioning", "protein_abundance", "recruitment_binding", "phase_activity"]}, "evidence": {"type": "object"}}, ["config_path", "stage", "requirement_name", "evidence_type", "evidence"]), output_schema=_schema({"ok": {"type": "boolean"}, "parameter_candidate": {"type": "object"}, "approval_required": {"type": "boolean"}}, additional_properties=True))
 CONSTRUCTS_QUERY_TOOL = McpTool(name="igem.constructs.query", title="Query approved construct registry", description="Return approved construct records from project config.", input_schema=_schema({"config_path": {"type": "string"}, "scaffold": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 CONSTRUCTS_GENERATE_TOOL = McpTool(name="igem.constructs.generate_candidates", title="Generate construct candidates", description="Combine explicit config constructs with approved construct-registry records and preserve provenance.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "candidates": {"type": "array"}}, additional_properties=True))
 PROJECT_GET_STATE_TOOL = McpTool(name="igem.project.get_state", title="Get registry-backed project state", description="Return constructs and approved parameters available to agent/workflow modes.", input_schema=_schema({"config_path": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "state": {"type": "object"}}, additional_properties=True))
@@ -1033,6 +1055,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PARAMETERS_RESOLVE_TOOL, parameters_resolve),
     (PARAMETERS_PROVENANCE_TOOL, parameters_provenance),
     (PARAMETERS_VALIDATE_EVIDENCE_TOOL, parameters_validate_evidence),
+    (PARAMETERS_MAP_TYPED_EVIDENCE_TOOL, parameters_map_typed_evidence),
     (CONSTRUCTS_QUERY_TOOL, constructs_query),
     (CONSTRUCTS_GENERATE_TOOL, constructs_generate_candidates),
     (PROJECT_GET_STATE_TOOL, project_get_state),
