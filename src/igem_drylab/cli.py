@@ -185,8 +185,14 @@ def query_parameters(
 
 @parameters_app.command("conflicts")
 def parameter_conflicts(config: Path) -> None:
-    registry = ParameterRegistry(load_config(config).parameters)
-    typer.echo(json.dumps([item.model_dump(mode="json") for item in registry.list_conflicts()], ensure_ascii=False, indent=2))
+    project = load_config(config)
+    catalog = {
+        requirement.name: requirement
+        for stage in ("m3", "m4")
+        for requirement in requirements_for_stage(project, stage)
+    }
+    registry = ParameterRegistry(project.parameters)
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in registry.list_conflicts(requirements=catalog)], ensure_ascii=False, indent=2))
 
 
 @parameters_app.command("validate-candidate")

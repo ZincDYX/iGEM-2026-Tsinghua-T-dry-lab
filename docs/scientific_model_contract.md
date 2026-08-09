@@ -32,6 +32,13 @@ normalized to `uM`; unknown units fail fast. Provenance combinations are also
 validated centrally, so for example a literature record cannot be labelled as
 a model fit.
 
+Production conflict scans receive an explicit project requirement catalog built
+from `requirements_for_stage(project, "m3")` and `requirements_for_stage(project,
+"m4")`. This includes project-specific auxiliary recruitment requirements
+without making `ParameterRegistry` depend on `ProjectConfig`. Records outside
+that catalog remain available for legacy query/provenance but are skipped by the
+production conflict scan rather than causing a dimension-inference fallback.
+
 ## Implemented
 
 - M1 computes explicit linker features and negative-screen flags. It does not predict LLPS probability.

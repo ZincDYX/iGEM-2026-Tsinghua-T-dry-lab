@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Iterable, Mapping
 
 from pydantic import BaseModel, Field
 
@@ -151,8 +152,18 @@ class ParameterRegistry:
         return ancestor.parameter_id in {item.parameter_id for item in self.provenance(child.parameter_id)[1:]}
 
     def records(self) -> list[ParameterRecord]: return list(self._records)
-    def list_conflicts(self) -> list[ParameterRecord]:
-        """Return incompatible same-tier *leaves* using the resolver lineage policy."""
+    def list_conflicts(
+        self,
+        *,
+        requirements: Mapping[str, ParameterRequirement] | Iterable[ParameterRequirement] | None = None,
+    ) -> list[ParameterRecord]:
+        """Return incompatible same-tier leaves using a caller-supplied catalog.
+
+        Records outside the supplied production catalog are intentionally
+        skipped. They remain visible through ``query`` and ``provenance`` but
+        cannot be misclassified as production scientific conflicts.
+        """
+        catalog = _requirement_catalog(requirements)
         groups: dict[tuple[object, ...], list[ParameterRecord]] = {}
         for record in self._records:
             if record.review_status != "approved":
@@ -168,7 +179,9 @@ class ParameterRegistry:
             leaves = [item for item in peers if not any(self._supersedes_transitively(other, item) for other in peers if other.parameter_id != item.parameter_id)]
             if len(leaves) < 2:
                 continue
-            requirement = _known_requirement(leaves[0].name)
+            requirement = catalog.get(leaves[0].name)
+            if requirement is None:
+                continue
             values = {round(validate_requirement_value(item.numeric_value, item.unit, requirement), 12) for item in leaves}
             if len(values) > 1:
                 conflicts.extend(leaves)
@@ -206,16 +219,16 @@ def _lineage_compatible(child: ParameterRecord, parent: ParameterRecord) -> bool
     return child_phase is None or parent_phase is None or child_phase == parent_phase
 
 
-def _known_requirement(name: str) -> ParameterRequirement:
-    """Conflict scanning does not invent dimensions from a unit string."""
+def _requirement_catalog(
+    requirements: Mapping[str, ParameterRequirement] | Iterable[ParameterRequirement] | None,
+) -> dict[str, ParameterRequirement]:
+    """Use explicit caller contracts; defaults retain legacy built-in scanning."""
+    if requirements is not None:
+        if isinstance(requirements, Mapping):
+            return dict(requirements)
+        return {item.name: item for item in requirements}
     from .requirements import m3_requirements, m4_requirements
-    requirement = next(
-        (item for item in [*m3_requirements(), *m4_requirements(include_degradation=True)] if item.name == name),
-        None,
-    )
-    if requirement is None:
-        raise ValueError(f"unknown_parameter_requirement_for_conflict_scan:{name}")
-    return requirement
+    return {item.name: item for item in [*m3_requirements(), *m4_requirements(include_degradation=True)]}
 
 
 def has_required_provenance(record: ParameterRecord) -> bool:
