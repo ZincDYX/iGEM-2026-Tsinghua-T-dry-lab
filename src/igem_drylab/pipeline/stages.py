@@ -386,7 +386,7 @@ def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], va
             "measurement_uncertainty_type": result.metabolite_uncertainty_type,
             "trend_agreement": comparison.trend_agreement,
             "replicate_variation": variations.get((result.construct_id, result.condition_id, metabolite, time_h)) if time_h is not None else None,
-            "fit_status": comparison.fit.status if comparison.fit else None,
+            "fit_status": "descriptive_scale_fit" if comparison.fit else None,
         }
     return evidence
 
