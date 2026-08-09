@@ -15,6 +15,7 @@ def diagnose_discrepancy(*, qc_passed: bool, replicate_variation: float | None, 
     if not qc_passed or (replicate_variation is not None and replicate_variation > 0.5): return DiscrepancyDiagnosis(category="DATA_QUALITY_ERROR", evidence=["QC failure or high replicate variation"])
     if abundance_ratio is not None and abundance_ratio < 0.3: return DiscrepancyDiagnosis(category="IMPLEMENTATION_ERROR", evidence=["measured abundance substantially below expected"])
     if systematic_directional_error: return DiscrepancyDiagnosis(category="MODEL_MISMATCH", evidence=["multiple conditions have systematic directional error"])
+    if significant_residual is None: return DiscrepancyDiagnosis(category="INSUFFICIENT_INFORMATION", evidence=["missing_discrepancy_threshold"])
     if significant_residual is False: return DiscrepancyDiagnosis(category="NO_SIGNIFICANT_DISCREPANCY", evidence=["residual is within uncertainty and tolerance"])
     if trend_agreement is True: return DiscrepancyDiagnosis(category="PARAMETER_MISMATCH", evidence=["trend agrees but amplitude differs"])
     return DiscrepancyDiagnosis(category="INSUFFICIENT_INFORMATION", evidence=["no discriminating deterministic evidence"])

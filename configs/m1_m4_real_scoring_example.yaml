@@ -1,7 +1,6 @@
 run:
   id: m1-m4-real-scoring-demo
   output_dir: outputs
-  random_seed: 42
 
 execution:
   mode: real
@@ -68,8 +67,6 @@ stages:
   m1_llps:
     top_n: 6
   m2_fusion:
-    activity_penalty_weight: 0.35
-    clash_penalty_weight: 0.25
     structure_metrics_file: ../examples/real_metrics/m2_structure_metrics.json
   m3_concentration:
     binding_model: independent

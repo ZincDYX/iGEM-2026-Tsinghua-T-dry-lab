@@ -12,7 +12,6 @@ from igem_drylab.constructs import ConstructRecord
 class RunConfig(BaseModel):
     id: str = "demo-run"
     output_dir: Path = Path("outputs")
-    random_seed: int = 42
 
 
 class ExecutionConfig(BaseModel):
@@ -103,8 +102,6 @@ class M1Config(StrictScientificConfig):
 
 
 class M2Config(StrictScientificConfig):
-    activity_penalty_weight: float = Field(default=0.35, ge=0, le=1)
-    clash_penalty_weight: float = Field(default=0.25, ge=0, le=1)
     structure_metrics_file: Path | None = None
 
 
@@ -182,7 +179,6 @@ class FitPlanConfig(StrictScientificConfig):
     fixed_parameter_names: list[str] = Field(default_factory=list)
     bounds: tuple[float, float]
     observables: list[Literal["13", "15"]] = Field(min_length=1)
-    bootstrap_samples: int = Field(default=100, ge=0)
 
     @model_validator(mode="after")
     def _validate_plan(self) -> "FitPlanConfig":
@@ -199,6 +195,7 @@ class M5Config(StrictScientificConfig):
     wetlab_results_file: Path | None = None
     absolute_residual_tolerance: float = Field(default=0.0, ge=0)
     relative_residual_tolerance: float = Field(default=0.0, ge=0)
+    discrepancy_threshold_configured: bool = False
     fit_plan: FitPlanConfig | None = None
 
 

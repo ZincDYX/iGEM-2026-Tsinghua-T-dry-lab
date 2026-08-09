@@ -1,7 +1,6 @@
 run:
   id: m1-m4-demo
   output_dir: outputs
-  random_seed: 42
 
 execution:
   mode: demo
@@ -71,8 +70,6 @@ stages:
   m1_llps:
     top_n: 6
   m2_fusion:
-    activity_penalty_weight: 0.35
-    clash_penalty_weight: 0.25
   m3_concentration:
     binding_model: independent
   m4_reaction:
