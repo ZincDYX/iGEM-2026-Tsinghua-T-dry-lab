@@ -81,6 +81,8 @@ Production M3 passes a candidate-specific, mass-conserving enzyme distribution t
 
 Before pilot ingestion, use the typed evidence contracts for enzyme kinetics, LLPS partitioning, abundance, and recruitment. Evidence extraction remains review-only; it cannot write an approved production parameter.
 
+Production ingestion is: raw source → typed Evidence → `map_evidence_to_requirement` (identity/unit validation) → extracted ParameterCandidate → human validation/approval → scoped Registry. Phase-specific residual activity uses `PhaseActivityEvidence`; no evidence path can auto-approve a parameter.
+
 ## Build a literature extraction prompt
 
 This command does not call an LLM. It only builds the schema-first prompt.

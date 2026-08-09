@@ -36,6 +36,8 @@ silently converted or selected.
 - The numerical kernel contains first-order `kdeg_9/10/11/13/15`. Production M4 leaves it disabled (all zero) by default; enabling degradation requires approved `degradation_rate` records. The model still has no export, ER/LD, or other organelle compartment.
 - M5 can optionally use an explicit one-parameter FitPlan. It must declare the parameter, fixed parameters, bounds, and 13/15 observables; a fitted value is a validated candidate only and needs human approval before registry use.
 - Real-data ingestion uses typed review-only evidence contracts: enzyme kinetics, LLPS partitioning, protein abundance, and recruitment binding. They share identity, host/assay, condition, unit, uncertainty, replicate, DOI, and evidence-location metadata. Evidence is never an approved parameter: an explicit reviewed Evidence→ParameterCandidate mapping is required.
+- Phase-specific residual activity has its own `PhaseActivityEvidence` contract and maps to `activity_dense_*` / `activity_dilute_*` only through a matching `ParameterRequirement`. Production resolver priority is direct wet-lab measurement, model-fit wet-lab value, direct literature measurement, literature-derived extraction, prediction, then assumption; equal scope/tier conflicts are not auto-selected.
+- M5 below-LOD/LOQ observations are censored and excluded from residual/systematic-mismatch diagnosis. They remain in raw records and QC output.
 - Validated wet-lab parameter candidates require an explicit human approval action before `approve_and_persist_parameter` appends an approved, provenance-bearing record to project YAML. Agent replanning after that external action is explicit, not autonomous.
 
 ## Experimental inputs required for real mode
