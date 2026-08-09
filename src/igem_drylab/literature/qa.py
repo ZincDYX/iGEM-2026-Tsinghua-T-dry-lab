@@ -1,8 +1,8 @@
-"""Small, local evidence retrieval with explicit provenance.
+"""Hybrid, provenance-preserving retrieval for local literature evidence.
 
-The retrieval score is lexical TF-IDF cosine similarity.  It is useful for a
-transparent offline review page, but is not a substitute for semantic evidence
-assessment by a human reader.
+This module intentionally keeps retrieval separate from parameter approval.
+BM25 and metadata conditioning always work offline. Semantic retrieval and LLM
+synthesis are optional enhancements that fail closed to the deterministic path.
 """
 
 from __future__ import annotations
@@ -10,17 +10,54 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, Sequence
+
+from .llm import ChatClient, LlmError
+from .semantic import (
+    EmbeddingApiBackend,
+    SemanticBackendError,
+    backend_from_environment,
+    evidence_fingerprint,
+    load_embedding_cache,
+    write_embedding_cache,
+)
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_+\-'.]*")
+BM25_K1 = 1.5
+BM25_B = 0.75
+RRF_K = 60
+METADATA_BONUS_PER_MATCH = 0.01
+MMR_LAMBDA = 0.7
+
+FIELD_ALIASES = {
+    "enzyme": ("enzyme", "enzyme_name"),
+    "substrate": ("substrate", "substrate_name"),
+    "product": ("product", "product_name", "main_product_name"),
+    "parameter_type": ("parameter_type", "metric", "parameter", "measurement_type"),
+    "host": ("host", "host_species", "organism", "assay_host"),
+}
+INDEX_FIELD_NAMES = tuple({name for names in FIELD_ALIASES.values() for name in names})
+QUERY_ALIASES = {
+    "enzyme": {"dmt": "DMT", "ggdmt1": "DMT", "oc": "OC", "ggoc1": "OC", "pt": "PT", "ggpt1": "PT"},
+    "parameter_type": {
+        "kcat": "kcat", "km": "Km", "kp": "Kp", "partition coefficient": "partition coefficient",
+        "abundance": "abundance", "activity": "activity", "phi": "phi",
+    },
+    "host": {"yeast": "yeast", "saccharomyces cerevisiae": "yeast"},
+}
 
 
 class EvidenceDatabaseUnavailable(FileNotFoundError):
     pass
+
+
+class EmbeddingBackend(Protocol):
+    def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
 
 
 @dataclass(frozen=True)
@@ -32,12 +69,31 @@ class EvidenceDocument:
     source_file: str = ""
     fields: dict[str, Any] | None = None
 
-    def as_dict(self, *, score: float | None = None) -> dict[str, Any]:
-        payload = {"record_id": self.record_id, "title": self.title, "doi": self.doi, "evidence": self.evidence,
-                   "source_file": self.source_file, "fields": self.fields or {}}
+    def as_dict(self, *, score: float | None = None, retrieval: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "record_id": self.record_id,
+            "title": self.title,
+            "doi": self.doi,
+            "evidence": self.evidence,
+            "source_file": self.source_file,
+            "fields": self.fields or {},
+        }
         if score is not None:
             payload["score"] = round(score, 6)
+        if retrieval is not None:
+            payload["retrieval"] = retrieval
         return payload
+
+
+@dataclass(frozen=True)
+class RankedEvidence:
+    index: int
+    lexical_score: float = 0.0
+    semantic_score: float | None = None
+    lexical_rank: int | None = None
+    semantic_rank: int | None = None
+    rrf_score: float = 0.0
+    matched_metadata: tuple[str, ...] = ()
 
 
 def load_evidence_documents(path: Path) -> list[EvidenceDocument]:
@@ -65,56 +121,446 @@ def load_evidence_documents(path: Path) -> list[EvidenceDocument]:
             continue
         documents.append(EvidenceDocument(
             record_id=_first_text(row, "record_id", "evidence_id", "article_id") or f"row-{index}",
-            title=_first_text(row, "title") or "Untitled source", doi=_first_text(row, "doi"), evidence=evidence,
-            source_file=_first_text(row, "source_file", "text_file"), fields=record,
+            title=_first_text(row, "title") or "Untitled source",
+            doi=_first_text(row, "doi"),
+            evidence=evidence,
+            source_file=_first_text(row, "source_file", "text_file"),
+            fields=record,
         ))
     return documents
 
 
-def search_evidence(question: str, documents: list[EvidenceDocument], *, top_k: int = 5) -> list[dict[str, Any]]:
-    if not question.strip() or top_k < 1:
+def extract_query_constraints(question: str, documents: Sequence[EvidenceDocument] | None = None) -> dict[str, str]:
+    """Normalize explicit entity/metadata mentions without scientific inference."""
+    del documents  # Kept in the public signature for future schema-aware callers.
+    normalized = " ".join(_tokens(question))
+    constraints: dict[str, str] = {}
+    for key, aliases in QUERY_ALIASES.items():
+        for alias, canonical in aliases.items():
+            if _contains_alias(normalized, alias):
+                constraints[key] = canonical
+                break
+    compound = re.search(r"\b(?:compound|intermediate|substrate)\s*(9|10|11|13|15)\b", normalized)
+    if compound:
+        constraints["substrate"] = compound.group(1)
+    if "glabridin" in normalized:
+        constraints.setdefault("product", "glabridin")
+    return constraints
+
+
+def bm25_search(question: str, documents: Sequence[EvidenceDocument], *, constraints: dict[str, str] | None = None) -> list[RankedEvidence]:
+    """Rank evidence with a compact BM25 implementation and bounded metadata boost."""
+    query_terms = _tokens(question)
+    if not query_terms or not documents:
         return []
-    query = Counter(_tokens(question))
-    if not query:
-        return []
-    corpus = [Counter(_tokens(f"{item.title} {item.evidence}")) for item in documents]
-    document_frequency = Counter(token for vector in corpus for token in vector)
-    n = len(corpus)
-    query_weighted = _tfidf(query, document_frequency, n)
-    scored = []
-    for document, vector in zip(documents, corpus):
-        score = _cosine(query_weighted, _tfidf(vector, document_frequency, n))
+    corpus = [Counter(_tokens(_index_text(document))) for document in documents]
+    average_length = sum(sum(vector.values()) for vector in corpus) / len(corpus)
+    document_frequency = Counter(term for vector in corpus for term in vector)
+    scored: list[tuple[int, float, tuple[str, ...]]] = []
+    for index, vector in enumerate(corpus):
+        length = sum(vector.values())
+        score = 0.0
+        for term in query_terms:
+            frequency = vector.get(term, 0)
+            if not frequency:
+                continue
+            inverse_frequency = math.log(1 + (len(corpus) - document_frequency[term] + 0.5) / (document_frequency[term] + 0.5))
+            denominator = frequency + BM25_K1 * (1 - BM25_B + BM25_B * length / max(average_length, 1.0))
+            score += inverse_frequency * frequency * (BM25_K1 + 1) / denominator
+        matches = _metadata_matches(documents[index], constraints or {})
+        project_matches = _project_metadata_matches(documents[index])
+        all_matches = tuple((*matches, *project_matches))
         if score > 0:
-            scored.append(document.as_dict(score=score))
-    return sorted(scored, key=lambda item: (-float(item["score"]), item["record_id"]))[:top_k]
+            score += min(METADATA_BONUS_PER_MATCH * len(all_matches), 0.05)
+            scored.append((index, score, all_matches))
+    ranked = sorted(scored, key=lambda item: (-item[1], documents[item[0]].record_id))
+    return [RankedEvidence(index=index, lexical_score=score, lexical_rank=rank, matched_metadata=matches) for rank, (index, score, matches) in enumerate(ranked, start=1)]
 
 
-def answer_question(question: str, evidence_path: Path, *, top_k: int = 5) -> dict[str, Any]:
-    """Return retrieval results; never fabricates a scientific conclusion."""
+def semantic_search(
+    question: str,
+    documents: Sequence[EvidenceDocument],
+    *,
+    backend: EmbeddingBackend,
+    evidence_path: Path | None = None,
+) -> tuple[list[RankedEvidence], dict[int, list[float]]]:
+    """Rank by embedding cosine similarity, reusing a valid local document cache."""
+    document_vectors = _document_embeddings(documents, backend=backend, evidence_path=evidence_path)
+    query_vectors = backend.embed([question])
+    if len(query_vectors) != 1:
+        raise SemanticBackendError("embedding backend did not return one query vector")
+    scores = [(index, _cosine(query_vectors[0], vector)) for index, vector in enumerate(document_vectors)]
+    ranked = sorted(((index, score) for index, score in scores if score > 0), key=lambda item: (-item[1], documents[item[0]].record_id))
+    return [RankedEvidence(index=index, semantic_score=score, semantic_rank=rank) for rank, (index, score) in enumerate(ranked, start=1)], {index: vector for index, vector in enumerate(document_vectors)}
+
+
+def rrf_fuse(lexical: Sequence[RankedEvidence], semantic: Sequence[RankedEvidence]) -> list[RankedEvidence]:
+    """Fuse ranked routes without mixing incomparable BM25 and cosine scores."""
+    merged: dict[int, RankedEvidence] = {}
+    for hit in lexical:
+        merged[hit.index] = RankedEvidence(
+            index=hit.index,
+            lexical_score=hit.lexical_score,
+            lexical_rank=hit.lexical_rank,
+            rrf_score=1 / (RRF_K + (hit.lexical_rank or 1)),
+            matched_metadata=hit.matched_metadata,
+        )
+    for hit in semantic:
+        previous = merged.get(hit.index, RankedEvidence(index=hit.index))
+        merged[hit.index] = RankedEvidence(
+            index=hit.index,
+            lexical_score=previous.lexical_score,
+            semantic_score=hit.semantic_score,
+            lexical_rank=previous.lexical_rank,
+            semantic_rank=hit.semantic_rank,
+            rrf_score=previous.rrf_score + 1 / (RRF_K + (hit.semantic_rank or 1)),
+            matched_metadata=previous.matched_metadata,
+        )
+    return sorted(merged.values(), key=lambda hit: (-hit.rrf_score, hit.index))
+
+
+def deduplicate_sources(candidates: Sequence[RankedEvidence], documents: Sequence[EvidenceDocument], *, max_per_doi: int = 1) -> list[RankedEvidence]:
+    """Remove duplicate records/text and enforce source diversity before MMR."""
+    accepted: list[RankedEvidence] = []
+    record_ids: set[str] = set()
+    source_counts: Counter[str] = Counter()
+    evidence_tokens: list[set[str]] = []
+    for candidate in candidates:
+        document = documents[candidate.index]
+        source = _source_identity(document)
+        tokens = set(_tokens(document.evidence))
+        if document.record_id in record_ids or source_counts[source] >= max_per_doi:
+            continue
+        if any(_jaccard(tokens, seen) >= 0.92 for seen in evidence_tokens):
+            continue
+        accepted.append(candidate)
+        record_ids.add(document.record_id)
+        source_counts[source] += 1
+        evidence_tokens.append(tokens)
+    return accepted
+
+
+def mmr_select(
+    candidates: Sequence[RankedEvidence],
+    documents: Sequence[EvidenceDocument],
+    *,
+    top_k: int,
+    semantic_vectors: dict[int, list[float]] | None = None,
+) -> list[RankedEvidence]:
+    """Select relevant, non-redundant sources.
+
+    MMR is a retrieval diversity heuristic, not evidence strength.
+    """
+    remaining = list(candidates)
+    selected: list[RankedEvidence] = []
+    if top_k < 1:
+        return selected
+    max_relevance = max((candidate.rrf_score for candidate in remaining), default=1.0)
+    while remaining and len(selected) < top_k:
+        def mmr_score(candidate: RankedEvidence) -> float:
+            relevance = candidate.rrf_score / max_relevance
+            redundancy = max((_candidate_similarity(candidate, chosen, documents, semantic_vectors) for chosen in selected), default=0.0)
+            return MMR_LAMBDA * relevance - (1 - MMR_LAMBDA) * redundancy
+        chosen = max(remaining, key=lambda candidate: (mmr_score(candidate), candidate.rrf_score, -candidate.index))
+        selected.append(chosen)
+        remaining.remove(chosen)
+    return selected
+
+
+def retrieve_evidence(
+    question: str,
+    documents: Sequence[EvidenceDocument],
+    *,
+    top_k: int = 5,
+    constraints: dict[str, str] | None = None,
+    semantic_enabled: bool = False,
+    semantic_backend: EmbeddingBackend | None = None,
+    evidence_path: Path | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Execute BM25, optional semantic retrieval, RRF, deduplication, and MMR."""
+    normalized = extract_query_constraints(question, documents)
+    normalized.update(_validated_constraints(constraints))
+    lexical = bm25_search(question, documents, constraints=normalized)
+    semantic: list[RankedEvidence] = []
+    semantic_vectors: dict[int, list[float]] | None = None
+    semantic_status = "disabled"
+    if semantic_enabled:
+        backend = semantic_backend or backend_from_environment()
+        if backend is None:
+            semantic_status = "unavailable"
+        else:
+            try:
+                semantic, semantic_vectors = semantic_search(question, documents, backend=backend, evidence_path=evidence_path)
+                semantic_status = "used"
+            except Exception:  # Optional backends must never break deterministic retrieval.
+                semantic_status = "unavailable"
+    fused = rrf_fuse(lexical, semantic)
+    deduplicated = deduplicate_sources(fused, documents)
+    selected = mmr_select(deduplicated, documents, top_k=top_k, semantic_vectors=semantic_vectors)
+    max_score = max((hit.rrf_score for hit in selected), default=1.0)
+    sources = [
+        documents[hit.index].as_dict(
+            score=hit.rrf_score / max_score,
+            retrieval={
+                "lexical_rank": hit.lexical_rank,
+                "semantic_rank": hit.semantic_rank,
+                "rrf_score": round(hit.rrf_score, 8),
+                "matched_metadata": list(hit.matched_metadata),
+            },
+        )
+        for hit in selected
+    ]
+    relaxed = [f"{key}={value}" for key, value in normalized.items() if not any(key in hit.matched_metadata for hit in lexical)]
+    query_analysis = {"constraints": normalized, "relaxed_constraints": relaxed}
+    retrieval = {
+        "lexical": "bm25",
+        "semantic": semantic_status,
+        "fusion": "rrf" if semantic_status == "used" else "rrf_fallback",
+        "diversity": "doi_dedup+mmr",
+        "candidate_count": len(fused),
+        "final_count": len(sources),
+    }
+    return sources, query_analysis, retrieval
+
+
+def search_evidence(question: str, documents: Sequence[EvidenceDocument], *, top_k: int = 5) -> list[dict[str, Any]]:
+    """Backward-compatible deterministic evidence search used by existing callers."""
+    sources, _analysis, _retrieval = retrieve_evidence(question, documents, top_k=top_k)
+    return sources
+
+
+def answer_question(
+    question: str,
+    evidence_path: Path,
+    *,
+    top_k: int = 5,
+    mode: str = "retrieve_only",
+    constraints: dict[str, str] | None = None,
+    semantic_enabled: bool = False,
+    semantic_backend: EmbeddingBackend | None = None,
+    chat_client: ChatClient | Any | None = None,
+) -> dict[str, Any]:
+    """Return provenance-bearing evidence, optionally followed by one grounded LLM call."""
+    if mode not in {"retrieve_only", "synthesize"}:
+        raise ValueError("mode must be 'retrieve_only' or 'synthesize'")
     try:
         documents = load_evidence_documents(evidence_path)
     except EvidenceDatabaseUnavailable as exc:
-        return {"ok": False, "status": "database_unavailable", "answer": str(exc), "sources": []}
-    sources = search_evidence(question, documents, top_k=top_k)
+        return _base_response(False, "database_unavailable", str(exc), [], mode=mode)
+    sources, query_analysis, retrieval = retrieve_evidence(
+        question,
+        documents,
+        top_k=top_k,
+        constraints=constraints,
+        semantic_enabled=semantic_enabled,
+        semantic_backend=semantic_backend,
+        evidence_path=evidence_path,
+    )
     if not sources:
-        return {"ok": True, "status": "no_match", "answer": "No lexical match was found in the local evidence database.", "sources": []}
+        response = _base_response(True, "no_match", "No matching evidence was found in the local database.", [], mode=mode)
+        response.update(query_analysis=query_analysis, retrieval=retrieval)
+        return response
+    retrieval_answer = _retrieval_summary(sources)
+    response = _base_response(True, "retrieved", retrieval_answer, sources, mode=mode)
+    response.update(query_analysis=query_analysis, retrieval=retrieval)
+    if mode == "retrieve_only":
+        return response
+    client = chat_client or _synthesis_client_from_environment()
+    if client is None:
+        response.update(
+            status="synthesis_error",
+            answer="AI synthesis unavailable. Retrieved evidence is shown below.",
+            limitations=["No QA synthesis API is configured; retrieval results remain available."],
+        )
+        return response
+    try:
+        synthesis = synthesize_answer(question, query_analysis["constraints"], sources, client=client)
+    except (LlmError, ValueError, TypeError, KeyError) as exc:
+        response.update(
+            status="synthesis_error",
+            answer="AI synthesis unavailable. Retrieved evidence is shown below.",
+            limitations=[f"Synthesis response was unavailable: {exc}"],
+        )
+        return response
+    response.update(answer=synthesis["answer"], claims=synthesis["claims"], limitations=synthesis["limitations"], suggested_next_steps=synthesis["suggested_next_steps"], selected_evidence_ids=synthesis["selected_evidence_ids"])
+    return response
+
+
+def synthesize_answer(question: str, constraints: dict[str, str], sources: Sequence[dict[str, Any]], *, client: Any) -> dict[str, Any]:
+    """Make exactly one grounded synthesis request from already-selected evidence."""
+    evidence = [
+        {
+            "evidence_id": source["record_id"],
+            "title": source["title"],
+            "doi": source["doi"],
+            "quoted_evidence": source["evidence"],
+            "metadata": _important_fields(source.get("fields", {})),
+        }
+        for source in sources
+    ]
+    prompt = (
+        "Answer only from the supplied evidence. Do not use outside knowledge or invent DOI, values, mechanisms, or results. "
+        "Every factual claim must cite evidence_ids. Distinguish direct_report from interpretation. If evidence is insufficient, say so. "
+        "Retrieved evidence is not a validated model parameter. Return one JSON object with answer, claims, limitations, "
+        "suggested_next_steps, and selected_evidence_ids.\n\n"
+        f"Question: {question}\nConstraints: {json.dumps(constraints)}\nEvidence: {json.dumps(evidence, ensure_ascii=False)}"
+    )
+    parsed = client.complete_json(prompt)
+    answer = parsed.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("synthesis JSON must contain a non-empty answer")
+    known_ids = {source["record_id"] for source in sources}
+    claims = []
+    for claim in parsed.get("claims", []):
+        if not isinstance(claim, dict) or not isinstance(claim.get("claim"), str):
+            continue
+        evidence_ids = [item for item in claim.get("evidence_ids", []) if isinstance(item, str) and item in known_ids]
+        claim_type = claim.get("type") if claim.get("type") in {"direct_report", "interpretation"} else "interpretation"
+        claims.append({"claim": claim["claim"], "evidence_ids": evidence_ids, "type": claim_type})
+    return {
+        "answer": answer.strip(),
+        "claims": claims,
+        "limitations": _string_list(parsed.get("limitations")),
+        "suggested_next_steps": _string_list(parsed.get("suggested_next_steps")),
+        "selected_evidence_ids": [item for item in _string_list(parsed.get("selected_evidence_ids")) if item in known_ids],
+    }
+
+
+def _document_embeddings(documents: Sequence[EvidenceDocument], *, backend: EmbeddingBackend, evidence_path: Path | None) -> list[list[float]]:
+    if isinstance(backend, EmbeddingApiBackend) and evidence_path is not None and evidence_path.is_file():
+        fingerprint = evidence_fingerprint(evidence_path)
+        record_ids = [document.record_id for document in documents]
+        cached = load_embedding_cache(evidence_path, fingerprint=fingerprint, model=backend.cache_identity, record_ids=record_ids)
+        if cached is not None:
+            return cached
+        vectors = backend.embed([_index_text(document) for document in documents])
+        write_embedding_cache(evidence_path, fingerprint=fingerprint, model=backend.cache_identity, record_ids=record_ids, vectors=vectors)
+        return vectors
+    return backend.embed([_index_text(document) for document in documents])
+
+
+def _metadata(document: EvidenceDocument) -> dict[str, Any]:
+    fields = document.fields or {}
+    metadata = dict(fields)
+    nested = fields.get("fields")
+    if isinstance(nested, dict):
+        metadata.update(nested)
+    return metadata
+
+
+def _metadata_matches(document: EvidenceDocument, constraints: dict[str, str]) -> tuple[str, ...]:
+    metadata = _metadata(document)
+    matches = []
+    for key, expected in constraints.items():
+        aliases = FIELD_ALIASES.get(key, (key,))
+        values = [metadata.get(alias) for alias in aliases if metadata.get(alias) not in (None, "")]
+        if values and any(_canonical_value(key, value) == _canonical_value(key, expected) for value in values):
+            matches.append(key)
+    return tuple(matches)
+
+
+def _project_metadata_matches(document: EvidenceDocument) -> tuple[str, ...]:
+    metadata = _metadata(document)
+    matches = []
+    for key in ("is_project_glabridin_direct", "is_project_llps_related", "is_project_yeast", "high_transferability"):
+        if metadata.get(key) is True or str(metadata.get(key, "")).lower() == "true":
+            matches.append(f"project:{key}")
+    return tuple(matches)
+
+
+def _index_text(document: EvidenceDocument) -> str:
+    metadata = _metadata(document)
+    field_text = " ".join(str(metadata[name]) for name in INDEX_FIELD_NAMES if metadata.get(name) not in (None, ""))
+    return f"{document.title} {document.evidence} {field_text}"
+
+
+def _validated_constraints(constraints: dict[str, str] | None) -> dict[str, str]:
+    if not constraints:
+        return {}
+    return {str(key): str(value) for key, value in constraints.items() if isinstance(value, (str, int, float)) and str(value).strip()}
+
+
+def _canonical_value(key: str, value: object) -> str:
+    text = " ".join(_tokens(str(value)))
+    if key == "enzyme":
+        for alias, canonical in QUERY_ALIASES["enzyme"].items():
+            if _contains_alias(text, alias):
+                return canonical.lower()
+    if key == "parameter_type":
+        for alias, canonical in QUERY_ALIASES["parameter_type"].items():
+            if _contains_alias(text, alias):
+                return canonical.lower()
+    if key == "host" and (_contains_alias(text, "yeast") or _contains_alias(text, "saccharomyces cerevisiae")):
+        return "yeast"
+    if key in {"substrate", "product"}:
+        compound = re.search(r"\b(9|10|11|13|15)\b", text)
+        if compound:
+            return compound.group(1)
+    return text
+
+
+def _source_identity(document: EvidenceDocument) -> str:
+    if document.doi.strip():
+        return f"doi:{document.doi.strip().lower()}"
+    return f"fallback:{' '.join(_tokens(document.title))}|{' '.join(_tokens(document.source_file))}"
+
+
+def _candidate_similarity(left: RankedEvidence, right: RankedEvidence, documents: Sequence[EvidenceDocument], semantic_vectors: dict[int, list[float]] | None) -> float:
+    if semantic_vectors and left.index in semantic_vectors and right.index in semantic_vectors:
+        return _cosine(semantic_vectors[left.index], semantic_vectors[right.index])
+    return _jaccard(set(_tokens(_index_text(documents[left.index]))), set(_tokens(_index_text(documents[right.index]))))
+
+
+def _important_fields(fields: object) -> dict[str, Any]:
+    if not isinstance(fields, dict):
+        return {}
+    metadata = dict(fields)
+    if isinstance(fields.get("fields"), dict):
+        metadata.update(fields["fields"])
+    return {key: metadata[key] for key in (*INDEX_FIELD_NAMES, "condition", "project_tier") if key in metadata}
+
+
+def _synthesis_client_from_environment() -> ChatClient | None:
+    api_key = os.getenv("QA_SYNTHESIS_API_KEY")
+    api_base = os.getenv("QA_SYNTHESIS_API_BASE")
+    model = os.getenv("QA_SYNTHESIS_MODEL")
+    if not all((api_key, api_base, model)):
+        return None
+    return ChatClient(api_key=api_key, api_base=api_base, model=model, retries=1)
+
+
+def _base_response(ok: bool, status: str, answer: str, sources: list[dict[str, Any]], *, mode: str) -> dict[str, Any]:
+    return {"ok": ok, "status": status, "answer": answer, "sources": sources, "mode": mode, "claims": [], "limitations": [], "suggested_next_steps": [], "selected_evidence_ids": []}
+
+
+def _retrieval_summary(sources: Sequence[dict[str, Any]]) -> str:
     citations = "; ".join(filter(None, (f"{source['title']} ({source['doi']})" for source in sources)))
-    return {"ok": True, "status": "retrieved", "answer": f"Retrieved {len(sources)} local evidence record(s); inspect their quoted evidence before using a parameter. {citations}", "sources": sources}
+    return f"Retrieved {len(sources)} local evidence record(s); inspect their quoted evidence before using a parameter. {citations}"
+
+
+def _contains_alias(text: str, alias: str) -> bool:
+    return re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", text) is not None
 
 
 def _tokens(text: str) -> list[str]:
     return [token.lower() for token in TOKEN_RE.findall(text)]
 
 
-def _tfidf(vector: Counter[str], document_frequency: Counter[str], n: int) -> dict[str, float]:
-    return {token: (1 + math.log(count)) * (math.log((1 + n) / (1 + document_frequency[token])) + 1) for token, count in vector.items()}
+def _jaccard(left: set[str], right: set[str]) -> float:
+    return len(left & right) / len(left | right) if left or right else 0.0
 
 
-def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
-    numerator = sum(value * right.get(token, 0.0) for token, value in left.items())
-    left_norm = math.sqrt(sum(value * value for value in left.values()))
-    right_norm = math.sqrt(sum(value * value for value in right.values()))
+def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
+    if len(left) != len(right) or not left:
+        raise SemanticBackendError("embedding vectors have incompatible dimensions")
+    numerator = sum(a * b for a, b in zip(left, right))
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
     return numerator / (left_norm * right_norm) if left_norm and right_norm else 0.0
+
+
+def _string_list(value: object) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
 
 
 def _first_text(row: dict[str, Any], *keys: str) -> str:

@@ -88,6 +88,8 @@ def test_literature_qa_tool_returns_provenance(tmp_path):
     structured = result.as_protocol_dict()["structuredContent"]
     assert structured["ok"] is True
     assert structured["sources"][0]["doi"] == "10.1/oc"
+    assert structured["mode"] == "retrieve_only"
+    assert structured["retrieval"]["lexical"] == "bm25"
 
 
 def test_literature_search_tool_writes_manifest(monkeypatch, tmp_path):

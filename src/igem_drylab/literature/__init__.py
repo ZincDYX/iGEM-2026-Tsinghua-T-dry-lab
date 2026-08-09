@@ -7,7 +7,20 @@ from .schema import ExtractionSchema, load_schema
 from .database import build_database_from_manifest, mine_numeric_evidence, read_manifest
 from .sources import LiteratureSearchQuery, LiteratureSearchResult, search_literature, write_search_manifest
 from .chunked import ExtractedRecord, chunk_text, extract_records_chunked, validate_record
-from .qa import EvidenceDatabaseUnavailable, EvidenceDocument, answer_question, load_evidence_documents, search_evidence
+from .qa import (
+    EvidenceDatabaseUnavailable,
+    EvidenceDocument,
+    answer_question,
+    bm25_search,
+    deduplicate_sources,
+    extract_query_constraints,
+    load_evidence_documents,
+    mmr_select,
+    retrieve_evidence,
+    rrf_fuse,
+    search_evidence,
+    synthesize_answer,
+)
 from .evidence_contract import EnzymeKineticsEvidence, LlpsPartitioningEvidence, PhaseActivityEvidence, ProteinAbundanceEvidence, RecruitmentBindingEvidence, evidence_to_parameter_candidate, map_evidence_to_requirement
 
 __all__ = [
@@ -25,6 +38,13 @@ __all__ = [
     "extract_records_chunked",
     "load_schema",
     "load_evidence_documents",
+    "extract_query_constraints",
+    "bm25_search",
+    "rrf_fuse",
+    "deduplicate_sources",
+    "mmr_select",
+    "retrieve_evidence",
+    "synthesize_answer",
     "mine_numeric_evidence",
     "parse_json_object",
     "read_manifest",

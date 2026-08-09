@@ -217,10 +217,12 @@ set ELSEVIER_API_KEY=...
 
 ## Literature evidence QA
 
-The evidence QA route is deliberately local and conservative: it uses transparent TF-IDF retrieval over a supplied `.jsonl`, `.json`, or `.csv` evidence file and returns evidence text, DOI, and score. It does not call an LLM or turn a retrieved sentence into a validated parameter.
+The evidence QA route is deliberately conservative: it uses metadata-aware BM25 retrieval over a supplied `.jsonl`, `.json`, or `.csv` evidence file, with RRF, DOI/MMR diversity, and provenance-bearing evidence cards. Optional API embeddings and one grounded synthesis call can improve presentation, but deterministic lexical retrieval remains functional when either service is unavailable. LLM synthesis is interpretation only; it never approves a scientific parameter.
 
 ```bash
 igem-drylab literature qa "What evidence reports OC activity?" --evidence path/to/evidence.jsonl
+igem-drylab literature qa "Find DMT kinetics" --evidence path/to/evidence.jsonl --semantic
+igem-drylab literature qa "Summarize OC activity" --evidence path/to/evidence.jsonl --mode synthesize
 igem-drylab literature serve-qa --evidence path/to/evidence.jsonl
 ```
 
