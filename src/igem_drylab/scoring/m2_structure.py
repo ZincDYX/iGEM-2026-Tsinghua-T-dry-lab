@@ -43,6 +43,8 @@ def load_m2_structure_metrics(path: Path) -> dict[str, M2StructureMetrics]:
     if not isinstance(rows, list):
         raise ValueError("M2 metrics JSON must be a list or {'records': [...]}")
     metrics = [M2StructureMetrics.model_validate(item) for item in rows]
+    if len({item.candidate_id for item in metrics}) != len(metrics):
+        raise ValueError("duplicate_m2_metric_candidate_id")
     return {item.candidate_id: item for item in metrics}
 
 

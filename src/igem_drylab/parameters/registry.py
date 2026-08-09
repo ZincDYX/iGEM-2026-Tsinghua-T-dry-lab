@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-import math
 
 from pydantic import BaseModel, Field
 
-from .dimensions import normalize_for_requirement
+from .dimensions import validate_requirement_value
 from .models import ParameterRecord
 from .requirements import ParameterRequirement
 from .validation import condition_compatibility, identity_compatibility
@@ -97,22 +96,20 @@ class ParameterRegistry:
                 rejected.extend(("weak_match", *identity.reasons, *condition.reasons))
                 continue
             try:
-                value = normalize_for_requirement(record.numeric_value, record.unit, requirement)
+                value = validate_requirement_value(record.numeric_value, record.unit, requirement)
             except ValueError as error:
                 rejected.append(str(error))
-                continue
-            if not math.isfinite(value):
-                rejected.append("nonfinite_value")
-                continue
-            if requirement.minimum is not None and (value < requirement.minimum or (value == requirement.minimum and not requirement.minimum_inclusive)):
-                rejected.append("physical_lower_bound_violation")
-                continue
-            if requirement.maximum is not None and value > requirement.maximum:
-                rejected.append("physical_upper_bound_violation")
                 continue
             compatible.append((record, value))
         if not compatible:
             return ParameterResolution(status="unresolved", reasons=sorted(set(rejected or ["no_approved_exact_compatible_parameter"])))
+        # Explicit replacements define the current lineage leaf before source
+        # priority is considered.  This keeps resolve(), provenance(), and
+        # conflict scans on one graph policy.
+        compatible = [
+            pair for pair in compatible
+            if not any(self._supersedes_transitively(other[0], pair[0]) for other in compatible if other[0].parameter_id != pair[0].parameter_id)
+        ]
         def scope_rank(record: ParameterRecord) -> int:
             if record.construct_id == construct_id and record.condition_id == condition_id and construct_id is not None and condition_id is not None: return 0
             if record.construct_id == construct_id and record.condition_id is None and construct_id is not None: return 1
@@ -155,19 +152,26 @@ class ParameterRegistry:
 
     def records(self) -> list[ParameterRecord]: return list(self._records)
     def list_conflicts(self) -> list[ParameterRecord]:
-        """Return records participating in same-scope/same-tier unresolved value conflicts."""
-        conflicts: list[ParameterRecord] = []
+        """Return incompatible same-tier *leaves* using the resolver lineage policy."""
+        groups: dict[tuple[object, ...], list[ParameterRecord]] = {}
         for record in self._records:
-            peers = [other for other in self._records if other.name == record.name and other.review_status == "approved" and other.construct_id == record.construct_id and other.condition_id == record.condition_id and evidence_priority(other) == evidence_priority(record)]
-            values = set()
-            for item in peers:
-                try:
-                    requirement = ParameterRequirement(name=item.name, parameter_type=item.parameter_type, dimension="concentration" if item.unit in {"M", "mM", "uM", "nM"} else "rate" if item.unit in {"1/h", "h^-1", "h-1", "1/min", "1/s", "s^-1"} else "dimensionless", canonical_unit="uM" if item.unit in {"M", "mM", "uM", "nM"} else "1/h" if item.unit in {"1/h", "h^-1", "h-1", "1/min", "1/s", "s^-1"} else "1")
-                    values.add(round(normalize_for_requirement(item.numeric_value, item.unit, requirement), 12))
-                except ValueError:
-                    values.add((str(item.value), item.unit))
-            if len(values) > 1 and not any(self._supersedes_transitively(item, record) for item in peers if item.parameter_id != record.parameter_id):
-                conflicts.append(record)
+            if record.review_status != "approved":
+                continue
+            key = (
+                record.name, record.parameter_type, record.enzyme_id, record.substrate_id,
+                record.product_id, record.species_id, record.conditions.get("phase"),
+                record.construct_id, record.condition_id, evidence_priority(record),
+            )
+            groups.setdefault(key, []).append(record)
+        conflicts: list[ParameterRecord] = []
+        for peers in groups.values():
+            leaves = [item for item in peers if not any(self._supersedes_transitively(other, item) for other in peers if other.parameter_id != item.parameter_id)]
+            if len(leaves) < 2:
+                continue
+            requirement = _known_requirement(leaves[0].name)
+            values = {round(validate_requirement_value(item.numeric_value, item.unit, requirement), 12) for item in leaves}
+            if len(values) > 1:
+                conflicts.extend(leaves)
         return conflicts
     @classmethod
     def from_jsonl(cls, path: Path) -> "ParameterRegistry": return cls([ParameterRecord.model_validate_json(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()])
@@ -200,6 +204,18 @@ def _lineage_compatible(child: ParameterRecord, parent: ParameterRecord) -> bool
         return False
     child_phase, parent_phase = child.conditions.get("phase"), parent.conditions.get("phase")
     return child_phase is None or parent_phase is None or child_phase == parent_phase
+
+
+def _known_requirement(name: str) -> ParameterRequirement:
+    """Conflict scanning does not invent dimensions from a unit string."""
+    from .requirements import m3_requirements, m4_requirements
+    requirement = next(
+        (item for item in [*m3_requirements(), *m4_requirements(include_degradation=True)] if item.name == name),
+        None,
+    )
+    if requirement is None:
+        raise ValueError(f"unknown_parameter_requirement_for_conflict_scan:{name}")
+    return requirement
 
 
 def has_required_provenance(record: ParameterRecord) -> bool:

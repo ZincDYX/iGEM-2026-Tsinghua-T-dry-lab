@@ -10,10 +10,10 @@ from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
-from igem_drylab.parameters.requirements import requirements_for_stage
+from igem_drylab.parameters.requirements import requirement_name_to_kernel_key, requirements_for_stage
 from igem_drylab.parameters.dimensions import normalize_concentration
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
-from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, load_wetlab_results, quality_control, replicate_variation, systematic_directional_errors, fit_mechanistic_parameter
+from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, evaluate_residual_significance, load_wetlab_results, quality_control, replicate_variation, fit_mechanistic_parameter
 from igem_drylab.wetlab.canonical import canonicalize_metabolite
 
 from .config import ConstructDefinition, ProjectConfig, canonical_m4_condition_id
@@ -135,17 +135,11 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             enzyme = entry.enzyme_id
             hill = auxiliary[entry.hill_coefficient_parameter].canonical_value if entry.hill_coefficient_parameter else config.stages.m3_concentration.hill_coefficient
             if config.stages.m3_concentration.binding_model == "hill" and hill is None:
-                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient or switch to independent binding model"], notes="Hill recruitment was not calculated without an explicit reviewed value or allowed assumption."))
-                break
+                continue
             if config.stages.m3_concentration.binding_model == "hill" and entry.hill_coefficient_parameter is None and not config.execution.allow_assumptions:
-                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["hill_coefficient"], recommended_next_action=["provide reviewed Hill coefficient"], notes="Config Hill coefficient is an assumption and is disabled in real mode."))
-                break
+                continue
             recruitment_result = calculate_recruitment(RecruitmentInput(enzyme_id=enzyme, enzyme_total=auxiliary[entry.enzyme_total_parameter].canonical_value, site_total=auxiliary[entry.site_total_parameter].canonical_value, kd=auxiliary[entry.kd_parameter].canonical_value, binding_model=config.stages.m3_concentration.binding_model, hill_coefficient=hill))
             binding_recruitment[enzyme] = recruitment_result.recruited_fraction; occupancy[enzyme] = recruitment_result.site_occupancy
-        else:
-            pass
-        if records and records[-1].candidate_id == assessment.candidate_id and records[-1].status == "insufficient_data":
-            continue
         context = M4CandidateContext(candidate_id=assessment.candidate_id, construct_id=construct_id, condition_id=condition_id,
             phi=phi,
             enzyme_distribution={name: {"dense": value.dense_concentration, "dilute": value.dilute_concentration, "partition_coefficient": value.partition_coefficient} for name, value in result.items()},
@@ -159,6 +153,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             dense_oc_dmt_ratio=oc.dense_concentration / dmt.dense_concentration if dmt.dense_concentration else None,
             whole_cell_oc_dmt_ratio=selected["oc_total"].canonical_value / selected["dmt_total"].canonical_value if selected["dmt_total"].canonical_value else None,
             fraction_in_dense={key: value.fraction_in_dense for key, value in result.items()},
+            binding_recruitment_status="not_requested" if not config.stages.m3_concentration.recruitment else ("valid" if binding_recruitment else "insufficient_data"),
             binding_recruited_fraction=binding_recruitment,
             site_occupancy=occupancy,
             recommended_for_m4=True, parameter_ids=sorted(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter),
@@ -245,8 +240,24 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
                 report.flags.append(f"comparison_contract_error:{error}")
             usable = [item for item in comparisons.values() if item.comparison_status in {"trajectory_aligned", "endpoint_only"}]
             evidence = _joint_diagnosis_evidence(result, comparisons, variations)
-            for item in evidence.values():
-                item["significant"] = _residual_exceeds_tolerance({str(item["metabolite_id"]): item}, config.stages.m5_feedback.absolute_residual_tolerance, config.stages.m5_feedback.relative_residual_tolerance)
+            significance = evaluate_residual_significance(
+                evidence,
+                absolute_tolerance=config.stages.m5_feedback.absolute_residual_tolerance,
+                relative_tolerance=config.stages.m5_feedback.relative_residual_tolerance,
+                tolerance_configured=config.stages.m5_feedback.discrepancy_threshold_configured,
+                require_interpretable_uncertainty=config.execution.mode == "real",
+            )
+            for metabolite, item in evidence.items():
+                metabolite_significance = evaluate_residual_significance(
+                    {metabolite: item},
+                    absolute_tolerance=config.stages.m5_feedback.absolute_residual_tolerance,
+                    relative_tolerance=config.stages.m5_feedback.relative_residual_tolerance,
+                    tolerance_configured=config.stages.m5_feedback.discrepancy_threshold_configured,
+                    require_interpretable_uncertainty=config.execution.mode == "real",
+                )
+                item["significant"] = metabolite_significance.significant
+                item["significance_reason"] = metabolite_significance.reason
+                item["significance_threshold"] = metabolite_significance.threshold
             residuals = [item["residual_final"] for item in evidence.values() if item["residual_final"] is not None]
             trends = [item["trend_agreement"] for item in evidence.values() if item["trend_agreement"] is not None]
             variations_for_result = [item["replicate_variation"] for item in evidence.values() if item["replicate_variation"] is not None]
@@ -254,26 +265,13 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
             trend = all(trends) if trends else None
             variation = max(variations_for_result) if variations_for_result else None
             comparison_status = "joint_13_15" if set(evidence) == {"13", "15"} else (next(iter(evidence.values()))["comparison_status"] if evidence else ("unmatched_condition" if prediction is None else "no_observed_metabolite"))
-            prepared.append((result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable))
-        systematic_rows = [
-            (result.construct_id, result.condition_id, metabolite, comparison.residual_final,
-             report.passed and comparison.residual_final is not None and _residual_exceeds_tolerance(
-                 {metabolite: _joint_diagnosis_evidence(result, comparisons, variations)[metabolite]},
-                 config.stages.m5_feedback.absolute_residual_tolerance,
-                 config.stages.m5_feedback.relative_residual_tolerance,
-             ))
-            for result, report, comparisons, *_ in prepared
-            for metabolite, comparison in comparisons.items()
-        ]
-        systematic = systematic_directional_errors(systematic_rows)
-        fit_groups = _aggregate_fit_groups(results)
+            prepared.append((result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable, significance))
+        systematic = _condition_level_systematic(prepared, config)
+        fit_groups = _aggregate_fit_groups([result for result, report, *_ in prepared if report.passed and _fit_eligible(result)])
         fitted_by_group: dict[tuple[str, str], dict[str, object] | None] = {}
-        for result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable in prepared:
-            systematic_error = any((result.construct_id, metabolite) in systematic for metabolite in comparisons)
-            systematic_error = systematic_error and _residual_exceeds_tolerance(evidence, config.stages.m5_feedback.absolute_residual_tolerance, config.stages.m5_feedback.relative_residual_tolerance)
-            has_uncertainty = any(item.get("measurement_uncertainty") is not None for item in evidence.values())
-            significant = None if config.execution.mode == "real" and not has_uncertainty and not config.stages.m5_feedback.discrepancy_threshold_configured else _residual_exceeds_tolerance(evidence, config.stages.m5_feedback.absolute_residual_tolerance, config.stages.m5_feedback.relative_residual_tolerance)
-            diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, abundance_ratio=None, trend_agreement=trend, systematic_directional_error=systematic_error, significant_residual=significant)
+        for result, report, comparisons, evidence, residual, trend, variation, comparison_status, usable, significance in prepared:
+            systematic_error = significance.significant is True and any((result.construct_id, metabolite) in systematic for metabolite in comparisons)
+            diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, trend_agreement=trend, systematic_directional_error=systematic_error, significant_residual=significance.significant)
             joint_diagnosis = _joint_diagnosis_label(evidence, diagnosis.category)
             group_key = (result.construct_id, result.condition_id)
             if group_key not in fitted_by_group:
@@ -320,9 +318,7 @@ def _glabridin_parameter_values(selected: dict[str, object]) -> dict[str, float]
         "activity_dense_pt", "activity_dilute_pt", "activity_dense_oc", "activity_dilute_oc", "activity_dense_dmt", "activity_dilute_dmt", "kdeg_9", "kdeg_10", "kdeg_11", "kdeg_13", "kdeg_15",
     }
     values = {name: float(getattr(record, "canonical_value")) for name, record in selected.items() if name in accepted}
-    for species in ("9", "10", "11"):
-        values[f"partition_{species}"] = values.pop(f"partition_x{species}")
-    return values
+    return {requirement_name_to_kernel_key(name): value for name, value in values.items()}
 
 
 def _candidate_enzyme_values(context: M4CandidateContext) -> dict[str, float]:
@@ -337,18 +333,7 @@ def _candidate_enzyme_values(context: M4CandidateContext) -> dict[str, float]:
 
 
 def _data_quality(records: object) -> str:
-    values = list(records)  # type: ignore[arg-type]
-    values = [getattr(item, "selected_parameter", item) for item in values]
-    kinds = {getattr(item, "source_type", None) for item in values}
-    if len(kinds - {None}) > 1:
-        return "mixed"
-    if "wetlab" in kinds:
-        return "measured"
-    if any(getattr(item, "source_type", None) == "literature" for item in values):
-        return "literature"
-    if any(getattr(item, "source_type", None) == "prediction" for item in values):
-        return "predicted"
-    return "heuristic"
+    return _data_quality_from_summary(_provenance_summary(records))
 
 
 def _data_quality_from_summary(summary: dict[str, int]) -> str:
@@ -358,7 +343,7 @@ def _data_quality_from_summary(summary: dict[str, int]) -> str:
     if kinds == {"wetlab"}:
         return "measured"
     if kinds == {"fitted"}:
-        return "predicted"
+        return "fitted"
     if kinds == {"literature"}:
         return "literature"
     if kinds == {"prediction"}:
@@ -439,17 +424,35 @@ def _joint_diagnosis_label(evidence: dict[str, dict[str, object]], fallback: str
     return fallback
 
 
-def _residual_exceeds_tolerance(evidence: dict[str, dict[str, object]], absolute: float, relative: float) -> bool:
-    for item in evidence.values():
-        residual = item.get("residual_final")
-        if residual is None:
+def _condition_level_systematic(prepared: list[tuple[object, ...]], config: ProjectConfig) -> set[tuple[str, str]]:
+    """Detect systematic error from condition means, never selected replicates."""
+    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for row in prepared:
+        result, report, _comparisons, evidence, *_ = row
+        if not report.passed:
             continue
-        scale = max(abs(float(item.get("observed_final") or 0)), abs(float(item.get("predicted_final") or 0)), 1e-12)
-        raw_uncertainty = float(item.get("measurement_uncertainty") or 0)
-        uncertainty = raw_uncertainty * 1.96 if item.get("measurement_uncertainty_type") == "sem" else raw_uncertainty
-        if abs(float(residual)) > absolute + relative * scale + uncertainty:
-            return True
-    return False
+        for metabolite, item in evidence.items():
+            if item.get("residual_final") is not None:
+                grouped.setdefault((result.construct_id, result.condition_id, metabolite), []).append(item)
+    condition_signs: dict[tuple[str, str], list[float]] = {}
+    for (construct_id, _condition_id, metabolite), items in grouped.items():
+        observed = sum(float(item["observed_final"]) for item in items) / len(items)
+        predicted = sum(float(item["predicted_final"]) for item in items) / len(items)
+        uncertainties = [item.get("measurement_uncertainty") for item in items]
+        types = {item.get("measurement_uncertainty_type") for item in items}
+        uncertainty = None
+        uncertainty_type = None
+        if len(types) == 1 and all(isinstance(value, (int, float)) for value in uncertainties):
+            uncertainty = float(np.sqrt(sum(float(value) ** 2 for value in uncertainties)) / len(items))
+            uncertainty_type = next(iter(types))
+        summary = {metabolite: {"residual_final": observed - predicted, "observed_final": observed, "predicted_final": predicted, "measurement_uncertainty": uncertainty, "measurement_uncertainty_type": uncertainty_type}}
+        evaluation = evaluate_residual_significance(summary, absolute_tolerance=config.stages.m5_feedback.absolute_residual_tolerance, relative_tolerance=config.stages.m5_feedback.relative_residual_tolerance, tolerance_configured=config.stages.m5_feedback.discrepancy_threshold_configured, require_interpretable_uncertainty=config.execution.mode == "real")
+        if evaluation.significant is True:
+            condition_signs.setdefault((construct_id, metabolite), []).append(observed - predicted)
+    return {
+        key for key, values in condition_signs.items()
+        if len(values) >= 2 and (all(value > 0 for value in values) or all(value < 0 for value in values))
+    }
 
 
 def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction | None, result: object, comparisons: dict[str, object]) -> dict[str, object] | None:
@@ -474,25 +477,30 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
     if len(observed) < 4 or len(fit_points) != len(observed):
         return {"fit": None, "candidate": None, "warning": "identifiability_warning:fewer_than_four_declared_observations"}
     values = dict(prediction.simulation_inputs["parameters"])
-    if plan.parameter_name not in values or plan.parameter_name in plan.fixed_parameter_names:
+    kernel_key = requirement_name_to_kernel_key(plan.parameter_name)
+    fixed_kernel_keys = {requirement_name_to_kernel_key(name) for name in plan.fixed_parameter_names}
+    if kernel_key not in values or kernel_key in fixed_kernel_keys:
         return {"fit": None, "candidate": None, "warning": "FitPlan parameter absent_or_declared_fixed"}
     inputs = prediction.simulation_inputs
     def predictor(value: float) -> np.ndarray:
-        changed = dict(values); changed[plan.parameter_name] = value
+        changed = dict(values); changed[kernel_key] = value
         simulation = simulate_glabridin(GlabridinKineticParameters(**changed), pt_gate=InductionGate(**{k: v for k, v in inputs["pt_gate"].items() if k != "time_unit"}), oc_gate=InductionGate(**{k: v for k, v in inputs["oc_gate"].items() if k != "time_unit"}), dmt_gate=InductionGate(**{k: v for k, v in inputs["dmt_gate"].items() if k != "time_unit"}), initial=tuple(inputs["initial"][f"x{key}"] for key in ("9", "10", "11", "13", "15")), t_end=inputs["t_end"])
         return np.asarray([np.interp(time_h, simulation.time, getattr(simulation, f"x{observable}")) for observable, time_h in fit_points])
     try:
         # The input is an aggregate trajectory. Time points are correlated, so they
         # are not valid IID bootstrap units. A replicate-block bootstrap requires
         # retained individual replicate trajectories and is intentionally withheld.
-        fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[plan.parameter_name], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=0)
+        fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[kernel_key], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=0)
         fit = fit.model_copy(update={"confidence_interval": None, "identifiability_warning": "replicate_block_bootstrap_unavailable_from_aggregated_trajectory"})
     except ValueError as error:
         return {"fit": None, "candidate": None, "warning": str(error)}
     requirement = next((item for item in m4_kinetic_requirements(include_degradation=True) if item.name == plan.parameter_name), None)
     if requirement is None:
         return {"fit": None, "candidate": None, "warning": "FitPlan parameter is not an approved M4 requirement"}
-    candidate = ParameterRecord(parameter_id=f"fit:{prediction.candidate_id}:{prediction.condition_id}:{plan.parameter_name}", name=requirement.name, value=fit.best_fit, unit=requirement.canonical_unit, parameter_type=requirement.parameter_type, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, source_type="wetlab", derivation_type="model_fit", source_reference=result.experiment_id, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, derived_from=prediction.parameter_ids, notes="model_fit derived from wet-lab observations; human approval is required before registry use.")
+    source_lineage = result.notes or result.experiment_id
+    fingerprint_input = {"construct": prediction.construct_id, "condition": prediction.condition_id, "requirement": requirement.name, "source_lineage": source_lineage, "fit_points": fit_points, "parameter_ids": sorted(prediction.parameter_ids), "bounds": plan.bounds, "observables": plan.observables, "contract": "pre-real-data-frozen"}
+    dataset_hash = sha256(json.dumps(fingerprint_input, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    candidate = ParameterRecord(parameter_id=f"fit:{dataset_hash}", name=requirement.name, value=fit.best_fit, unit=requirement.canonical_unit, parameter_type=requirement.parameter_type, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, species_id=requirement.species_id, source_type="wetlab", derivation_type="model_fit", source_reference=source_lineage, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, conditions={"phase": requirement.phase} if requirement.phase else {}, derived_from=prediction.parameter_ids, notes=f"model_fit dataset_hash={dataset_hash}; target_requirement={requirement.name}; fit_bounds={plan.bounds}; observables={plan.observables}; source_lineage={source_lineage}; human approval is required before registry use.")
     return {"fit": fit.model_dump(), "candidate": candidate.model_dump(mode="json")}
 
 
@@ -526,5 +534,16 @@ def _aggregate_fit_groups(results: list[object]) -> dict[tuple[str, str], object
                 uncertainty_type = canonical[0].uncertainty_type
                 uncertainties[name] = [float(np.sqrt(sum(series.uncertainty_uM[index] ** 2 for series in canonical if series.uncertainty_uM is not None)) / len(canonical)) for index in range(len(canonical[0].time_h))]
         if metabolites:
-            aggregated[key] = reference.model_copy(update={"experiment_id": f"fit_group:{key[0]}:{key[1]}", "replicate_id": "biological_mean", "metabolites": metabolites, "metabolite_concentration_unit": "uM", "metabolite_uncertainty": uncertainties, "metabolite_uncertainty_type": uncertainty_type, "metabolite_lod": {}, "metabolite_loq": {}, "biological_replicate_count": len(records)})
+            lineage = sorted(f"{record.experiment_id}/{record.replicate_id}" for record in records)
+            aggregated[key] = reference.model_copy(update={"experiment_id": f"fit_group:{key[0]}:{key[1]}", "replicate_id": "biological_mean", "metabolites": metabolites, "metabolite_concentration_unit": "uM", "metabolite_uncertainty": uncertainties, "metabolite_uncertainty_type": uncertainty_type, "metabolite_lod": {}, "metabolite_loq": {}, "biological_replicate_count": len(records), "notes": json.dumps({"source_replicates": lineage}, sort_keys=True)})
     return aggregated
+
+
+def _fit_eligible(result: object) -> bool:
+    """FitPlan only receives QC-valid records with a declared usable unit."""
+    if getattr(result, "metabolite_concentration_unit", None) is None:
+        return False
+    try:
+        return any("quantified" in canonicalize_metabolite(result, species).censor_mask for species in result.metabolites)
+    except ValueError:
+        return False

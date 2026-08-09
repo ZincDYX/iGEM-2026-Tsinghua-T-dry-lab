@@ -19,7 +19,7 @@ def test_m5_preserves_outliers_but_flags_them():
 
 
 def test_m5_diagnosis_and_transparent_recommendation():
-    diagnosis = diagnose_discrepancy(qc_passed=True, replicate_variation=0.1, abundance_ratio=1, trend_agreement=False, systematic_directional_error=True)
+    diagnosis = diagnose_discrepancy(qc_passed=True, replicate_variation=0.1, trend_agreement=False, systematic_directional_error=True, significant_residual=True)
     assert diagnosis.category == "MODEL_MISMATCH"
     recommendation = recommend_measurements([{"target": "partition_oc", "measurement": "imaging", "sensitivity": 2, "uncertainty": 1, "cost_class": "low"}])
     assert recommendation[0].target_parameter_or_hypothesis == "partition_oc"

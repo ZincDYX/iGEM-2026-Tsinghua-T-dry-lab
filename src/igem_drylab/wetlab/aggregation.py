@@ -7,7 +7,7 @@ from .models import WetLabResult
 
 def replicate_variation(records: list[WetLabResult]) -> dict[tuple[str, str, str, float], float | None]:
     """CV only for biological replicates sharing construct, condition, metabolite, and final time."""
-    grouped: dict[tuple[str, str, str, float], list[tuple[str, float]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, float], list[tuple[tuple[str, str], float]]] = defaultdict(list)
     observed_keys: set[tuple[str, str, str, float]] = set()
     for record in records:
         for metabolite in record.metabolites:
@@ -15,11 +15,11 @@ def replicate_variation(records: list[WetLabResult]) -> dict[tuple[str, str, str
             for time_h, value, censor in zip(series.time_h, series.concentration_uM, series.censor_mask, strict=True):
                 observed_keys.add((record.construct_id, record.condition_id, metabolite, time_h))
                 if censor == "quantified":
-                    grouped[(record.construct_id, record.condition_id, metabolite, time_h)].append((record.replicate_id, value))
+                    grouped[(record.construct_id, record.condition_id, metabolite, time_h)].append(((record.experiment_id, record.replicate_id), value))
     result: dict[tuple[str, str, str, float], float | None] = {}
     for key in observed_keys:
         values = grouped[key]
-        ids = {replicate for replicate, _ in values}
+        ids = {replicate_identity for replicate_identity, _ in values}
         if len(ids) < 2:
             result[key] = None
             continue

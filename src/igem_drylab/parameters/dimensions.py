@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from .requirements import ParameterRequirement
 
 _CONCENTRATION = {"M": 1e6, "mM": 1e3, "uM": 1.0, "nM": 1e-3}
@@ -9,8 +11,14 @@ _RATE_TO_PER_HOUR = {"1/h": 1.0, "h^-1": 1.0, "h-1": 1.0, "1/min": 60.0, "1/s": 
 _DIMENSIONLESS = {"1", "dimensionless", None}
 
 
+def canonicalize_unit(unit: str | None) -> str | None:
+    """Normalize accepted micro-molar spellings before dimension validation."""
+    return {"µM": "uM", "μM": "uM", "碌M": "uM"}.get(unit, unit)
+
+
 def normalize_concentration(value: float, unit: str | None) -> float:
     """Convert a declared concentration to the production canonical unit (uM)."""
+    unit = canonicalize_unit(unit)
     if unit not in _CONCENTRATION:
         raise ValueError(f"unsupported_concentration_unit:{unit}")
     return float(value) * _CONCENTRATION[unit]
@@ -18,6 +26,7 @@ def normalize_concentration(value: float, unit: str | None) -> float:
 
 def normalize_for_requirement(value: float, unit: str | None, requirement: ParameterRequirement) -> float:
     """Return a canonical numeric value or raise; never infer dimensions."""
+    unit = canonicalize_unit(unit)
     if requirement.dimension == "dimensionless":
         if unit not in _DIMENSIONLESS:
             raise ValueError(f"dimension_mismatch:{unit}:expected_dimensionless")
@@ -29,3 +38,18 @@ def normalize_for_requirement(value: float, unit: str | None, requirement: Param
     if requirement.canonical_unit in {"uM", "1/h"}:
         return canonical
     raise ValueError(f"unsupported_canonical_unit:{requirement.canonical_unit}")
+
+
+def validate_requirement_value(value: float, unit: str | None, requirement: ParameterRequirement) -> float:
+    """Shared normalization, finiteness, and physical-bound validation."""
+    canonical = normalize_for_requirement(value, unit, requirement)
+    if not math.isfinite(canonical):
+        raise ValueError("nonfinite_value")
+    if requirement.minimum is not None and (
+        canonical < requirement.minimum
+        or (canonical == requirement.minimum and not requirement.minimum_inclusive)
+    ):
+        raise ValueError("physical_lower_bound_violation")
+    if requirement.maximum is not None and canonical > requirement.maximum:
+        raise ValueError("physical_upper_bound_violation")
+    return canonical

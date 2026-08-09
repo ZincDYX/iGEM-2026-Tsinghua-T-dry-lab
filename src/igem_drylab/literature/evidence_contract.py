@@ -5,7 +5,7 @@ import hashlib
 from pydantic import BaseModel, ConfigDict, Field
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.parameters.requirements import ParameterRequirement
-from igem_drylab.parameters.dimensions import normalize_for_requirement
+from igem_drylab.parameters.dimensions import validate_requirement_value
 
 
 class EvidenceMetadata(BaseModel):
@@ -96,7 +96,7 @@ def map_evidence_to_requirement(evidence: QuantitativeEvidence, requirement: Par
         raise ValueError("evidence species identity does not match requirement")
     if requirement.phase and phase != requirement.phase:
         raise ValueError("evidence phase does not match requirement")
-    normalize_for_requirement(evidence.value, evidence.unit, requirement)
+    validate_requirement_value(evidence.value, evidence.unit, requirement)
     return evidence_to_parameter_candidate(evidence, requirement_name=requirement.name, parameter_type=requirement.parameter_type, canonical_unit=requirement.canonical_unit, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, species_id=requirement.species_id)
 
 

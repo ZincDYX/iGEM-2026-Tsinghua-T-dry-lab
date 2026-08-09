@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 ScientificStatus = Literal["valid", "insufficient_data", "invalid_input", "failed"]
-DataQuality = Literal["measured", "literature", "predicted", "heuristic", "demo_fixture", "mixed"]
+DataQuality = Literal["measured", "fitted", "literature", "predicted", "heuristic", "demo_fixture", "mixed"]
 
 
 class ScientificResult(BaseModel):
@@ -76,9 +76,9 @@ class M3ConcentrationAssessment(ScientificResult):
     dense_oc_dmt_ratio: float | None = Field(default=None, ge=0)
     whole_cell_oc_dmt_ratio: float | None = Field(default=None, ge=0)
     fraction_in_dense: dict[str, float] = Field(default_factory=dict)
+    binding_recruitment_status: Literal["not_requested", "valid", "insufficient_data"] = "not_requested"
     binding_recruited_fraction: dict[str, float] = Field(default_factory=dict)
     site_occupancy: dict[str, float] = Field(default_factory=dict)
-    saturation: bool | None = None
     recommended_for_m4: bool = False
     m4_candidate_context: M4CandidateContext | None = None
     notes: str = ""

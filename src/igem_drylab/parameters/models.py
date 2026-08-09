@@ -13,6 +13,18 @@ ParameterType = Literal["kcat", "km", "kd", "kp", "phi", "abundance", "activity_
 ReviewStatus = Literal["extracted", "validated", "approved", "rejected"]
 
 
+def validate_provenance_combination(source_type: ParameterSourceType, derivation_type: str) -> None:
+    """Reject provenance pairings that do not describe a possible data origin."""
+    allowed = {
+        "wetlab": {"direct_measurement", "model_fit", "other"},
+        "literature": {"direct_measurement", "literature_extraction", "other"},
+        "prediction": {"other"},
+        "assumption": {"other"},
+    }
+    if derivation_type not in allowed[source_type]:
+        raise ParameterValidationError(f"invalid_source_derivation_combination:{source_type}:{derivation_type}")
+
+
 class ParameterValidationError(ValueError):
     pass
 
@@ -60,6 +72,7 @@ class ParameterRecord(BaseModel):
 
     @model_validator(mode="after")
     def _validate_provenance(self) -> "ParameterRecord":
+        validate_provenance_combination(self.source_type, self.derivation_type)
         if self.source_type == "literature" and not self.doi:
             raise ValueError("literature parameter records require a DOI")
         if self.source_type == "literature" and self.review_status == "approved" and not self.evidence_text:

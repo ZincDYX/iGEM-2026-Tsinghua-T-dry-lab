@@ -72,6 +72,12 @@ def m4_kinetic_requirements(*, include_degradation: bool = False) -> list[Parame
     return [item for item in m4_requirements(include_degradation=include_degradation) if item.name not in m3_names]
 
 
+def requirement_name_to_kernel_key(name: str) -> str:
+    """Explicit bridge between public requirement names and ODE constructor keys."""
+    mapping = {f"partition_x{species}": f"partition_{species}" for species in ("9", "10", "11")}
+    return mapping.get(name, name)
+
+
 def recruitment_requirements(recruitment: object, *, binding_model: str) -> list[ParameterRequirement]:
     enzyme = recruitment.enzyme_id
     requirements = [

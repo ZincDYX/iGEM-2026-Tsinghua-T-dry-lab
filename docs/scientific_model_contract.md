@@ -24,6 +24,14 @@ are required for real-model resolution. A value with a mismatched unit,
 identity, host, mutant, or unsupported condition is unresolved rather than
 silently converted or selected.
 
+The same value contract is used for typed evidence, wet-lab candidate mapping,
+human approval, and Registry resolution: unit normalization, finite values,
+and physical bounds are checked before a candidate can be persisted. `uM`,
+Greek-mu `μM`, micro-sign `µM`, and the legacy imported `碌M` spelling are
+normalized to `uM`; unknown units fail fast. Provenance combinations are also
+validated centrally, so for example a literature record cannot be labelled as
+a model fit.
+
 ## Implemented
 
 - M1 computes explicit linker features and negative-screen flags. It does not predict LLPS probability.
@@ -38,6 +46,8 @@ silently converted or selected.
 - Real-data ingestion uses typed review-only evidence contracts: enzyme kinetics, LLPS partitioning, protein abundance, and recruitment binding. They share identity, host/assay, condition, unit, uncertainty, replicate, DOI, and evidence-location metadata. Evidence is never an approved parameter: an explicit reviewed Evidence→ParameterCandidate mapping is required.
 - Phase-specific residual activity has its own `PhaseActivityEvidence` contract and maps to `activity_dense_*` / `activity_dilute_*` only through a matching `ParameterRequirement`. Production resolver priority is direct wet-lab measurement, model-fit wet-lab value, direct literature measurement, literature-derived extraction, prediction, then assumption; equal scope/tier conflicts are not auto-selected.
 - M5 converts declared wet-lab concentration units to `uM` before comparison. LOD/LOQ censoring is per metabolite and time point: censored values remain in raw records and QC masks but are excluded only from exact residual/fit points, not from the whole trajectory.
+- M5 uses one residual-significance evaluation for top-level, branch, and systematic diagnoses. In real mode, absent interpretable uncertainty and absent configured tolerance yields `INSUFFICIENT_INFORMATION`, not a branch or model mismatch. Systematic mismatch is evaluated from condition-level means across at least two independent conditions; replicate observations are not preselected by significance.
+- FitPlan excludes QC-invalid or unit-invalid records, does not impute censored values, and fingerprints its source experiment/replicate lineage, fit points, bounds, observables, production parameter IDs, and contract version. Requirement-to-kernel mapping is explicit (for example `partition_x10` → `partition_10`), while fitted candidates retain requirement species and phase identity.
 - FitPlan aggregates matching biological replicate time courses. It never bootstraps correlated timepoints as IID samples; if replicate trajectories needed for a block bootstrap are unavailable, the fit has no CI and records an explicit identifiability warning.
 - Validated wet-lab parameter candidates require an explicit human approval action before `approve_and_persist_parameter` appends an approved, provenance-bearing record to project YAML. `ProjectState`, CLI, and MCP invoke the same identity/unit/lineage/reviewer validation boundary. Agent replanning after that external action is explicit, not autonomous.
 

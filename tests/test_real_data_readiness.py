@@ -25,7 +25,7 @@ def test_one_millimolar_equals_one_thousand_micromolar(tmp_path: Path) -> None:
 
 
 def test_perfect_prediction_is_not_parameter_mismatch() -> None:
-    diagnosis = diagnose_discrepancy(qc_passed=True, replicate_variation=0, abundance_ratio=1, trend_agreement=True, systematic_directional_error=False, significant_residual=False)
+    diagnosis = diagnose_discrepancy(qc_passed=True, replicate_variation=0, trend_agreement=True, systematic_directional_error=False, significant_residual=False)
     assert diagnosis.category == "NO_SIGNIFICANT_DISCREPANCY"
 
 

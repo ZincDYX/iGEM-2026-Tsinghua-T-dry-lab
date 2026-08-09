@@ -285,4 +285,22 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         missing = [str(item) for item in required_files if item is not None and not item.exists()]
         if missing:
             raise ValueError(f"real_mode_references_missing_file:{','.join(missing)}")
+    fasta_ids = _fasta_ids(config.inputs.protein_fasta)
+    required_ids = {item.protein_id for item in config.inputs.enzymes}
+    if config.inputs.idr_id is not None:
+        required_ids.add(config.inputs.idr_id)
+    absent = sorted(required_ids - fasta_ids)
+    if absent:
+        raise ValueError(f"protein_id_missing_from_fasta:{','.join(absent)}")
     return config
+
+
+def _fasta_ids(path: Path) -> set[str]:
+    """Read FASTA header IDs for lightweight sequence-provenance validation."""
+    if not path.exists():
+        return set()
+    return {
+        line[1:].strip().split()[0]
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith(">") and line[1:].strip()
+    }
