@@ -382,7 +382,7 @@ def _joint_diagnosis_evidence(result: object, comparisons: dict[str, object], va
             "residual_final": comparison.residual_final,
             "observed_final": comparison.observed_final,
             "predicted_final": comparison.predicted_final,
-            "measurement_uncertainty": result.metabolite_uncertainty.get(metabolite, [None])[-1] if result.metabolite_uncertainty.get(metabolite) else None,
+            "measurement_uncertainty": normalize_concentration(result.metabolite_uncertainty[metabolite][-1], result.metabolite_concentration_unit) if result.metabolite_uncertainty.get(metabolite) and result.metabolite_concentration_unit else None,
             "measurement_uncertainty_type": result.metabolite_uncertainty_type,
             "trend_agreement": comparison.trend_agreement,
             "replicate_variation": variations.get((result.construct_id, result.condition_id, metabolite, time_h)) if time_h is not None else None,

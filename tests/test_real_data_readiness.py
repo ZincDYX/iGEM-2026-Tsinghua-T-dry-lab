@@ -10,6 +10,7 @@ from igem_drylab.mcp import create_default_registry
 from igem_drylab.parameters import ParameterRecord, ParameterRegistry
 from igem_drylab.parameters.requirements import m4_requirements
 from igem_drylab.wetlab import WetLabResult, compare_prediction, diagnose_discrepancy, quality_control
+from igem_drylab.pipeline.stages import _joint_diagnosis_evidence
 
 
 def _trajectory(path: Path) -> Path:
@@ -26,6 +27,13 @@ def test_one_millimolar_equals_one_thousand_micromolar(tmp_path: Path) -> None:
 def test_perfect_prediction_is_not_parameter_mismatch() -> None:
     diagnosis = diagnose_discrepancy(qc_passed=True, replicate_variation=0, abundance_ratio=1, trend_agreement=True, systematic_directional_error=False, significant_residual=False)
     assert diagnosis.category == "NO_SIGNIFICANT_DISCREPANCY"
+
+
+def test_m5_uncertainty_uses_the_same_concentration_unit_as_residual(tmp_path: Path) -> None:
+    result = WetLabResult(experiment_id="e", construct_id="c", condition_id="q", replicate_id="r", metabolite_time=[0, 24], metabolite_concentration_unit="mM", metabolites={"13": [0, 1]}, metabolite_uncertainty={"13": [0, 0.1]}, metabolite_uncertainty_type="sd")
+    comparison = compare_prediction(_trajectory(tmp_path / "t.json"), result)
+    evidence = _joint_diagnosis_evidence(result, comparison, {})
+    assert evidence["13"]["measurement_uncertainty"] == pytest.approx(100)
 
 
 def test_zero_hour_below_lod_keeps_later_quantified_trajectory(tmp_path: Path) -> None:
