@@ -91,7 +91,7 @@ raw article text -> typed EvidenceRecord -> ParameterCandidate -> human approval
 
 ### 2. Search the local evidence database
 
-The default QA route is offline, deterministic BM25 retrieval:
+The default QA route is offline, deterministic BM25 retrieval. It accepts `.jsonl`, `.json`, and `.csv` evidence databases. Legacy project-conditioned CSV exports are read through a thin field-alias layer: original provenance and project metadata are retained, while `primary_result_evidence`, `best_enzyme_name_value`, `best_substrate_name_value`, and `primary_result_metric` also populate canonical QA fields. Legacy rules and decision engines are not reintroduced.
 
 ```bash
 igem-drylab literature qa "What evidence reports OC activity?" \

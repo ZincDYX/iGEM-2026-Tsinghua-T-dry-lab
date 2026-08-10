@@ -36,12 +36,12 @@ MMR_LAMBDA = 0.7
 DEFAULT_EMBEDDING_BATCH_SIZE = 64
 
 FIELD_ALIASES = {
-    "enzyme": ("enzyme", "enzyme_name"),
-    "substrate": ("substrate", "substrate_name"),
-    "product": ("product", "product_name", "main_product_name"),
-    "parameter_type": ("parameter_type", "metric", "parameter", "measurement_type"),
-    "host": ("host", "host_species", "organism", "assay_host"),
-    "condition": ("condition", "assay_condition", "experimental_condition"),
+    "enzyme": ("enzyme", "enzyme_name", "best_enzyme_name_value", "enzyme_name_value"),
+    "substrate": ("substrate", "substrate_name", "best_substrate_name_value", "substrate_name_value"),
+    "product": ("product", "product_name", "main_product_name", "best_main_product_name_value", "main_product_name_value", "best_canonical_product", "canonical_product"),
+    "parameter_type": ("parameter_type", "metric", "parameter", "measurement_type", "primary_result_metric", "structured_metric"),
+    "host": ("host", "host_species", "organism", "assay_host", "best_canonical_host", "best_expression_host_value", "expression_host_value", "best_host_group"),
+    "condition": ("condition", "assay_condition", "experimental_condition", "condition_prior_scope"),
 }
 INDEX_FIELD_NAMES = tuple({name for names in FIELD_ALIASES.values() for name in names})
 QUERY_ALIASES = {
@@ -119,16 +119,21 @@ def load_evidence_documents(path: Path) -> list[EvidenceDocument]:
         if not isinstance(row, dict):
             continue
         record = row.get("record") if isinstance(row.get("record"), dict) else row
-        evidence = _first_text(row, "evidence", "evidence_text", "data_source_type_evidence") or _find_metric_evidence(record)
+        fields = _compatibility_fields(record)
+        evidence = (
+            _first_text(row, "evidence", "evidence_text", "primary_result_evidence", "data_source_type_evidence", "best_llps_trigger_evidence", "best_llps_component_evidence", "best_llps_state_evidence")
+            or _first_text(record, "evidence", "evidence_text", "primary_result_evidence", "data_source_type_evidence", "best_llps_trigger_evidence", "best_llps_component_evidence", "best_llps_state_evidence")
+            or _find_metric_evidence(record)
+        )
         if not evidence:
             continue
         documents.append(EvidenceDocument(
-            record_id=_first_text(row, "record_id", "evidence_id", "article_id") or f"row-{index}",
-            title=_first_text(row, "title") or "Untitled source",
-            doi=_first_text(row, "doi"),
+            record_id=_first_text(row, "record_id", "evidence_id", "aggregate_record_id", "article_id") or _first_text(record, "record_id", "evidence_id", "aggregate_record_id", "article_id") or f"row-{index}",
+            title=_first_text(row, "title", "title_clean") or _first_text(record, "title", "title_clean") or "Untitled source",
+            doi=_first_text(row, "doi") or _first_text(record, "doi"),
             evidence=evidence,
-            source_file=_first_text(row, "source_file", "text_file"),
-            fields=record,
+            source_file=_first_text(row, "source_file", "text_file") or _first_text(record, "source_file", "text_file"),
+            fields=fields,
         ))
     return documents
 
@@ -521,6 +526,29 @@ def _metadata(document: EvidenceDocument) -> dict[str, Any]:
     return metadata
 
 
+def _compatibility_fields(record: dict[str, Any]) -> dict[str, Any]:
+    """Preserve raw evidence fields while filling only missing canonical aliases."""
+    fields = dict(record)
+    nested = fields.get("fields")
+    nested_fields = nested if isinstance(nested, dict) else {}
+    for canonical, aliases in FIELD_ALIASES.items():
+        if _field_value(fields, canonical) is not None or _field_value(nested_fields, canonical) is not None:
+            continue
+        for alias in aliases:
+            value = _field_value(fields, alias)
+            if value is None:
+                value = _field_value(nested_fields, alias)
+            if value is not None:
+                fields[canonical] = value
+                break
+    return fields
+
+
+def _field_value(fields: dict[str, Any], key: str) -> Any | None:
+    value = fields.get(key)
+    return value if value is not None and str(value).strip() else None
+
+
 def _metadata_matches(document: EvidenceDocument, constraints: dict[str, str]) -> tuple[str, ...]:
     metadata = _metadata(document)
     matches = []
@@ -535,7 +563,7 @@ def _metadata_matches(document: EvidenceDocument, constraints: dict[str, str]) -
 def _project_metadata_matches(document: EvidenceDocument) -> tuple[str, ...]:
     metadata = _metadata(document)
     matches = []
-    for key in ("is_project_glabridin_direct", "is_project_llps_related", "is_project_yeast", "high_transferability"):
+    for key in ("is_project_glabridin_direct", "is_project_llps_related", "is_project_yeast", "high_transferability", "is_project_high_transfer_llps"):
         if metadata.get(key) is True or str(metadata.get(key, "")).lower() == "true":
             matches.append(f"project:{key}")
     return tuple(matches)
