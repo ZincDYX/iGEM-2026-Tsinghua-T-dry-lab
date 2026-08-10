@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import csv
 from pathlib import Path
 
 from igem_drylab.literature.qa import (
@@ -8,6 +9,8 @@ from igem_drylab.literature.qa import (
     EvidenceDocument,
     RankedEvidence,
     _document_embeddings,
+    _metadata_matches,
+    _project_metadata_matches,
     answer_question,
     bm25_search,
     deduplicate_sources,
@@ -28,6 +31,33 @@ def _evidence_file(tmp_path: Path) -> Path:
     ]
     path = tmp_path / "evidence.jsonl"
     path.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    return path
+
+
+def _legacy_evidence_file(tmp_path: Path) -> Path:
+    rows = [
+        {
+            "aggregate_record_id": "legacy-dmt-11", "article_id": "article-a", "title": "DMT kcat evidence", "doi": "10.1000/legacy-a",
+            "best_enzyme_name_value": "GgDMT1", "best_substrate_name_value": "11", "primary_result_metric": "kcat",
+            "primary_result_value": "2.4", "primary_result_unit": "h^-1", "primary_result_evidence": "DMT kcat was measured for compound 11.",
+            "project_tier": "direct", "is_project_glabridin_direct": "True", "is_project_high_transfer_llps": "True", "llps_transferability_class": "high",
+        },
+        {
+            "aggregate_record_id": "legacy-dmt-9", "article_id": "article-b", "title_clean": "DMT Km evidence", "doi": "10.1000/legacy-b",
+            "best_enzyme_name_value": "GgDMT1", "best_substrate_name_value": "9", "primary_result_metric": "Km",
+            "primary_result_evidence": "DMT Km was measured for compound 9.",
+        },
+        {
+            "aggregate_record_id": "legacy-oc-10", "article_id": "article-c", "title": "OC kcat evidence", "doi": "10.1000/legacy-c",
+            "best_enzyme_name_value": "GgOC1", "best_substrate_name_value": "10", "primary_result_metric": "kcat",
+            "primary_result_evidence": "OC kcat was measured for compound 10.",
+        },
+    ]
+    path = tmp_path / "project_conditioned_evidence_database.csv"
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=sorted({key for row in rows for key in row}))
+        writer.writeheader()
+        writer.writerows(rows)
     return path
 
 
@@ -216,3 +246,38 @@ def test_explicit_constraint_relaxation_is_visible_and_semantic_uses_same_subset
     assert analysis["active_constraints"] == {"enzyme": "DMT"}
     assert analysis["relaxed_constraints"] == ["substrate=11", "parameter_type=kcat"]
     assert retrieval["semantic"] == "used"
+
+
+def test_legacy_project_conditioned_csv_loads_as_canonical_evidence(tmp_path: Path) -> None:
+    documents = load_evidence_documents(_legacy_evidence_file(tmp_path))
+    assert [document.record_id for document in documents] == ["legacy-dmt-11", "legacy-dmt-9", "legacy-oc-10"]
+    dmt_11 = documents[0]
+    assert dmt_11.title == "DMT kcat evidence"
+    assert dmt_11.doi == "10.1000/legacy-a"
+    assert dmt_11.evidence == "DMT kcat was measured for compound 11."
+    assert _metadata_matches(dmt_11, {"enzyme": "DMT", "substrate": "11", "parameter_type": "kcat"}) == ("enzyme", "substrate", "parameter_type")
+    assert dmt_11.fields["project_tier"] == "direct"
+    assert dmt_11.fields["is_project_glabridin_direct"] == "True"
+    assert dmt_11.fields["llps_transferability_class"] == "high"
+    assert "project:is_project_high_transfer_llps" in _project_metadata_matches(dmt_11)
+
+
+def test_legacy_csv_supports_constraints_bm25_and_canonical_precedence(tmp_path: Path) -> None:
+    path = _legacy_evidence_file(tmp_path)
+    documents = load_evidence_documents(path)
+    sources, _analysis, _retrieval = retrieve_evidence(
+        "What evidence reports DMT kcat for compound 11?",
+        documents,
+        constraints={"enzyme": "DMT", "substrate": "11"},
+    )
+    assert [source["record_id"] for source in sources] == ["legacy-dmt-11"]
+
+    canonical = tmp_path / "canonical_wins.csv"
+    canonical.write_text(
+        "record_id,title,doi,evidence,enzyme,best_enzyme_name_value\n"
+        "canonical,Canonical field,10.1000/canonical,Canonical metadata must win.,OC,GgDMT1\n",
+        encoding="utf-8",
+    )
+    document = load_evidence_documents(canonical)[0]
+    assert document.fields["enzyme"] == "OC"
+    assert _metadata_matches(document, {"enzyme": "OC"}) == ("enzyme",)
