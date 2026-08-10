@@ -18,6 +18,7 @@ def _evidence_file(tmp_path: Path) -> Path:
 
 def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert "Literature Evidence Explorer" in PAGE
+    assert "GLOSS" not in PAGE
     assert 'id="question-form"' in PAGE
     assert 'id="results"' in PAGE
     assert "checkHealth()" in PAGE
