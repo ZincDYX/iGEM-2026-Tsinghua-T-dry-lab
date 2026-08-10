@@ -9,6 +9,7 @@ from igem_drylab.literature.qa import (
     EvidenceDocument,
     RankedEvidence,
     _document_embeddings,
+    _index_text,
     _metadata_matches,
     _project_metadata_matches,
     answer_question,
@@ -281,3 +282,7 @@ def test_legacy_csv_supports_constraints_bm25_and_canonical_precedence(tmp_path:
     document = load_evidence_documents(canonical)[0]
     assert document.fields["enzyme"] == "OC"
     assert _metadata_matches(document, {"enzyme": "OC"}) == ("enzyme",)
+    assert _metadata_matches(document, {"enzyme": "DMT"}) == ()
+    assert "GgDMT1" not in _index_text(document)
+    assert bm25_search("DMT", [document]) == []
+    assert bm25_search("OC", [document])[0].index == 0
