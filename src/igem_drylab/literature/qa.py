@@ -526,6 +526,18 @@ def _metadata(document: EvidenceDocument) -> dict[str, Any]:
     return metadata
 
 
+def _canonical_metadata_value(metadata: dict[str, Any], key: str) -> Any | None:
+    """Resolve canonical metadata first, using aliases only when it is absent."""
+    value = _field_value(metadata, key)
+    if value is not None:
+        return value
+    for alias in FIELD_ALIASES.get(key, (key,)):
+        value = _field_value(metadata, alias)
+        if value is not None:
+            return value
+    return None
+
+
 def _compatibility_fields(record: dict[str, Any]) -> dict[str, Any]:
     """Preserve raw evidence fields while filling only missing canonical aliases."""
     fields = dict(record)
@@ -553,9 +565,8 @@ def _metadata_matches(document: EvidenceDocument, constraints: dict[str, str]) -
     metadata = _metadata(document)
     matches = []
     for key, expected in constraints.items():
-        aliases = FIELD_ALIASES.get(key, (key,))
-        values = [metadata.get(alias) for alias in aliases if metadata.get(alias) not in (None, "")]
-        if values and any(_canonical_value(key, value) == _canonical_value(key, expected) for value in values):
+        value = _canonical_metadata_value(metadata, key)
+        if value is not None and _canonical_value(key, value) == _canonical_value(key, expected):
             matches.append(key)
     return tuple(matches)
 
@@ -571,7 +582,11 @@ def _project_metadata_matches(document: EvidenceDocument) -> tuple[str, ...]:
 
 def _index_text(document: EvidenceDocument) -> str:
     metadata = _metadata(document)
-    field_text = " ".join(str(metadata[name]) for name in INDEX_FIELD_NAMES if metadata.get(name) not in (None, ""))
+    field_text = " ".join(
+        str(value)
+        for key in FIELD_ALIASES
+        if (value := _canonical_metadata_value(metadata, key)) is not None
+    )
     return f"{document.title} {document.evidence} {field_text}"
 
 
