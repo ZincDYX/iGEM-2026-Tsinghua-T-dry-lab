@@ -370,7 +370,7 @@ def retrieve_evidence(
 def _stage_one_candidates(question: str, documents: Sequence[EvidenceDocument], scoped_indices: Sequence[int], intent: dict[str, Any]) -> list[int]:
     """High-recall local union before any semantic API call."""
     lexical = bm25_search(question, documents, candidate_indices=scoped_indices)
-    selected = {hit.index for hit in lexical[:DEFAULT_CANDIDATE_POOL_SIZE]}
+    selected = [hit.index for hit in lexical[:DEFAULT_CANDIDATE_POOL_SIZE]]
     for index in scoped_indices:
         document = documents[index]
         text = _index_text(document).lower()
@@ -380,8 +380,9 @@ def _stage_one_candidates(question: str, documents: Sequence[EvidenceDocument], 
         transfer = bool(_project_metadata_matches(document)) or str(metadata.get("llps_transferability_class", "")).lower() in {"high", "medium"}
         entity = any(_canonical_value("enzyme", _canonical_metadata_value(metadata, "enzyme") or "") == enzyme.lower() for enzyme in intent["enzymes"])
         if (mechanism and catalytic) or transfer or entity:
-            selected.add(index)
-    return sorted(selected)[:DEFAULT_CANDIDATE_POOL_SIZE]
+            if index not in selected:
+                selected.append(index)
+    return selected[:DEFAULT_CANDIDATE_POOL_SIZE]
 
 
 def _evidence_tier(document: EvidenceDocument, intent: dict[str, Any]) -> str:
