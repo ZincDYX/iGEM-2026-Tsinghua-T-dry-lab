@@ -23,7 +23,7 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert 'id="results"' in PAGE
     assert "checkHealth()" in PAGE
     assert "renderSourceCard" in PAGE
-    assert "No matching local evidence found." in PAGE
+    assert "No sufficiently relevant evidence found." in PAGE
     assert "Evidence database unavailable." in PAGE
     assert "innerHTML" not in PAGE
     assert "AGENT TOOL" not in PAGE
@@ -44,6 +44,9 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert 'id="mode"' in PAGE
     assert "Evidence-grounded answer" in PAGE
     assert "function renderRetrievalInfo" in PAGE
+    assert "Relative retrieval score" in PAGE
+    assert "transferable_fallback" in PAGE
+    assert "No direct project-specific evidence was found." in PAGE
 
 
 def test_health_contract_is_unchanged(tmp_path: Path) -> None:

@@ -38,6 +38,10 @@ METADATA_BONUS_PER_MATCH = 0.01
 MMR_LAMBDA = 0.7
 DEFAULT_EMBEDDING_BATCH_SIZE = 64
 DEFAULT_CANDIDATE_POOL_SIZE = 200
+STAGE_ONE_BM25_QUOTA = 80
+STAGE_ONE_ENTITY_QUOTA = 60
+STAGE_ONE_MECHANISM_QUOTA = 50
+STAGE_ONE_TRANSFER_QUOTA = 50
 
 FIELD_ALIASES = {
     "enzyme": ("enzyme", "enzyme_name", "best_enzyme_name_value", "enzyme_name_value"),
@@ -332,8 +336,21 @@ def retrieve_evidence(
                 semantic_status = "unavailable"
     fused = rrf_fuse(lexical, semantic)
     relevant = _relevant_candidates(fused, documents, intent)
-    deduplicated = deduplicate_sources(relevant, documents)
-    selected = mmr_select(deduplicated, documents, top_k=top_k, semantic_vectors=semantic_vectors)
+    direct = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], intent) == "direct"]
+    transferable = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], intent) == "transferable"]
+    if direct:
+        evidence_mode = "direct"
+        selected = mmr_select(
+            deduplicate_sources(direct, documents), documents, top_k=top_k, semantic_vectors=semantic_vectors,
+        )
+    elif transferable:
+        evidence_mode = "transferable_fallback"
+        selected = mmr_select(
+            deduplicate_sources(transferable, documents), documents, top_k=top_k, semantic_vectors=semantic_vectors,
+        )
+    else:
+        evidence_mode = "no_match"
+        selected = []
     max_score = max((hit.rrf_score for hit in selected), default=1.0)
     sources = [
         documents[hit.index].as_dict(
@@ -363,6 +380,7 @@ def retrieve_evidence(
         "diversity": "doi_dedup+mmr",
         "candidate_count": len(candidate_indices),
         "final_count": len(sources),
+        "evidence_mode": evidence_mode,
     }
     return sources, query_analysis, retrieval
 
@@ -370,41 +388,99 @@ def retrieve_evidence(
 def _stage_one_candidates(question: str, documents: Sequence[EvidenceDocument], scoped_indices: Sequence[int], intent: dict[str, Any]) -> list[int]:
     """High-recall local union before any semantic API call."""
     lexical = bm25_search(question, documents, candidate_indices=scoped_indices)
-    selected = [hit.index for hit in lexical[:DEFAULT_CANDIDATE_POOL_SIZE]]
+    lexical_order = [hit.index for hit in lexical]
+    lexical_rank = {index: rank for rank, index in enumerate(lexical_order)}
+
+    def ordered(indices: Sequence[int]) -> list[int]:
+        return sorted(indices, key=lambda index: (lexical_rank.get(index, len(documents)), documents[index].record_id))
+
+    entity_indices: list[int] = []
+    mechanism_indices: list[int] = []
+    transfer_indices: list[int] = []
     for index in scoped_indices:
         document = documents[index]
         text = _index_text(document).lower()
         metadata = _metadata(document)
-        mechanism = bool(intent["context"]) and any(term in text for term in ("llps", "condensate", "phase separation"))
-        catalytic = bool(intent["outcomes"]) and any(term in text for term in ("activity", "catalytic", "kcat", "km", "kinetic"))
+        mechanism = _has_llps_context(text)
+        catalytic = _has_catalytic_evidence(text)
         transfer = bool(_project_metadata_matches(document)) or str(metadata.get("llps_transferability_class", "")).lower() in {"high", "medium"}
-        entity = any(_canonical_value("enzyme", _canonical_metadata_value(metadata, "enzyme") or "") == enzyme.lower() for enzyme in intent["enzymes"])
-        if (mechanism and catalytic) or transfer or entity:
+        entity = bool(intent["enzymes"]) and _entity_matches(metadata, intent)
+        if entity:
+            entity_indices.append(index)
+        if mechanism and catalytic:
+            mechanism_indices.append(index)
+        if transfer:
+            transfer_indices.append(index)
+
+    routes = (
+        lexical_order[:STAGE_ONE_BM25_QUOTA],
+        ordered(entity_indices)[:STAGE_ONE_ENTITY_QUOTA],
+        ordered(mechanism_indices)[:STAGE_ONE_MECHANISM_QUOTA],
+        ordered(transfer_indices)[:STAGE_ONE_TRANSFER_QUOTA],
+    )
+    selected: list[int] = []
+    for route in routes:
+        for index in route:
             if index not in selected:
                 selected.append(index)
-    return selected[:DEFAULT_CANDIDATE_POOL_SIZE]
+            if len(selected) == DEFAULT_CANDIDATE_POOL_SIZE:
+                return selected
+    return selected
 
 
 def _evidence_tier(document: EvidenceDocument, intent: dict[str, Any]) -> str:
     metadata = _metadata(document)
-    enzyme = _canonical_value("enzyme", _canonical_metadata_value(metadata, "enzyme") or "")
-    if intent["enzymes"] and enzyme in {item.lower() for item in intent["enzymes"]}:
-        return "direct"
     text = _index_text(document).lower()
-    if intent["context"] and any(term in text for term in ("llps", "condensate", "phase separation")) and any(term in text for term in ("activity", "catalytic", "enzyme", "kinetic")):
+    has_requested_dimension = bool(intent["enzymes"] or intent["context"] or intent["outcomes"] or intent["constraints"])
+    if has_requested_dimension and _entity_matches(metadata, intent, text=text) and _context_matches(text, intent) and _outcome_matches(text, intent):
+        return "direct"
+    if _has_llps_context(text) and _has_catalytic_evidence(text):
         return "transferable"
     return "background"
 
 
 def _relevant_candidates(candidates: Sequence[RankedEvidence], documents: Sequence[EvidenceDocument], intent: dict[str, Any]) -> list[RankedEvidence]:
     """Reject zero-signal background before DOI diversity/MMR can promote it."""
-    kept = []
-    for candidate in candidates:
-        tier = _evidence_tier(documents[candidate.index], intent)
-        if candidate.lexical_rank is not None or candidate.semantic_rank is not None:
-            if tier != "background" or not intent["context"] or candidate.lexical_rank is not None:
-                kept.append(candidate)
-    return kept
+    return [
+        candidate
+        for candidate in candidates
+        if _evidence_tier(documents[candidate.index], intent) in {"direct", "transferable"}
+    ]
+
+
+def _entity_matches(metadata: dict[str, Any], intent: dict[str, Any], *, text: str = "") -> bool:
+    if not intent["enzymes"]:
+        return True
+    enzyme = _canonical_value("enzyme", _canonical_metadata_value(metadata, "enzyme") or "")
+    requested = {item.lower() for item in intent["enzymes"]}
+    return enzyme in requested or (not enzyme and any(_contains_alias(text, item) for item in requested))
+
+
+def _context_matches(text: str, intent: dict[str, Any]) -> bool:
+    return not intent["context"] or _has_llps_context(text)
+
+
+def _outcome_matches(text: str, intent: dict[str, Any]) -> bool:
+    if not intent["outcomes"]:
+        return True
+    outcome_terms = {
+        "activity": ("activity", "catalytic", "enzyme activity"),
+        "kcat": ("kcat", "turnover"),
+        "Km": ("km", "michaelis"),
+        "Kp": ("kp", "partition coefficient"),
+        "partition coefficient": ("partition coefficient", "partitioning"),
+        "abundance": ("abundance", "concentration", "expression"),
+        "phi": ("phi", "volume fraction"),
+    }
+    return any(term in text for outcome in intent["outcomes"] for term in outcome_terms.get(outcome, (outcome.lower(),)))
+
+
+def _has_llps_context(text: str) -> bool:
+    return any(term in text for term in ("llps", "condensate", "phase separation"))
+
+
+def _has_catalytic_evidence(text: str) -> bool:
+    return any(term in text for term in ("activity", "catalytic", "enzyme", "kcat", "km", "kinetic"))
 
 
 def search_evidence(question: str, documents: Sequence[EvidenceDocument], *, top_k: int = 5) -> list[dict[str, Any]]:
@@ -441,7 +517,7 @@ def answer_question(
         evidence_path=evidence_path,
     )
     if not sources:
-        response = _base_response(True, "no_match", "No matching evidence was found in the local database.", [], mode=mode)
+        response = _base_response(True, "no_match", "No sufficiently relevant evidence was found in the local database.", [], mode=mode)
         response.update(query_analysis=query_analysis, retrieval=retrieval)
         return response
     retrieval_answer = _retrieval_summary(sources)
@@ -458,7 +534,10 @@ def answer_question(
         )
         return response
     try:
-        synthesis = synthesize_answer(question, query_analysis["constraints"], sources, client=client)
+        synthesis = synthesize_answer(
+            question, query_analysis["constraints"], sources,
+            evidence_mode=retrieval["evidence_mode"], client=client,
+        )
     except (LlmError, ValueError, TypeError, KeyError) as exc:
         response.update(
             status="synthesis_error",
@@ -470,7 +549,14 @@ def answer_question(
     return response
 
 
-def synthesize_answer(question: str, constraints: dict[str, str], sources: Sequence[dict[str, Any]], *, client: Any) -> dict[str, Any]:
+def synthesize_answer(
+    question: str,
+    constraints: dict[str, str],
+    sources: Sequence[dict[str, Any]],
+    *,
+    evidence_mode: str = "direct",
+    client: Any,
+) -> dict[str, Any]:
     """Make exactly one grounded synthesis request from already-selected evidence."""
     evidence = [
         {
@@ -485,7 +571,13 @@ def synthesize_answer(question: str, constraints: dict[str, str], sources: Seque
     prompt = (
         "Answer only from the supplied evidence. Do not use outside knowledge or invent DOI, values, mechanisms, or results. "
         "Every factual claim must cite evidence_ids. Distinguish direct_report from interpretation. If evidence is insufficient, say so. "
-        "Retrieved evidence is not a validated model parameter. Return one JSON object with answer, claims, limitations, "
+        "Retrieved evidence is not a validated model parameter. "
+        + (
+            "No direct project-specific evidence was retrieved. The selected sources are transferable evidence from related "
+            "LLPS-enzyme systems; do not present them as facts about the queried enzymes, and state that experimental validation is required. "
+            if evidence_mode == "transferable_fallback" else ""
+        )
+        + "Return one JSON object with answer, claims, limitations, "
         "suggested_next_steps, and selected_evidence_ids.\n\n"
         f"Question: {question}\nConstraints: {json.dumps(constraints)}\nEvidence: {json.dumps(evidence, ensure_ascii=False)}"
     )

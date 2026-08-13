@@ -9,9 +9,12 @@ from igem_drylab.literature.qa import (
     EvidenceDocument,
     RankedEvidence,
     _document_embeddings,
+    _evidence_tier,
     _index_text,
     _metadata_matches,
     _project_metadata_matches,
+    _relevant_candidates,
+    _stage_one_candidates,
     answer_question,
     bm25_search,
     deduplicate_sources,
@@ -215,6 +218,24 @@ def test_embedding_corpus_is_batched_and_cache_is_written_only_after_success(tmp
     assert not cache_path_for(path).exists()
 
 
+def test_incremental_embedding_cache_reuses_overlap_and_embeds_only_new_candidates(tmp_path: Path, monkeypatch) -> None:
+    path = _evidence_file(tmp_path)
+    documents = load_evidence_documents(path)
+    calls: list[list[str]] = []
+
+    def embed(_self, texts):
+        calls.append(list(texts))
+        return [[float(index + 1), 1.0] for index, _text in enumerate(texts)]
+
+    monkeypatch.setattr(EmbeddingApiBackend, "embed", embed)
+    backend = EmbeddingApiBackend(api_base="https://example.invalid", api_key="unused", model="incremental-test")
+    _document_embeddings(documents[2:3], backend=backend, evidence_path=path)
+    _document_embeddings(documents[2:], backend=backend, evidence_path=path)
+    assert [len(batch) for batch in calls] == [1, 1]
+    assert "OC activity" in calls[0][0]
+    assert "DMT activity" in calls[1][0]
+
+
 def test_explicit_constraints_filter_candidates_but_inferred_constraints_remain_soft(tmp_path: Path) -> None:
     path = _evidence_file(tmp_path)
     documents = load_evidence_documents(path)
@@ -309,3 +330,83 @@ def test_multi_entity_llps_intent_and_candidate_scoped_embeddings(tmp_path: Path
     assert sources[0]["retrieval"]["tier"] == "direct"
     assert retrieval["semantic"] == "used"
     assert max(backend.batch_sizes[:-1]) < len(rows)
+
+
+def test_stage_one_preserves_entity_route_when_bm25_quota_is_full() -> None:
+    noise = [
+        EvidenceDocument(
+            f"noise-{index:03d}", "Generic LLPS activity", f"10.1/noise-{index}",
+            "DMT enzyme activity activity activity in LLPS condensates.", fields={"enzyme": "DMT"},
+        )
+        for index in range(120)
+    ]
+    routed = EvidenceDocument(
+        "z-dmt-route", "Transferable condensate assay", "10.1/dmt-route",
+        "Catalytic activity was measured inside an LLPS condensate.", fields={"is_project_high_transfer_llps": True},
+    )
+    documents = [*noise, routed]
+    intent = parse_query_intent("DMT activity in LLPS condensates")
+    lexical = bm25_search("DMT activity in LLPS condensates", documents)
+    assert lexical.index(next(hit for hit in lexical if hit.index == len(noise))) >= 80
+    candidates = _stage_one_candidates("DMT activity in LLPS condensates", documents, list(range(len(documents))), intent)
+    assert len(noise) in candidates
+    assert len(candidates) <= 200
+
+
+def test_llps_activity_query_rejects_morphology_background() -> None:
+    documents = [
+        EvidenceDocument("morphology", "FUS condensate morphology", "10.1/morphology", "FUS condensate morphology and DNAJB6 colocalization."),
+        EvidenceDocument("catalysis", "Enzyme catalysis in LLPS", "10.1/catalysis", "Enzyme catalytic activity was measured in an LLPS condensate."),
+    ]
+    intent = parse_query_intent("Will enzyme activity be affected in LLPS condensates?")
+    fused = rrf_fuse(bm25_search("Will enzyme activity be affected in LLPS condensates?", documents), [])
+    relevant = _relevant_candidates(fused, documents, intent)
+    assert [documents[candidate.index].record_id for candidate in relevant] == ["catalysis"]
+
+
+def test_direct_tier_requires_all_requested_intent_dimensions() -> None:
+    documents = [
+        EvidenceDocument("dmt-soluble", "DMT soluble kinetics", "10.1/soluble", "DMT kinetic activity in a soluble assay.", fields={"enzyme": "DMT"}),
+        EvidenceDocument("other-llps", "Other enzyme in LLPS", "10.1/other", "An enzyme catalytic activity was measured in LLPS condensates.", fields={"enzyme": "OTHER"}),
+        EvidenceDocument("dmt-llps", "DMT in LLPS", "10.1/direct", "DMT catalytic activity was measured in an LLPS condensate.", fields={"enzyme": "DMT"}),
+    ]
+    intent = parse_query_intent("DMT activity in LLPS condensates")
+    assert _evidence_tier(documents[0], intent) == "background"
+    assert _evidence_tier(documents[1], intent) == "transferable"
+    assert _evidence_tier(documents[2], intent) == "direct"
+
+
+def test_transferable_fallback_never_pads_with_background(tmp_path: Path) -> None:
+    path = tmp_path / "fallback.jsonl"
+    rows = [
+        {"record_id": "transfer", "title": "Other enzyme LLPS catalysis", "doi": "10.1/transfer", "evidence": "A non-project enzyme catalytic activity was measured in an LLPS condensate.", "fields": {"enzyme": "OTHER"}},
+        {"record_id": "background", "title": "FUS morphology", "doi": "10.1/background", "evidence": "FUS condensate morphology and colocalization.", "fields": {}},
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    sources, _analysis, retrieval = retrieve_evidence("OC and DMT activity in LLPS condensates", load_evidence_documents(path), top_k=5)
+    assert [source["record_id"] for source in sources] == ["transfer"]
+    assert sources[0]["retrieval"]["tier"] == "transferable"
+    assert retrieval["evidence_mode"] == "transferable_fallback"
+
+
+def test_transferable_synthesis_prompt_preserves_epistemic_boundary(tmp_path: Path) -> None:
+    path = tmp_path / "transfer-synthesis.jsonl"
+    path.write_text(json.dumps({"record_id": "transfer", "title": "Other enzyme LLPS catalysis", "doi": "10.1/transfer", "evidence": "A non-project enzyme catalytic activity was measured in an LLPS condensate.", "fields": {"enzyme": "OTHER"}}), encoding="utf-8")
+
+    class CaptureChatClient:
+        def __init__(self) -> None: self.prompt = ""
+        def complete_json(self, prompt: str) -> dict[str, object]:
+            self.prompt = prompt
+            return {"answer": "Transferable evidence only.", "claims": [], "limitations": [], "suggested_next_steps": [], "selected_evidence_ids": ["transfer"]}
+
+    client = CaptureChatClient()
+    result = answer_question("OC and DMT activity in LLPS condensates", path, mode="synthesize", chat_client=client)
+    assert result["retrieval"]["evidence_mode"] == "transferable_fallback"
+    assert "do not present them as facts about the queried enzymes" in client.prompt
+
+
+def test_no_relevant_evidence_returns_no_match_mode() -> None:
+    documents = [EvidenceDocument("background", "FUS morphology", "10.1/background", "FUS condensate morphology and colocalization.")]
+    sources, _analysis, retrieval = retrieve_evidence("DMT activity in LLPS condensates", documents)
+    assert sources == []
+    assert retrieval["evidence_mode"] == "no_match"
