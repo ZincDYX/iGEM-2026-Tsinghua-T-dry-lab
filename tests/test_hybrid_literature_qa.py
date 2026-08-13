@@ -14,6 +14,7 @@ from igem_drylab.literature.qa import (
     _metadata_matches,
     _project_metadata_matches,
     _relevant_candidates,
+    _sentences,
     _stage_one_candidates,
     compact_evidence_sources,
     get_evidence_detail,
@@ -407,6 +408,37 @@ def test_transferable_synthesis_prompt_preserves_epistemic_boundary(tmp_path: Pa
     result = answer_question("OC and DMT activity in LLPS condensates", path, mode="synthesize", chat_client=client)
     assert result["retrieval"]["evidence_mode"] == "transferable_fallback"
     assert "do not present them as facts about the queried enzymes" in client.prompt
+
+
+def test_synthesis_normalizes_presentation_structure_and_drops_uncited_claims(tmp_path: Path) -> None:
+    path = _evidence_file(tmp_path)
+    client = FakeChatClient({
+        "answer": "The cited studies support a bounded conclusion. Evidence sufficiency is limited to those studies.",
+        "claims": [
+            {"claim": "DMT kinetics were measured for compound 11 in yeast.", "evidence_ids": ["dmt-repeat"], "type": "direct_report"},
+            {"claim": "This unsupported statement must not render.", "evidence_ids": ["missing"], "type": "direct_report"},
+            {"claim": "DMT kinetics were measured for compound 11 in yeast.", "evidence_ids": ["dmt-repeat"], "type": "direct_report"},
+        ],
+        "limitations": ["Assay conditions differ between records.", "The cited studies support a bounded conclusion."],
+        "suggested_next_steps": [], "selected_evidence_ids": ["dmt-repeat"],
+    })
+    result = answer_question("DMT kinetics", path, mode="synthesize", chat_client=client)
+    assert 2 <= len(_sentences(result["answer"])) <= 4
+    assert len(result["claims"]) == 1
+    assert result["claims"][0]["evidence_ids"] == ["dmt-repeat"]
+    assert "unsupported" not in " ".join(item["claim"].lower() for item in result["claims"])
+    assert all(item["claim"] not in result["answer"] for item in result["claims"])
+    assert result["limitations"] == ["Assay conditions differ between records."]
+
+
+def test_transferable_synthesis_uses_stable_explicit_answer(tmp_path: Path) -> None:
+    path = tmp_path / "transfer.jsonl"
+    path.write_text(json.dumps({"record_id": "transfer", "title": "Synthetic biomolecular condensate catalysis", "doi": "10.1/transfer", "evidence": "An OC/DMT-relevant biomolecular condensate enzyme system produced product by catalytic activity.", "fields": {"enzyme": "OTHER"}}), encoding="utf-8")
+    client = FakeChatClient({"answer": "An overlong answer that should not be used.", "claims": [{"claim": "The related condensate system produced product.", "evidence_ids": ["transfer"]}], "limitations": [], "suggested_next_steps": [], "selected_evidence_ids": ["transfer"]})
+    result = answer_question("OC and DMT activity in LLPS condensates", path, mode="synthesize", chat_client=client)
+    assert "No direct project-specific evidence was found." in result["answer"]
+    assert "cannot establish the effect for OC/DMT" in result["answer"]
+    assert 2 <= len(_sentences(result["answer"])) <= 4
 
 
 def test_no_relevant_evidence_returns_no_match_mode() -> None:

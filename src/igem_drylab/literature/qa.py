@@ -742,7 +742,10 @@ def synthesize_answer(
     ]
     prompt = (
         "Answer only from the supplied evidence. Do not use outside knowledge or invent DOI, values, mechanisms, or results. "
-        "Every factual claim must cite evidence_ids. Distinguish direct_report from interpretation. If evidence is insufficient, say so. "
+        "Answer must be a concise 2-4 sentence direct response giving only the overall conclusion and evidence sufficiency; "
+        "do not put study-specific results in answer. Return 2-4 concise, non-redundant study-specific claims, preferably one per "
+        "independent source/system. Every factual claim must cite at least one evidence_id. Distinguish direct_report from interpretation. "
+        "Limitations must contain 1-3 concise epistemic limitations and must not repeat the answer or claims. If evidence is insufficient, say so. "
         "Retrieved evidence is not a validated model parameter. "
         + (
             "No direct project-specific evidence was retrieved. The selected sources are transferable evidence from related "
@@ -758,20 +761,86 @@ def synthesize_answer(
     if not isinstance(answer, str) or not answer.strip():
         raise ValueError("synthesis JSON must contain a non-empty answer")
     known_ids = {source["record_id"] for source in sources}
-    claims = []
+    normalized_answer = _normalize_synthesis_answer(answer, evidence_mode=evidence_mode)
+    claims: list[dict[str, Any]] = []
+    seen_claims: set[str] = set()
     for claim in parsed.get("claims", []):
         if not isinstance(claim, dict) or not isinstance(claim.get("claim"), str):
             continue
         evidence_ids = [item for item in claim.get("evidence_ids", []) if isinstance(item, str) and item in known_ids]
+        claim_text = _compact_text(claim["claim"])
+        if not evidence_ids or not claim_text or _materially_overlaps(claim_text, normalized_answer):
+            continue
+        claim_key = _normalized_text(claim_text)
+        if claim_key in seen_claims:
+            continue
+        seen_claims.add(claim_key)
         claim_type = claim.get("type") if claim.get("type") in {"direct_report", "interpretation"} else "interpretation"
-        claims.append({"claim": claim["claim"], "evidence_ids": evidence_ids, "type": claim_type})
+        claims.append({"claim": claim_text, "evidence_ids": evidence_ids, "type": claim_type})
+        if len(claims) == 4:
+            break
+    limitations = _normalize_limitations(parsed.get("limitations"), normalized_answer, claims, evidence_mode=evidence_mode)
     return {
-        "answer": answer.strip(),
+        "answer": normalized_answer,
         "claims": claims,
-        "limitations": _string_list(parsed.get("limitations")),
+        "limitations": limitations,
         "suggested_next_steps": _string_list(parsed.get("suggested_next_steps")),
         "selected_evidence_ids": [item for item in _string_list(parsed.get("selected_evidence_ids")) if item in known_ids],
     }
+
+
+def _normalize_synthesis_answer(answer: str, *, evidence_mode: str) -> str:
+    if evidence_mode == "transferable_fallback":
+        return (
+            "No direct project-specific evidence was found. Related-system evidence from LLPS-enzyme studies is available, "
+            "but it cannot establish the effect for OC/DMT. Experimental validation is required."
+        )
+    sentences = _sentences(answer)[:4]
+    if not sentences:
+        raise ValueError("synthesis answer has no complete sentence")
+    if len(sentences) == 1:
+        sentences.append("Evidence sufficiency is limited to the cited studies.")
+    return " ".join(sentences)
+
+
+def _normalize_limitations(
+    values: object,
+    answer: str,
+    claims: Sequence[dict[str, Any]],
+    *,
+    evidence_mode: str,
+) -> list[str]:
+    prohibited = [answer, *(str(item["claim"]) for item in claims)]
+    limitations: list[str] = []
+    for value in _string_list(values):
+        compact = _compact_text(value)
+        if compact and not any(_materially_overlaps(compact, item) for item in prohibited):
+            limitations.append(compact)
+        if len(limitations) == 3:
+            break
+    if limitations:
+        return limitations
+    if evidence_mode == "transferable_fallback":
+        return ["Assay conditions and construct designs may differ across the related systems."]
+    return ["The conclusion is limited to the retrieved evidence and its reported conditions."]
+
+
+def _sentences(text: str) -> list[str]:
+    return [item.strip() for item in re.split(r"(?<=[.!?])\s+", _compact_text(text)) if item.strip()]
+
+
+def _compact_text(text: str) -> str:
+    return " ".join(text.split())[:600]
+
+
+def _normalized_text(text: str) -> str:
+    return " ".join(_tokens(text.lower()))
+
+
+def _materially_overlaps(left: str, right: str) -> bool:
+    left_normalized = _normalized_text(left)
+    right_normalized = _normalized_text(right)
+    return len(left_normalized) >= 24 and (left_normalized in right_normalized or right_normalized in left_normalized)
 
 
 def _document_embeddings(documents: Sequence[EvidenceDocument], *, backend: EmbeddingBackend, evidence_path: Path | None) -> list[list[float]]:

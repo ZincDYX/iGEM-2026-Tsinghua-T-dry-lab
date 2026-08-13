@@ -47,9 +47,12 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert "Relevant structured fields" in PAGE
     assert "View full structured record" in PAGE
     assert "source.relevant_fields" in PAGE
+    assert "details.open=true" not in PAGE
     assert "Relative retrieval score" in PAGE
     assert "transferable_fallback" in PAGE
     assert "No direct project-specific evidence was found." in PAGE
+    assert "BM25/metadata retrieval" in PAGE
+    assert "Semantic retrieval disabled" in PAGE
     assert "intent.enzymes" in PAGE
     assert "intent.context" in PAGE
     assert "intent.outcomes" in PAGE
