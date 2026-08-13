@@ -51,6 +51,9 @@ FIELD_ALIASES = {
     "host": ("host", "host_species", "organism", "assay_host", "best_canonical_host", "best_expression_host_value", "expression_host_value", "best_host_group"),
     "condition": ("condition", "assay_condition", "experimental_condition", "condition_prior_scope"),
 }
+COMPACT_BASE_FIELDS = ("enzyme", "substrate", "product", "parameter_type", "host", "condition")
+COMPACT_VALUE_ALIASES = ("value", "primary_result_value", "structured_value", "metric_value")
+COMPACT_UNIT_ALIASES = ("unit", "primary_result_unit", "structured_unit", "metric_unit")
 INDEX_FIELD_NAMES = tuple({name for names in FIELD_ALIASES.values() for name in names})
 QUERY_ALIASES = {
     "enzyme": {"dmt": "DMT", "ggdmt1": "DMT", "oc": "OC", "ggoc1": "OC", "pt": "PT", "ggpt1": "PT"},
@@ -372,6 +375,8 @@ def retrieve_evidence(
         )
         for hit in selected
     ]
+    for source in sources:
+        source["relevant_fields"] = project_evidence_fields(source.get("fields", {}), intent)
     legacy_constraints = {**inferred_constraints, **active_constraints}
     query_analysis = {
         "constraints": legacy_constraints, "intent": intent,
@@ -390,6 +395,112 @@ def retrieve_evidence(
         "evidence_mode": evidence_mode,
     }
     return sources, query_analysis, retrieval
+
+
+def project_evidence_fields(fields: object, intent: dict[str, Any]) -> dict[str, Any]:
+    """Project only query-relevant metadata for compact Agent or browser views."""
+    if not isinstance(fields, dict):
+        return {}
+    metadata = dict(fields)
+    if isinstance(fields.get("fields"), dict):
+        metadata.update(fields["fields"])
+    projected: dict[str, Any] = {}
+    for key in COMPACT_BASE_FIELDS:
+        value = _canonical_metadata_value(metadata, key)
+        if value is not None:
+            projected[key] = value
+    value = _first_metadata_value(metadata, COMPACT_VALUE_ALIASES)
+    unit = _first_metadata_value(metadata, COMPACT_UNIT_ALIASES)
+    if value is not None:
+        projected["value"] = value
+    if unit is not None:
+        projected["unit"] = unit
+    keywords = _projection_keywords(intent)
+    for key, value in metadata.items():
+        normalized = str(key).lower()
+        if value is None or not str(value).strip() or normalized in projected:
+            continue
+        if any(keyword in normalized for keyword in keywords):
+            projected[str(key)] = value
+    return projected
+
+
+def compact_evidence_sources(sources: Sequence[dict[str, Any]], intent: dict[str, Any]) -> list[dict[str, Any]]:
+    """Agent-facing evidence packets; raw structured fields stay behind detail lookup."""
+    compact: list[dict[str, Any]] = []
+    for source in sources:
+        retrieval = source.get("retrieval") if isinstance(source.get("retrieval"), dict) else {}
+        tier = retrieval.get("tier", "background")
+        fields = project_evidence_fields(source.get("fields", {}), intent)
+        quality = {
+            key: value
+            for key in ("database_tier", "clean_level")
+            if (value := _source_metadata(source).get(key)) is not None
+        }
+        limitations = ["transferable evidence, not project-specific"] if tier == "transferable" else []
+        compact.append({
+            "record_id": source.get("record_id", ""),
+            "doi": source.get("doi", ""),
+            "title": source.get("title", ""),
+            "evidence": source.get("evidence", ""),
+            "tier": tier,
+            "relative_retrieval_score": source.get("score"),
+            "relevant_entities": list(intent.get("enzymes", [])),
+            "relevant_context": list(intent.get("context", [])),
+            "relevant_outcomes": list(intent.get("outcomes", [])),
+            "relevant_fields": fields,
+            "quality": quality,
+            "limitations": limitations,
+        })
+    return compact
+
+
+def get_evidence_detail(
+    evidence_path: Path,
+    record_id: str,
+    *,
+    fields: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Explicit detail lookup; ordinary QA searches never invoke this function."""
+    document = next((item for item in load_evidence_documents(evidence_path) if item.record_id == record_id), None)
+    if document is None:
+        raise KeyError(f"Evidence record not found: {record_id}")
+    payload = document.as_dict()
+    metadata = _metadata(document)
+    if fields is None:
+        payload["fields"] = metadata
+        return payload
+    requested = {str(item) for item in fields}
+    payload["fields"] = {key: value for key, value in metadata.items() if key in requested}
+    return payload
+
+
+def source_document_fields(source: dict[str, Any]) -> dict[str, Any]:
+    fields = source.get("fields")
+    return fields if isinstance(fields, dict) else {}
+
+
+def _source_metadata(source: dict[str, Any]) -> dict[str, Any]:
+    metadata = source_document_fields(source)
+    nested = metadata.get("fields")
+    return {**metadata, **nested} if isinstance(nested, dict) else metadata
+
+
+def _first_metadata_value(metadata: dict[str, Any], aliases: Sequence[str]) -> Any | None:
+    for alias in aliases:
+        if (value := _field_value(metadata, alias)) is not None:
+            return value
+    return None
+
+
+def _projection_keywords(intent: dict[str, Any]) -> tuple[str, ...]:
+    keywords = {"reaction", "assay", "temperature", "ph", "llps", "condensate", "phase"}
+    outcomes = {str(item).lower() for item in intent.get("outcomes", [])}
+    if outcomes & {"activity", "kcat", "km"}:
+        keywords.update(("activity", "kcat", "km", "kinetic", "catalytic", "reaction"))
+    if "activity" in outcomes:
+        keywords.update(("titer", "yield", "conversion", "production"))
+    return tuple(sorted(keywords))
 
 
 def _stage_one_candidates(question: str, documents: Sequence[EvidenceDocument], scoped_indices: Sequence[int], intent: dict[str, Any]) -> list[int]:

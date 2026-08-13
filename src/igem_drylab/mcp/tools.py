@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from igem_drylab.literature import answer_question, build_prompt, extract_records_chunked, extract_records_from_text, load_schema
+from igem_drylab.literature import answer_question, build_prompt, compact_evidence_sources, extract_records_chunked, extract_records_from_text, get_evidence_detail, load_schema
 from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article_xml, search_scopus
 from igem_drylab.literature.icl import load_icl_examples
 from igem_drylab.literature.llm import ChatClient
@@ -498,7 +498,20 @@ def literature_qa(arguments: JsonObject) -> McpToolResult:
         constraints=constraints,
         semantic_enabled=semantic_enabled,
     )
-    return McpToolResult.ok(result)
+    compact = {key: value for key, value in result.items() if key != "sources"}
+    intent = result.get("query_analysis", {}).get("intent", {}) if isinstance(result.get("query_analysis"), dict) else {}
+    compact["sources"] = compact_evidence_sources(result.get("sources", []), intent)
+    return McpToolResult.ok(compact)
+
+
+def literature_evidence_detail(arguments: JsonObject) -> McpToolResult:
+    requested = arguments.get("fields")
+    if requested is not None and (not isinstance(requested, list) or not all(isinstance(item, str) for item in requested)):
+        raise ValueError("Argument 'fields' must be an array of strings")
+    detail = get_evidence_detail(
+        Path(_require_str(arguments, "evidence_path")), _require_str(arguments, "record_id"), fields=requested,
+    )
+    return McpToolResult.ok({"ok": True, "record": detail, "detail_level": "selected_fields" if requested is not None else "full_record"})
 
 
 def parameters_query(arguments: JsonObject) -> McpToolResult:
@@ -1013,6 +1026,14 @@ LITERATURE_QA_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "status": {"type": "string"}, "answer": {"type": "string"}, "sources": {"type": "array"}}, additional_properties=True),
 )
 
+LITERATURE_EVIDENCE_DETAIL_TOOL = McpTool(
+    name="igem.literature.evidence_detail",
+    title="Inspect a selected literature evidence record",
+    description="Explicitly fetch one full evidence record or selected metadata fields after compact QA retrieval.",
+    input_schema=_schema({"evidence_path": {"type": "string"}, "record_id": {"type": "string"}, "fields": {"type": "array", "items": {"type": "string"}}}, ["evidence_path", "record_id"]),
+    output_schema=_schema({"ok": {"type": "boolean"}, "record": {"type": "object"}, "detail_level": {"type": "string"}}, additional_properties=True),
+)
+
 PARAMETERS_QUERY_TOOL = McpTool(name="igem.parameters.query", title="Query parameter registry", description="Query records from project config; raw literature extraction is not implicitly approved.", input_schema=_schema({"config_path": {"type": "string"}, "name": {"type": "string"}, "parameter_type": {"type": "string"}, "enzyme_id": {"type": "string"}, "substrate_id": {"type": "string"}}, ["config_path"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
 PARAMETERS_RESOLVE_TOOL = McpTool(name="igem.parameters.resolve", title="Resolve approved parameter", description="Resolve one declared M3/M4 requirement with identity, construct/condition scope, and dimension checks.", input_schema=_schema({"config_path": {"type": "string"}, "stage": {"type": "string", "enum": ["m3", "m4"]}, "requirement_name": {"type": "string"}, "construct_id": {"type": "string"}, "condition_id": {"type": "string"}}, ["config_path", "stage", "requirement_name"]), output_schema=_schema({"ok": {"type": "boolean"}, "resolution": {"type": "object"}}, additional_properties=True))
 PARAMETERS_PROVENANCE_TOOL = McpTool(name="igem.parameters.provenance", title="Show parameter provenance", description="Return selected parameter and superseded lineage.", input_schema=_schema({"config_path": {"type": "string"}, "parameter_id": {"type": "string"}}, ["config_path", "parameter_id"]), output_schema=_schema({"ok": {"type": "boolean"}, "records": {"type": "array"}}, additional_properties=True))
@@ -1082,6 +1103,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (LITERATURE_EXTRACT_RECORDS_TOOL, literature_extract_records),
     (LITERATURE_EXTRACT_CHUNKED_RECORDS_TOOL, literature_extract_chunked_records),
     (LITERATURE_QA_TOOL, literature_qa),
+    (LITERATURE_EVIDENCE_DETAIL_TOOL, literature_evidence_detail),
     (PARAMETERS_QUERY_TOOL, parameters_query),
     (PARAMETERS_RESOLVE_TOOL, parameters_resolve),
     (PARAMETERS_PROVENANCE_TOOL, parameters_provenance),

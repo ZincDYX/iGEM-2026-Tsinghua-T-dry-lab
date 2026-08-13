@@ -81,13 +81,20 @@ def test_literature_build_database_tool_writes_database(tmp_path):
 
 def test_literature_qa_tool_returns_provenance(tmp_path):
     evidence = tmp_path / "evidence.jsonl"
-    evidence.write_text(json.dumps({"record_id": "r1", "title": "OC study", "doi": "10.1/oc", "evidence": "OC converts compound 11."}) + "\n", encoding="utf-8")
+    evidence.write_text(json.dumps({"record_id": "r1", "title": "OC study", "doi": "10.1/oc", "evidence": "OC activity in LLPS converts compound 11.", "fields": {"enzyme": "OC", "substrate": "11", "parameter_type": "activity", "irrelevant_legacy_field": "not agent context", "primary_result_value": "4.2", "primary_result_unit": "uM"}}) + "\n", encoding="utf-8")
     result = create_default_registry().call(
         "igem.literature.qa", {"question": "Which enzyme converts compound 11?", "evidence_path": str(evidence)},
     )
     structured = result.as_protocol_dict()["structuredContent"]
     assert structured["ok"] is True
     assert structured["sources"][0]["doi"] == "10.1/oc"
+    assert "fields" not in structured["sources"][0]
+    assert structured["sources"][0]["tier"] == "direct"
+    assert structured["sources"][0]["relevant_fields"]["enzyme"] == "OC"
+    assert structured["sources"][0]["relevant_fields"]["value"] == "4.2"
+    assert "irrelevant_legacy_field" not in structured["sources"][0]["relevant_fields"]
+    assert "parameter_candidate" not in structured
+    assert "approved_parameter" not in structured
     assert structured["mode"] == "retrieve_only"
     assert structured["retrieval"]["lexical"] == "bm25"
 
@@ -104,6 +111,20 @@ def test_literature_qa_tool_exposes_opt_in_semantic_flag(tmp_path):
     structured = result.as_protocol_dict()["structuredContent"]
     assert structured["ok"] is True
     assert structured["retrieval"]["semantic"] == "unavailable"
+
+
+def test_literature_evidence_detail_requires_explicit_record_and_can_select_fields(tmp_path):
+    evidence = tmp_path / "evidence.jsonl"
+    evidence.write_text(json.dumps({"record_id": "r1", "title": "OC study", "doi": "10.1/oc", "evidence": "OC activity.", "fields": {"reaction_temperature": "30 C", "reaction_ph": "7.0", "hidden": "raw"}}) + "\n", encoding="utf-8")
+    registry = create_default_registry()
+    names = {tool["name"] for tool in registry.list_tools()}
+    assert "igem.literature.evidence_detail" in names
+    selected = registry.call("igem.literature.evidence_detail", {"evidence_path": str(evidence), "record_id": "r1", "fields": ["reaction_temperature", "reaction_ph"]}).as_protocol_dict()["structuredContent"]
+    assert selected["detail_level"] == "selected_fields"
+    assert selected["record"]["fields"] == {"reaction_temperature": "30 C", "reaction_ph": "7.0"}
+    full = registry.call("igem.literature.evidence_detail", {"evidence_path": str(evidence), "record_id": "r1"}).as_protocol_dict()["structuredContent"]
+    assert full["detail_level"] == "full_record"
+    assert full["record"]["fields"]["hidden"] == "raw"
 
 
 def test_literature_search_tool_writes_manifest(monkeypatch, tmp_path):

@@ -44,6 +44,9 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert 'id="mode"' in PAGE
     assert "Evidence-grounded answer" in PAGE
     assert "function renderRetrievalInfo" in PAGE
+    assert "Relevant structured fields" in PAGE
+    assert "View full structured record" in PAGE
+    assert "source.relevant_fields" in PAGE
     assert "Relative retrieval score" in PAGE
     assert "transferable_fallback" in PAGE
     assert "No direct project-specific evidence was found." in PAGE

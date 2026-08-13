@@ -15,6 +15,9 @@ from igem_drylab.literature.qa import (
     _project_metadata_matches,
     _relevant_candidates,
     _stage_one_candidates,
+    compact_evidence_sources,
+    get_evidence_detail,
+    project_evidence_fields,
     answer_question,
     bm25_search,
     deduplicate_sources,
@@ -456,3 +459,24 @@ def test_direct_tier_respects_substrate_and_product_constraints() -> None:
     product_intent = parse_query_intent("glabridin production")
     assert _evidence_tier(unrelated_product, product_intent) != "direct"
     assert _evidence_tier(glabridin, product_intent) == "direct"
+
+
+def test_compact_agent_evidence_is_query_aware_and_preserves_provenance(tmp_path: Path) -> None:
+    path = tmp_path / "compact.jsonl"
+    path.write_text(json.dumps({"record_id": "oc", "title": "OC LLPS activity", "doi": "10.1/oc", "evidence": "OC catalytic activity in an LLPS condensate converted compound 10 to compound 11.", "fields": {"enzyme": "OC", "substrate": "10", "product": "11", "primary_result_metric": "kcat", "primary_result_value": "1.2", "primary_result_unit": "s^-1", "reaction_temperature": "30 C", "irrelevant_legacy_field": "omit", "clean_level": "reviewed"}}), encoding="utf-8")
+    result = answer_question("OC activity in LLPS", path)
+    packet = compact_evidence_sources(result["sources"], result["query_analysis"]["intent"])[0]
+    assert {"record_id", "doi", "title", "evidence", "tier", "relative_retrieval_score", "relevant_fields", "limitations"} <= set(packet)
+    assert "fields" not in packet
+    assert packet["relevant_fields"]["enzyme"] == "OC"
+    assert packet["relevant_fields"]["value"] == "1.2"
+    assert "irrelevant_legacy_field" not in packet["relevant_fields"]
+    assert get_evidence_detail(path, "oc", fields=["reaction_temperature"])["fields"] == {"reaction_temperature": "30 C"}
+
+
+def test_projection_prefers_production_and_kinetics_fields() -> None:
+    fields = {"product": "glabridin", "titer": "2.1 g/L", "yield": "0.4", "kcat": "3.0", "unrelated": "omit"}
+    production = project_evidence_fields(fields, parse_query_intent("glabridin production"))
+    kinetics = project_evidence_fields(fields, parse_query_intent("DMT kcat for compound 11"))
+    assert "titer" in production and "yield" in production and "unrelated" not in production
+    assert "kcat" in kinetics and "titer" not in kinetics
