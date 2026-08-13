@@ -72,6 +72,33 @@ def cache_path_for(evidence_path: Path) -> Path:
     return evidence_path.with_suffix(evidence_path.suffix + ".qa_embeddings.json")
 
 
+def embedding_cache_key(record_id: str, model: str, index_text: str) -> str:
+    digest = hashlib.sha256(index_text.encode("utf-8")).hexdigest()
+    return f"{model}:{record_id}:{digest}"
+
+
+def load_incremental_embedding_cache(evidence_path: Path) -> dict[str, list[float]]:
+    """Read record-scoped vectors; invalid entries are ignored independently."""
+    path = cache_path_for(evidence_path)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        entries = payload.get("record_vectors", {})
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return {key: [float(item) for item in value] for key, value in entries.items() if isinstance(key, str) and _valid_vector(value)}
+
+
+def write_incremental_embedding_cache(evidence_path: Path, entries: dict[str, list[float]]) -> None:
+    """Atomically persist only successfully obtained record-scoped vectors."""
+    path = cache_path_for(evidence_path)
+    previous = load_incremental_embedding_cache(evidence_path)
+    previous.update(entries)
+    payload = {"metadata": {"source_path": str(evidence_path.resolve()), "format": "record_scoped_v1"}, "record_vectors": previous}
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload), encoding="utf-8")
+    temporary.replace(path)
+
+
 def load_embedding_cache(evidence_path: Path, *, fingerprint: str, model: str, record_ids: list[str]) -> list[list[float]] | None:
     path = cache_path_for(evidence_path)
     if not path.is_file():

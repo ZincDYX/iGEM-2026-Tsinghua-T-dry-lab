@@ -17,6 +17,7 @@ from igem_drylab.literature.qa import (
     deduplicate_sources,
     load_evidence_documents,
     mmr_select,
+    parse_query_intent,
     retrieve_evidence,
     rrf_fuse,
 )
@@ -286,3 +287,25 @@ def test_legacy_csv_supports_constraints_bm25_and_canonical_precedence(tmp_path:
     assert "GgDMT1" not in _index_text(document)
     assert bm25_search("DMT", [document]) == []
     assert bm25_search("OC", [document])[0].index == 0
+
+
+def test_multi_entity_llps_intent_and_candidate_scoped_embeddings(tmp_path: Path) -> None:
+    intent = parse_query_intent("Will the enzymatic activity of OC and DMT sequestered within LLPS condensates be affected?")
+    assert set(intent["enzymes"]) == {"OC", "DMT"}
+    assert "activity" in intent["outcomes"] and "llps" in intent["context"]
+
+    rows = [
+        {"record_id": "direct", "title": "OC condensate activity", "doi": "10.1/direct", "evidence": "OC enzyme activity in LLPS condensates.", "fields": {"enzyme": "OC", "is_project_llps_related": True}},
+        {"record_id": "transfer", "title": "Enzyme condensate catalysis", "doi": "10.1/transfer", "evidence": "Enzyme catalytic activity was altered in phase separation.", "fields": {"is_project_high_transfer_llps": True}},
+    ] + [{"record_id": f"noise-{i}", "title": "Unrelated morphology", "doi": f"10.1/noise-{i}", "evidence": "FUS condensate morphology."} for i in range(250)]
+    path = tmp_path / "noisy.jsonl"
+    path.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    class CaptureBackend(FakeSemanticBackend):
+        def __init__(self): super().__init__(); self.batch_sizes = []
+        def embed(self, texts): self.batch_sizes.append(len(texts)); return super().embed(texts)
+    backend = CaptureBackend()
+    sources, _analysis, retrieval = retrieve_evidence("OC and DMT enzyme activity in LLPS condensates", load_evidence_documents(path), semantic_enabled=True, semantic_backend=backend, evidence_path=path)
+    assert sources[0]["record_id"] == "direct"
+    assert sources[0]["retrieval"]["tier"] == "direct"
+    assert retrieval["semantic"] == "used"
+    assert max(backend.batch_sizes[:-1]) < len(rows)

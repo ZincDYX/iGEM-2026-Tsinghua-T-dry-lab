@@ -23,8 +23,11 @@ from .semantic import (
     SemanticBackendError,
     backend_from_environment,
     evidence_fingerprint,
+    embedding_cache_key,
+    load_incremental_embedding_cache,
     load_embedding_cache,
     write_embedding_cache,
+    write_incremental_embedding_cache,
 )
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_+\-'.]*")
@@ -34,6 +37,7 @@ RRF_K = 60
 METADATA_BONUS_PER_MATCH = 0.01
 MMR_LAMBDA = 0.7
 DEFAULT_EMBEDDING_BATCH_SIZE = 64
+DEFAULT_CANDIDATE_POOL_SIZE = 200
 
 FIELD_ALIASES = {
     "enzyme": ("enzyme", "enzyme_name", "best_enzyme_name_value", "enzyme_name_value"),
@@ -156,6 +160,15 @@ def extract_query_constraints(question: str, documents: Sequence[EvidenceDocumen
     return constraints
 
 
+def parse_query_intent(question: str) -> dict[str, Any]:
+    """Transparent multi-entity query routing; it does not assert biology."""
+    normalized = " ".join(_tokens(question))
+    enzymes = [canonical for alias, canonical in QUERY_ALIASES["enzyme"].items() if _contains_alias(normalized, alias)]
+    outcomes = [canonical for alias, canonical in QUERY_ALIASES["parameter_type"].items() if _contains_alias(normalized, alias)]
+    context = [term for term in ("llps", "condensate", "phase separation") if _contains_alias(normalized, term)]
+    return {"enzymes": list(dict.fromkeys(enzymes)), "outcomes": list(dict.fromkeys(outcomes)), "context": context, "constraints": extract_query_constraints(question)}
+
+
 def bm25_search(
     question: str,
     documents: Sequence[EvidenceDocument],
@@ -202,14 +215,14 @@ def semantic_search(
     candidate_indices: Sequence[int] | None = None,
 ) -> tuple[list[RankedEvidence], dict[int, list[float]]]:
     """Rank by embedding cosine similarity, reusing a valid local document cache."""
-    document_vectors = _document_embeddings(documents, backend=backend, evidence_path=evidence_path)
+    indices = _candidate_indices(documents, candidate_indices)
+    document_vectors = _document_embeddings([documents[index] for index in indices], backend=backend, evidence_path=evidence_path)
     query_vectors = backend.embed([question])
     if len(query_vectors) != 1:
         raise SemanticBackendError("embedding backend did not return one query vector")
-    indices = _candidate_indices(documents, candidate_indices)
-    scores = [(index, _cosine(query_vectors[0], document_vectors[index])) for index in indices]
+    scores = [(index, _cosine(query_vectors[0], document_vectors[local])) for local, index in enumerate(indices)]
     ranked = sorted(((index, score) for index, score in scores if score > 0), key=lambda item: (-item[1], documents[item[0]].record_id))
-    return [RankedEvidence(index=index, semantic_score=score, semantic_rank=rank) for rank, (index, score) in enumerate(ranked, start=1)], {index: vector for index, vector in enumerate(document_vectors)}
+    return [RankedEvidence(index=index, semantic_score=score, semantic_rank=rank) for rank, (index, score) in enumerate(ranked, start=1)], dict(zip(indices, document_vectors))
 
 
 def rrf_fuse(lexical: Sequence[RankedEvidence], semantic: Sequence[RankedEvidence]) -> list[RankedEvidence]:
@@ -296,9 +309,11 @@ def retrieve_evidence(
     evidence_path: Path | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Execute BM25, optional semantic retrieval, RRF, deduplication, and MMR."""
-    inferred_constraints = extract_query_constraints(question, documents)
+    intent = parse_query_intent(question)
+    inferred_constraints = intent["constraints"]
     explicit_constraints = _validated_constraints(constraints)
-    candidate_indices, active_constraints, relaxed_constraints = _select_candidate_indices(documents, explicit_constraints)
+    scoped_indices, active_constraints, relaxed_constraints = _select_candidate_indices(documents, explicit_constraints)
+    candidate_indices = _stage_one_candidates(question, documents, scoped_indices, intent)
     lexical = bm25_search(question, documents, constraints=inferred_constraints, candidate_indices=candidate_indices)
     semantic: list[RankedEvidence] = []
     semantic_vectors: dict[int, list[float]] | None = None
@@ -316,7 +331,8 @@ def retrieve_evidence(
             except Exception:  # Optional backends must never break deterministic retrieval.
                 semantic_status = "unavailable"
     fused = rrf_fuse(lexical, semantic)
-    deduplicated = deduplicate_sources(fused, documents)
+    relevant = _relevant_candidates(fused, documents, intent)
+    deduplicated = deduplicate_sources(relevant, documents)
     selected = mmr_select(deduplicated, documents, top_k=top_k, semantic_vectors=semantic_vectors)
     max_score = max((hit.rrf_score for hit in selected), default=1.0)
     sources = [
@@ -327,13 +343,14 @@ def retrieve_evidence(
                 "semantic_rank": hit.semantic_rank,
                 "rrf_score": round(hit.rrf_score, 8),
                 "matched_metadata": list(hit.matched_metadata),
+                "tier": _evidence_tier(documents[hit.index], intent),
             },
         )
         for hit in selected
     ]
     legacy_constraints = {**inferred_constraints, **active_constraints}
     query_analysis = {
-        "constraints": legacy_constraints,
+        "constraints": legacy_constraints, "intent": intent,
         "inferred_constraints": inferred_constraints,
         "explicit_constraints": explicit_constraints,
         "active_constraints": active_constraints,
@@ -342,12 +359,51 @@ def retrieve_evidence(
     retrieval = {
         "lexical": "bm25",
         "semantic": semantic_status,
-        "fusion": "rrf" if semantic_status == "used" else "rrf_fallback",
+        "fusion": "rrf" if semantic_status == "used" else "lexical_fallback",
         "diversity": "doi_dedup+mmr",
         "candidate_count": len(candidate_indices),
         "final_count": len(sources),
     }
     return sources, query_analysis, retrieval
+
+
+def _stage_one_candidates(question: str, documents: Sequence[EvidenceDocument], scoped_indices: Sequence[int], intent: dict[str, Any]) -> list[int]:
+    """High-recall local union before any semantic API call."""
+    lexical = bm25_search(question, documents, candidate_indices=scoped_indices)
+    selected = {hit.index for hit in lexical[:DEFAULT_CANDIDATE_POOL_SIZE]}
+    for index in scoped_indices:
+        document = documents[index]
+        text = _index_text(document).lower()
+        metadata = _metadata(document)
+        mechanism = bool(intent["context"]) and any(term in text for term in ("llps", "condensate", "phase separation"))
+        catalytic = bool(intent["outcomes"]) and any(term in text for term in ("activity", "catalytic", "kcat", "km", "kinetic"))
+        transfer = bool(_project_metadata_matches(document)) or str(metadata.get("llps_transferability_class", "")).lower() in {"high", "medium"}
+        entity = any(_canonical_value("enzyme", _canonical_metadata_value(metadata, "enzyme") or "") == enzyme.lower() for enzyme in intent["enzymes"])
+        if (mechanism and catalytic) or transfer or entity:
+            selected.add(index)
+    return sorted(selected)[:DEFAULT_CANDIDATE_POOL_SIZE]
+
+
+def _evidence_tier(document: EvidenceDocument, intent: dict[str, Any]) -> str:
+    metadata = _metadata(document)
+    enzyme = _canonical_value("enzyme", _canonical_metadata_value(metadata, "enzyme") or "")
+    if intent["enzymes"] and enzyme in {item.lower() for item in intent["enzymes"]}:
+        return "direct"
+    text = _index_text(document).lower()
+    if intent["context"] and any(term in text for term in ("llps", "condensate", "phase separation")) and any(term in text for term in ("activity", "catalytic", "enzyme", "kinetic")):
+        return "transferable"
+    return "background"
+
+
+def _relevant_candidates(candidates: Sequence[RankedEvidence], documents: Sequence[EvidenceDocument], intent: dict[str, Any]) -> list[RankedEvidence]:
+    """Reject zero-signal background before DOI diversity/MMR can promote it."""
+    kept = []
+    for candidate in candidates:
+        tier = _evidence_tier(documents[candidate.index], intent)
+        if candidate.lexical_rank is not None or candidate.semantic_rank is not None:
+            if tier != "background" or not intent["context"] or candidate.lexical_rank is not None:
+                kept.append(candidate)
+    return kept
 
 
 def search_evidence(question: str, documents: Sequence[EvidenceDocument], *, top_k: int = 5) -> list[dict[str, Any]]:
@@ -454,16 +510,21 @@ def synthesize_answer(question: str, constraints: dict[str, str], sources: Seque
 
 
 def _document_embeddings(documents: Sequence[EvidenceDocument], *, backend: EmbeddingBackend, evidence_path: Path | None) -> list[list[float]]:
-    if isinstance(backend, EmbeddingApiBackend) and evidence_path is not None and evidence_path.is_file():
-        fingerprint = evidence_fingerprint(evidence_path)
-        record_ids = [document.record_id for document in documents]
-        cached = load_embedding_cache(evidence_path, fingerprint=fingerprint, model=backend.cache_identity, record_ids=record_ids)
-        if cached is not None:
-            return cached
-        vectors = _embed_in_batches(backend, [_index_text(document) for document in documents])
-        write_embedding_cache(evidence_path, fingerprint=fingerprint, model=backend.cache_identity, record_ids=record_ids, vectors=vectors)
-        return vectors
-    return _embed_in_batches(backend, [_index_text(document) for document in documents])
+    texts = [_index_text(document) for document in documents]
+    if not isinstance(backend, EmbeddingApiBackend) or evidence_path is None or not evidence_path.is_file():
+        return _embed_in_batches(backend, texts)
+    keys = [embedding_cache_key(document.record_id, backend.cache_identity, text) for document, text in zip(documents, texts)]
+    cached = load_incremental_embedding_cache(evidence_path)
+    missing = [index for index, key in enumerate(keys) if key not in cached]
+    if missing:
+        new_vectors = _embed_in_batches(backend, [texts[index] for index in missing])
+        additions = {keys[index]: vector for index, vector in zip(missing, new_vectors)}
+        write_incremental_embedding_cache(evidence_path, additions)
+        cached.update(additions)
+    vectors = [cached[key] for key in keys]
+    if vectors and any(len(vector) != len(vectors[0]) for vector in vectors):
+        raise SemanticBackendError("embedding cache contains incompatible dimensions")
+    return vectors
 
 
 def _embed_in_batches(
