@@ -313,6 +313,7 @@ def test_legacy_csv_supports_constraints_bm25_and_canonical_precedence(tmp_path:
 def test_multi_entity_llps_intent_and_candidate_scoped_embeddings(tmp_path: Path) -> None:
     intent = parse_query_intent("Will the enzymatic activity of OC and DMT sequestered within LLPS condensates be affected?")
     assert set(intent["enzymes"]) == {"OC", "DMT"}
+    assert intent["enzymes"] == ["OC", "DMT"]
     assert "activity" in intent["outcomes"] and "llps" in intent["context"]
 
     rows = [
@@ -410,3 +411,48 @@ def test_no_relevant_evidence_returns_no_match_mode() -> None:
     sources, _analysis, retrieval = retrieve_evidence("DMT activity in LLPS condensates", documents)
     assert sources == []
     assert retrieval["evidence_mode"] == "no_match"
+
+
+def test_peroxisome_and_conformation_records_are_not_llps_transferable() -> None:
+    intent = parse_query_intent("Will enzyme activity in LLPS condensates be affected?")
+    peroxisome = EvidenceDocument("peroxisome", "Peroxisome activity", "10.1/peroxisome", "MmCAR showed 45% higher activity in the peroxisome than in the cytosol.")
+    conformation = EvidenceDocument(
+        "calcium", "Calcium conformational activity", "10.1/calcium",
+        "G6PDH activity changed after Ca2+-induced conformational rearrangement.",
+        fields={"is_project_llps_related": True, "high_transferability": True},
+    )
+    assert _evidence_tier(peroxisome, intent) == "background"
+    assert _evidence_tier(conformation, intent) == "background"
+
+
+def test_metadata_recovers_stage_one_candidate_but_cannot_qualify_it() -> None:
+    document = EvidenceDocument(
+        "metadata-only", "Recruitment study", "10.1/metadata", "The enzyme localized to a protein assembly.",
+        fields={"is_project_high_transfer_llps": True},
+    )
+    intent = parse_query_intent("enzyme activity in LLPS condensates")
+    candidates = _stage_one_candidates("enzyme activity in LLPS condensates", [document], [0], intent)
+    assert candidates == [0]
+    assert _evidence_tier(document, intent) == "background"
+
+
+def test_genuine_condensate_catalysis_is_transferable_without_project_metadata() -> None:
+    document = EvidenceDocument(
+        "gcs", "Condensate enzyme reaction", "10.1/gcs",
+        "A condensate system containing GCS enzymes produced 5.0 mM glycine in 1 hour.",
+    )
+    assert _evidence_tier(document, parse_query_intent("OC activity in LLPS condensates")) == "transferable"
+
+
+def test_direct_tier_respects_substrate_and_product_constraints() -> None:
+    dmt_9 = EvidenceDocument("dmt-9", "DMT kcat compound 9", "10.1/dmt9", "DMT kcat was measured for compound 9.", fields={"enzyme": "DMT", "substrate": "9", "parameter_type": "kcat"})
+    dmt_11 = EvidenceDocument("dmt-11", "DMT kcat compound 11", "10.1/dmt11", "DMT kcat was measured for compound 11.", fields={"enzyme": "DMT", "substrate": "11", "parameter_type": "kcat"})
+    kinetic_intent = parse_query_intent("DMT kcat for compound 11")
+    assert _evidence_tier(dmt_9, kinetic_intent) != "direct"
+    assert _evidence_tier(dmt_11, kinetic_intent) == "direct"
+
+    unrelated_product = EvidenceDocument("other-product", "Other product titer", "10.1/other", "An unrelated product titer was reported.", fields={"product": "other"})
+    glabridin = EvidenceDocument("glabridin", "Glabridin production", "10.1/glabridin", "Glabridin production was measured in yeast.", fields={"product": "glabridin"})
+    product_intent = parse_query_intent("glabridin production")
+    assert _evidence_tier(unrelated_product, product_intent) != "direct"
+    assert _evidence_tier(glabridin, product_intent) == "direct"

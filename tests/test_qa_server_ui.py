@@ -47,6 +47,10 @@ def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
     assert "Relative retrieval score" in PAGE
     assert "transferable_fallback" in PAGE
     assert "No direct project-specific evidence was found." in PAGE
+    assert "intent.enzymes" in PAGE
+    assert "intent.context" in PAGE
+    assert "intent.outcomes" in PAGE
+    assert "enzymes'" in PAGE
 
 
 def test_health_contract_is_unchanged(tmp_path: Path) -> None:

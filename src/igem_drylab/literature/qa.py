@@ -56,7 +56,8 @@ QUERY_ALIASES = {
     "enzyme": {"dmt": "DMT", "ggdmt1": "DMT", "oc": "OC", "ggoc1": "OC", "pt": "PT", "ggpt1": "PT"},
     "parameter_type": {
         "kcat": "kcat", "km": "Km", "kp": "Kp", "partition coefficient": "partition coefficient",
-        "abundance": "abundance", "activity": "activity", "phi": "phi",
+        "abundance": "abundance", "activity": "activity", "production": "activity", "conversion": "activity",
+        "yield": "activity", "titer": "activity", "phi": "phi",
     },
     "host": {"yeast": "yeast", "saccharomyces cerevisiae": "yeast"},
 }
@@ -167,7 +168,12 @@ def extract_query_constraints(question: str, documents: Sequence[EvidenceDocumen
 def parse_query_intent(question: str) -> dict[str, Any]:
     """Transparent multi-entity query routing; it does not assert biology."""
     normalized = " ".join(_tokens(question))
-    enzymes = [canonical for alias, canonical in QUERY_ALIASES["enzyme"].items() if _contains_alias(normalized, alias)]
+    enzyme_mentions = [
+        (normalized.find(alias), canonical)
+        for alias, canonical in QUERY_ALIASES["enzyme"].items()
+        if _contains_alias(normalized, alias)
+    ]
+    enzymes = [canonical for _position, canonical in sorted(enzyme_mentions)]
     outcomes = [canonical for alias, canonical in QUERY_ALIASES["parameter_type"].items() if _contains_alias(normalized, alias)]
     context = [term for term in ("llps", "condensate", "phase separation") if _contains_alias(normalized, term)]
     return {"enzymes": list(dict.fromkeys(enzymes)), "outcomes": list(dict.fromkeys(outcomes)), "context": context, "constraints": extract_query_constraints(question)}
@@ -318,6 +324,7 @@ def retrieve_evidence(
     explicit_constraints = _validated_constraints(constraints)
     scoped_indices, active_constraints, relaxed_constraints = _select_candidate_indices(documents, explicit_constraints)
     candidate_indices = _stage_one_candidates(question, documents, scoped_indices, intent)
+    tier_intent = {**intent, "constraints": {**inferred_constraints, **active_constraints}}
     lexical = bm25_search(question, documents, constraints=inferred_constraints, candidate_indices=candidate_indices)
     semantic: list[RankedEvidence] = []
     semantic_vectors: dict[int, list[float]] | None = None
@@ -335,9 +342,9 @@ def retrieve_evidence(
             except Exception:  # Optional backends must never break deterministic retrieval.
                 semantic_status = "unavailable"
     fused = rrf_fuse(lexical, semantic)
-    relevant = _relevant_candidates(fused, documents, intent)
-    direct = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], intent) == "direct"]
-    transferable = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], intent) == "transferable"]
+    relevant = _relevant_candidates(fused, documents, tier_intent)
+    direct = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], tier_intent) == "direct"]
+    transferable = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], tier_intent) == "transferable"]
     if direct:
         evidence_mode = "direct"
         selected = mmr_select(
@@ -360,7 +367,7 @@ def retrieve_evidence(
                 "semantic_rank": hit.semantic_rank,
                 "rrf_score": round(hit.rrf_score, 8),
                 "matched_metadata": list(hit.matched_metadata),
-                "tier": _evidence_tier(documents[hit.index], intent),
+                "tier": _evidence_tier(documents[hit.index], tier_intent),
             },
         )
         for hit in selected
@@ -430,11 +437,17 @@ def _stage_one_candidates(question: str, documents: Sequence[EvidenceDocument], 
 
 def _evidence_tier(document: EvidenceDocument, intent: dict[str, Any]) -> str:
     metadata = _metadata(document)
-    text = _index_text(document).lower()
+    evidence_text = _evidence_text(document)
     has_requested_dimension = bool(intent["enzymes"] or intent["context"] or intent["outcomes"] or intent["constraints"])
-    if has_requested_dimension and _entity_matches(metadata, intent, text=text) and _context_matches(text, intent) and _outcome_matches(text, intent):
+    if (
+        has_requested_dimension
+        and _entity_matches(metadata, intent, text=evidence_text)
+        and _context_matches(evidence_text, intent)
+        and _outcome_matches(evidence_text, intent)
+        and _direct_constraints_match(document, intent, evidence_text)
+    ):
         return "direct"
-    if _has_llps_context(text) and _has_catalytic_evidence(text):
+    if _has_llps_context(evidence_text) and _has_catalytic_evidence(evidence_text):
         return "transferable"
     return "background"
 
@@ -464,7 +477,7 @@ def _outcome_matches(text: str, intent: dict[str, Any]) -> bool:
     if not intent["outcomes"]:
         return True
     outcome_terms = {
-        "activity": ("activity", "catalytic", "enzyme activity"),
+        "activity": ("activity", "catalytic", "enzyme activity", "production", "conversion", "yield", "titer"),
         "kcat": ("kcat", "turnover"),
         "Km": ("km", "michaelis"),
         "Kp": ("kp", "partition coefficient"),
@@ -476,11 +489,59 @@ def _outcome_matches(text: str, intent: dict[str, Any]) -> bool:
 
 
 def _has_llps_context(text: str) -> bool:
-    return any(term in text for term in ("llps", "condensate", "phase separation"))
+    return bool(re.search(
+        r"\b(?:llps|phase[- ]separation|phase[- ]separated|biomolecular condensates?|synthetic(?: protein)? condensates?|"
+        r"protein-based condensates?|condensate system|condensates? containing|enzyme[- ]condensate)\b",
+        text,
+    ))
 
 
 def _has_catalytic_evidence(text: str) -> bool:
-    return any(term in text for term in ("activity", "catalytic", "enzyme", "kcat", "km", "kinetic"))
+    if any(
+        term in text
+        for term in (
+            "activity", "enzymatic activity", "catalytic", "catalysis", "kcat", "km", "kinetic", "kinetics",
+            "turnover", "reaction rate", "product formation", "substrate consumption", "substrate channeling",
+            "biosynthesis", "bioconversion", "chemo-enzymatic",
+        )
+    ):
+        return True
+    return bool(re.search(
+        r"\b(?:enzyme|enzymes|catalyst|catalysts)\b.{0,48}\b(?:production|produced|conversion|yield|titer)\b",
+        text,
+    ))
+
+
+def _evidence_text(document: EvidenceDocument) -> str:
+    """Text that can substantiate a tier; structured metadata is intentionally excluded."""
+    return f"{document.title} {document.evidence}".lower()
+
+
+def _direct_constraints_match(document: EvidenceDocument, intent: dict[str, Any], evidence_text: str) -> bool:
+    """Require each explicit/inferred biological identity constraint for direct evidence."""
+    metadata = _metadata(document)
+    for key, expected in intent["constraints"].items():
+        if key == "enzyme":
+            continue  # Checked by _entity_matches, including cautious text fallback.
+        value = _canonical_metadata_value(metadata, key)
+        if value is not None and _canonical_value(key, value) == _canonical_value(key, expected):
+            continue
+        if not _text_supports_constraint(key, expected, evidence_text):
+            return False
+    return True
+
+
+def _text_supports_constraint(key: str, expected: str, evidence_text: str) -> bool:
+    canonical = _canonical_value(key, expected)
+    if key == "substrate":
+        return bool(re.search(rf"\b(?:compound|intermediate|substrate)\s*{re.escape(canonical)}\b", evidence_text))
+    if key == "product":
+        return bool(canonical) and canonical in evidence_text
+    if key == "host":
+        return _contains_alias(evidence_text, canonical)
+    if key == "parameter_type":
+        return _outcome_matches(evidence_text, {"outcomes": [expected]})
+    return canonical in evidence_text
 
 
 def search_evidence(question: str, documents: Sequence[EvidenceDocument], *, top_k: int = 5) -> list[dict[str, Any]]:
