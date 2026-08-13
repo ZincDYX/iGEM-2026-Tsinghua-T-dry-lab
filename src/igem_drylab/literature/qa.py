@@ -786,6 +786,8 @@ def synthesize_answer(
             break
     if not claims and valid_claims:
         claims = valid_claims[:3]
+    if not claims:
+        claims = _source_backed_claim_fallback(sources)
     limitations = _normalize_limitations(parsed.get("limitations"), normalized_answer, claims, evidence_mode=evidence_mode)
     return {
         "answer": normalized_answer,
@@ -808,6 +810,28 @@ def _normalize_synthesis_answer(answer: str, *, evidence_mode: str) -> str:
     if len(sentences) == 1:
         sentences.append("Evidence sufficiency is limited to the cited studies.")
     return " ".join(sentences)
+
+
+def _source_backed_claim_fallback(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep the presentation cited when an LLM omits usable claims; never infer beyond evidence."""
+    claims: list[dict[str, Any]] = []
+    for source in sources:
+        record_id = source.get("record_id")
+        evidence = _compact_text(str(source.get("evidence", "")))
+        title = _compact_text(str(source.get("title", "Untitled source")))
+        if not isinstance(record_id, str) or not record_id or not evidence:
+            continue
+        excerpt = evidence[:360].rstrip()
+        if len(evidence) > len(excerpt):
+            excerpt += "…"
+        claims.append({
+            "claim": f"{title}: {excerpt}",
+            "evidence_ids": [record_id],
+            "type": "direct_report",
+        })
+        if len(claims) == 3:
+            break
+    return claims
 
 
 def _normalize_limitations(

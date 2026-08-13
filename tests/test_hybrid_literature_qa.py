@@ -476,6 +476,18 @@ def test_cited_claim_safety_fallback_prevents_empty_claim_list() -> None:
     assert result["claims"] == [{"claim": "The cited study supports a bounded conclusion.", "evidence_ids": ["r1"], "type": "interpretation"}]
 
 
+def test_synthesis_uses_source_backed_cited_bullets_when_llm_omits_claims() -> None:
+    sources = [
+        {"record_id": "ectoine", "title": "Ectoine condensate study", "doi": "10.1/ectoine", "evidence": "A synthetic biomolecular condensate improved ectoine biosynthesis.", "fields": {}},
+        {"record_id": "glycine", "title": "Glycine condensate study", "doi": "10.1/glycine", "evidence": "The condensate system produced glycine in a defined reaction.", "fields": {}},
+    ]
+    client = FakeChatClient({"answer": "The retrieved evidence supports a limited conclusion.", "claims": [], "limitations": [], "suggested_next_steps": [], "selected_evidence_ids": []})
+    result = synthesize_answer("question", {}, sources, client=client)
+    assert len(result["claims"]) == 2
+    assert [claim["evidence_ids"] for claim in result["claims"]] == [["ectoine"], ["glycine"]]
+    assert all("condensate" in claim["claim"].lower() for claim in result["claims"])
+
+
 def test_no_relevant_evidence_returns_no_match_mode() -> None:
     documents = [EvidenceDocument("background", "FUS morphology", "10.1/background", "FUS condensate morphology and colocalization.")]
     sources, _analysis, retrieval = retrieve_evidence("DMT activity in LLPS condensates", documents)
