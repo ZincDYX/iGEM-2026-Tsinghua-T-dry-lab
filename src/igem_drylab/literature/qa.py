@@ -763,22 +763,29 @@ def synthesize_answer(
     known_ids = {source["record_id"] for source in sources}
     normalized_answer = _normalize_synthesis_answer(answer, evidence_mode=evidence_mode)
     claims: list[dict[str, Any]] = []
+    valid_claims: list[dict[str, Any]] = []
     seen_claims: set[str] = set()
     for claim in parsed.get("claims", []):
         if not isinstance(claim, dict) or not isinstance(claim.get("claim"), str):
             continue
         evidence_ids = [item for item in claim.get("evidence_ids", []) if isinstance(item, str) and item in known_ids]
         claim_text = _compact_text(claim["claim"])
-        if not evidence_ids or not claim_text or _materially_overlaps(claim_text, normalized_answer):
+        if not evidence_ids or not claim_text:
             continue
         claim_key = _normalized_text(claim_text)
         if claim_key in seen_claims:
             continue
         seen_claims.add(claim_key)
         claim_type = claim.get("type") if claim.get("type") in {"direct_report", "interpretation"} else "interpretation"
-        claims.append({"claim": claim_text, "evidence_ids": evidence_ids, "type": claim_type})
+        candidate = {"claim": claim_text, "evidence_ids": evidence_ids, "type": claim_type}
+        valid_claims.append(candidate)
+        if _is_answer_duplicate_claim(claim_text, normalized_answer):
+            continue
+        claims.append(candidate)
         if len(claims) == 4:
             break
+    if not claims and valid_claims:
+        claims = valid_claims[:3]
     limitations = _normalize_limitations(parsed.get("limitations"), normalized_answer, claims, evidence_mode=evidence_mode)
     return {
         "answer": normalized_answer,
@@ -841,6 +848,14 @@ def _materially_overlaps(left: str, right: str) -> bool:
     left_normalized = _normalized_text(left)
     right_normalized = _normalized_text(right)
     return len(left_normalized) >= 24 and (left_normalized in right_normalized or right_normalized in left_normalized)
+
+
+def _is_answer_duplicate_claim(claim: str, answer: str) -> bool:
+    """Only remove a claim that repeats a full answer sentence, not shared scientific terms."""
+    claim_normalized = _normalized_text(claim)
+    if len(claim_normalized) < 24:
+        return False
+    return any(claim_normalized == _normalized_text(sentence) for sentence in _sentences(answer))
 
 
 def _document_embeddings(documents: Sequence[EvidenceDocument], *, backend: EmbeddingBackend, evidence_path: Path | None) -> list[list[float]]:

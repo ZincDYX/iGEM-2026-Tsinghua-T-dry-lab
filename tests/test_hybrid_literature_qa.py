@@ -19,6 +19,7 @@ from igem_drylab.literature.qa import (
     compact_evidence_sources,
     get_evidence_detail,
     project_evidence_fields,
+    synthesize_answer,
     answer_question,
     bm25_search,
     deduplicate_sources,
@@ -439,6 +440,40 @@ def test_transferable_synthesis_uses_stable_explicit_answer(tmp_path: Path) -> N
     assert "No direct project-specific evidence was found." in result["answer"]
     assert "cannot establish the effect for OC/DMT" in result["answer"]
     assert 2 <= len(_sentences(result["answer"])) <= 4
+
+
+def test_transferable_claims_keep_cited_ectoine_glycine_lnt_examples() -> None:
+    sources = [
+        {"record_id": "ectoine", "title": "Ectoine condensate biosynthesis", "doi": "10.1/ectoine", "evidence": "", "fields": {}},
+        {"record_id": "glycine", "title": "Glycine condensate system", "doi": "10.1/glycine", "evidence": "", "fields": {}},
+        {"record_id": "lnt", "title": "LNT condensate system", "doi": "10.1/lnt", "evidence": "", "fields": {}},
+    ]
+    client = FakeChatClient({
+        "answer": "Related systems may be informative.",
+        "claims": [
+            {"claim": "An LLPS enzyme system improved ectoine biosynthesis.", "evidence_ids": ["ectoine"], "type": "direct_report"},
+            {"claim": "A condensate system reported glycine product formation.", "evidence_ids": ["glycine"], "type": "direct_report"},
+            {"claim": "A related condensate study reported LNT production.", "evidence_ids": ["lnt"], "type": "direct_report"},
+        ],
+        "limitations": ["Cross-system assay conditions differ."], "suggested_next_steps": [],
+        "selected_evidence_ids": ["ectoine", "glycine", "lnt"],
+    })
+    result = synthesize_answer("OC/DMT activity in LLPS", {}, sources, evidence_mode="transferable_fallback", client=client)
+    assert len(result["claims"]) == 3
+    assert [claim["evidence_ids"][0] for claim in result["claims"]] == ["ectoine", "glycine", "lnt"]
+    assert all(claim["evidence_ids"] for claim in result["claims"])
+    assert "No direct project-specific evidence was found." in result["answer"]
+
+
+def test_cited_claim_safety_fallback_prevents_empty_claim_list() -> None:
+    sources = [{"record_id": "r1", "title": "Study", "doi": "10.1/r1", "evidence": "", "fields": {}}]
+    client = FakeChatClient({
+        "answer": "The cited study supports a bounded conclusion.",
+        "claims": [{"claim": "The cited study supports a bounded conclusion.", "evidence_ids": ["r1"]}],
+        "limitations": [], "suggested_next_steps": [], "selected_evidence_ids": ["r1"],
+    })
+    result = synthesize_answer("question", {}, sources, client=client)
+    assert result["claims"] == [{"claim": "The cited study supports a bounded conclusion.", "evidence_ids": ["r1"], "type": "interpretation"}]
 
 
 def test_no_relevant_evidence_returns_no_match_mode() -> None:
