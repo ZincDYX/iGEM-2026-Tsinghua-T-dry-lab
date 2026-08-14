@@ -44,14 +44,14 @@ PRIMARY_METRICS = (
     "oc_before_dmt_route_fraction",
 )
 
-# M1/M2 presentation palette: pale canvas, YlGnBu scale, and purple accents.
-PURPLE = "#4d216f"
-PURPLE_LIGHT = "#f7f1f8"
-PURPLE_EDGE = "#e4d6e8"
-BLUE_GREEN = plt.get_cmap("YlGnBu")
-SLOT_COLORS = [BLUE_GREEN(value) for value in (0.35, 0.48, 0.60, 0.72, 0.84)]
-TEAL = "#3f8c8c"
-GOLD = "#c8a952"
+# M1/M2 presentation palette: pastel blue → lilac → mauve, with plum accents.
+PURPLE = "#573276"
+PURPLE_LIGHT = "#f8f5fa"
+PURPLE_EDGE = "#d8c8e1"
+SLOT_COLORS = ["#c9ddec", "#9fc7df", "#a58bc6", "#b784a7", "#bd789c"]
+CURRENT_HIGHLIGHT = "#eee6f1"
+POSITIVE = "#9fc7df"
+NEGATIVE = "#b784a7"
 
 
 def load_yaml(path: Path) -> dict:
@@ -216,7 +216,7 @@ def figures(*, paired: list[dict], m3_stoichiometry: list[dict], one_factor: dic
     fig, ax = plt.subplots(figsize=(7.2, 4.2))
     values = [next(row["dense_OC_to_DMT_ratio"] for row in reference_rows if row["slot_ratio_sh3_to_pdz"] == slot) for slot in SLOTS]
     ax.plot(SLOTS, values, marker="o", markersize=7, linewidth=2.4, color=PURPLE)
-    ax.scatter([3.0], [values[2]], s=95, marker="s", color=GOLD, zorder=3, label="current architecture")
+    ax.scatter([3.0], [values[2]], s=95, marker="s", color=SLOT_COLORS[2], zorder=3, label="current architecture")
     configure_axes(ax); ax.set_xticks(SLOTS); ax.set_xlabel("SH3:PDZ capacity ratio"); ax.set_ylabel("Dense OC:DMT ratio")
     ax.set_title("M3 Recruitment Stoichiometry Sensitivity"); ax.legend(frameon=False, loc="upper left")
     fig.tight_layout(); fig.savefig(figure_dir / "m3_recruitment_stoichiometry.png", dpi=240); plt.close(fig)
@@ -226,7 +226,7 @@ def figures(*, paired: list[dict], m3_stoichiometry: list[dict], one_factor: dic
     grouped = [[row["branch_9_to_13_fraction"] for row in paired if row["slot_ratio_sh3_to_pdz"] == slot] for slot in SLOTS]
     plot = ax.boxplot(grouped, tick_labels=[str(int(slot)) for slot in SLOTS], patch_artist=True, medianprops={"color": PURPLE, "linewidth": 1.8})
     for box, color in zip(plot["boxes"], SLOT_COLORS): box.set(facecolor=color, edgecolor=PURPLE_EDGE)
-    ax.axvspan(2.5, 3.5, color=GOLD, alpha=.13)
+    ax.axvspan(2.5, 3.5, color=CURRENT_HIGHLIGHT, alpha=.8)
     ax.text(3, .97, "current design", transform=ax.get_xaxis_transform(), ha="center", va="top", color=PURPLE, fontsize=9)
     configure_axes(ax); ax.set_xlabel("SH3:PDZ capacity ratio"); ax.set_ylabel("Branch 9→13 fraction")
     ax.set_title("Paired Kp Sensitivity Across SH3:PDZ Ratios")
@@ -251,10 +251,10 @@ def figures(*, paired: list[dict], m3_stoichiometry: list[dict], one_factor: dic
     ]
     labels = ["H0", "Spatial neutral", "Spatial directional"]
     fig, (branch_ax, yield_ax) = plt.subplots(1, 2, figsize=(9.6, 4.2))
-    branch_ax.bar(labels, [row["branch_9_to_13_fraction"] for row in selected], color=[PURPLE, TEAL, SLOT_COLORS[3]])
+    branch_ax.bar(labels, [row["branch_9_to_13_fraction"] for row in selected], color=[SLOT_COLORS[0], SLOT_COLORS[1], SLOT_COLORS[2]], edgecolor=PURPLE_EDGE)
     configure_axes(branch_ax); branch_ax.set_ylabel("Branch 9→13 fraction"); branch_ax.set_title("A. Side-product branch")
     yield_delta = [row["target_yield_fraction"] - h0["target_yield_fraction"] for row in selected]
-    yield_ax.bar(labels, yield_delta, color=[PURPLE, TEAL, SLOT_COLORS[3]])
+    yield_ax.bar(labels, yield_delta, color=[SLOT_COLORS[0], SLOT_COLORS[1], SLOT_COLORS[2]], edgecolor=PURPLE_EDGE)
     yield_ax.axhline(0, color=PURPLE, linewidth=1); configure_axes(yield_ax); yield_ax.set_ylabel("Δ normalized 15 yield vs H0"); yield_ax.set_title("B. Yield change")
     fig.suptitle("M4 Representative Comparison", color=PURPLE, fontweight="bold", y=1.02)
     fig.tight_layout(); fig.savefig(figure_dir / "m4_representative_comparison.png", dpi=240, bbox_inches="tight"); plt.close(fig)
@@ -264,7 +264,7 @@ def figures(*, paired: list[dict], m3_stoichiometry: list[dict], one_factor: dic
     fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.4), sharey=True)
     for ax, metric, title in zip(axes, ("branch_9_to_13_fraction", "oc_before_dmt_route_fraction"), ("Branch 9→13", "OC-before-DMT route")):
         metric_rows = sorted((row for row in sensitivity if row["metric"] == metric), key=lambda row: row["Spearman_rho"])
-        ax.barh([row["parameter"] for row in metric_rows], [row["Spearman_rho"] for row in metric_rows], color=[BLUE_GREEN(.70) if row["Spearman_rho"] >= 0 else BLUE_GREEN(.45) for row in metric_rows])
+        ax.barh([row["parameter"] for row in metric_rows], [row["Spearman_rho"] for row in metric_rows], color=[POSITIVE if row["Spearman_rho"] >= 0 else NEGATIVE for row in metric_rows], edgecolor=PURPLE_EDGE)
         ax.axvline(0, color=PURPLE, linewidth=1); configure_axes(ax); ax.set_xlabel("Spearman ρ"); ax.set_title(title)
     fig.suptitle("Metabolite Partitioning Sensitivity", color=PURPLE, fontweight="bold", y=1.02)
     fig.tight_layout(); fig.savefig(figure_dir / "metabolite_kp_sensitivity.png", dpi=240, bbox_inches="tight"); plt.close(fig)
