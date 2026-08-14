@@ -105,16 +105,16 @@ def save_reference(repo: Path, output: Path) -> None:
 
 def figures(rows: list[dict], output: Path) -> None:
     figure_dir = output / "figures"; figure_dir.mkdir(parents=True, exist_ok=True)
-    deterministic = [row for row in rows if row["scenario"].startswith("galatea_spatial_")]
+    deterministic = [row for row in rows if row["condition_id"].startswith("galatea_spatial_") and "global_Kp_uncertainty" not in row["condition_id"]]
     slots = sorted({row["slot_ratio"] for row in deterministic})
     means = [np.mean([row["dense_OC_to_DMT_ratio"] for row in deterministic if row["slot_ratio"] == slot]) for slot in slots]
     plt.figure(figsize=(6, 4)); plt.plot(slots, means, marker="o", color="#7663a6"); plt.xlabel("SH3:PDZ capacity ratio"); plt.ylabel("Dense OC:DMT ratio"); plt.title("M3 literature-informed sensitivity"); plt.tight_layout(); plt.savefig(figure_dir / "m3_dense_oc_dmt_vs_slot_ratio.png", dpi=200); plt.close()
     nominal = [row for row in deterministic if row["slot_ratio"] == 3 and row["phi"] == .012 and row["total_recruited_fraction"] == .7 and row["recruitment_bias_oc_vs_dmt"] == 1]
     if nominal:
         labels = ["H0", "Spatial neutral", "Spatial directional"]
-        selected = [next(row for row in rows if row["scenario"] == "homogeneous_constitutive"), next(row for row in nominal if "neutral" in row["scenario"]), next(row for row in nominal if "directional" in row["scenario"])]
+        selected = [next(row for row in rows if row["scenario"] == "homogeneous_constitutive"), next(row for row in nominal if "neutral_Kp" in row["condition_id"]), next(row for row in nominal if "directional_Kp" in row["condition_id"])]
         plt.figure(figsize=(7, 4)); x = np.arange(3); plt.bar(x - .18, [row["branch_9_to_13_fraction"] for row in selected], .36, label="Branch 9→13", color="#8bb7a1"); plt.bar(x + .18, [row["target_yield_fraction"] for row in selected], .36, label="Normalized 15 yield", color="#b49bd1"); plt.xticks(x, labels); plt.legend(); plt.title("M4 representative branch comparison"); plt.tight_layout(); plt.savefig(figure_dir / "m4_representative_branch_comparison.png", dpi=200); plt.close()
-    global_rows = [row for row in rows if row["scenario"] == "galatea_spatial_global_Kp_uncertainty"]
+    global_rows = [row for row in rows if row["condition_id"].startswith("galatea_spatial_global_Kp_uncertainty")]
     if global_rows:
         plt.figure(figsize=(7, 4)); grouped = [[row["branch_9_to_13_fraction"] for row in global_rows if row["slot_ratio"] == slot] for slot in slots]; plt.boxplot(grouped, labels=[str(slot) for slot in slots]); plt.xlabel("SH3:PDZ capacity ratio"); plt.ylabel("Branch 9→13 fraction"); plt.title("Prior-driven Kp sensitivity envelope"); plt.tight_layout(); plt.savefig(figure_dir / "m4_kp_sensitivity_envelope.png", dpi=200); plt.close()
 
