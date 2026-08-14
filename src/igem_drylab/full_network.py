@@ -22,6 +22,7 @@ REACTIONS = (
 )
 ENZYME_SUBSTRATES = {"PTR": ("8", "12"), "PT": ("9", "13"), "OC": ("10", "14"), "DMT": ("8", "9", "10", "11")}
 _INDEX = {compound: index for index, compound in enumerate(COMPOUNDS)}
+NUMERICAL_NEGATIVE_TOLERANCE = -1e-8
 
 
 @dataclass(frozen=True)
@@ -253,12 +254,11 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
         return np.concatenate((derivative - transport, transport))
 
     evaluation = np.linspace(0.0, t_end, points)
-    solved = solve_ivp(rhs, (0.0, t_end), initial, t_eval=evaluation, method="LSODA", rtol=1e-8, atol=1e-10)
+    solved = solve_ivp(rhs, (0.0, t_end), initial, t_eval=evaluation, method="LSODA", rtol=1e-8, atol=1e-12)
     if not solved.success:
         raise RuntimeError(solved.message)
     raw_states = solved.y
-    negative_tolerance = -1e-9
-    if float(raw_states.min()) < negative_tolerance:
+    if float(raw_states.min()) < NUMERICAL_NEGATIVE_TOLERANCE:
         raise RuntimeError(f"numerical_negative_concentration_exceeds_tolerance:{raw_states.min():.3e}")
     states = np.where(raw_states < 0.0, 0.0, raw_states)
     fluxes = np.empty((10, solved.t.size))
