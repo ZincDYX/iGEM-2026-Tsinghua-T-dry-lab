@@ -285,6 +285,7 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
         "dmt_late_selectivity": integrals["R7"] / (dmt_total + eps),
         "early_dmt_fraction": 1.0 - integrals["R7"] / (dmt_total + eps),
         "oc_before_dmt_route_fraction": integrals["R7"] / (integrals["R7"] + integrals["R10"] + eps),
+        "side_product_fraction_13": final_13_total / (final_13_total + final_15_total + eps),
         "mass_balance_error": abs(float(states[:, 0].sum() - states[:, -1].sum())),
     }
     return FullNetworkResult(solved.t, states[:8], states[8:], fluxes, integrals, diagnostics, params.unit_mode)

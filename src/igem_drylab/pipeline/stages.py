@@ -364,7 +364,11 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             candidate_context=context, simulation_inputs={"scenario": settings.scenario_mode, "transport_access": settings.transport_access, "dmt_gate": gate.mode, "unit_mode": result.unit_mode},
             bottleneck="full_network_comparative_screen", trajectory_artifact=trajectory,
             flux_integrals=({f"relative_{key}": value for key, value in result.flux_integrals.items()} if author_native else result.flux_integrals),
-            mechanistic_diagnostics=({"normalized_yield_fraction_15": result.diagnostics["final_15_total"] / result.diagnostics["initial_8"] if result.diagnostics["initial_8"] else 0.0, "side_product_fraction_13": result.diagnostics["final_13_total"] / (result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"]) if result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"] else 0.0, "mass_balance_error": result.diagnostics["mass_balance_error"]} if author_native else result.diagnostics), parameter_ids=sorted({*context.parameter_ids, *(entry.selected_parameter.parameter_id for entry in selected.values() if entry.selected_parameter)}),
+            mechanistic_diagnostics=({key: result.diagnostics[key] for key in (
+                "target_yield_fraction", "branch_9_to_13_fraction", "dmt_late_selectivity",
+                "early_dmt_fraction", "oc_before_dmt_route_fraction", "side_product_fraction_13",
+                "mass_balance_error",
+            )} if author_native else result.diagnostics), parameter_ids=sorted({*context.parameter_ids, *(entry.selected_parameter.parameter_id for entry in selected.values() if entry.selected_parameter)}),
             provenance_summary=provenance, assumptions=["M1/M2 structural and docking scores are not kinetic inputs", "M4 is a mechanistic sensitivity model", activity_assumption],
             notes=("Full 8-compound / 10-reaction phase-specific competitive model. Values are not enzyme activity or yield predictions."
                    if result.unit_mode == "physical" else "Results are normalized mechanistic sensitivity outputs and must not be interpreted as absolute concentration, enzyme abundance, kinetic rate, productivity, or titer."),

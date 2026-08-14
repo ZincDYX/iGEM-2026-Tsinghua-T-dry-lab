@@ -14,8 +14,9 @@ from igem_drylab.full_network import (
 )
 from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
 from igem_drylab.published_reference import run_published_reference, write_published_reference_reproduction
-from igem_drylab.pipeline.config import AuthorNativeEnzymeScales, FullNetworkInitialStateConfig, InductionGateConfig, M4Config
-from igem_drylab.pipeline.stages import _full_network_reactions, _full_network_units
+from igem_drylab.pipeline.config import AuthorNativeEnzymeScales, FullNetworkInitialStateConfig, InductionGateConfig, M4Config, load_config
+from igem_drylab.pipeline.models import M3ConcentrationAssessment, M4CandidateContext
+from igem_drylab.pipeline.stages import _full_network_reactions, _full_network_units, run_m4
 from igem_drylab.parameters.requirements import requirements_for_stage
 
 
@@ -237,6 +238,57 @@ def test_author_native_output_units_never_claim_physical_quantities() -> None:
     serialized = json.dumps(units)
     assert "uM" not in serialized and "mM" not in serialized and "1/h" not in serialized
     assert units["absolute_titer_supported"] is False and units["physical_rate_supported"] is False
+
+
+def test_author_native_full_pipeline_output_keeps_only_normalized_diagnostics(tmp_path: Path) -> None:
+    csv_path = tmp_path / "author_native_reactions.csv"
+    csv_path.write_text(
+        "reaction_id,enzyme,substrate,product,kcat_derived_author_native,Km_author_native\n"
+        + "".join(f"{r.reaction_id},{r.enzyme},{r.substrate},{r.product},1,1\n" for r in reactions()),
+        encoding="utf-8",
+    )
+    config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
+    config.execution.mode = "demo"
+    config.execution.require_provenance = False
+    config.stages.m3_concentration.recruitment_mode = "effective_ratio"
+    config.stages.m3_concentration.slot_ratio_sh3_to_pdz = 1.0
+    config.stages.m3_concentration.total_recruited_fraction = .5
+    config.stages.m3_concentration.author_native_inputs = AuthorNativeEnzymeScales(
+        ptr_scale=.01, pt_scale=.01, oc_scale=.01, dmt_scale=.01,
+    )
+    config.stages.m4_reaction = M4Config(
+        network_mode="galatea_full_competitive",
+        scenario_mode="galatea_spatial",
+        unit_mode="author_native_sensitivity",
+        t_end=.2,
+        condition_id="author-native-test",
+        reaction_network_file=csv_path,
+        full_network_initial_state=FullNetworkInitialStateConfig(
+            concentration_unit="author_native", intracellular={compound: (1.0 if compound == "8" else 0.0) for compound in COMPOUNDS},
+        ),
+    )
+    context = M4CandidateContext(
+        candidate_id="candidate", construct_id="construct", condition_id="author-native-test", phi=.1,
+        enzyme_distribution={enzyme: {"dense": 1.0, "dilute": 1.0, "partition_coefficient": 1.0} for enzyme in ENZYME_SUBSTRATES},
+        metabolite_partition_coefficients={compound: 1.0 for compound in COMPOUNDS},
+        assumptions=["explicit author-native enzyme scales"],
+    )
+    m3 = M3ConcentrationAssessment(
+        candidate_id="candidate", construct_id="construct", status="valid", recommended_for_m4=True,
+        m4_candidate_context=context,
+    )
+    predictions, _ = run_m4(config, tmp_path, [m3])
+    prediction = predictions[0]
+    assert prediction.final_15 is None and prediction.final_13 is None and prediction.productivity is None
+    required = {
+        "target_yield_fraction", "branch_9_to_13_fraction", "dmt_late_selectivity",
+        "early_dmt_fraction", "oc_before_dmt_route_fraction", "side_product_fraction_13",
+        "mass_balance_error",
+    }
+    assert required <= set(prediction.mechanistic_diagnostics)
+    trajectory = prediction.trajectory_artifact.read_text(encoding="utf-8")  # type: ignore[union-attr]
+    assert "uM" not in trajectory and "mM" not in trajectory and "1/h" not in trajectory
+    assert '"absolute_titer_supported": false' in trajectory
 
 
 def test_machine_contract_agrees_with_author_native_stage_requirements() -> None:
