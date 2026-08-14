@@ -150,6 +150,18 @@ def pipeline_run_stage(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok({"ok": True, "run_dir": str(manifest.run_dir), "stage": "m4", "records": [record.model_dump(mode="json") for record in records]})
 
 
+def pipeline_plan_stage(arguments: JsonObject) -> McpToolResult:
+    """Validate an Agent-selected stage dispatch without reproducing its science.
+
+    The Agent uses this narrow contract to invoke a deterministic stage owner;
+    actual M1--M5 computation remains outside the planner.
+    """
+    stage = _require_str(arguments, "stage").lower()
+    if stage not in {"m1", "m2", "m3", "m4", "m5"}:
+        raise ValueError("stage must be one of m1, m2, m3, m4, m5")
+    return McpToolResult.ok({"ok": True, "stage": stage, "dispatch_only": True})
+
+
 def compute_check_tool(arguments: JsonObject) -> McpToolResult:
     config = load_config(Path(_require_str(arguments, "config_path")))
     tool_name = _require_str(arguments, "tool_name")
@@ -1025,6 +1037,7 @@ LITERATURE_QA_TOOL = McpTool(
     input_schema=_schema({"question": {"type": "string"}, "evidence_path": {"type": "string"}, "top_k": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "enum": ["retrieve_only", "synthesize"]}, "constraints": {"type": "object"}, "semantic_enabled": {"type": "boolean", "default": False}}, ["question", "evidence_path"]),
     output_schema=_schema({"ok": {"type": "boolean"}, "status": {"type": "string"}, "answer": {"type": "string"}, "sources": {"type": "array"}}, additional_properties=True),
 )
+PIPELINE_PLAN_STAGE_TOOL = McpTool(name="igem.pipeline.plan_stage", title="Dispatch deterministic dry-lab stage", description="Stage-aware orchestration wrapper; validates Agent dispatch only and does not reproduce M1--M5 scientific calculations.", input_schema=_schema({"stage": {"type": "string", "enum": ["m1", "m2", "m3", "m4", "m5"]}}, ["stage"]), output_schema=_schema({"ok": {"type": "boolean"}, "stage": {"type": "string"}, "dispatch_only": {"type": "boolean"}}, additional_properties=True))
 
 LITERATURE_EVIDENCE_DETAIL_TOOL = McpTool(
     name="igem.literature.evidence_detail",
@@ -1084,6 +1097,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PIPELINE_VALIDATE_TOOL, pipeline_validate),
     (PIPELINE_RUN_TOOL, pipeline_run),
     (PIPELINE_RUN_STAGE_TOOL, pipeline_run_stage),
+    (PIPELINE_PLAN_STAGE_TOOL, pipeline_plan_stage),
     (COMPUTE_CHECK_TOOL, compute_check_tool),
     (COMPUTE_RUN_TOOL, compute_run_tool),
     (MULTICHAIN_BUILD_INPUT_TOOL, multichain_build_input),

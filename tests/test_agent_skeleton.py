@@ -209,3 +209,34 @@ def test_runtime_binds_results_and_skips_failed_gate(tmp_path):
     assert trace.final_status == "completed"
     assert trace.plan.steps[1].status == "succeeded"
     assert trace.calls[1].result["structuredContent"]["received"] == {"value": 7}
+
+
+def test_semantic_state_routing_is_not_case_id_specific(tmp_path):
+    runtime = AgentRuntime(memory_path=tmp_path / "memory.jsonl")
+    kp = runtime.dry_run(AgentTask(task_id="semantic-kp10", objective="A Kp10 measurement was updated.", inputs={"new_measurement": "Kp10", "construct_unchanged": True}))
+    assert [step.step_id for step in kp.plan.steps] == ["dispatch_m3", "dispatch_m4"]
+    linker = runtime.dry_run(AgentTask(task_id="semantic-linker", objective="OC fusion linker sequence changed from X to Y.", inputs={"changed_entities": ["OC_linker"], "structure_input_file": "example.fasta", "allow_new_compute": True}))
+    assert [step.step_id for step in linker.plan.steps] == ["dispatch_m1", "dispatch_m2", "dispatch_m3", "dispatch_m4"]
+    capacity = runtime.dry_run(AgentTask(task_id="semantic-capacity", objective="PDZ site count changed; fusion sequences are unchanged.", inputs={"change_type": "scaffold_capacity_update"}))
+    assert [step.step_id for step in capacity.plan.steps] == ["dispatch_m3", "dispatch_m4"]
+
+
+def test_invalid_artifact_is_blocked_before_reuse(tmp_path):
+    trace = AgentRuntime(memory_path=tmp_path / "memory.jsonl").dry_run(AgentTask(task_id="bad-artifact", objective="Reuse structure", inputs={"artifact_checksum_invalid": True, "structure_output_path": "old"}))
+    assert trace.plan.steps[0].step_id == "collect_missing_inputs"
+    assert trace.plan.steps[0].status == "blocked"
+    assert "integrity" in trace.plan.steps[0].rationale.lower()
+
+
+def test_llm_contract_uses_json_output_and_single_repair():
+    class RepairClient:
+        def __init__(self): self.calls = 0
+        def complete_json(self, prompt: str, **kwargs):
+            self.calls += 1
+            assert kwargs["response_format"] == {"type": "json_object"}
+            if self.calls == 1: return {"steps": [{"id": "bad", "tool": None}]}
+            return {"steps": [{"step_id": "collect_missing_inputs", "objective": "Request input", "tool_name": None, "arguments": {}, "depends_on": [], "required_artifact_ids": [], "produces": [], "run_conditions": [], "result_bindings": [], "resources": [], "priority": 50, "estimated_gpu_minutes": 0, "estimated_api_calls": 0, "retry_limit": 1, "attempts": 0, "status": "blocked", "rationale": "Input missing."}]}
+    task = AgentTask(task_id="repair", objective="test")
+    plan = OpenAICompatiblePlanningBackend(client=RepairClient()).create_plan(task, ContextBundle(task=task, constraints=[], retrieved_memory=[], artifact_summaries=[], conflicts=[]), set())  # type: ignore[arg-type]
+    assert plan.diagnostics["schema_valid_first_attempt"] is False
+    assert plan.diagnostics["schema_valid_after_repair"] is True

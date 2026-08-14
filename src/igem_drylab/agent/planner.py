@@ -9,6 +9,7 @@ from igem_drylab.parameters import ParameterRegistry, resolve_requirement
 from igem_drylab.parameters.requirements import requirements_for_stage
 
 from .context import ContextBundle
+from .artifacts import ArtifactStore
 from .models import AgentTask, Plan, PlanStep, ResultBinding, ResultCondition
 
 
@@ -30,6 +31,10 @@ class RuleBasedDryLabPlanner:
         It reuses files first, only schedules new compute after an explicit
         request, and binds numerical outputs between compatible local tools.
         """
+        routed = _route_project_state_change(task, available_tools)
+        if routed is not None:
+            return routed
+
         steps: list[PlanStep] = []
         inputs = task.inputs
         candidate_id = _string_or(inputs.get("candidate_id"), task.task_id)
@@ -69,6 +74,7 @@ class RuleBasedDryLabPlanner:
                 )
             )
         return Plan(task_id=task.task_id, steps=steps)
+
 
     @staticmethod
     def _select_missing_parameter_evidence(task: AgentTask, config: Any, available_tools: set[str], dependencies: list[str], steps: list[PlanStep]) -> bool:
@@ -263,6 +269,78 @@ class RuleBasedDryLabPlanner:
         if blocked or "igem.pipeline.run_stage" not in available_tools or not isinstance(task.inputs.get("config_path"), str):
             return
         steps.append(PlanStep(step_id="run_production_m4", objective="Run the configured production glabridin M4 from reviewed project configuration.", tool_name="igem.pipeline.run_stage", arguments={"config_path": task.inputs["config_path"], "stage": "m4", "output_dir": str(Path(task.artifacts_dir) / candidate_id / "production_m4")}, priority=45, rationale="The configured M4 kernel is selected explicitly: legacy reduced compatibility or the audited full competitive Galatea network. Neither path converts M1/M2 scores into kinetic values."))
+
+
+def _stage_step(stage: str, *, depends_on: list[str] | None = None, rationale: str, priority: int) -> PlanStep:
+    """Plan a validated deterministic stage without embedding scientific logic."""
+    return PlanStep(step_id=f"dispatch_{stage}", objective=f"Dispatch the deterministic {stage.upper()} pipeline stage.", tool_name="igem.pipeline.plan_stage", arguments={"stage": stage}, depends_on=depends_on or [], priority=priority, rationale=rationale)
+
+
+def _blocked_input_step(reason: str) -> Plan:
+    return Plan(task_id="", steps=[PlanStep(step_id="collect_missing_inputs", objective="Request a valid artifact or the missing scientific input.", status="blocked", rationale=reason)])
+
+
+def _route_project_state_change(task: AgentTask, available_tools: set[str]) -> Plan | None:
+    """Route typed project-state changes; no benchmark-case identifiers are used."""
+    inputs, text = task.inputs, task.objective.lower()
+    def blocked(reason: str) -> Plan:
+        return _blocked_input_step(reason).model_copy(update={"task_id": task.task_id})
+    if inputs.get("artifact_checksum_invalid"):
+        return blocked("Artifact integrity check failed; do not reuse checksum-invalid or unprovenanced output.")
+    manifest_root, artifact_id = inputs.get("artifact_manifest_root"), inputs.get("artifact_id")
+    if isinstance(manifest_root, str) and isinstance(artifact_id, str):
+        verified, reason = ArtifactStore(Path(manifest_root)).verify(artifact_id)
+        if not verified:
+            return blocked(f"Artifact integrity check failed: {reason}; request a valid artifact or recomputation.")
+    if inputs.get("missing_parameter"):
+        return blocked("A required parameter is missing; resolve compatible evidence or request measurement before a physical prediction.")
+    if inputs.get("all_artifacts_validated") and not _has_state_change(inputs):
+        return Plan(task_id=task.task_id, steps=[PlanStep(step_id="reuse_validated_artifacts", objective="Reuse validated artifacts; no scientific recomputation is scheduled.", rationale="No relevant state change was supplied and all required artifacts are validated.", status="succeeded")])
+    if inputs.get("external_api_required") and not inputs.get("api_key_available", False):
+        return blocked("External evidence API credentials are unavailable; do not fabricate a remote result.")
+    if inputs.get("author_native_sensitivity") and any(token in text for token in ("absolute", "micromolar", "titer")):
+        return blocked("Author-native sensitivity is normalized only and cannot support physical titer or productivity claims.")
+    if "docking score" in text and any(token in text for token in ("kcat", "km", "kinetic")):
+        return blocked("Docking is a structural negative screen and must not modify kinetic parameters.")
+    if "sh3:pdz" in text and "oc:dmt" in text and any(token in text for token in ("measured", "treat", "equate")):
+        return blocked("Scaffold capacity is not a measured OC:DMT protein-abundance ratio.")
+    if inputs.get("robustness_summary_available"):
+        return blocked("Sensitivity analysis prioritizes measurements; it does not establish experimental causality or an optimal architecture.")
+    if inputs.get("wetlab_time_course_available") or inputs.get("target_stage") == "m5":
+        return Plan(task_id=task.task_id, steps=[_stage_step("m5", rationale="Wet-lab time-course updates route to deterministic M5 calibration/QC.", priority=90)])
+    change = _change_type(inputs, text)
+    if change in {"parameter_update", "scaffold_capacity_update"}:
+        m3 = _stage_step("m3", rationale="Partitioning/recruitment/abundance changes alter the M3 mass-conserving context.", priority=90)
+        return Plan(task_id=task.task_id, steps=[m3, _stage_step("m4", depends_on=[m3.step_id], rationale="M4 consumes the updated M3 context without rerunning sequence/structure stages.", priority=85)])
+    if change in {"construct_sequence_update", "fusion_architecture_update"}:
+        m1 = _stage_step("m1", rationale="Changed fusion sequence/architecture requires M1 feasibility assessment.", priority=95)
+        m2 = _stage_step("m2", depends_on=[m1.step_id], rationale="M2 evaluates structural accessibility after M1; M1/M2 do not modify kinetics.", priority=90)
+        if inputs.get("allow_new_compute") and isinstance(inputs.get("structure_input_file"), str):
+            m2.resources, m2.estimated_gpu_minutes = ["gpu"], 60
+        m3 = _stage_step("m3", depends_on=[m2.step_id], rationale="M3 recomputes the candidate context for the changed construct.", priority=85)
+        return Plan(task_id=task.task_id, steps=[m1, m2, m3, _stage_step("m4", depends_on=[m3.step_id], rationale="M4 consumes approved kinetics and M3 context only.", priority=80)])
+    if inputs.get("structure_output_path"):
+        return None
+    if inputs.get("allow_new_compute") and not isinstance(inputs.get("structure_input_file"), str):
+        return blocked("A new structure prediction requires an explicit FASTA or construct sequence path.")
+    return None
+
+
+def _has_state_change(inputs: dict[str, Any]) -> bool:
+    return any(key in inputs for key in ("new_measurement", "slot_ratio_changed", "wetlab_time_course_available", "structure_input_file", "structure_output_path"))
+
+
+def _change_type(inputs: dict[str, Any], text: str) -> str | None:
+    explicit = inputs.get("change_type")
+    if isinstance(explicit, str): return explicit
+    values = {str(item).lower() for item in inputs.get("changed_entities", [])} if isinstance(inputs.get("changed_entities"), list) else set()
+    measurement = str(inputs.get("new_measurement", "")).lower()
+    if inputs.get("slot_ratio_changed") or measurement in {"kp9", "kp10", "phi", "recruitment_enrichment", "enzyme_abundance"} or values & {"kp9", "kp10", "phi", "recruitment", "enzyme_abundance", "sh3_pdz_ratio"}:
+        return "scaffold_capacity_update" if inputs.get("slot_ratio_changed") or "sh3" in measurement else "parameter_update"
+    if any(token in text for token in ("linker sequence changed", "ligand-tag sequence changed", "tag sequence changed")) or values & {"oc_linker", "dmt_linker", "dmt_tag", "ligand_tag", "fusion_sequence"}:
+        return "construct_sequence_update"
+    if "fusion orientation changed" in text or values & {"fusion_orientation", "architecture"}: return "fusion_architecture_update"
+    return None
 
 
 def _load_config_if_present(config_path: object) -> Any | None:

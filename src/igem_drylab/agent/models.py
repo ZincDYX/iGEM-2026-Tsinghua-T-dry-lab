@@ -69,6 +69,7 @@ class Plan(BaseModel):
     plan_id: str = Field(default_factory=lambda: datetime.now(timezone.utc).strftime("plan-%Y%m%dT%H%M%S%f"))
     previous_plan_id: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolCallRecord(BaseModel):

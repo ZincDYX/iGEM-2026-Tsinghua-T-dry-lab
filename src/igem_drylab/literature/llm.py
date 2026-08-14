@@ -19,17 +19,18 @@ class ChatClient:
     api_base: str
     model: str
     temperature: float = 0.2
+    max_tokens: int = 1400
     timeout_seconds: int = 180
     retries: int = 3
 
-    def complete_json(self, prompt: str) -> dict[str, Any]:
-        content = self.complete(prompt)
+    def complete_json(self, prompt: str, *, response_format: dict[str, Any] | None = None) -> dict[str, Any]:
+        content = self.complete(prompt, response_format=response_format)
         parsed = parse_json_object(content)
         if parsed is None:
             raise LlmError("LLM response did not contain a JSON object")
         return parsed
 
-    def complete(self, prompt: str) -> str:
+    def complete(self, prompt: str, *, response_format: dict[str, Any] | None = None) -> str:
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "model": self.model,
@@ -38,7 +39,10 @@ class ChatClient:
                 {"role": "user", "content": prompt},
             ],
             "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
         }
+        if response_format is not None:
+            payload["response_format"] = response_format
         retry_status = {429, 500, 502, 503, 504}
         last_error: Exception | None = None
         for attempt in range(max(1, self.retries)):

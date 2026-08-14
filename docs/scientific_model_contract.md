@@ -70,6 +70,10 @@ production conflict scan rather than causing a dimension-inference fallback.
 
 Structure predictors, FreeSASA, Vina, CALVADOS, and FTH1 geometry tools can supply bounded evidence. Their outputs are not proof of LLPS or catalytic activity. Vina is used only to flag a potentially disrupted binding pose.
 
+## Agent orchestration boundary
+
+The optional Agent may dispatch deterministic M1--M5 stages based on an explicit project-state change, reuse only integrity-verified artifacts, and route unresolved inputs to evidence review or human approval. It does not calculate M1--M5 equations, approve parameters, convert docking/structure outputs into kinetics, or treat sensitivity as experimental causality. The frozen Agent benchmark evaluates this orchestration contract rather than biological prediction accuracy.
+
 ## Planned / intentionally not implemented
 
 No PDE, ER/lipid-droplet biophysics, Bayesian experiment design, or automatic conversion of external prediction output to biology is claimed. The current M5 fitter is intentionally restricted to one identifiable apparent parameter per call; fitting a full pathway requires sufficient time-course data and a separately specified fit plan.

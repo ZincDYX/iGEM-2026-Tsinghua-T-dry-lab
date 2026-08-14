@@ -166,6 +166,20 @@ Key packages:
 - `igem_drylab.mcp` — local MCP-style tool contracts
 - `igem_drylab.agent` — optional planner, memory, policy, execution, and recovery framework
 
+## Agent orchestration benchmark
+
+The optional Agent is an orchestration layer. It selects deterministic M1–M5 stage dispatches, validates artifact reuse, requests missing inputs or human review, and records traces. It does not replace the scientific modules or generate biological results itself.
+
+`benchmarks/agent_orchestration_v1/` is a frozen 24-case project-specific regression set. Version 2 retains the same cases and gold decisions, and adds typed change routing, checksum-aware reuse blocking, stage-aware dispatch, and strict OpenAI-compatible JSON Output validation. Run it only with configured local credentials; outputs remain ignored by Git:
+
+```bash
+python scripts/evaluate_agent_benchmark.py --benchmark benchmarks/agent_orchestration_v1 --output results/agent_benchmark_v2/rule_based --planner rule-based --mode dry-run
+python scripts/evaluate_agent_benchmark.py --benchmark benchmarks/agent_orchestration_v1 --output results/agent_benchmark_v2/llm --planner llm --mode dry-run --jobs 4
+python scripts/render_agent_benchmark_v2_report.py
+```
+
+An accepted LLM plan is still subject to the normal policy, budget, artifact, and human-approval gates. Passing this frozen benchmark indicates project-specific orchestration behavior only—not general scientific intelligence or biological prediction accuracy.
+
 ## Configuration and secrets
 
 All project inputs should be versioned configuration, reviewed evidence, or explicit command arguments. API credentials must only be environment variables.

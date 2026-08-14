@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -71,11 +72,11 @@ def facts(trace: dict[str, Any] | None) -> dict[str, bool]:
     parsed_existing = any(step.get("step_id") == "parse_structure" and "run_colabfold" not in step.get("depends_on", []) for step in steps)
     return {
         "m1": any("m1" in item.lower() for item in names | ids),
-        "m2": any(item in names for item in {"igem.parsers.structure_prediction", "igem.scoring.pocket_sasa", "igem.scoring.m2_structure", "igem.scoring.docking_penalty"}),
+        "m2": "dispatch_m2" in ids or any(item in names for item in {"igem.parsers.structure_prediction", "igem.scoring.pocket_sasa", "igem.scoring.m2_structure", "igem.scoring.docking_penalty"}),
         "m3": any("m3" in item.lower() for item in names | ids),
-        "m4": "igem.pipeline.run_stage" in names or "run_production_m4" in ids,
+        "m4": "igem.pipeline.run_stage" in names or "run_production_m4" in ids or "dispatch_m4" in ids,
         "m5": any("m5" in item.lower() for item in names | ids),
-        "reuse_artifact": parsed_existing or ("score_docking" in ids and not any(item.startswith("run_vina_") for item in ids)),
+        "reuse_artifact": parsed_existing or "reuse_validated_artifacts" in ids or ("score_docking" in ids and not any(item.startswith("run_vina_") for item in ids)),
         "new_gpu": gpu,
         "new_vina": any(item.startswith("run_vina_") for item in ids),
         "resolve_evidence": "igem.parameters.resolve" in names or "igem.literature.qa" in names,
@@ -85,7 +86,7 @@ def facts(trace: dict[str, Any] | None) -> dict[str, bool]:
         "request_input": "collect_missing_inputs" in ids or any(step.get("status") == "blocked" for step in steps),
         "approval": gpu or any(step.get("status") == "waiting_approval" for step in steps),
         "external_api": any("external_api" in step.get("resources", []) for step in steps),
-        "no_action": len(steps) == 1 and "collect_missing_inputs" in ids,
+        "no_action": "reuse_validated_artifacts" in ids,
         "reject_shortcut": "collect_missing_inputs" in ids and not any(item in names for item in {"igem.pipeline.run_stage", "igem.compute.run_tool"}),
         "normalized_only": "collect_missing_inputs" in ids and "igem.pipeline.run_stage" not in names,
         "request_measurement": "collect_missing_inputs" in ids,
@@ -130,7 +131,16 @@ def score(case: dict[str, Any], gold: dict[str, Any], raw: dict[str, Any], plann
     required_missing = [item for item in required if not observed.get(item, False)]
     forbidden_hit = [item for item in forbidden if observed.get(item, False)]
     expected_modules = gold["expected_modules"]
-    routing_correct = not any(not observed.get(item, False) for item in expected_modules)
+    observed_sequence: list[str] = []
+    m2_tools = {"igem.parsers.structure_prediction", "igem.scoring.pocket_sasa", "igem.scoring.m2_structure", "igem.scoring.docking_penalty"}
+    for step in (trace or {}).get("plan", {}).get("steps", []):
+        step_id, tool = str(step.get("step_id", "")), str(step.get("tool_name") or "")
+        stage = step_id.removeprefix("dispatch_") if step_id.startswith("dispatch_") else None
+        if stage not in {"m1", "m2", "m3", "m4", "m5"}:
+            stage = "m2" if tool in m2_tools or step_id in {"run_colabfold", "run_vina_reference", "run_vina_fusion"} else None
+        if stage and (not observed_sequence or observed_sequence[-1] != stage): observed_sequence.append(stage)
+    stage_expected = all(item in {"m1", "m2", "m3", "m4", "m5"} for item in expected_modules)
+    routing_correct = observed_sequence == expected_modules if stage_expected else not any(not observed.get(item, False) for item in expected_modules)
     unnecessary = sum(observed.get(item, False) for item in {"m1", "m2", "m3", "m4", "m5"} - set(expected_modules) if item not in forbidden)
     blocked_expected = bool(gold["should_block"])
     block_ok = (observed["blocked"] == blocked_expected) if blocked_expected else True
@@ -155,6 +165,9 @@ def score(case: dict[str, Any], gold: dict[str, Any], raw: dict[str, Any], plann
             *(["expected_block_not_observed"] if not block_ok else []), *(["artifact_reuse_mismatch"] if not artifact_ok else []),
             *(["safety_gate_mismatch"] if not safety_ok else []), *(["scientific_boundary_mismatch"] if not boundary_ok else []),
         ]),
+        "exact_module_sequence_correct": routing_correct,
+        "schema_valid_first_attempt": bool((trace or {}).get("plan", {}).get("diagnostics", {}).get("schema_valid_first_attempt", False)),
+        "schema_valid_after_repair": bool((trace or {}).get("plan", {}).get("diagnostics", {}).get("schema_valid_after_repair", False)),
     }
 
 
@@ -174,6 +187,7 @@ def main() -> None:
     parser.add_argument("--model")
     parser.add_argument("--integration-only", action="store_true")
     parser.add_argument("--score-only", action="store_true", help="Re-score saved raw_results.jsonl without invoking the Agent.")
+    parser.add_argument("--jobs", type=int, default=1, help="Independent benchmark cases to invoke concurrently.")
     args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
     cases = load_jsonl(args.benchmark / "benchmark_cases.jsonl")
     gold = {item["case_id"]: item for item in json.loads((args.benchmark / "gold_decisions.json").read_text(encoding="utf-8"))}
@@ -183,7 +197,9 @@ def main() -> None:
         expected_ids = [case["case_id"] for case in cases]
         raw_rows = [row for row in raw_rows if row["case_id"] in expected_ids]
     else:
-        raw_rows = [run_case(case, output=args.output, planner=args.planner, mode=args.mode, api_base=args.api_base, model=args.model) for case in cases]
+        if args.jobs < 1: raise ValueError("--jobs must be at least 1")
+        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            raw_rows = list(pool.map(lambda case: run_case(case, output=args.output, planner=args.planner, mode=args.mode, api_base=args.api_base, model=args.model), cases))
         write_jsonl(args.output / "raw_results.jsonl", raw_rows)
         plans = [{"case_id": row["case_id"], "planner": args.planner, "trace": row["trace"]} for row in raw_rows]
         write_jsonl(args.output / "plans.jsonl", plans)
