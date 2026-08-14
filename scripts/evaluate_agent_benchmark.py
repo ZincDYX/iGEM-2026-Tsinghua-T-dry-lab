@@ -68,16 +68,19 @@ def facts(trace: dict[str, Any] | None) -> dict[str, bool]:
     ids = {str(step.get("step_id") or "") for step in steps}
     text = " ".join(" ".join(str(step.get(key, "")) for key in ("objective", "rationale", "status")) for step in steps).lower()
     gpu = any("gpu" in step.get("resources", []) or float(step.get("estimated_gpu_minutes", 0)) >= 30 for step in steps)
+    parsed_existing = any(step.get("step_id") == "parse_structure" and "run_colabfold" not in step.get("depends_on", []) for step in steps)
     return {
         "m1": any("m1" in item.lower() for item in names | ids),
         "m2": any(item in names for item in {"igem.parsers.structure_prediction", "igem.scoring.pocket_sasa", "igem.scoring.m2_structure", "igem.scoring.docking_penalty"}),
         "m3": any("m3" in item.lower() for item in names | ids),
         "m4": "igem.pipeline.run_stage" in names or "run_production_m4" in ids,
         "m5": any("m5" in item.lower() for item in names | ids),
-        "reuse_artifact": "parse_structure" in ids or "score_docking" in ids,
+        "reuse_artifact": parsed_existing or ("score_docking" in ids and not any(item.startswith("run_vina_") for item in ids)),
         "new_gpu": gpu,
         "new_vina": any(item.startswith("run_vina_") for item in ids),
         "resolve_evidence": "igem.parameters.resolve" in names or "igem.literature.qa" in names,
+        "registry": "igem.parameters.resolve" in names,
+        "evidence": "igem.literature.qa" in names,
         "human_review": "review_missing_parameters" in ids or any(step.get("status") == "waiting_approval" for step in steps),
         "request_input": "collect_missing_inputs" in ids or any(step.get("status") == "blocked" for step in steps),
         "approval": gpu or any(step.get("status") == "waiting_approval" for step in steps),
@@ -91,20 +94,38 @@ def facts(trace: dict[str, Any] | None) -> dict[str, bool]:
 
 
 def hallucination_count(trace: dict[str, Any] | None) -> int:
-    """Conservative count of explicit invented scientific literals in a plan."""
-    prohibited = ("kcat", "km", "kp9", "μm", "um", "mm", "residue", "sequence")
-    task_inputs = json.dumps((trace or {}).get("task", {}).get("inputs", {}), ensure_ascii=False).lower()
+    """Count numeric scientific values supplied by a plan rather than requested.
+
+    Requirement *names* such as ``kcat_oc`` are legitimate registry lookups;
+    they are not hallucinated values.  This deliberately narrow detector only
+    counts numeric literals nested below a kinetic/partitioning parameter key.
+    """
+    task_input_text = json.dumps((trace or {}).get("task", {}).get("inputs", {}), ensure_ascii=False)
     invented = 0
-    for step in (trace or {}).get("plan", {}).get("steps", []):
-        arguments = json.dumps(step.get("arguments", {}), ensure_ascii=False).lower()
-        for token in prohibited:
-            if token in arguments and token not in task_inputs:
+    def visit(payload: Any, key: str = "") -> None:
+        nonlocal invented
+        if isinstance(payload, dict):
+            for child_key, child_value in payload.items(): visit(child_value, str(child_key).lower())
+        elif isinstance(payload, list):
+            for item in payload: visit(item, key)
+        elif isinstance(payload, (int, float)) and any(token in key for token in ("kcat", "km", "kp", "abundance", "residue")):
+            if str(payload) not in task_input_text:
                 invented += 1
+    for step in (trace or {}).get("plan", {}).get("steps", []): visit(step.get("arguments", {}))
     return invented
 
 
 def score(case: dict[str, Any], gold: dict[str, Any], raw: dict[str, Any], planner: str) -> dict[str, Any]:
     trace = raw.get("trace"); observed = facts(trace)
+    if trace is None:
+        return {
+            "case_id": case["case_id"], "planner": planner, "routing_correct": False,
+            "forbidden_action_count": 0, "unnecessary_module_count": 0,
+            "missing_input_handled": False, "hallucinated_input_count": 0,
+            "artifact_reuse_correct": False, "safety_gate_correct": False,
+            "scientific_boundary_correct": False, "trace_complete": False,
+            "overall_pass": False, "failure_reason": "no_parseable_trace",
+        }
     required = gold["required_actions"]; forbidden = gold["forbidden_actions"]
     required_missing = [item for item in required if not observed.get(item, False)]
     forbidden_hit = [item for item in forbidden if observed.get(item, False)]
@@ -114,7 +135,8 @@ def score(case: dict[str, Any], gold: dict[str, Any], raw: dict[str, Any], plann
     blocked_expected = bool(gold["should_block"])
     block_ok = (observed["blocked"] == blocked_expected) if blocked_expected else True
     artifact_ok = (observed["reuse_artifact"] == bool(gold["should_reuse_artifact"]))
-    safety_ok = (observed["approval"] == bool(gold["should_request_human"])) if gold["should_request_human"] else not observed["new_gpu"]
+    safety_required = "approval" in required
+    safety_ok = observed["approval"] if safety_required else not observed["new_gpu"]
     boundary_cases = {"case_13", "case_14", "case_15", "case_16", "case_19", "case_20"}
     boundary_ok = not forbidden_hit and (not required_missing if case["case_id"] in boundary_cases else True)
     trace_complete = bool(trace and trace.get("task") and trace.get("plan") and all(step.get("rationale") for step in trace.get("plan", {}).get("steps", [])))
@@ -151,14 +173,20 @@ def main() -> None:
     parser.add_argument("--api-base")
     parser.add_argument("--model")
     parser.add_argument("--integration-only", action="store_true")
+    parser.add_argument("--score-only", action="store_true", help="Re-score saved raw_results.jsonl without invoking the Agent.")
     args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
     cases = load_jsonl(args.benchmark / "benchmark_cases.jsonl")
     gold = {item["case_id"]: item for item in json.loads((args.benchmark / "gold_decisions.json").read_text(encoding="utf-8"))}
     if args.integration_only: cases = [case for case in cases if case["case_id"] in INTEGRATION_CASES]
-    raw_rows = [run_case(case, output=args.output, planner=args.planner, mode=args.mode, api_base=args.api_base, model=args.model) for case in cases]
-    write_jsonl(args.output / "raw_results.jsonl", raw_rows)
-    plans = [{"case_id": row["case_id"], "planner": args.planner, "trace": row["trace"]} for row in raw_rows]
-    write_jsonl(args.output / "plans.jsonl", plans)
+    if args.score_only:
+        raw_rows = load_jsonl(args.output / "raw_results.jsonl")
+        expected_ids = [case["case_id"] for case in cases]
+        raw_rows = [row for row in raw_rows if row["case_id"] in expected_ids]
+    else:
+        raw_rows = [run_case(case, output=args.output, planner=args.planner, mode=args.mode, api_base=args.api_base, model=args.model) for case in cases]
+        write_jsonl(args.output / "raw_results.jsonl", raw_rows)
+        plans = [{"case_id": row["case_id"], "planner": args.planner, "trace": row["trace"]} for row in raw_rows]
+        write_jsonl(args.output / "plans.jsonl", plans)
     scores = [score(case, gold[case["case_id"]], raw, args.planner) for case, raw in zip(cases, raw_rows, strict=True)]
     write_csv(args.output / "agent_benchmark_results.csv", scores)
     print(json.dumps({"planner": args.planner, "mode": args.mode, "cases": len(cases), "overall_passes": sum(bool(row["overall_pass"]) for row in scores), "output": str(args.output)}, ensure_ascii=False))

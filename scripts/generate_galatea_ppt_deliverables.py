@@ -13,6 +13,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import FancyBboxPatch
 
 
@@ -25,6 +26,9 @@ CURRENT = "#ead7a0"
 CURRENT_BG = "#f7f0db"
 POSITIVE = "#9fc7df"
 NEGATIVE = "#b784a7"
+PROJECT_DIVERGING = LinearSegmentedColormap.from_list(
+    "project_diverging", [NEGATIVE, "#fbf9fb", POSITIVE], N=256,
+)
 SLOTS = (1.0, 2.0, 3.0, 4.0, 6.0)
 
 
@@ -125,7 +129,7 @@ def robustness_figure(paired: list[dict[str, str]], sensitivity: list[dict[str, 
     parameters = ("Kp9", "Kp10", "Kp14")
     lookup = {(row["metric"], row["parameter"]): value(row, "Spearman_rho") for row in sensitivity}
     matrix = np.array([[lookup[(metric, parameter)] for metric in metrics] for parameter in parameters])
-    image = axes[1].imshow(matrix, cmap="PuOr", vmin=-1, vmax=1, aspect="auto")
+    image = axes[1].imshow(matrix, cmap=PROJECT_DIVERGING, vmin=-1, vmax=1, aspect="auto")
     axes[1].set_xticks(range(3), ["9→13\nbranch", "DMT late\nselectivity", "OC-before-DMT\nroute"], fontsize=13)
     axes[1].set_yticks(range(3), parameters, fontsize=15)
     axes[1].set_title("B. Partitioning sensitivity", color=PURPLE, fontsize=20, fontweight="bold")
