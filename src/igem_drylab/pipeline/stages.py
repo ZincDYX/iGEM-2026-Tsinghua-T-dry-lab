@@ -9,7 +9,10 @@ import json
 from igem_drylab.constructs import ConstructRegistry, assess_linker
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
-from igem_drylab.parameters import ParameterRecord, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
+from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
+from igem_drylab.full_network import PhaseDistribution, TemporalGate, TransportParameters
+from igem_drylab.published_reference import run_published_reference, write_published_reference_reproduction
+from igem_drylab.parameters import ParameterRecord, full_m4_kinetic_requirements, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.parameters.requirements import requirement_name_to_kernel_key, requirements_for_stage
 from igem_drylab.parameters.dimensions import normalize_concentration
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
@@ -118,6 +121,64 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 notes="M3 does not infer partitioning from M1/M2 scores."))
             continue
         phi = selected["phi"].canonical_value
+        if config.stages.m3_concentration.recruitment_mode == "effective_ratio":
+            settings = config.stages.m3_concentration
+            author_native = config.stages.m4_reaction.unit_mode == "author_native_sensitivity"
+            if author_native:
+                scales = settings.author_native_inputs
+                if scales is None:  # ProjectConfig normally rejects this before execution.
+                    records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic", missing_inputs=["author_native_inputs"], notes="Author-native sensitivity requires explicit nonphysical enzyme scales."))
+                    continue
+                ptr_total, pt_total = scales.ptr_scale, scales.pt_scale
+                oc_total, dmt_total = scales.oc_scale, scales.dmt_scale
+                scale_assumption = "author_native enzyme scale from explicit sensitivity input; not measured protein abundance"
+            else:
+                ptr_total = selected["ptr_total"].canonical_value
+                pt_total = selected["pt_total"].canonical_value
+                oc_total = selected["oc_total"].canonical_value
+                dmt_total = selected["dmt_total"].canonical_value
+                scale_assumption = "enzyme abundance is a reviewed physical concentration input"
+            result = run_m3_effective_ratio(M3EffectiveRatioInputs(
+                phi=phi,
+                ptr_total=ptr_total,
+                pt_total=pt_total,
+                oc_total=oc_total,
+                dmt_total=dmt_total,
+                slot_ratio_sh3_to_pdz=settings.slot_ratio_sh3_to_pdz or 0.0,
+                total_recruited_fraction=settings.total_recruited_fraction or 0.0,
+                recruitment_bias_oc_vs_dmt=settings.recruitment_bias_oc_vs_dmt,
+                ptr_pt_phase_handling=settings.ptr_pt_phase_handling,
+                metabolite_kp={species: selected[f"partition_x{species}"].canonical_value for species in ("8", "9", "10", "11", "12", "13", "14", "15")},
+            ))
+            enzyme_distribution = {
+                name: {"dense": value.dense, "dilute": value.dilute, "partition_coefficient": value.dense / value.dilute if value.dilute else 0.0}
+                for name, value in result.enzyme_distributions.items()
+            }
+            oc, dmt = result.enzyme_distributions["OC"], result.enzyme_distributions["DMT"]
+            recruited = {
+                "OC": result.recruitment.oc_bound / oc_total if oc_total else 0.0,
+                "DMT": result.recruitment.dmt_bound / dmt_total if dmt_total else 0.0,
+            }
+            context = M4CandidateContext(
+                candidate_id=assessment.candidate_id, construct_id=construct_id, condition_id=condition_id, phi=phi,
+                enzyme_distribution=enzyme_distribution, binding_recruited_fraction=recruited,
+                metabolite_partition_coefficients=result.metabolite_kp,
+                site_occupancy={}, parameter_ids=sorted(resolution.selected_parameter.parameter_id for resolution in selected.values() if resolution.selected_parameter),
+                provenance_summary=_provenance_summary(selected.values()), assumptions=[*result.assumptions, scale_assumption],
+            )
+            records.append(M3ConcentrationAssessment(
+                candidate_id=assessment.candidate_id, construct_id=construct_id, status="valid", data_quality=_data_quality(selected.values()),
+                concentrations={name: {"dense_concentration": value.dense, "dilute_concentration": value.dilute} for name, value in result.enzyme_distributions.items()},
+                dense_oc_dmt_ratio=oc.dense / dmt.dense if dmt.dense else None,
+                whole_cell_oc_dmt_ratio=oc_total / dmt_total if dmt_total else None,
+                fraction_in_dense={"OC": result.recruitment.oc_bound / oc_total if oc_total else 0.0, "DMT": result.recruitment.dmt_bound / dmt_total if dmt_total else 0.0},
+                binding_recruitment_status="valid", binding_recruited_fraction=recruited, site_occupancy={}, recommended_for_m4=True,
+                parameter_ids=sorted(resolution.selected_parameter.parameter_id for resolution in selected.values() if resolution.selected_parameter),
+                provenance_summary=_provenance_summary(selected.values()), m4_candidate_context=context,
+                notes=("Author-native M3 sensitivity: relative enzyme scale, not measured protein abundance."
+                       if author_native else "Effective-ratio M3 mode: recruitment changes mass-conserving OC/DMT phase abundance, not kcat.")
+            ))
+            continue
         inputs = [EnrichmentInput(species_id=item, total_concentration=selected[f"{item.lower()}_total"].canonical_value,
             partition_coefficient=selected[f"partition_{item.lower()}"].canonical_value,
             partition_source=selected[f"partition_{item.lower()}"].selected_parameter.source_reference,
@@ -143,6 +204,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
         context = M4CandidateContext(candidate_id=assessment.candidate_id, construct_id=construct_id, condition_id=condition_id,
             phi=phi,
             enzyme_distribution={name: {"dense": value.dense_concentration, "dilute": value.dilute_concentration, "partition_coefficient": value.partition_coefficient} for name, value in result.items()},
+            metabolite_partition_coefficients={species: selected[f"partition_x{species}"].canonical_value for species in ("8", "9", "10", "11", "12", "13", "14", "15") if f"partition_x{species}" in selected},
             binding_recruited_fraction=binding_recruitment, site_occupancy=occupancy,
             parameter_ids=sorted(resolution.selected_parameter.parameter_id for resolution in selected.values() if resolution.selected_parameter),
             provenance_summary=_provenance_summary(selected.values()),
@@ -165,6 +227,10 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
 
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
+    if config.stages.m4_reaction.network_mode == "published_reference":
+        return _run_published_reference_m4(config, run_dir)
+    if config.stages.m4_reaction.network_mode == "galatea_full_competitive":
+        return _run_full_network_m4(config, run_dir, assessments)
     stage_dir = run_dir / "m4_glabridin_kinetics"
     gates = config.stages.m4_reaction
     gate_missing = [name for name in ("pt_gate", "oc_gate", "dmt_gate") if getattr(gates, name) is None]
@@ -219,6 +285,155 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 notes=f"M4 consumed candidate-specific M3 enzyme distributions; {'modeled degradation loss=' + format(delayed.modeled_degradation_loss, '.3g') if gates.enable_degradation else 'mass-balance error=' + format(delayed.mass_balance_error, '.3g')}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
+
+
+def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
+    """Production Galatea M4: full 8-compound / 10-reaction competitive network."""
+    stage_dir = run_dir / "m4_glabridin_full_network"
+    settings = config.stages.m4_reaction
+    author_native = settings.unit_mode == "author_native_sensitivity"
+    requirements = requirements_for_stage(config, "m4")
+    records: list[M4ReactionPrediction] = []
+    for item in assessments:
+        context = item.m4_candidate_context
+        if item.status != "valid" or context is None:
+            records.append(_m4_insufficient(item.candidate_id, config, ["valid effective-ratio or finite-site M3 context"], construct_id=item.construct_id))
+            continue
+        selected, missing = validate_parameters(
+            config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions,
+            host=config.experimental_context.host, strain=config.experimental_context.strain,
+            assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH,
+            temperature_c=config.experimental_context.temperature_c, construct_id=context.construct_id,
+            condition_id=context.condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance,
+        )
+        if missing or settings.full_network_initial_state is None or settings.reaction_network_file is None:
+            records.append(_m4_insufficient(item.candidate_id, config, missing + (["full_network_initial_state"] if settings.full_network_initial_state is None else []) + (["reaction_network_file"] if settings.reaction_network_file is None else []), construct_id=context.construct_id))
+            continue
+        reactions = _full_network_reactions(settings, selected)
+        distributions = {enzyme: PhaseDistribution(values["dense"], values["dilute"]) for enzyme, values in context.enzyme_distribution.items()}
+        kp = context.metabolite_partition_coefficients
+        if set(kp) != {"8", "9", "10", "11", "12", "13", "14", "15"} or any(value <= 0 for value in kp.values()):
+            records.append(_m4_insufficient(item.candidate_id, config, ["M3 metabolite Kp8-Kp15 context"], construct_id=context.construct_id))
+            continue
+        if settings.activity_mode == "sensitivity_parameters":
+            activity_dense = {enzyme: selected[f"activity_dense_{enzyme.lower()}"].canonical_value for enzyme in ("PTR", "PT", "OC", "DMT")}
+            activity_dilute = {enzyme: selected[f"activity_dilute_{enzyme.lower()}"].canonical_value for enzyme in ("PTR", "PT", "OC", "DMT")}
+            activity_assumption = "activity-sensitivity parameters resolved from registry"
+        else:
+            activity_dense = {enzyme: 1.0 for enzyme in ("PTR", "PT", "OC", "DMT")}
+            activity_dilute = {enzyme: 1.0 for enzyme in ("PTR", "PT", "OC", "DMT")}
+            activity_assumption = "assumption_sensitivity: unity activity"
+        gate = TemporalGate()
+        if settings.scenario_mode in {"homogeneous_published_like_temporal", "galatea_spatiotemporal_ablation"} and settings.dmt_gate is not None:
+            gate = TemporalGate(mode="published_delayed_ramp", disable_time=settings.dmt_gate.on_time)
+        transport = TransportParameters(
+            enabled=settings.transport_enabled, access=settings.transport_access,
+            rate=selected["transport_rate"].canonical_value if settings.transport_enabled else 0.0,
+            outside_over_inside=settings.transport_outside_over_inside,
+        )
+        result = run_galatea_full_m4(
+            enzyme_distributions=distributions, phi=context.phi, metabolite_kp=kp,
+            reactions=reactions, initial_intracellular=settings.full_network_initial_state.intracellular,
+            initial_extracellular=settings.full_network_initial_state.extracellular, t_end=settings.t_end,
+            scenario=settings.scenario_mode, transport=transport, dmt_gate=gate,
+            activity_dense=activity_dense, activity_dilute=activity_dilute,
+            unit_mode=settings.unit_mode,
+        )
+        fingerprint = sha256(context.condition_id.encode("utf-8")).hexdigest()[:10]
+        trajectory = stage_dir / f"{item.candidate_id}_{fingerprint}_full_trajectory.json"
+        trajectory.parent.mkdir(parents=True, exist_ok=True)
+        trajectory.write_text(json.dumps({
+            "candidate_id": item.candidate_id, "construct_id": context.construct_id, "condition_id": context.condition_id,
+            "time": result.time.tolist(), "intracellular_cell_average": {str(index + 8): result.intracellular[index].tolist() for index in range(8)},
+            "extracellular": {str(index + 8): result.extracellular[index].tolist() for index in range(8)},
+            "reaction_fluxes": {f"R{index + 1}": result.fluxes[index].tolist() for index in range(10)},
+            "flux_integrals": result.flux_integrals, "diagnostics": result.diagnostics,
+            "unit_mode": result.unit_mode,
+            "units": _full_network_units(settings),
+            "provenance": _full_network_provenance(author_native),
+            "assumptions": ["rapid_partition_equilibrium", "phase-specific competing enzyme pools", "transport access is configured, not measured", activity_assumption],
+        }), encoding="utf-8")
+        provenance = _merge_provenance(context.provenance_summary, _provenance_summary(selected.values()))
+        records.append(M4ReactionPrediction(
+            candidate_id=item.candidate_id, construct_id=context.construct_id, condition_id=context.condition_id,
+            target_product=settings.target_product, status="valid", data_quality=_data_quality_from_summary(provenance),
+            final_15=None if author_native else result.diagnostics["final_15_total"], final_13=None if author_native else result.diagnostics["final_13_total"],
+            side_product_fraction_13=result.diagnostics["final_13_total"] / (result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"]) if result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"] else 0.0,
+            leakage_fraction=None, productivity=None if author_native else result.diagnostics["final_15_total"] / settings.t_end,
+            recommendation="iterate", recommendation_evidence=["comparative_negative_screen_requires_control_comparison"],
+            candidate_context=context, simulation_inputs={"scenario": settings.scenario_mode, "transport_access": settings.transport_access, "dmt_gate": gate.mode, "unit_mode": result.unit_mode},
+            bottleneck="full_network_comparative_screen", trajectory_artifact=trajectory,
+            flux_integrals=({f"relative_{key}": value for key, value in result.flux_integrals.items()} if author_native else result.flux_integrals),
+            mechanistic_diagnostics=({"normalized_yield_fraction_15": result.diagnostics["final_15_total"] / result.diagnostics["initial_8"] if result.diagnostics["initial_8"] else 0.0, "side_product_fraction_13": result.diagnostics["final_13_total"] / (result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"]) if result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"] else 0.0, "mass_balance_error": result.diagnostics["mass_balance_error"]} if author_native else result.diagnostics), parameter_ids=sorted({*context.parameter_ids, *(entry.selected_parameter.parameter_id for entry in selected.values() if entry.selected_parameter)}),
+            provenance_summary=provenance, assumptions=["M1/M2 structural and docking scores are not kinetic inputs", "M4 is a mechanistic sensitivity model", activity_assumption],
+            notes=("Full 8-compound / 10-reaction phase-specific competitive model. Values are not enzyme activity or yield predictions."
+                   if result.unit_mode == "physical" else "Results are normalized mechanistic sensitivity outputs and must not be interpreted as absolute concentration, enzyme abundance, kinetic rate, productivity, or titer."),
+        ))
+    write_models(stage_dir, "reaction_predictions", records)
+    return records, _stage_output("m4_glabridin_full_network", stage_dir, "reaction_predictions", len(records))
+
+
+def _full_network_reactions(settings: object, selected: dict[str, object]) -> tuple[object, ...]:
+    """Keep physical and author-native kinetic acquisition paths disjoint."""
+    source_reactions = load_author_native_reactions(settings.reaction_network_file)  # type: ignore[attr-defined]
+    if settings.unit_mode == "author_native_sensitivity":  # type: ignore[attr-defined]
+        return source_reactions
+    return tuple(
+        reaction.__class__(
+            reaction.reaction_id, reaction.enzyme, reaction.substrate, reaction.product,
+            selected[f"kcat_{reaction.reaction_id.lower()}"].canonical_value,  # type: ignore[index,union-attr]
+            selected[f"km_{reaction.reaction_id.lower()}"].canonical_value,  # type: ignore[index,union-attr]
+        )
+        for reaction in source_reactions
+    )
+
+
+def _full_network_units(settings: object) -> dict[str, object]:
+    if settings.unit_mode == "author_native_sensitivity":  # type: ignore[attr-defined]
+        return {
+            "time": settings.author_native_time_label,  # type: ignore[attr-defined]
+            "concentration": "author_native",
+            "enzyme_scale": "author_native",
+            "kinetics": "author_native",
+            "absolute_titer_supported": False,
+            "physical_rate_supported": False,
+        }
+    return {"time": "h", "concentration": "uM", "kinetics": "1/h and uM"}
+
+
+def _full_network_provenance(author_native: bool) -> dict[str, str]:
+    if author_native:
+        return {
+            "kinetics": "Zhang_author_model",
+            "unit_status": "author_native_only",
+            "enzyme_scale": "explicit_author_native_inputs",
+            "phi_and_Kp": "reviewed_dimensionless_records",
+            "recruitment": "project_design_and_sensitivity_inputs",
+        }
+    return {
+        "kinetics": "reviewed_ParameterRegistry",
+        "enzyme_scale": "reviewed_ParameterRegistry",
+        "phi_and_Kp": "reviewed_ParameterRegistry",
+    }
+
+
+def _run_published_reference_m4(config: ProjectConfig, run_dir: Path) -> tuple[list[M4ReactionPrediction], StageOutput]:
+    """Route the published baseline only through its isolated immutable adapter."""
+    stage_dir = run_dir / "m4_published_reference"
+    root = Path(__file__).resolve().parents[3]
+    output = write_published_reference_reproduction(root, stage_dir / "published_reference_author_native.csv")
+    reference = run_published_reference(root)
+    record = M4ReactionPrediction(
+        candidate_id="published_reference", construct_id="published_reference", condition_id="published_reference",
+        target_product=config.stages.m4_reaction.target_product, status="valid", data_quality="heuristic",
+        final_15=float(reference.state[7, -1]), final_13=float(reference.state[5, -1]),
+        productivity=None, recommendation="iterate", bottleneck="published_reference_adapter",
+        trajectory_artifact=output, simulation_inputs={"network_mode": "published_reference", "unit_mode": "author_native_sensitivity"},
+        assumptions=["author_native_sensitivity: no physical concentration, time, rate, or titer units are assigned"],
+        notes="Independent Zhang author-code reproduction; it does not enter the Galatea full-network kernel.",
+    )
+    write_models(stage_dir, "reaction_predictions", [record])
+    return [record], _stage_output("m4_published_reference", stage_dir, "reaction_predictions", 1)
 
 
 def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPrediction] | None = None) -> tuple[list[M5FeedbackAssessment], StageOutput]:
@@ -305,9 +520,14 @@ def _parameter_key(species: str) -> str:
 
 
 def _m4_insufficient(candidate_id: str, config: ProjectConfig, missing: list[str], construct_id: str = "unresolved") -> M4ReactionPrediction:
+    action = (
+        "supply reviewed full-network kinetics, metabolite Kp values, and explicit M3/M4 states"
+        if config.stages.m4_reaction.network_mode == "galatea_full_competitive"
+        else "supply reviewed glabridin kinetics and explicit induction gates"
+    )
     return M4ReactionPrediction(candidate_id=candidate_id, construct_id=construct_id, condition_id=canonical_m4_condition_id(config.stages.m4_reaction) or "unresolved", target_product=config.stages.m4_reaction.target_product,
         status="insufficient_data", data_quality="heuristic", missing_inputs=sorted(set(missing)),
-        recommended_next_action=["supply reviewed glabridin kinetics and explicit induction gates"],
+        recommended_next_action=[action],
         notes="M4 does not use docking, M2, or M3 proxy scores as enzyme kinetic parameters.")
 
 

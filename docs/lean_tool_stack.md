@@ -7,7 +7,7 @@ M0: construct and evidence database
   -> M1: FTH1 24-mer template expansion and geometric clash screen
   -> M2: ColabFold AlphaFold2-Multimer, then FreeSASA and AutoDock Vina
   -> M3: finite-site binding / mass-conserving local-concentration model
-  -> M4: OC-first/DMT-later competitive piecewise ODE
+  -> M4: full competitive two-phase glabridin network
   -> M5: wet-lab HPLC, protein-abundance, and imaging feedback
 ```
 
@@ -17,7 +17,7 @@ M0: construct and evidence database
 | FTH1 template expansion | repository-native | Tests 24-arm geometry without attempting an infeasible all-atom condensate prediction. |
 | FreeSASA | external CPU command | Directly measures pocket accessibility from a selected structural model. |
 | AutoDock Vina | external CPU command | Compares substrate docking in reference and fusion enzymes. |
-| M3/M4 models | repository-native | Fast, transparent interpretation of site saturation, expression allocation, induction delay, and 13/15 trends. |
+| M3/M4 models | repository-native | Fast, transparent interpretation of recruitment stoichiometry, LLPS partitioning, optional published-like temporal ablation, and 13/15 trends. |
 | Literature / construct database | repository-native with public metadata APIs | Provides versioned provenance for sequences, parameters, plasmids, and wet-lab measurements. |
 
 ## Deliberately not default dependencies

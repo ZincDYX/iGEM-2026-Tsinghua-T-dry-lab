@@ -13,6 +13,19 @@ outputs*/
 third_party/downloads/
 .env
 .env.*
+
+# Local project inputs, immutable uploaded author files, and generated analyses.
+# These are intentionally supplied per workstation/server and must never be pushed.
+data/galatea_m3_m4_inputs/
+data/local/
+published_reference/author_uploaded/
+published_reference/*.csv
+published_reference/*_validation.md
+tmpz/
+outputs/
+outputs_real_smoke/
+outputs_test/
+.env.*
 !.env.example
 
 docs/agent_tutorial.md

@@ -262,7 +262,7 @@ class RuleBasedDryLabPlanner:
             return
         if blocked or "igem.pipeline.run_stage" not in available_tools or not isinstance(task.inputs.get("config_path"), str):
             return
-        steps.append(PlanStep(step_id="run_production_m4", objective="Run the production five-state glabridin M4 from reviewed project configuration.", tool_name="igem.pipeline.run_stage", arguments={"config_path": task.inputs["config_path"], "stage": "m4", "output_dir": str(Path(task.artifacts_dir) / candidate_id / "production_m4")}, priority=45, rationale="Agent reuses pipeline PT 9→10, OC 10→11, DMT 9→13/11→15 implementation; it does not use the generic four-state ODE."))
+        steps.append(PlanStep(step_id="run_production_m4", objective="Run the configured production glabridin M4 from reviewed project configuration.", tool_name="igem.pipeline.run_stage", arguments={"config_path": task.inputs["config_path"], "stage": "m4", "output_dir": str(Path(task.artifacts_dir) / candidate_id / "production_m4")}, priority=45, rationale="The configured M4 kernel is selected explicitly: legacy reduced compatibility or the audited full competitive Galatea network. Neither path converts M1/M2 scores into kinetic values."))
 
 
 def _load_config_if_present(config_path: object) -> Any | None:

@@ -1,0 +1,50 @@
+{
+  "contract_version": "galatea-m3-m4-pre-run-3-author-native-input-separation",
+  "status": "ready_for_audited_configuration_not_project_sweep",
+  "published_reference": {
+    "immutable_files": [
+      "published_reference/author_uploaded/simulation-network-glabridin-final.py",
+      "published_reference/author_uploaded/simulation-data.txt",
+      "published_reference/author_uploaded/Source Data_V2.xlsx"
+    ],
+    "solver": "LSODA",
+    "units": "author_native_only"
+  },
+  "production_network": {
+    "intracellular_compounds": ["8", "9", "10", "11", "12", "13", "14", "15"],
+    "extracellular_compounds_when_transport_enabled": ["8", "9", "10", "11", "12", "13", "14", "15"],
+    "reactions": ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"],
+    "enzyme_competition": {"PTR": ["8", "12"], "PT": ["9", "13"], "OC": ["10", "14"], "DMT": ["8", "9", "10", "11"]},
+    "phase_flux": "phi*v_dense + (1-phi)*v_dilute",
+    "transport_access_modes": ["dilute_phase", "cell_average"]
+  },
+  "m3": {
+    "primary_mode": "effective_ratio",
+    "finite_site_mode": "optional_future_measured_Kd_mode",
+    "physical_inputs": ["phi", "ptr_total", "pt_total", "oc_total", "dmt_total", "Kp_8", "Kp_9", "Kp_10", "Kp_11", "Kp_12", "Kp_13", "Kp_14", "Kp_15"],
+    "author_native_sensitivity_inputs": ["phi", "ptr_scale", "pt_scale", "oc_scale", "dmt_scale", "Kp_8", "Kp_9", "Kp_10", "Kp_11", "Kp_12", "Kp_13", "Kp_14", "Kp_15"],
+    "dimensionless_sensitivity_inputs": ["phi", "slot_ratio_sh3_to_pdz", "total_recruited_fraction", "recruitment_bias_oc_vs_dmt", "Kp_8", "Kp_9", "Kp_10", "Kp_11", "Kp_12", "Kp_13", "Kp_14", "Kp_15"],
+    "not_measurement_claims": ["slot_ratio_is_not_dense_OC_DMT_ratio", "recruitment_bias_is_not_measured_affinity"]
+  },
+  "parameter_acquisition": {
+    "physical": {
+      "m3_registry": ["phi", "Kp_8_to_Kp_15", "PTR_PT_OC_DMT_abundance_uM"],
+      "m4_registry": ["kcat_R1_to_R10_per_hour", "Km_R1_to_R10_uM", "optional_activity_or_transport"]
+    },
+    "author_native_sensitivity": {
+      "m3_registry": ["phi", "Kp_8_to_Kp_15"],
+      "m3_explicit_config": ["ptr_scale", "pt_scale", "oc_scale", "dmt_scale"],
+      "m4_local_source": ["reaction_network_file:kcat_derived_author_native", "reaction_network_file:Km_author_native"],
+      "transport": "rejected_until_explicit_author_native_contract_exists"
+    }
+  },
+  "scenario_modes": ["published_reference", "homogeneous_constitutive", "homogeneous_published_like_temporal", "galatea_spatial", "galatea_spatiotemporal_ablation"],
+  "scientific_boundaries": [
+    "galatea_spatial_uses_constitutive_DMT",
+    "M1_M2_scores_do_not_enter_kinetics",
+    "Vina_SASA_RMSD_do_not_predict_activity_or_yield",
+    "no_absolute_unit_claim_without_verified_unit_mapping",
+    "author_native_kinetics_and_enzyme_scale_never_use_physical_registry_records",
+    "author_native_transport_is_rejected_until_explicitly_supported"
+  ]
+}

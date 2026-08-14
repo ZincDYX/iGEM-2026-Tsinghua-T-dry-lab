@@ -64,7 +64,11 @@ Vina output is parsed into best affinity. The docking penalty compares fusion an
 
 If fusion docking is worse, flag it as a possible binding-risk construct. Do not derive an activity multiplier or any enzyme-rate parameter from Vina; activity requires wet-lab measurement, reviewed literature, or an explicitly allowed assumption.
 
-The production M4 model is the five-state glabridin system (`9`, `10`, `11`, `13`, `15`) used by the pipeline. `simulate_piecewise_induction` and `score_m4_piecewise_ode` are retained only as legacy, generic A/B/P/Q demonstration utilities and are not used by the production Agent route.
+The Galatea production M4 route is the full eight-compound (`8`--`15`), ten-reaction competitive network. It consumes M3-provided `phi`, metabolite Kp8--Kp15, and phase-specific enzyme distributions, then recomputes dynamic metabolite phase concentrations during integration. The reduced five-state glabridin kernel and generic A/B/P/Q utilities are compatibility paths, not the Galatea production route.
+
+Physical production mode uses `uM`, `h`, and `1/h`. `author_native_sensitivity` is explicitly nonphysical: it supports relative/normalized sensitivity with Zhang author-native inputs, but must not be presented as `uM`, `mM`, `1/h`, or absolute titer. Primary sensitivity uses unity phase-activity multipliers; alternative activity values are an explicit activity-sensitivity input rather than inferred from M1/M2 or docking.
+
+The primary Galatea comparison varies recruitment stoichiometry and LLPS partitioning. A delayed DMT gate is a published-like temporal control/ablation, not the default causal mechanism.
 
 Legacy generic demonstration state variables (not the production glabridin state):
 

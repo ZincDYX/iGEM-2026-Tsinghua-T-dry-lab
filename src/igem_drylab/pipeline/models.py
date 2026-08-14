@@ -90,8 +90,9 @@ class M4CandidateContext(BaseModel):
     candidate_id: str
     construct_id: str
     condition_id: str
-    phi: float = Field(ge=0, le=1)
+    phi: float = Field(ge=0, lt=1)
     enzyme_distribution: dict[str, dict[str, float]]
+    metabolite_partition_coefficients: dict[str, float] = Field(default_factory=dict)
     binding_recruited_fraction: dict[str, float] = Field(default_factory=dict)
     site_occupancy: dict[str, float] = Field(default_factory=dict)
     parameter_ids: list[str] = Field(default_factory=list)
@@ -117,6 +118,8 @@ class M4ReactionPrediction(ScientificResult):
     candidate_context: M4CandidateContext | None = None
     simulation_inputs: dict[str, Any] = Field(default_factory=dict)
     recommendation_evidence: list[str] = Field(default_factory=list)
+    flux_integrals: dict[str, float] = Field(default_factory=dict)
+    mechanistic_diagnostics: dict[str, float] = Field(default_factory=dict)
     notes: str = ""
 
 

@@ -1,0 +1,55 @@
+# Template only: local reaction CSV and author-native inputs are Git-ignored.
+run:
+  id: galatea-author-native-sensitivity-template
+  output_dir: outputs
+execution:
+  mode: demo
+  require_provenance: true
+  allow_assumptions: false
+inputs:
+  protein_fasta: ../examples/data/proteins.fasta
+  enzymes:
+    - id: OC
+      protein_id: OC
+      reaction_role: oxidative_cyclase
+    - id: DMT
+      protein_id: DMT
+      reaction_role: methyltransferase
+  scaffolds:
+    - id: FTH1
+      description: Ferritin scaffold
+      oligomeric_state: 24
+  linkers:
+    - id: representative_linker
+      sequence: GGGGSGGGGSGGGGS
+  constructs:
+    - id: representative_construct
+      components: [FTH1, representative_linker]
+      linker_ids: [representative_linker]
+      scaffold_id: FTH1
+stages:
+  m3_concentration:
+    recruitment_mode: effective_ratio
+    slot_ratio_sh3_to_pdz: 1.0
+    total_recruited_fraction: 0.5
+    recruitment_bias_oc_vs_dmt: 1.0
+    author_native_inputs:
+      ptr_scale: 0.01
+      pt_scale: 0.01
+      oc_scale: 0.01
+      dmt_scale: 0.01
+      source: published_author_model
+  m4_reaction:
+    network_mode: galatea_full_competitive
+    scenario_mode: galatea_spatial
+    unit_mode: author_native_sensitivity
+    author_native_time_label: author_native_day_axis
+    t_end: 5.0
+    reaction_network_file: ../data/galatea_m3_m4_inputs/reaction_network_author_native.csv
+    full_network_initial_state:
+      concentration_unit: author_native
+      intracellular: {"8": 0.000074, "9": 0.0, "10": 0.0, "11": 0.0, "12": 0.0, "13": 0.0, "14": 0.0, "15": 0.0}
+      extracellular: {"8": 0.0, "9": 0.0, "10": 0.0, "11": 0.0, "12": 0.0, "13": 0.0, "14": 0.0, "15": 0.0}
+    transport_enabled: false
+# Required reviewed/dimensionless Registry records: phi and partition_x8...partition_x15.
+# No physical abundance, kcat, km, or transport_rate ParameterRecord is read on this path.

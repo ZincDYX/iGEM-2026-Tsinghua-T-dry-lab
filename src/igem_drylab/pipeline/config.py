@@ -120,10 +120,35 @@ class M2Config(StrictScientificConfig):
     structure_metrics_file: Path | None = None
 
 
+class AuthorNativeEnzymeScales(StrictScientificConfig):
+    """Explicit nonphysical author-model enzyme scales for sensitivity runs."""
+
+    ptr_scale: float = Field(ge=0)
+    pt_scale: float = Field(ge=0)
+    oc_scale: float = Field(ge=0)
+    dmt_scale: float = Field(ge=0)
+    source: Literal["published_author_model", "explicit_sensitivity_input"] = "published_author_model"
+    interpretation: Literal["relative_enzyme_scale_not_measured_abundance"] = "relative_enzyme_scale_not_measured_abundance"
+
+
 class M3Config(StrictScientificConfig):
     binding_model: Literal["independent", "hill"] = "independent"
     hill_coefficient: float | None = Field(default=None, gt=0)
     recruitment: list["RecruitmentConfig"] = Field(default_factory=list)
+    recruitment_mode: Literal["finite_site", "effective_ratio"] = "finite_site"
+    slot_ratio_sh3_to_pdz: float | None = Field(default=None, ge=0)
+    total_recruited_fraction: float | None = Field(default=None, ge=0, le=1)
+    recruitment_bias_oc_vs_dmt: float = Field(default=1.0, ge=0)
+    ptr_pt_phase_handling: Literal["dilute_only", "homogeneous_kp_1"] = "dilute_only"
+    author_native_inputs: AuthorNativeEnzymeScales | None = None
+
+    @model_validator(mode="after")
+    def _effective_ratio_contract(self) -> "M3Config":
+        if self.recruitment_mode == "effective_ratio" and (
+            self.slot_ratio_sh3_to_pdz is None or self.total_recruited_fraction is None
+        ):
+            raise ValueError("effective_ratio_requires_slot_ratio_and_total_recruited_fraction")
+        return self
 
 
 class RecruitmentConfig(StrictScientificConfig):
@@ -146,6 +171,23 @@ class InitialStateConfig(StrictScientificConfig):
         return self.x9, self.x10, self.x11, self.x13, self.x15
 
 
+class FullNetworkInitialStateConfig(StrictScientificConfig):
+    """Explicit 8--15 state for the audited full Galatea network."""
+
+    concentration_unit: Literal["uM", "author_native"] = "uM"
+    intracellular: dict[str, float]
+    extracellular: dict[str, float] = Field(default_factory=lambda: {str(index): 0.0 for index in range(8, 16)})
+
+    @model_validator(mode="after")
+    def _complete_nonnegative_states(self) -> "FullNetworkInitialStateConfig":
+        required = {str(index) for index in range(8, 16)}
+        if set(self.intracellular) != required or set(self.extracellular) != required:
+            raise ValueError("full_network_initial_state_requires_compounds_8_to_15")
+        if any(value < 0 for value in [*self.intracellular.values(), *self.extracellular.values()]):
+            raise ValueError("full_network_initial_state_must_be_nonnegative")
+        return self
+
+
 class InductionGateConfig(StrictScientificConfig):
     on_time: float = Field(ge=0)
     off_time: float | None = Field(default=None, gt=0)
@@ -153,7 +195,7 @@ class InductionGateConfig(StrictScientificConfig):
     induced: float = Field(default=1, ge=0)
     mode: Literal["step", "sigmoid"] = "step"
     transition_width: float = Field(default=0.25, gt=0)
-    time_unit: Literal["h"] = "h"
+    time_unit: Literal["h", "author_native_day_axis"] = "h"
 
     @model_validator(mode="after")
     def _validate_interval(self) -> "InductionGateConfig":
@@ -166,6 +208,8 @@ class M4Config(StrictScientificConfig):
     target_product: str = "glabridin"
     t_end: float = Field(default=24.0, gt=0)
     initial_state: InitialStateConfig | None = None
+    full_network_initial_state: FullNetworkInitialStateConfig | None = None
+    reaction_network_file: Path | None = None
     pt_gate: InductionGateConfig | None = None
     oc_gate: InductionGateConfig | None = None
     dmt_gate: InductionGateConfig | None = None
@@ -175,6 +219,55 @@ class M4Config(StrictScientificConfig):
     min_15_improvement: float = Field(default=0, ge=-1)
     min_productivity: float = Field(default=0, ge=0)
     enable_degradation: bool = False
+    # The legacy reduced kernel remains for existing projects. New Galatea work
+    # must explicitly opt into the audited full network rather than receiving a
+    # silent interpretation of legacy five-state inputs.
+    network_mode: Literal["legacy_reduced", "galatea_full_competitive", "published_reference"] = "legacy_reduced"
+    scenario_mode: Literal[
+        "published_reference", "homogeneous_constitutive", "homogeneous_published_like_temporal",
+        "galatea_spatial", "galatea_spatiotemporal_ablation"
+    ] = "homogeneous_constitutive"
+    unit_mode: Literal["physical", "author_native_sensitivity"] = "physical"
+    author_native_time_label: Literal["author_native_day_axis"] = "author_native_day_axis"
+    activity_mode: Literal["unity_assumption", "sensitivity_parameters"] = "unity_assumption"
+    transport_access: Literal["dilute_phase", "cell_average"] = "dilute_phase"
+    transport_enabled: bool = False
+    transport_rate_parameter: str | None = None
+    transport_outside_over_inside: dict[str, float] = Field(default_factory=lambda: {str(index): 0.0 for index in range(8, 16)})
+
+    @model_validator(mode="after")
+    def _scenario_contract(self) -> "M4Config":
+        if self.network_mode == "published_reference" and self.scenario_mode != "published_reference":
+            raise ValueError("published_reference_network_requires_published_reference_scenario")
+        if self.scenario_mode == "published_reference" and self.network_mode != "published_reference":
+            raise ValueError("published_reference_scenario_requires_published_reference_network")
+        if self.network_mode == "legacy_reduced" and self.scenario_mode != "homogeneous_constitutive":
+            raise ValueError("legacy_reduced_supports_only_homogeneous_constitutive")
+        if self.network_mode == "galatea_full_competitive" and self.scenario_mode == "published_reference":
+            raise ValueError("full_network_cannot_route_to_published_reference")
+        if self.scenario_mode == "galatea_spatial" and self.dmt_gate is not None:
+            raise ValueError("galatea_spatial_requires_constitutive_dmt_without_a_temporal_gate")
+        if self.network_mode == "galatea_full_competitive" and self.full_network_initial_state is None:
+            raise ValueError("full_network_requires_explicit_full_network_initial_state")
+        if self.network_mode == "galatea_full_competitive" and self.reaction_network_file is None:
+            raise ValueError("full_network_requires_reaction_network_file")
+        if self.network_mode == "galatea_full_competitive" and self.full_network_initial_state is not None:
+            expected = "author_native" if self.unit_mode == "author_native_sensitivity" else "uM"
+            if self.full_network_initial_state.concentration_unit != expected:
+                raise ValueError("full_network_initial_state_unit_must_match_m4_unit_mode")
+        if self.unit_mode == "author_native_sensitivity" and self.network_mode != "galatea_full_competitive":
+            raise ValueError("author_native_sensitivity_requires_galatea_full_competitive_network")
+        if self.unit_mode == "author_native_sensitivity" and self.transport_enabled:
+            raise ValueError("author_native_transport_is_not_supported; disable_transport")
+        if self.unit_mode == "author_native_sensitivity":
+            for gate in (self.pt_gate, self.oc_gate, self.dmt_gate):
+                if gate is not None and gate.time_unit != "author_native_day_axis":
+                    raise ValueError("author_native_sensitivity_gate_requires_author_native_day_axis")
+        if self.scenario_mode == "homogeneous_published_like_temporal" and self.dmt_gate is None:
+            raise ValueError("homogeneous_published_like_temporal_requires_dmt_gate")
+        if set(self.transport_outside_over_inside) != {str(index) for index in range(8, 16)} or any(value < 0 for value in self.transport_outside_over_inside.values()):
+            raise ValueError("transport_outside_over_inside_requires_nonnegative_compounds_8_to_15")
+        return self
 
 
 def canonical_m4_condition_id(config: M4Config) -> str | None:
@@ -247,6 +340,11 @@ class ProjectConfig(StrictScientificConfig):
             if any(item not in enzyme_ids for item in construct.enzyme_ids): raise ValueError("construct_references_unknown_enzyme")
         if self.execution.mode == "real" and self.stages.m4_reaction.condition_id is None and any((self.stages.m4_reaction.initial_state, self.stages.m4_reaction.pt_gate, self.stages.m4_reaction.oc_gate, self.stages.m4_reaction.dmt_gate)):
             raise ValueError("real_mode_requires_explicit_condition_id")
+        if self.stages.m4_reaction.unit_mode == "author_native_sensitivity":
+            if self.stages.m3_concentration.recruitment_mode != "effective_ratio":
+                raise ValueError("author_native_sensitivity_requires_effective_ratio_m3")
+            if self.stages.m3_concentration.author_native_inputs is None:
+                raise ValueError("author_native_sensitivity_requires_explicit_author_native_enzyme_scales")
         return self
 
 
@@ -276,12 +374,14 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         config.stages.m2_fusion.structure_metrics_file,
         base_dir,
     )  # type: ignore[assignment]
+    config.stages.m4_reaction.reaction_network_file = _resolve_path(config.stages.m4_reaction.reaction_network_file, base_dir)  # type: ignore[assignment]
     config.stages.m5_feedback.wetlab_results_file = _resolve_path(config.stages.m5_feedback.wetlab_results_file, base_dir)  # type: ignore[assignment]
     if config.execution.mode == "real":
         required_files = [config.inputs.protein_fasta]
         required_files.extend(item.sdf for item in config.inputs.ligands if item.sdf is not None)
         required_files.extend(item.structure_pdb for item in [*config.inputs.enzymes, *config.inputs.scaffolds] if item.structure_pdb is not None)
         required_files.extend([config.stages.m2_fusion.structure_metrics_file, config.stages.m5_feedback.wetlab_results_file])
+        required_files.append(config.stages.m4_reaction.reaction_network_file)
         missing = [str(item) for item in required_files if item is not None and not item.exists()]
         if missing:
             raise ValueError(f"real_mode_references_missing_file:{','.join(missing)}")

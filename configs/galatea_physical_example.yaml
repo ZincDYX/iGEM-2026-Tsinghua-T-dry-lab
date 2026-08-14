@@ -1,0 +1,48 @@
+# Template only: fill reviewed physical records before a real production run.
+run:
+  id: galatea-physical-template
+  output_dir: outputs
+execution:
+  mode: demo
+  require_provenance: true
+  allow_assumptions: false
+inputs:
+  protein_fasta: ../examples/data/proteins.fasta
+  enzymes:
+    - id: OC
+      protein_id: OC
+      reaction_role: oxidative_cyclase
+    - id: DMT
+      protein_id: DMT
+      reaction_role: methyltransferase
+  scaffolds:
+    - id: FTH1
+      description: Ferritin scaffold
+      oligomeric_state: 24
+  linkers:
+    - id: representative_linker
+      sequence: GGGGSGGGGSGGGGS
+  constructs:
+    - id: representative_construct
+      components: [FTH1, representative_linker]
+      linker_ids: [representative_linker]
+      scaffold_id: FTH1
+stages:
+  m3_concentration:
+    recruitment_mode: effective_ratio
+    slot_ratio_sh3_to_pdz: 1.0
+    total_recruited_fraction: 0.5
+    recruitment_bias_oc_vs_dmt: 1.0
+  m4_reaction:
+    network_mode: galatea_full_competitive
+    scenario_mode: galatea_spatial
+    unit_mode: physical
+    t_end: 24.0
+    reaction_network_file: ../data/galatea_m3_m4_inputs/reaction_network_author_native.csv
+    full_network_initial_state:
+      concentration_unit: uM
+      intracellular: {"8": 1.0, "9": 0.0, "10": 0.0, "11": 0.0, "12": 0.0, "13": 0.0, "14": 0.0, "15": 0.0}
+      extracellular: {"8": 0.0, "9": 0.0, "10": 0.0, "11": 0.0, "12": 0.0, "13": 0.0, "14": 0.0, "15": 0.0}
+    transport_enabled: false
+# Required reviewed physical records: PTR/PT/OC/DMT abundance (uM), kcat_r1...r10 (1/h),
+# km_r1...r10 (uM), phi and partition_x8...partition_x15 (dimensionless).

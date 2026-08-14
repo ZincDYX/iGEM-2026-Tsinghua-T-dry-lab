@@ -47,6 +47,54 @@ def m3_requirements() -> list[ParameterRequirement]:
     ]
 
 
+def m3_effective_ratio_requirements() -> list[ParameterRequirement]:
+    """Requirements for the explicit Galatea engineering-ratio M3 mode."""
+    return [
+        _requirement("phi", "phi"),
+        *[_requirement(f"{enzyme}_total", "abundance", enzyme_id=enzyme.upper()) for enzyme in ("ptr", "pt", "oc", "dmt")],
+        *[_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")],
+    ]
+
+
+def author_native_m3_effective_ratio_requirements() -> list[ParameterRequirement]:
+    """Only dimensionless M3 values resolved from Registry in author-native mode."""
+    return [
+        _requirement("phi", "phi"),
+        *[_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")],
+    ]
+
+
+def author_native_m4_sensitivity_requirements(*, include_activity: bool = False) -> list[ParameterRequirement]:
+    """Author-native kinetics come from the cited reaction CSV, never Registry."""
+    if not include_activity:
+        return []
+    return [
+        _requirement(f"activity_{phase}_{enzyme.lower()}", "activity_ratio", enzyme_id=enzyme, phase=phase)
+        for phase in ("dense", "dilute")
+        for enzyme in ("PTR", "PT", "OC", "DMT")
+    ]
+
+
+def full_m4_kinetic_requirements(*, include_transport: bool = False, include_activity: bool = False) -> list[ParameterRequirement]:
+    """Full ten-reaction kinetics; M3 owns phase partition and enzyme distributions."""
+    mapping = (
+        ("r1", "PTR", "8", "9"), ("r2", "PT", "9", "10"), ("r3", "OC", "10", "11"),
+        ("r4", "DMT", "8", "12"), ("r5", "DMT", "9", "13"), ("r6", "DMT", "10", "14"),
+        ("r7", "DMT", "11", "15"), ("r8", "PTR", "12", "13"), ("r9", "PT", "13", "14"),
+        ("r10", "OC", "14", "15"),
+    )
+    requirements = [
+        item
+        for name, enzyme, substrate, product in mapping
+        for item in (_requirement(f"kcat_{name}", "kcat", enzyme_id=enzyme, substrate_id=substrate, product_id=product), _requirement(f"km_{name}", "km", enzyme_id=enzyme, substrate_id=substrate))
+    ]
+    if include_activity:
+        requirements.extend(_requirement(f"activity_{phase}_{enzyme.lower()}", "activity_ratio", enzyme_id=enzyme, phase=phase) for phase in ("dense", "dilute") for enzyme in ("PTR", "PT", "OC", "DMT"))
+    if include_transport:
+        requirements.append(_requirement("transport_rate", "export_rate"))
+    return requirements
+
+
 def m4_requirements(*, include_degradation: bool = False) -> list[ParameterRequirement]:
     requirements = [
         *m3_requirements(),
@@ -93,9 +141,22 @@ def recruitment_requirements(recruitment: object, *, binding_model: str) -> list
 def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
     """Project-aware, single catalog used by every production entry point."""
     if stage == "m3":
+        author_native = getattr(project.stages.m4_reaction, "unit_mode", "physical") == "author_native_sensitivity"
+        if getattr(project.stages.m3_concentration, "recruitment_mode", "finite_site") == "effective_ratio":
+            return author_native_m3_effective_ratio_requirements() if author_native else m3_effective_ratio_requirements()
         core = m3_requirements()
+        if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") == "galatea_full_competitive":
+            core = core + [_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")]
         auxiliary = [item for recruitment in getattr(project.stages.m3_concentration, "recruitment", []) for item in recruitment_requirements(recruitment, binding_model=project.stages.m3_concentration.binding_model)]
         return core + auxiliary if include_auxiliary else core
     if stage == "m4":
+        m4 = project.stages.m4_reaction
+        if getattr(m4, "network_mode", "legacy_reduced") == "galatea_full_competitive":
+            if m4.unit_mode == "author_native_sensitivity":
+                return author_native_m4_sensitivity_requirements(include_activity=m4.activity_mode == "sensitivity_parameters")
+            return full_m4_kinetic_requirements(
+                include_transport=m4.transport_enabled,
+                include_activity=m4.activity_mode == "sensitivity_parameters",
+            )
         return m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation)
     return []

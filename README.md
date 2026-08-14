@@ -35,7 +35,7 @@ This project is designed to be useful before complete project-specific measureme
 - `real` mode returns `insufficient_data` when reviewed parameters, identities, units, or conditions are missing.
 - Structure confidence, docking affinity, LLPS scores, and retrieval rank are bounded evidence or negative screens. They are not enzyme activities or validated kinetic constants.
 - Literature extraction and AI synthesis produce evidence for review; only a human-approved `ParameterRecord` can enter production M3/M4 calculations.
-- M4 concentrations use `uM`, time uses `h`, and rates use `1/h`. Incompatible or missing units are rejected rather than guessed.
+- Physical-unit M4 production mode uses `uM`, `h`, and `1/h`; incompatible or missing units are rejected rather than guessed. The isolated `author_native_sensitivity` mode preserves Zhang author-native numbers only for relative/normalized sensitivity analysis and never labels its values as physical concentration, rate, time, or titer.
 
 See [scientific_model_contract.md](docs/scientific_model_contract.md) for the complete model and data contract.
 
@@ -140,7 +140,9 @@ igem-drylab pipeline validate configs/m1_m4_real_scoring_example.yaml
 igem-drylab pipeline run configs/m1_m4_real_scoring_example.yaml
 ```
 
-Production M3 supplies candidate-specific, mass-conserving enzyme distributions to M4. Registry resolution follows exact `construct + condition`, construct-only, condition-only, then global scope. Recruitment, docking, and structural scores are never multiplied into `kcat`.
+Production Galatea M3 supplies candidate-specific, mass-conserving enzyme dense/dilute distributions together with `phi` and metabolite Kp8--Kp15 to the full 8-compound/10-reaction M4 route. The legacy reduced kernel remains only as a compatibility path. Registry resolution follows exact `construct + condition`, construct-only, condition-only, then global scope. Recruitment, docking, and structural scores are never multiplied into `kcat`.
+
+The primary Galatea mechanism is recruitment stoichiometry plus LLPS partitioning; delayed DMT is only a published-like temporal control or ablation. `author_native_sensitivity` is a separate nonphysical path: author-native kinetics come only from the cited reaction CSV and enzyme scales come only from an explicit sensitivity block, never from physical Registry records.
 
 ## Repository layout
 
