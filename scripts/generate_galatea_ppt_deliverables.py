@@ -77,10 +77,22 @@ def m3_figure(context_rows: list[dict[str, str]], output: Path) -> list[dict]:
     return summary
 
 
-def m4_ablation(one_factor_phi: list[dict[str, str]], output: Path) -> list[dict]:
+def find_h0(results_root: Path) -> dict[str, str]:
+    """Load H0 from an existing prior M4 result, never from a numeric literal."""
+    matches = []
+    for path in results_root.parent.rglob("m4_condition_summary.csv"):
+        for row in read_csv(path):
+            if row.get("scenario") == "homogeneous_constitutive":
+                matches.append((path, row))
+    if not matches:
+        raise FileNotFoundError("Could not locate an existing homogeneous_constitutive M4 summary for the H0 ablation control.")
+    path, row = matches[0]
+    return {"condition": "H0", "branch_9_to_13_fraction": value(row, "branch_9_to_13_fraction"), "target_yield_fraction": value(row, "target_yield_fraction"), "source": str(path.relative_to(results_root.parent))}
+
+
+def m4_ablation(one_factor_phi: list[dict[str, str]], h0: dict[str, str], output: Path) -> list[dict]:
     neutral = next(row for row in one_factor_phi if row["label"] == "neutral_Kp" and value(row, "value") == .005)
     directional = next(row for row in one_factor_phi if row["label"] == "directional_Kp" and value(row, "value") == .005)
-    h0 = {"condition": "H0", "branch_9_to_13_fraction": .8627665417478687, "target_yield_fraction": .6278188230677045, "source": "paired robustness report H0 reference"}
     selected = [h0, {"condition": "Spatial neutral", **neutral, "source": "one_factor_phi.csv; phi=0.005"}, {"condition": "Spatial directional", **directional, "source": "one_factor_phi.csv; phi=0.005"}]
     summary = [{"condition": item["condition"], "branch_9_to_13_fraction": float(item["branch_9_to_13_fraction"]), "delta_target_yield_fraction_vs_H0": float(item["target_yield_fraction"]) - h0["target_yield_fraction"], "source": item["source"]} for item in selected]
     labels = [row["condition"] for row in summary]
@@ -184,7 +196,7 @@ def main() -> None:
     if missing: raise FileNotFoundError("Missing completed result files: " + ", ".join(missing))
     plt.rcParams.update({"font.family": "DejaVu Sans", "axes.titleweight": "bold"})
     m3 = m3_figure(read_csv(root / "m3_recruitment_context.csv"), root)
-    m4 = m4_ablation(read_csv(root / "one_factor_phi.csv"), root)
+    m4 = m4_ablation(read_csv(root / "one_factor_phi.csv"), find_h0(root), root)
     robustness = robustness_figure(read_csv(root / "paired_kp_results.csv"), read_csv(root / "kp_spearman_sensitivity.csv"), root)
     priorities = closed_loop_figure(root)
     write_csv(root / "ppt_m3_summary.csv", m3)
