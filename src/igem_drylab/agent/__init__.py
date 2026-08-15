@@ -11,6 +11,9 @@ from .human import ApprovalDecision, HumanApprovalGate
 from .hypothesis import HypothesisRecord
 from .memory import AgentMemory, MemoryRecord
 from .llm_planner import OpenAICompatiblePlanningBackend
+from .hybrid_planner import HybridLLMPlanningBackend
+from .decision import PlanningDecision
+from .plan_compiler import DeterministicPlanCompiler
 from .models import AgentTask, AgentTrace, Plan, PlanStep, ResultBinding, ResultCondition
 from .observability import EventLogger
 from .reflection import ReflectionEvaluator, ReflectionReport
@@ -34,6 +37,9 @@ __all__ = [
     "HypothesisRecord",
     "MemoryRecord",
     "OpenAICompatiblePlanningBackend",
+    "HybridLLMPlanningBackend",
+    "PlanningDecision",
+    "DeterministicPlanCompiler",
     "Plan",
     "PlanStep",
     "ResultBinding",

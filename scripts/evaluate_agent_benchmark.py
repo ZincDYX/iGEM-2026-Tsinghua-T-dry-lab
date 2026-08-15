@@ -53,7 +53,7 @@ def run_case(case: dict[str, Any], *, output: Path, planner: str, mode: str, api
     task = public_task(case, output / "artifacts")
     task_path = task_dir / f"{case['case_id']}.json"; task_path.write_text(json.dumps(task, ensure_ascii=False, indent=2), encoding="utf-8")
     command = ["igem-drylab", "agent", mode, str(task_path), "--planner", planner, "--memory-path", str(output / "memory" / f"{case['case_id']}.jsonl")]
-    if planner == "llm":
+    if planner in {"llm", "hybrid"}:
         if api_base: command.extend(["--api-base", api_base])
         if model: command.extend(["--model", model])
     completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
@@ -181,17 +181,21 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--benchmark", type=Path, default=Path("benchmarks/agent_orchestration_v1"))
     parser.add_argument("--output", type=Path, default=Path("results/agent_benchmark_v1/rule_based"))
-    parser.add_argument("--planner", choices=("rule-based", "llm"), default="rule-based")
+    parser.add_argument("--planner", choices=("rule-based", "llm", "hybrid"), default="rule-based")
     parser.add_argument("--mode", choices=("dry-run", "run"), default="dry-run")
     parser.add_argument("--api-base")
     parser.add_argument("--model")
     parser.add_argument("--integration-only", action="store_true")
+    parser.add_argument("--case-ids", help="Comma-separated frozen case IDs to execute.")
     parser.add_argument("--score-only", action="store_true", help="Re-score saved raw_results.jsonl without invoking the Agent.")
     parser.add_argument("--jobs", type=int, default=1, help="Independent benchmark cases to invoke concurrently.")
     args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
     cases = load_jsonl(args.benchmark / "benchmark_cases.jsonl")
     gold = {item["case_id"]: item for item in json.loads((args.benchmark / "gold_decisions.json").read_text(encoding="utf-8"))}
     if args.integration_only: cases = [case for case in cases if case["case_id"] in INTEGRATION_CASES]
+    if args.case_ids:
+        selected = {item.strip() for item in args.case_ids.split(",") if item.strip()}
+        cases = [case for case in cases if case["case_id"] in selected]
     if args.score_only:
         raw_rows = load_jsonl(args.output / "raw_results.jsonl")
         expected_ids = [case["case_id"] for case in cases]

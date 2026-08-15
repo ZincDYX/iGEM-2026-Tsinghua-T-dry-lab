@@ -180,6 +180,8 @@ python scripts/render_agent_benchmark_v2_report.py
 
 An accepted LLM plan is still subject to the normal policy, budget, artifact, and human-approval gates. Passing this frozen benchmark indicates project-specific orchestration behavior only—not general scientific intelligence or biological prediction accuracy.
 
+The recommended v3 hybrid route further separates responsibilities: `LLM → PlanningDecision → DeterministicPlanCompiler → Policy/approval → deterministic M1–M5 tools`. Direct LLM DAG generation remains available as an ablation through `--planner llm`; the hybrid route is `--planner hybrid`. Qwen is optional and configured only through local `QWEN_API_KEY`, `QWEN_API_BASE`, and `QWEN_MODEL` variables.
+
 ## Configuration and secrets
 
 All project inputs should be versioned configuration, reviewed evidence, or explicit command arguments. API credentials must only be environment variables.

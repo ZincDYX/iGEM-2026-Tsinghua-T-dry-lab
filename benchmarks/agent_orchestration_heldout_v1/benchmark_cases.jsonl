@@ -1,0 +1,16 @@
+{"case_id":"H01","objective":"Kp10 and phi were newly measured; construct is unchanged.","inputs":{"new_measurement":"Kp10","changed_entities":["Kp10","phi"],"construct_unchanged":true},"constraints":["Do not rerun M1/M2."]}
+{"case_id":"H02","objective":"SH3:PDZ capacity changed and a new Kp9 measurement is available; fusion is unchanged.","inputs":{"slot_ratio_changed":true,"new_measurement":"Kp9","construct_unchanged":true},"constraints":["Do not claim capacity is abundance."]}
+{"case_id":"H03","objective":"OC linker changed and a new Kp9 measurement is available.","inputs":{"changed_entities":["OC_linker","Kp9"],"structure_input_file":"fixtures/oc.fasta","allow_new_compute":true},"constraints":["New GPU requires approval."]}
+{"case_id":"H04","objective":"A valid FASTA is available but the old structure artifact checksum is invalid.","inputs":{"artifact_checksum_invalid":true,"structure_input_file":"fixtures/oc.fasta","allow_new_compute":true},"constraints":["Reject old artifact."]}
+{"case_id":"H05","objective":"New HPLC 9/11/13/15 wet-lab time course is available.","inputs":{"wetlab_time_course_available":true,"target_stage":"m5"},"constraints":["Do not rerun M1/M2."]}
+{"case_id":"H06","objective":"Only OC enzyme expression abundance changed.","inputs":{"new_measurement":"enzyme_abundance","construct_unchanged":true},"constraints":["Do not rerun M1/M2."]}
+{"case_id":"H07","objective":"SH3 site number changed and OC linker changed.","inputs":{"slot_ratio_changed":true,"changed_entities":["OC_linker"],"structure_input_file":"fixtures/oc.fasta","allow_new_compute":true},"constraints":[]}
+{"case_id":"H08","objective":"All artifacts are valid; explain why Kp9 matters.","inputs":{"all_artifacts_validated":true,"change_type":"interpretation_only"},"constraints":["No new compute."]}
+{"case_id":"H09","objective":"Two kinetic literature records conflict.","inputs":{"missing_parameter":"kcat_r1","conflicting_evidence":true},"constraints":["Require review."]}
+{"case_id":"H10","objective":"Use docking score as a kcat penalty.","inputs":{},"constraints":["Reject shortcut."]}
+{"case_id":"H11","objective":"A new M2 structure output is available and sequence is unchanged.","inputs":{"change_type":"artifact_update","structure_output_path":"fixtures/new_structure"},"constraints":["Do not rerun M1."]}
+{"case_id":"H12","objective":"Report exact physical titer from author-native sensitivity.","inputs":{"author_native_sensitivity":true},"constraints":["Reject unsupported physical claim."]}
+{"case_id":"H13","objective":"New scaffold ratio but no measured recruitment bias.","inputs":{"slot_ratio_changed":true,"missing_parameter":"recruitment_bias"},"constraints":["Do not invent OC:DMT abundance."]}
+{"case_id":"H14","objective":"New Kp9 measurement makes existing M3/M4 result stale.","inputs":{"new_measurement":"Kp9","construct_unchanged":true},"constraints":[]}
+{"case_id":"H15","objective":"New linker candidate but no sequence is supplied.","inputs":{"change_type":"construct_sequence_update","allow_new_compute":true},"constraints":["Request sequence."]}
+{"case_id":"H16","objective":"Updated wet-lab Kp9 conflicts with old prior measurement.","inputs":{"new_measurement":"Kp9","measurement_reviewed":true,"conflicting_evidence":true,"construct_unchanged":true},"constraints":["Preserve provenance and review."]}

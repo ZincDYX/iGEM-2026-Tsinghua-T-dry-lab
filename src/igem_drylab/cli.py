@@ -7,7 +7,7 @@ import typer
 
 from igem_drylab.literature import answer_question, build_prompt, load_schema
 from igem_drylab.literature.qa_server import serve as serve_literature_qa
-from igem_drylab.agent import AgentRuntime, AgentTask, OpenAICompatiblePlanningBackend
+from igem_drylab.agent import AgentRuntime, AgentTask, OpenAICompatiblePlanningBackend, HybridLLMPlanningBackend
 from igem_drylab.agent.env import load_local_env
 from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.icl import load_icl_examples
@@ -334,14 +334,16 @@ def _agent_runtime(
 ) -> AgentRuntime:
     if planner == "rule-based":
         return AgentRuntime(memory_path=memory_path)
-    if planner != "llm":
-        raise typer.BadParameter("Planner must be 'rule-based' or 'llm'")
+    if planner not in {"llm", "hybrid"}:
+        raise typer.BadParameter("Planner must be 'rule-based', 'llm', or 'hybrid'")
     import os
 
     load_local_env()
-    resolved_base = api_base or os.getenv("DEEPSEEK_API_BASE") or "https://api.deepseek.com/chat/completions"
-    resolved_model = model or os.getenv("DEEPSEEK_MODEL") or "deepseek-chat"
-    backend = OpenAICompatiblePlanningBackend.from_environment(
+    prefix = "QWEN" if api_key_env.startswith("QWEN_") else "DEEPSEEK"
+    resolved_base = api_base or os.getenv(f"{prefix}_API_BASE") or "https://api.deepseek.com/chat/completions"
+    resolved_model = model or os.getenv(f"{prefix}_MODEL") or ("qwen3-235b-a22b-instruct-2507" if prefix == "QWEN" else "deepseek-chat")
+    backend_class = HybridLLMPlanningBackend if planner == "hybrid" else OpenAICompatiblePlanningBackend
+    backend = backend_class.from_environment(
         api_base=resolved_base,
         model=resolved_model,
         api_key_env=api_key_env,
@@ -353,7 +355,7 @@ def _agent_runtime(
 def agent_dry_run(
     task_file: Path,
     memory_path: Path = typer.Option(Path("outputs/agent_memory/events.jsonl"), "--memory-path"),
-    planner: str = typer.Option("rule-based", "--planner", help="rule-based (default) or llm"),
+    planner: str = typer.Option("rule-based", "--planner", help="rule-based (default), llm, or hybrid"),
     api_base: str | None = typer.Option(None, "--api-base", help="OpenAI-compatible /chat/completions URL"),
     model: str | None = typer.Option(None, "--model", help="Model name for --planner llm"),
     api_key_env: str = typer.Option("DEEPSEEK_API_KEY", "--api-key-env"),
@@ -367,7 +369,7 @@ def agent_dry_run(
 def agent_run(
     task_file: Path,
     memory_path: Path = typer.Option(Path("outputs/agent_memory/events.jsonl"), "--memory-path"),
-    planner: str = typer.Option("rule-based", "--planner", help="rule-based (default) or llm"),
+    planner: str = typer.Option("rule-based", "--planner", help="rule-based (default), llm, or hybrid"),
     api_base: str | None = typer.Option(None, "--api-base", help="OpenAI-compatible /chat/completions URL"),
     model: str | None = typer.Option(None, "--model", help="Model name for --planner llm"),
     api_key_env: str = typer.Option("DEEPSEEK_API_KEY", "--api-key-env"),

@@ -4,6 +4,9 @@ from igem_drylab.agent import AgentRuntime, AgentTask, ArtifactRecord, ArtifactS
 from igem_drylab.agent.context import ContextBundle
 from igem_drylab.agent.env import load_local_env
 from igem_drylab.agent.llm_planner import OpenAICompatiblePlanningBackend
+from igem_drylab.agent.hybrid_planner import HybridLLMPlanningBackend
+from igem_drylab.agent.plan_compiler import DeterministicPlanCompiler
+from igem_drylab.agent.decision import ArtifactAction, ChangeType, EvidenceAction, PlanningDecision, RequestedOutcome, Stage
 from igem_drylab.mcp import McpTool, McpToolResult, ToolRegistry
 
 
@@ -240,3 +243,23 @@ def test_llm_contract_uses_json_output_and_single_repair():
     plan = OpenAICompatiblePlanningBackend(client=RepairClient()).create_plan(task, ContextBundle(task=task, constraints=[], retrieved_memory=[], artifact_summaries=[], conflicts=[]), set())  # type: ignore[arg-type]
     assert plan.diagnostics["schema_valid_first_attempt"] is False
     assert plan.diagnostics["schema_valid_after_repair"] is True
+
+
+def test_compiler_unions_multiple_changes_without_duplicate_stages():
+    task = AgentTask(task_id="combined", objective="Linker and Kp changed", inputs={"structure_input_file": "x.fasta"})
+    decision = PlanningDecision(change_types=[ChangeType.construct_sequence_update, ChangeType.parameter_update], changed_entities=["OC_linker", "Kp9"], requested_outcome=RequestedOutcome.recompute, affected_stages=[Stage.m3, Stage.m4], artifact_action=ArtifactAction.recompute, evidence_action=EvidenceAction.use_existing, requires_human_review=False, requires_new_compute=True, rationale="Two changes require the earliest affected stage.")
+    plan = DeterministicPlanCompiler().compile(task, decision)
+    assert [step.step_id for step in plan.steps] == ["dispatch_m1", "dispatch_m2", "dispatch_m3", "dispatch_m4"]
+    assert plan.steps[1].resources == ["gpu"]
+
+
+def test_hybrid_planner_never_gives_llm_tool_names_or_dag_control():
+    class DecisionClient:
+        def complete_json(self, prompt: str, **kwargs):
+            assert "igem.pipeline.run_stage" not in prompt
+            assert kwargs["response_format"] == {"type": "json_object"}
+            return {"change_types": ["parameter_update"], "changed_entities": ["Kp9"], "requested_outcome": "recompute", "affected_stages": ["m3", "m4"], "artifact_action": "reuse", "missing_inputs": [], "evidence_action": "use_existing", "requires_human_review": False, "requires_new_compute": False, "scientific_constraints": ["do_not_rerun_unaffected_structural_stages"], "rationale": "Construct is unchanged."}
+    task = AgentTask(task_id="hybrid", objective="Kp9 updated", inputs={"new_measurement": "Kp9"})
+    plan = HybridLLMPlanningBackend(client=DecisionClient()).create_plan(task, ContextBundle(task=task, constraints=[], retrieved_memory=[], artifact_summaries=[], conflicts=[]), set())  # type: ignore[arg-type]
+    assert [step.step_id for step in plan.steps] == ["dispatch_m3", "dispatch_m4"]
+    assert plan.diagnostics["planning_decision"]["change_types"] == ["parameter_update"]
