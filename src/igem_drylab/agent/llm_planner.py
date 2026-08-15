@@ -65,7 +65,7 @@ class OpenAICompatiblePlanningBackend:
         }
         telemetry: dict[str, object] = {"api_call_succeeded": False, "json_parse_succeeded": False, "schema_valid_first_attempt": False, "schema_error": None, "repair_attempted": False, "schema_valid_after_repair": False, "response_format": "json_object", "structured_output_method": "OpenAI-compatible JSON Output"}
         try:
-            payload = self.client.complete_json(json.dumps(prompt, ensure_ascii=False), response_format={"type": "json_object"})
+            payload = self.client.complete_json(json.dumps(prompt, ensure_ascii=False), system_prompt="You are a conservative dry-lab execution planner. Return only JSON conforming to the supplied Plan schema; never invent scientific values or bypass approval/policy.", response_format={"type": "json_object"})
             telemetry["api_call_succeeded"] = telemetry["json_parse_succeeded"] = True
         except TypeError:  # Minimal test doubles predating the optional argument.
             payload = self.client.complete_json(json.dumps(prompt, ensure_ascii=False))
@@ -79,7 +79,7 @@ class OpenAICompatiblePlanningBackend:
         telemetry["repair_attempted"] = True
         repair = {"role": "Repair invalid plan JSON once. Return JSON only.", "invalid_json": payload, "validation_error": telemetry["schema_error"], "json_schema": schema, "rules": ["Use exact field names.", "Do not add facts, paths, parameter values, or benchmark expectations."]}
         try:
-            repaired = self.client.complete_json(json.dumps(repair, ensure_ascii=False), response_format={"type": "json_object"})
+            repaired = self.client.complete_json(json.dumps(repair, ensure_ascii=False), system_prompt="Repair the plan JSON once. Return only schema-valid JSON and do not add facts.", response_format={"type": "json_object"})
         except TypeError:
             repaired = self.client.complete_json(json.dumps(repair, ensure_ascii=False))
         telemetry["api_call_succeeded"] = telemetry["json_parse_succeeded"] = True

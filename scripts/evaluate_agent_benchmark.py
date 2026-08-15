@@ -67,6 +67,7 @@ def facts(trace: dict[str, Any] | None) -> dict[str, bool]:
     steps = (trace or {}).get("plan", {}).get("steps", [])
     names = {str(step.get("tool_name") or "") for step in steps}
     ids = {str(step.get("step_id") or "") for step in steps}
+    actions = {str(step.get("action_type") or "") for step in steps}
     text = " ".join(" ".join(str(step.get(key, "")) for key in ("objective", "rationale", "status")) for step in steps).lower()
     gpu = any("gpu" in step.get("resources", []) or float(step.get("estimated_gpu_minutes", 0)) >= 30 for step in steps)
     parsed_existing = any(step.get("step_id") == "parse_structure" and "run_colabfold" not in step.get("depends_on", []) for step in steps)
@@ -76,14 +77,14 @@ def facts(trace: dict[str, Any] | None) -> dict[str, bool]:
         "m3": any("m3" in item.lower() for item in names | ids),
         "m4": "igem.pipeline.run_stage" in names or "run_production_m4" in ids or "dispatch_m4" in ids,
         "m5": any("m5" in item.lower() for item in names | ids),
-        "reuse_artifact": parsed_existing or "reuse_validated_artifacts" in ids or ("score_docking" in ids and not any(item.startswith("run_vina_") for item in ids)),
+        "reuse_artifact": "reuse_artifact" in actions or parsed_existing or "reuse_validated_artifacts" in ids or ("score_docking" in ids and not any(item.startswith("run_vina_") for item in ids)),
         "new_gpu": gpu,
         "new_vina": any(item.startswith("run_vina_") for item in ids),
-        "resolve_evidence": "igem.parameters.resolve" in names or "igem.literature.qa" in names,
+        "resolve_evidence": "resolve_evidence" in actions or "igem.parameters.resolve" in names or "igem.literature.qa" in names,
         "registry": "igem.parameters.resolve" in names,
         "evidence": "igem.literature.qa" in names,
-        "human_review": "review_missing_parameters" in ids or any(step.get("status") == "waiting_approval" for step in steps),
-        "request_input": "collect_missing_inputs" in ids or any(step.get("status") == "blocked" for step in steps),
+        "human_review": "human_review" in actions or "review_missing_parameters" in ids or any(step.get("status") == "waiting_approval" for step in steps),
+        "request_input": bool(actions & {"request_input", "request_measurement"}) or "collect_missing_inputs" in ids or any(step.get("status") == "blocked" for step in steps),
         "approval": gpu or any(step.get("status") == "waiting_approval" for step in steps),
         "external_api": any("external_api" in step.get("resources", []) for step in steps),
         "no_action": "reuse_validated_artifacts" in ids,

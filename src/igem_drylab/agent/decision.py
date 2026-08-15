@@ -11,7 +11,7 @@ class ChangeType(StrEnum):
     scaffold_capacity_update = "scaffold_capacity_update"
     construct_sequence_update = "construct_sequence_update"
     fusion_architecture_update = "fusion_architecture_update"
-    wetlab_measurement_update = "wetlab_measurement_update"
+    timecourse_update = "timecourse_update"
     artifact_update = "artifact_update"
     interpretation_only = "interpretation_only"
     new_design_request = "new_design_request"
@@ -30,6 +30,10 @@ class EvidenceAction(StrEnum):
     none = "none"; use_existing = "use_existing"; search_local_evidence = "search_local_evidence"; request_measurement = "request_measurement"; human_review = "human_review"
 
 
+class MeasurementSource(StrEnum):
+    wetlab = "wetlab"; literature = "literature"; existing_artifact = "existing_artifact"; user_declared = "user_declared"; unknown = "unknown"
+
+
 class RequestedOutcome(StrEnum):
     recompute = "recompute"; calibrate = "calibrate"; interpret = "interpret"; design = "design"; validate = "validate"; resolve_missing_input = "resolve_missing_input"
 
@@ -44,13 +48,13 @@ class ScientificConstraint(StrEnum):
     invalid_artifact_never_reuse = "invalid_artifact_never_reuse"
 
 
-class PlanningDecision(BaseModel):
+class SemanticDecision(BaseModel):
     """LLM-proposed semantic interpretation, not an executable tool plan."""
     model_config = ConfigDict(extra="forbid")
     change_types: list[ChangeType] = Field(default_factory=list)
     changed_entities: list[str] = Field(default_factory=list)
+    measurement_source: MeasurementSource = MeasurementSource.unknown
     requested_outcome: RequestedOutcome
-    affected_stages: list[Stage] = Field(default_factory=list)
     artifact_action: ArtifactAction
     missing_inputs: list[str] = Field(default_factory=list)
     evidence_action: EvidenceAction
@@ -58,3 +62,8 @@ class PlanningDecision(BaseModel):
     requires_new_compute: bool
     scientific_constraints: list[ScientificConstraint] = Field(default_factory=list)
     rationale: str = Field(min_length=1)
+
+
+# Compatibility name for v3 callers.  It has v4 semantics and intentionally
+# no LLM-authoritative stage field.
+PlanningDecision = SemanticDecision

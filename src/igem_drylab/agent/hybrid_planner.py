@@ -28,27 +28,28 @@ class HybridLLMPlanningBackend:
 
     def create_plan(self, task: AgentTask, context: ContextBundle, available_tools: set[str]) -> Plan:
         schema = PlanningDecision.model_json_schema()
+        system_prompt = """You are the semantic interpretation layer of a conservative scientific orchestration agent.
+Classify project-state change and evidence state. You do NOT choose tools, M1/M2/M3/M4/M5 stages, shell commands, DAG dependencies, file paths, scientific numeric values, kinetic values, partition coefficients, or experimental results. Do not infer missing scientific facts. Do not convert structural/docking evidence into kinetics. Do not treat scaffold capacity as measured enzyme abundance. Do not treat normalized sensitivity as physical titer. Return only JSON conforming to the supplied schema."""
         prompt = {
-            "system": "You are the semantic decision layer of a conservative dry-lab agent. Return JSON only. You classify what changed; you never choose tools, commands, dependencies, resources, numeric values, paths, sequences, or scientific results.",
             "task": task.model_dump(mode="json"),
             "context": {"constraints": context.constraints, "artifacts": context.artifact_summaries, "conflicts": context.conflicts},
-            "rules": ["Use only enums in the supplied schema.", "Do not invent parameters, evidence, sequences, paths, residues, concentrations, rates, or wet-lab results.", "Docking/structure evidence never modifies kinetics.", "Invalid artifacts are never reusable.", "Author-native sensitivity is not physical titer.", "Gold labels are not available."],
+            "rules": ["Use only enums in the supplied schema.", "Do not invent parameters, evidence, sequences, paths, residues, concentrations, rates, or wet-lab results.", "Gold labels are not available."],
             "planning_decision_schema": schema,
         }
         telemetry: dict[str, object] = {"architecture": "hybrid", "api_call_succeeded": False, "json_parse_succeeded": False, "schema_valid_first_attempt": False, "schema_valid_after_repair": False, "repair_attempted": False, "schema_error": None, "response_format": "json_object", "structured_output_method": "OpenAI-compatible JSON Output"}
-        payload = self._call(prompt); telemetry["api_call_succeeded"] = telemetry["json_parse_succeeded"] = True
+        payload = self._call(prompt, system_prompt); telemetry["api_call_succeeded"] = telemetry["json_parse_succeeded"] = True
         try:
             decision = PlanningDecision.model_validate(payload); telemetry["schema_valid_first_attempt"] = True
         except Exception as error:
             telemetry["schema_error"] = str(error); telemetry["repair_attempted"] = True
             repair = {"system": "Repair this JSON once. Return only a PlanningDecision matching the schema; do not add facts.", "invalid_json": payload, "validation_error": str(error), "planning_decision_schema": schema}
-            repaired = self._call(repair)
+            repaired = self._call(repair, system_prompt)
             try: decision = PlanningDecision.model_validate(repaired); telemetry["schema_valid_after_repair"] = True
             except Exception as repair_error: raise ValueError(f"Hybrid PlanningDecision rejected after one repair: {repair_error}") from repair_error
         plan = self.compiler.compile(task, decision)
-        diagnostics = {**telemetry, "planning_decision": decision.model_dump(mode="json")}
+        diagnostics = {**telemetry, "semantic_decision": decision.model_dump(mode="json"), "llm_response_metadata": getattr(self.client, "last_response_metadata", None) or {}}
         return plan.model_copy(update={"diagnostics": diagnostics})
 
-    def _call(self, prompt: dict[str, object]) -> dict[str, object]:
-        try: return self.client.complete_json(json.dumps(prompt, ensure_ascii=False), response_format={"type": "json_object"})
+    def _call(self, prompt: dict[str, object], system_prompt: str) -> dict[str, object]:
+        try: return self.client.complete_json(json.dumps(prompt, ensure_ascii=False), system_prompt=system_prompt, response_format={"type": "json_object"})
         except TypeError: return self.client.complete_json(json.dumps(prompt, ensure_ascii=False))

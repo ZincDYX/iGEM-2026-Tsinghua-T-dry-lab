@@ -247,7 +247,7 @@ def test_llm_contract_uses_json_output_and_single_repair():
 
 def test_compiler_unions_multiple_changes_without_duplicate_stages():
     task = AgentTask(task_id="combined", objective="Linker and Kp changed", inputs={"structure_input_file": "x.fasta"})
-    decision = PlanningDecision(change_types=[ChangeType.construct_sequence_update, ChangeType.parameter_update], changed_entities=["OC_linker", "Kp9"], requested_outcome=RequestedOutcome.recompute, affected_stages=[Stage.m3, Stage.m4], artifact_action=ArtifactAction.recompute, evidence_action=EvidenceAction.use_existing, requires_human_review=False, requires_new_compute=True, rationale="Two changes require the earliest affected stage.")
+    decision = PlanningDecision(change_types=[ChangeType.construct_sequence_update, ChangeType.parameter_update], changed_entities=["OC_linker", "Kp9"], requested_outcome=RequestedOutcome.recompute, artifact_action=ArtifactAction.recompute, evidence_action=EvidenceAction.use_existing, requires_human_review=False, requires_new_compute=True, rationale="Two changes require the earliest affected stage.")
     plan = DeterministicPlanCompiler().compile(task, decision)
     assert [step.step_id for step in plan.steps] == ["dispatch_m1", "dispatch_m2", "dispatch_m3", "dispatch_m4"]
     assert plan.steps[1].resources == ["gpu"]
@@ -258,8 +258,16 @@ def test_hybrid_planner_never_gives_llm_tool_names_or_dag_control():
         def complete_json(self, prompt: str, **kwargs):
             assert "igem.pipeline.run_stage" not in prompt
             assert kwargs["response_format"] == {"type": "json_object"}
-            return {"change_types": ["parameter_update"], "changed_entities": ["Kp9"], "requested_outcome": "recompute", "affected_stages": ["m3", "m4"], "artifact_action": "reuse", "missing_inputs": [], "evidence_action": "use_existing", "requires_human_review": False, "requires_new_compute": False, "scientific_constraints": ["do_not_rerun_unaffected_structural_stages"], "rationale": "Construct is unchanged."}
+            return {"change_types": ["parameter_update"], "changed_entities": ["Kp9"], "measurement_source":"wetlab", "requested_outcome": "recompute", "artifact_action": "reuse", "missing_inputs": [], "evidence_action": "use_existing", "requires_human_review": False, "requires_new_compute": False, "scientific_constraints": ["do_not_rerun_unaffected_structural_stages"], "rationale": "Construct is unchanged."}
     task = AgentTask(task_id="hybrid", objective="Kp9 updated", inputs={"new_measurement": "Kp9"})
     plan = HybridLLMPlanningBackend(client=DecisionClient()).create_plan(task, ContextBundle(task=task, constraints=[], retrieved_memory=[], artifact_summaries=[], conflicts=[]), set())  # type: ignore[arg-type]
     assert [step.step_id for step in plan.steps] == ["dispatch_m3", "dispatch_m4"]
-    assert plan.diagnostics["planning_decision"]["change_types"] == ["parameter_update"]
+    assert plan.diagnostics["semantic_decision"]["change_types"] == ["parameter_update"]
+
+
+def test_compiler_routes_missing_parameter_to_evidence_review_not_m4():
+    task = AgentTask(task_id="missing", objective="Missing kinetics", inputs={"missing_parameter": "kcat_r1", "evidence_database_path": "local.jsonl"})
+    decision = PlanningDecision(change_types=[ChangeType.parameter_update], changed_entities=["kcat_r1"], requested_outcome=RequestedOutcome.resolve_missing_input, artifact_action=ArtifactAction.none, evidence_action=EvidenceAction.search_local_evidence, requires_human_review=True, requires_new_compute=False, rationale="Evidence is available.")
+    plan = DeterministicPlanCompiler().compile(task, decision)
+    assert [step.action_type for step in plan.steps] == ["resolve_evidence", "human_review"]
+    assert all(step.step_id != "dispatch_m4" for step in plan.steps)

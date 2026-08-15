@@ -13,7 +13,7 @@ class LlmError(RuntimeError):
     """Raised when an OpenAI-compatible chat endpoint cannot return content."""
 
 
-@dataclass(frozen=True)
+@dataclass
 class ChatClient:
     api_key: str
     api_base: str
@@ -22,20 +22,21 @@ class ChatClient:
     max_tokens: int = 1400
     timeout_seconds: int = 180
     retries: int = 3
+    last_response_metadata: dict[str, Any] | None = None
 
-    def complete_json(self, prompt: str, *, response_format: dict[str, Any] | None = None) -> dict[str, Any]:
-        content = self.complete(prompt, response_format=response_format)
+    def complete_json(self, prompt: str, *, system_prompt: str | None = None, response_format: dict[str, Any] | None = None) -> dict[str, Any]:
+        content = self.complete(prompt, system_prompt=system_prompt, response_format=response_format)
         parsed = parse_json_object(content)
         if parsed is None:
             raise LlmError("LLM response did not contain a JSON object")
         return parsed
 
-    def complete(self, prompt: str, *, response_format: dict[str, Any] | None = None) -> str:
+    def complete(self, prompt: str, *, system_prompt: str | None = None, response_format: dict[str, Any] | None = None) -> str:
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": "You extract structured information as JSON only."},
+                {"role": "system", "content": system_prompt or "You extract structured information as JSON only."},
                 {"role": "user", "content": prompt},
             ],
             "temperature": self.temperature,
@@ -56,11 +57,20 @@ class ChatClient:
                 if response.status_code in retry_status and attempt < self.retries - 1:
                     _sleep_before_retry(response, attempt)
                     continue
-                response.raise_for_status()
+                started = time.monotonic(); response.raise_for_status()
                 data = response.json()
                 content = data.get("choices", [{}])[0].get("message", {}).get("content")
                 if not isinstance(content, str) or not content.strip():
                     raise LlmError("LLM response did not include choices[0].message.content")
+                usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+                message = data.get("choices", [{}])[0].get("message", {})
+                self.last_response_metadata = {
+                    "requested_model": self.model, "response_model": data.get("model", "unavailable"),
+                    "api_base_domain": _api_domain(self.api_base), "request_id": response.headers.get("x-request-id") or response.headers.get("request-id") or "unavailable",
+                    "input_tokens": usage.get("prompt_tokens", "unavailable"), "output_tokens": usage.get("completion_tokens", "unavailable"), "total_tokens": usage.get("total_tokens", "unavailable"),
+                    "finish_reason": data.get("choices", [{}])[0].get("finish_reason", "unavailable"), "latency_seconds": round(time.monotonic()-started, 3), "retry_count": attempt,
+                    "response_format": response_format or "none",
+                }
                 return content
             except (requests.RequestException, ValueError, LlmError) as exc:
                 last_error = exc
@@ -103,3 +113,8 @@ def _sleep_before_retry(response: requests.Response | None, attempt: int) -> Non
     if wait is None:
         wait = 2**attempt + random.uniform(0, 0.5)
     time.sleep(max(0.0, wait))
+
+
+def _api_domain(api_base: str) -> str:
+    from urllib.parse import urlparse
+    return urlparse(api_base).netloc or "unavailable"

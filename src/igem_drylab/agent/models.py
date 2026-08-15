@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 StepStatus = Literal["pending", "ready", "running", "waiting_approval", "succeeded", "failed", "skipped", "blocked"]
 ResourceLabel = Literal["cpu", "gpu", "network", "external_api"]
+ActionType = Literal["dispatch_stage", "reuse_artifact", "validate_artifact", "request_input", "resolve_evidence", "request_measurement", "human_review", "reject_shortcut", "approval", "no_action"]
 
 
 class AgentTask(BaseModel):
@@ -47,6 +48,7 @@ class PlanStep(BaseModel):
     step_id: str
     objective: str
     tool_name: str | None = None
+    action_type: ActionType | None = None
     arguments: dict[str, Any] = Field(default_factory=dict)
     depends_on: list[str] = Field(default_factory=list)
     required_artifact_ids: list[str] = Field(default_factory=list)
