@@ -1,0 +1,20 @@
+{"case_id":"B01","objective":"A calibrated Kp12 value replaces its previous value; no construct component changed.","inputs":{"new_measurement":"Kp12","construct_unchanged":true},"constraints":["Keep structural artifacts."]}
+{"case_id":"B02","objective":"Both condensate fraction phi and OC abundance were measured again for the same fusion.","inputs":{"changed_entities":["phi","enzyme_abundance"],"construct_unchanged":true},"constraints":[]}
+{"case_id":"B03","objective":"PDZ copy number was revised after scaffold quantification, with all fusion sequences unchanged.","inputs":{"slot_ratio_changed":true,"construct_unchanged":true},"constraints":[]}
+{"case_id":"B04","objective":"Replace the OC linker and incorporate a new Kp9 measurement.","inputs":{"changed_entities":["OC_linker","Kp9"],"structure_input_file":"fixtures/new_oc.fasta","allow_new_compute":true},"constraints":["GPU requires approval."]}
+{"case_id":"B05","objective":"The supplied FTH1 fusion confidence artifact has a valid manifest and must be checked before reuse.","inputs":{"structure_output_path":"fixtures/valid_structure","artifact_action":"validate"},"constraints":["No GPU."]}
+{"case_id":"B06","objective":"The only available docking artifact has an invalid checksum.","inputs":{"artifact_checksum_invalid":true},"constraints":["Never reuse it."]}
+{"case_id":"B07","objective":"A DMT M2 structure was regenerated while sequence and kinetic inputs remain unchanged.","inputs":{"change_type":"artifact_update","structure_output_path":"fixtures/dmt_new"},"constraints":["Do not run M1."]}
+{"case_id":"B08","objective":"Evaluate a proposed linker but the sequence file has not been supplied.","inputs":{"change_type":"construct_sequence_update","allow_new_compute":true},"constraints":["Request it."]}
+{"case_id":"B09","objective":"Physical Kp9 is required but neither a measurement nor evidence database is available.","inputs":{"missing_parameter":"Kp9"},"constraints":["No fabricated value."]}
+{"case_id":"B10","objective":"Two sources disagree on Km for the same DMT substrate.","inputs":{"missing_parameter":"km_r1","conflicting_evidence":true},"constraints":["Review before use."]}
+{"case_id":"B11","objective":"Fresh HPLC profiles for compounds 9, 11, 13 and 15 are ready for calibration.","inputs":{"wetlab_time_course_available":true},"constraints":[]}
+{"case_id":"B12","objective":"Explain the already validated Kp sensitivity plot without calculating anything new.","inputs":{"all_artifacts_validated":true,"change_type":"interpretation_only"},"constraints":["No compute."]}
+{"case_id":"B13","objective":"Scale kcat using the docking affinity from M2.","inputs":{},"constraints":["Reject shortcut."]}
+{"case_id":"B14","objective":"Give a micromolar fermentation titer from author-native sensitivity output.","inputs":{"author_native_sensitivity":true},"constraints":["Reject physical claim."]}
+{"case_id":"B15","objective":"Retrieve missing evidence from a remote API with no credential configured.","inputs":{"external_api_required":true},"constraints":["No remote fabrication."]}
+{"case_id":"B16","objective":"Predict a new long fusion structure; this is expected to take an hour.","inputs":{"structure_input_file":"fixtures/long.fasta","allow_new_compute":true},"constraints":["Approval required."]}
+{"case_id":"B17","objective":"A reviewed wet-lab Kp9 supersedes an old literature estimate for this unchanged construct.","inputs":{"new_measurement":"Kp9","measurement_reviewed":true,"construct_unchanged":true},"constraints":[]}
+{"case_id":"B18","objective":"Partitioning was updated and downstream M3/M4 artifacts are stale.","inputs":{"new_measurement":"Kp10","artifact_stale":true,"construct_unchanged":true},"constraints":[]}
+{"case_id":"B19","objective":"All pipeline artifacts are valid and no scientific variable has changed.","inputs":{"all_artifacts_validated":true},"constraints":["Reuse only."]}
+{"case_id":"B20","objective":"The construct description is vague, but it says only local enzyme concentration was remeasured while sequence was retained.","inputs":{"new_measurement":"enzyme_abundance","construct_unchanged":true},"constraints":[]}
