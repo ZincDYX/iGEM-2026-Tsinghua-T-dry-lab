@@ -22,6 +22,7 @@ It provides:
 - M0–M5 pipeline stages for input validation, construct screening, structural negative screening, phase partitioning, kinetic simulation, and wet-lab feedback;
 - a mass-conserving glabridin reaction model with PT `9 -> 10`, OC `10 -> 11`, and competing DMT reactions `9 -> 13` / `11 -> 15`;
 - provenance-bearing literature evidence retrieval with BM25, optional embeddings, DOI de-duplication, MMR diversity, and optional one-call grounded synthesis;
+- deterministic evidence knowledge graphs and optional GraphRAG fusion with auditable entity paths;
 - a reviewed Parameter Registry with unit, identity, construct, condition, and provenance checks;
 - parsers and tool contracts for structure predictors, FreeSASA, AutoDock Vina, and CALVADOS-style outputs;
 - lightweight FTH1 24-mer geometric expansion and finite-site multichain binding utilities;
@@ -49,6 +50,11 @@ cd iGEM-2026-Tsinghua-T-dry-lab
 python -m pip install -e ".[test,plot,sasa]"
 pytest -q
 ```
+
+The repository includes the canonical 20,567-record evidence database through
+Git LFS. After cloning, run `git lfs pull`. For a clean-machine walkthrough,
+including database verification and GraphRAG startup, see
+[new_environment_setup.md](docs/new_environment_setup.md).
 
 Run the demonstration pipeline:
 
@@ -111,6 +117,15 @@ igem-drylab literature qa "Summarize OC activity" \
 ```
 
 Semantic retrieval builds a local cache only after all embedding batches complete successfully. If an optional embedding or synthesis API is unavailable, lexical retrieval remains available.
+
+Build a provenance-bearing graph and add it as a third retrieval route:
+
+```bash
+igem-drylab literature build-graph --evidence path/to/evidence.jsonl --output outputs/evidence_graph.json
+igem-drylab literature qa "DMT activity in yeast LLPS condensates" --evidence path/to/evidence.jsonl --semantic --graph --graph-path outputs/evidence_graph.json
+```
+
+Graph edges are derived only from stored evidence fields and retain record/DOI provenance. See [graph_rag_and_agent_baselines.md](docs/graph_rag_and_agent_baselines.md).
 
 ### 3. Run structure and partitioning screens
 
@@ -181,6 +196,13 @@ python scripts/render_agent_benchmark_v2_report.py
 An accepted LLM plan is still subject to the normal policy, budget, artifact, and human-approval gates. Passing this frozen benchmark indicates project-specific orchestration behavior only—not general scientific intelligence or biological prediction accuracy.
 
 The recommended v3 hybrid route further separates responsibilities: `LLM → PlanningDecision → DeterministicPlanCompiler → Policy/approval → deterministic M1–M5 tools`. Direct LLM DAG generation remains available as an ablation through `--planner llm`; the hybrid route is `--planner hybrid`. Qwen is optional and configured only through local `QWEN_API_KEY`, `QWEN_API_BASE`, and `QWEN_MODEL` variables.
+
+For a provider-by-architecture comparison of rule-based, Qwen, DeepSeek,
+Hybrid Qwen, and Hybrid DeepSeek on identical frozen cases, run:
+
+```bash
+python scripts/run_agent_baseline_matrix.py --benchmark benchmarks/agent_orchestration_heldout_v2 --output-root results/agent_baseline_matrix --jobs 5
+```
 
 ## Configuration and secrets
 

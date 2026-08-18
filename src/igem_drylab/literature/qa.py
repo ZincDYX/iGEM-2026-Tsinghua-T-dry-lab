@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, Sequence
 
+from .knowledge_graph import EvidenceKnowledgeGraph, load_or_build_knowledge_graph
 from .llm import ChatClient, LlmError
 from .semantic import (
     EmbeddingApiBackend,
@@ -42,6 +43,7 @@ STAGE_ONE_BM25_QUOTA = 80
 STAGE_ONE_ENTITY_QUOTA = 60
 STAGE_ONE_MECHANISM_QUOTA = 50
 STAGE_ONE_TRANSFER_QUOTA = 50
+STAGE_ONE_GRAPH_QUOTA = 60
 
 FIELD_ALIASES = {
     "enzyme": ("enzyme", "enzyme_name", "best_enzyme_name_value", "enzyme_name_value"),
@@ -107,6 +109,10 @@ class RankedEvidence:
     semantic_score: float | None = None
     lexical_rank: int | None = None
     semantic_rank: int | None = None
+    graph_score: float | None = None
+    graph_rank: int | None = None
+    graph_paths: tuple[str, ...] = ()
+    matched_entities: tuple[str, ...] = ()
     rrf_score: float = 0.0
     matched_metadata: tuple[str, ...] = ()
 
@@ -238,8 +244,12 @@ def semantic_search(
     return [RankedEvidence(index=index, semantic_score=score, semantic_rank=rank) for rank, (index, score) in enumerate(ranked, start=1)], dict(zip(indices, document_vectors))
 
 
-def rrf_fuse(lexical: Sequence[RankedEvidence], semantic: Sequence[RankedEvidence]) -> list[RankedEvidence]:
-    """Fuse ranked routes without mixing incomparable BM25 and cosine scores."""
+def rrf_fuse(
+    lexical: Sequence[RankedEvidence],
+    semantic: Sequence[RankedEvidence],
+    graph: Sequence[RankedEvidence] = (),
+) -> list[RankedEvidence]:
+    """Fuse lexical, semantic, and graph ranks without mixing raw scores."""
     merged: dict[int, RankedEvidence] = {}
     for hit in lexical:
         merged[hit.index] = RankedEvidence(
@@ -258,6 +268,21 @@ def rrf_fuse(lexical: Sequence[RankedEvidence], semantic: Sequence[RankedEvidenc
             lexical_rank=previous.lexical_rank,
             semantic_rank=hit.semantic_rank,
             rrf_score=previous.rrf_score + 1 / (RRF_K + (hit.semantic_rank or 1)),
+            matched_metadata=previous.matched_metadata,
+        )
+    for hit in graph:
+        previous = merged.get(hit.index, RankedEvidence(index=hit.index))
+        merged[hit.index] = RankedEvidence(
+            index=hit.index,
+            lexical_score=previous.lexical_score,
+            semantic_score=previous.semantic_score,
+            lexical_rank=previous.lexical_rank,
+            semantic_rank=previous.semantic_rank,
+            graph_score=hit.graph_score,
+            graph_rank=hit.graph_rank,
+            graph_paths=hit.graph_paths,
+            matched_entities=hit.matched_entities,
+            rrf_score=previous.rrf_score + 1 / (RRF_K + (hit.graph_rank or 1)),
             matched_metadata=previous.matched_metadata,
         )
     return sorted(merged.values(), key=lambda hit: (-hit.rrf_score, hit.index))
@@ -320,14 +345,44 @@ def retrieve_evidence(
     semantic_enabled: bool = False,
     semantic_backend: EmbeddingBackend | None = None,
     evidence_path: Path | None = None,
+    graph_enabled: bool = False,
+    graph_path: Path | None = None,
+    knowledge_graph: EvidenceKnowledgeGraph | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
-    """Execute BM25, optional semantic retrieval, RRF, deduplication, and MMR."""
+    """Execute BM25, optional semantic/graph retrieval, RRF, deduplication, and MMR."""
     intent = parse_query_intent(question)
     inferred_constraints = intent["constraints"]
     explicit_constraints = _validated_constraints(constraints)
     scoped_indices, active_constraints, relaxed_constraints = _select_candidate_indices(documents, explicit_constraints)
-    candidate_indices = _stage_one_candidates(question, documents, scoped_indices, intent)
     tier_intent = {**intent, "constraints": {**inferred_constraints, **active_constraints}}
+    graph_ranked: list[RankedEvidence] = []
+    graph_status = "disabled"
+    graph_stats: dict[str, Any] = {}
+    graph_candidate_indices: list[int] = []
+    if graph_enabled:
+        try:
+            graph = knowledge_graph
+            graph_source = "provided"
+            if graph is None:
+                graph, graph_source = load_or_build_knowledge_graph(documents, graph_path)
+            hits = graph.search(question, documents, intent=tier_intent, allowed_indices=scoped_indices, top_n=STAGE_ONE_GRAPH_QUOTA)
+            graph_ranked = [
+                RankedEvidence(
+                    index=hit.index,
+                    graph_score=hit.score,
+                    graph_rank=hit.graph_rank,
+                    graph_paths=hit.paths,
+                    matched_entities=hit.matched_entities,
+                )
+                for hit in hits
+            ]
+            graph_candidate_indices = [hit.index for hit in graph_ranked]
+            graph_status = graph_source
+            graph_stats = graph.stats
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            graph_status = "unavailable"
+    staged_candidates = _stage_one_candidates(question, documents, scoped_indices, intent)
+    candidate_indices = list(dict.fromkeys([*graph_candidate_indices, *staged_candidates]))[:DEFAULT_CANDIDATE_POOL_SIZE]
     lexical = bm25_search(question, documents, constraints=inferred_constraints, candidate_indices=candidate_indices)
     semantic: list[RankedEvidence] = []
     semantic_vectors: dict[int, list[float]] | None = None
@@ -344,7 +399,9 @@ def retrieve_evidence(
                 semantic_status = "used"
             except Exception:  # Optional backends must never break deterministic retrieval.
                 semantic_status = "unavailable"
-    fused = rrf_fuse(lexical, semantic)
+    candidate_set = set(candidate_indices)
+    graph_ranked = [hit for hit in graph_ranked if hit.index in candidate_set]
+    fused = rrf_fuse(lexical, semantic, graph_ranked)
     relevant = _relevant_candidates(fused, documents, tier_intent)
     direct = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], tier_intent) == "direct"]
     transferable = [candidate for candidate in relevant if _evidence_tier(documents[candidate.index], tier_intent) == "transferable"]
@@ -368,6 +425,10 @@ def retrieve_evidence(
             retrieval={
                 "lexical_rank": hit.lexical_rank,
                 "semantic_rank": hit.semantic_rank,
+                "graph_rank": hit.graph_rank,
+                "graph_score": round(hit.graph_score, 6) if hit.graph_score is not None else None,
+                "graph_matched_entities": list(hit.matched_entities),
+                "graph_paths": list(hit.graph_paths),
                 "rrf_score": round(hit.rrf_score, 8),
                 "matched_metadata": list(hit.matched_metadata),
                 "tier": _evidence_tier(documents[hit.index], tier_intent),
@@ -388,7 +449,9 @@ def retrieve_evidence(
     retrieval = {
         "lexical": "bm25",
         "semantic": semantic_status,
-        "fusion": "rrf" if semantic_status == "used" else "lexical_fallback",
+        "graph": graph_status,
+        "graph_stats": graph_stats,
+        "fusion": "rrf" if semantic_status == "used" or graph_status not in {"disabled", "unavailable"} else "lexical_fallback",
         "diversity": "doi_dedup+mmr",
         "candidate_count": len(candidate_indices),
         "final_count": len(sources),
@@ -670,6 +733,9 @@ def answer_question(
     constraints: dict[str, str] | None = None,
     semantic_enabled: bool = False,
     semantic_backend: EmbeddingBackend | None = None,
+    graph_enabled: bool = False,
+    graph_path: Path | None = None,
+    knowledge_graph: EvidenceKnowledgeGraph | None = None,
     chat_client: ChatClient | Any | None = None,
 ) -> dict[str, Any]:
     """Return provenance-bearing evidence, optionally followed by one grounded LLM call."""
@@ -687,6 +753,9 @@ def answer_question(
         semantic_enabled=semantic_enabled,
         semantic_backend=semantic_backend,
         evidence_path=evidence_path,
+        graph_enabled=graph_enabled,
+        graph_path=graph_path,
+        knowledge_graph=knowledge_graph,
     )
     if not sources:
         response = _base_response(True, "no_match", "No sufficiently relevant evidence was found in the local database.", [], mode=mode)

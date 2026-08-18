@@ -1,0 +1,18 @@
+{
+  "database_id": "project-conditioned-evidence-database-2026-08-07",
+  "file": "project_conditioned_evidence_database.csv",
+  "format": "csv",
+  "encoding": "utf-8-sig",
+  "records": 20567,
+  "columns": 564,
+  "bytes": 127471861,
+  "sha256": "6410268f021ca6b2ca04b6bac7979e52702af4875ee346e6b6aa9328a8f4450a",
+  "git_storage": "Git LFS",
+  "roles": [
+    "provenance-bearing literature QA",
+    "BM25 and optional semantic RAG",
+    "deterministic knowledge-graph construction",
+    "GraphRAG retrieval"
+  ],
+  "scientific_boundary": "Records are extracted evidence, not automatically approved ParameterRecords for M3/M4 production calculations."
+}

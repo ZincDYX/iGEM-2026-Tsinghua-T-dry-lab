@@ -5,6 +5,7 @@ from .icl import IclExample, select_icl_examples
 from .llm import ChatClient, parse_json_object
 from .schema import ExtractionSchema, load_schema
 from .database import build_database_from_manifest, mine_numeric_evidence, read_manifest
+from .knowledge_graph import EvidenceKnowledgeGraph, GraphEdge, GraphHit, GraphNode, build_knowledge_graph, load_or_build_knowledge_graph
 from .sources import LiteratureSearchQuery, LiteratureSearchResult, search_literature, write_search_manifest
 from .chunked import ExtractedRecord, chunk_text, extract_records_chunked, validate_record
 from .qa import (
@@ -29,17 +30,20 @@ __all__ = [
     "ChatClient",
     "EvidenceDatabaseUnavailable",
     "EvidenceDocument",
+    "EvidenceKnowledgeGraph",
     "ExtractionSchema",
     "IclExample",
     "LiteratureSearchQuery",
     "LiteratureSearchResult",
     "build_prompt",
+    "build_knowledge_graph",
     "chunk_text",
     "build_database_from_manifest",
     "extract_records_from_text",
     "extract_records_chunked",
     "load_schema",
     "load_evidence_documents",
+    "load_or_build_knowledge_graph",
     "extract_query_constraints",
     "compact_evidence_sources",
     "get_evidence_detail",
@@ -59,5 +63,6 @@ __all__ = [
     "ExtractedRecord",
     "validate_record",
     "write_search_manifest",
+    "GraphNode", "GraphEdge", "GraphHit",
     "EnzymeKineticsEvidence", "LlpsPartitioningEvidence", "PhaseActivityEvidence", "ProteinAbundanceEvidence", "RecruitmentBindingEvidence", "evidence_to_parameter_candidate", "map_evidence_to_requirement",
 ]

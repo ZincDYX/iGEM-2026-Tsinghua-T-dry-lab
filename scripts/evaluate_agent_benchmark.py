@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -48,7 +49,16 @@ def public_task(case: dict[str, Any], artifacts_dir: Path) -> dict[str, Any]:
     }
 
 
-def run_case(case: dict[str, Any], *, output: Path, planner: str, mode: str, api_base: str | None, model: str | None) -> dict[str, Any]:
+def run_case(
+    case: dict[str, Any],
+    *,
+    output: Path,
+    planner: str,
+    mode: str,
+    api_base: str | None,
+    model: str | None,
+    api_key_env: str,
+) -> dict[str, Any]:
     task_dir = output / "tasks"; trace_dir = output / "traces"; task_dir.mkdir(parents=True, exist_ok=True); trace_dir.mkdir(parents=True, exist_ok=True)
     task = public_task(case, output / "artifacts")
     task_path = task_dir / f"{case['case_id']}.json"; task_path.write_text(json.dumps(task, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -56,9 +66,12 @@ def run_case(case: dict[str, Any], *, output: Path, planner: str, mode: str, api
     if planner in {"llm", "hybrid"}:
         if api_base: command.extend(["--api-base", api_base])
         if model: command.extend(["--model", model])
+        command.extend(["--api-key-env", api_key_env])
+    started = time.perf_counter()
     completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
+    elapsed_seconds = round(time.perf_counter() - started, 4)
     trace = extract_json(completed.stdout)
-    raw = {"case_id": case["case_id"], "command": command, "returncode": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr, "trace": trace}
+    raw = {"case_id": case["case_id"], "command": command, "returncode": completed.returncode, "elapsed_seconds": elapsed_seconds, "stdout": completed.stdout, "stderr": completed.stderr, "trace": trace}
     (trace_dir / f"{case['case_id']}.json").write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
     return raw
 
@@ -117,11 +130,25 @@ def hallucination_count(trace: dict[str, Any] | None) -> int:
     return invented
 
 
-def score(case: dict[str, Any], gold: dict[str, Any], raw: dict[str, Any], planner: str) -> dict[str, Any]:
+def score(
+    case: dict[str, Any],
+    gold: dict[str, Any],
+    raw: dict[str, Any],
+    planner: str,
+    *,
+    benchmark_label: str | None = None,
+    provider: str = "local",
+    model: str | None = None,
+) -> dict[str, Any]:
     trace = raw.get("trace"); observed = facts(trace)
+    diagnostics = (trace or {}).get("plan", {}).get("diagnostics", {})
+    metadata = diagnostics.get("llm_response_metadata", {}) if isinstance(diagnostics, dict) else {}
+    label = benchmark_label or planner
     if trace is None:
         return {
-            "case_id": case["case_id"], "planner": planner, "routing_correct": False,
+            "case_id": case["case_id"], "planner": planner, "benchmark_label": label, "provider": provider, "model": model or "",
+            "elapsed_seconds": raw.get("elapsed_seconds", ""), "input_tokens": "", "output_tokens": "", "total_tokens": "",
+            "routing_correct": False,
             "forbidden_action_count": 0, "unnecessary_module_count": 0,
             "missing_input_handled": False, "hallucinated_input_count": 0,
             "artifact_reuse_correct": False, "safety_gate_correct": False,
@@ -155,7 +182,10 @@ def score(case: dict[str, Any], gold: dict[str, Any], raw: dict[str, Any], plann
     hallucinations = hallucination_count(trace)
     overall = bool(trace) and routing_correct and not forbidden_hit and not required_missing and block_ok and artifact_ok and safety_ok and boundary_ok and hallucinations == 0
     return {
-        "case_id": case["case_id"], "planner": planner, "routing_correct": routing_correct,
+        "case_id": case["case_id"], "planner": planner, "benchmark_label": label, "provider": provider,
+        "model": model or metadata.get("requested_model", ""), "elapsed_seconds": raw.get("elapsed_seconds", ""),
+        "input_tokens": metadata.get("input_tokens", ""), "output_tokens": metadata.get("output_tokens", ""), "total_tokens": metadata.get("total_tokens", ""),
+        "routing_correct": routing_correct,
         "forbidden_action_count": len(forbidden_hit), "unnecessary_module_count": unnecessary,
         "missing_input_handled": missing_input_handled, "hallucinated_input_count": hallucinations,
         "artifact_reuse_correct": artifact_ok, "safety_gate_correct": safety_ok,
@@ -173,7 +203,7 @@ def score(case: dict[str, Any], gold: dict[str, Any], raw: dict[str, Any], plann
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    columns = list(rows[0])
+    columns = list(dict.fromkeys(key for row in rows for key in row))
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns); writer.writeheader(); writer.writerows(rows)
 
@@ -186,6 +216,9 @@ def main() -> None:
     parser.add_argument("--mode", choices=("dry-run", "run"), default="dry-run")
     parser.add_argument("--api-base")
     parser.add_argument("--model")
+    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--provider", choices=("local", "qwen", "deepseek"), default="local")
+    parser.add_argument("--label", help="Stable comparison label, for example hybrid_qwen.")
     parser.add_argument("--integration-only", action="store_true")
     parser.add_argument("--case-ids", help="Comma-separated frozen case IDs to execute.")
     parser.add_argument("--score-only", action="store_true", help="Re-score saved raw_results.jsonl without invoking the Agent.")
@@ -204,13 +237,14 @@ def main() -> None:
     else:
         if args.jobs < 1: raise ValueError("--jobs must be at least 1")
         with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            raw_rows = list(pool.map(lambda case: run_case(case, output=args.output, planner=args.planner, mode=args.mode, api_base=args.api_base, model=args.model), cases))
+            raw_rows = list(pool.map(lambda case: run_case(case, output=args.output, planner=args.planner, mode=args.mode, api_base=args.api_base, model=args.model, api_key_env=args.api_key_env), cases))
         write_jsonl(args.output / "raw_results.jsonl", raw_rows)
         plans = [{"case_id": row["case_id"], "planner": args.planner, "trace": row["trace"]} for row in raw_rows]
         write_jsonl(args.output / "plans.jsonl", plans)
-    scores = [score(case, gold[case["case_id"]], raw, args.planner) for case, raw in zip(cases, raw_rows, strict=True)]
+    label = args.label or ("rule_based" if args.planner == "rule-based" else f"{args.planner}_{args.provider}")
+    scores = [score(case, gold[case["case_id"]], raw, args.planner, benchmark_label=label, provider=args.provider, model=args.model) for case, raw in zip(cases, raw_rows, strict=True)]
     write_csv(args.output / "agent_benchmark_results.csv", scores)
-    print(json.dumps({"planner": args.planner, "mode": args.mode, "cases": len(cases), "overall_passes": sum(bool(row["overall_pass"]) for row in scores), "output": str(args.output)}, ensure_ascii=False))
+    print(json.dumps({"planner": args.planner, "label": label, "provider": args.provider, "model": args.model, "mode": args.mode, "cases": len(cases), "overall_passes": sum(bool(row["overall_pass"]) for row in scores), "output": str(args.output)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

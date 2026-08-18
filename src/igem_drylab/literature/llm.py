@@ -48,6 +48,7 @@ class ChatClient:
         last_error: Exception | None = None
         for attempt in range(max(1, self.retries)):
             try:
+                started = time.monotonic()
                 response = requests.post(
                     self.api_base,
                     headers=headers,
@@ -57,7 +58,7 @@ class ChatClient:
                 if response.status_code in retry_status and attempt < self.retries - 1:
                     _sleep_before_retry(response, attempt)
                     continue
-                started = time.monotonic(); response.raise_for_status()
+                response.raise_for_status()
                 data = response.json()
                 content = data.get("choices", [{}])[0].get("message", {}).get("content")
                 if not isinstance(content, str) or not content.strip():

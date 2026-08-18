@@ -51,7 +51,7 @@ function renderFields(fields) { const details=document.createElement('details');
 function renderQuote(evidence) { const quote=document.createElement('blockquote');quote.className='quote';const preview=/^Illustrative preview record:\s*(.+)$/s.exec(evidence || '');if(preview){quote.append(text('span','Illustrative preview record:','quote-label'),text('span','“','quote-mark'),text('span',preview[1]),text('span','”','quote-mark'))}else{quote.append(text('span','“','quote-mark'),text('span',evidence || 'No quoted evidence text available.'),text('span','”','quote-mark'))}return quote; }
 function validDoi(doi) { return typeof doi==='string' && /^10\.\S+\/\S+$/i.test(doi.trim()); }
 function renderSourceCard(source, index) { const card=document.createElement('article');card.className='card glass';card.dataset.evidenceId=source.record_id || ''; const top=document.createElement('div');top.className='card-top'; const heading=document.createElement('div'); const tier=((source.retrieval||{}).tier||'background'); heading.append(text('div','EVIDENCE '+String(index+1).padStart(2,'0')+' · '+tier+' evidence','rank'),text('h3',source.title || 'Untitled source')); const relevance=document.createElement('div');relevance.className='relevance';const score=Math.max(0,Math.min(1,Number(source.score)||0));relevance.append(text('div','Retrieval score '+score.toFixed(2)),Object.assign(document.createElement('div'),{className:'meter'}));relevance.lastChild.append(Object.assign(document.createElement('i'),{style:'width:'+(score*100)+'%'}));top.append(heading,relevance);card.append(top,renderQuote(source.evidence)); const meta=document.createElement('div');meta.className='metadata';if(source.source_file)meta.append(text('span','Source: '+source.source_file));if(source.record_id)meta.append(text('span','Record: '+source.record_id));meta.append(text('span',validDoi(source.doi)?'DOI-LINKED':'LOCAL RECORD'));card.append(meta);if(validDoi(source.doi)){const actions=document.createElement('div');actions.className='actions';const link=document.createElement('a');link.className='action';link.textContent='Open DOI';link.href='https://doi.org/'+encodeURIComponent(source.doi.trim());link.target='_blank';link.rel='noopener noreferrer';const copy=document.createElement('button');copy.className='action';copy.type='button';copy.textContent='Copy DOI';copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(source.doi);copy.textContent='Copied';setTimeout(()=>copy.textContent='Copy DOI',1100)}catch(_){copy.textContent='Copy unavailable'}});actions.append(link,copy);card.append(actions)}if(source.fields && Object.keys(source.fields).length)card.append(renderFields(source.fields));return card; }
-function renderRetrievalInfo(payload) { const info=text('div','', 'retrieval-status');const retrieval=payload.retrieval || {};const semantic=retrieval.semantic==='used'?'Semantic':'Semantic retrieval unavailable — using BM25/metadata fallback';info.textContent=['BM25',semantic,retrieval.fusion==='rrf'?'RRF':'Lexical fallback','Diverse sources'].join(' · ');return info; }
+function renderRetrievalInfo(payload) { const info=text('div','', 'retrieval-status');const retrieval=payload.retrieval || {};const semantic=retrieval.semantic==='used'?'Semantic':'Semantic retrieval unavailable — using BM25/metadata fallback';const graph=!['disabled','unavailable',undefined].includes(retrieval.graph)?'Knowledge graph':'Graph retrieval disabled';info.textContent=['BM25',semantic,graph,retrieval.fusion==='rrf'?'RRF':'Lexical fallback','Diverse sources'].join(' · ');return info; }
   function renderConstraintChips(payload) { const analysis=payload.query_analysis || {};const constraints=analysis.constraints || {};const entries=Object.entries(constraints);const relaxed=Array.isArray(analysis.relaxed_constraints)?analysis.relaxed_constraints:[];if(!entries.length&&!relaxed.length)return null;const holder=document.createElement('div');holder.className='constraint-chips';entries.forEach(([key,value])=>holder.append(text('span',key+': '+value,'constraint-chip')));if(relaxed.length)holder.append(text('div','Search scope relaxed: '+relaxed.join(', '),'relaxed-constraints'));return holder; }
 const legacyRenderConstraintChips=renderConstraintChips;
 renderConstraintChips=payload=>{const analysis=payload.query_analysis || {};const intent=analysis.intent || {};const entries=[];if(Array.isArray(intent.enzymes)&&intent.enzymes.length)entries.push(['enzymes',intent.enzymes.join(', ')]);if(Array.isArray(intent.context)&&intent.context.length)entries.push(['context',intent.context.map(value=>value==='llps'?'LLPS':value).join(', ')]);if(Array.isArray(intent.outcomes)&&intent.outcomes.length)entries.push(['outcome',intent.outcomes.join(', ')]);const covered=new Set(['enzyme','parameter_type']);Object.entries(analysis.constraints || {}).forEach(([key,value])=>{if(!covered.has(key))entries.push([key,value])});const relaxed=Array.isArray(analysis.relaxed_constraints)?analysis.relaxed_constraints:[];if(!entries.length&&!relaxed.length)return legacyRenderConstraintChips(payload);const holder=document.createElement('div');holder.className='constraint-chips';entries.forEach(([key,value])=>holder.append(text('span',key+': '+value,'constraint-chip')));if(relaxed.length)holder.append(text('div','Search scope relaxed: '+relaxed.join(', '),'relaxed-constraints'));return holder;};
@@ -61,24 +61,30 @@ function renderResponse(payload, question, latency) { raw.textContent=JSON.strin
 async function submitQuestion(question) { if(!question.trim() || button.disabled)return; button.disabled=true;button.textContent='Searching…';const loadingTimer=window.setTimeout(renderLoading,180);const started=performance.now();try{const response=await fetch('/api/qa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,mode:modeControl.value,semantic_enabled:true})});const payload=await response.json();window.clearTimeout(loadingTimer);renderResponse(payload,question,Math.round(performance.now()-started));}catch(_){window.clearTimeout(loadingTimer);renderError('Please try again.',false)}finally{button.disabled=false;button.textContent='Search evidence'} }
 const defaultRenderSourceCard=renderSourceCard;
 renderSourceCard=(source,index)=>{const card=defaultRenderSourceCard(source,index);const previous=card.querySelector('details');if(previous&&source.relevant_fields){const details=document.createElement('details');details.append(text('summary','Relevant structured fields'));const relevant=document.createElement('div');relevant.className='fields';const relevantList=document.createElement('ul');relevantList.className='field-list';appendFieldRows(relevantList,source.relevant_fields);relevant.append(relevantList);details.append(relevant);const full=document.createElement('details');full.append(text('summary','View full structured record'));const fullPanel=document.createElement('div');fullPanel.className='fields';const fullList=document.createElement('ul');fullList.className='field-list';appendFieldRows(fullList,source.fields || {});fullPanel.append(fullList);full.append(fullPanel);details.append(full);previous.replaceWith(details)}return card};
-renderRetrievalInfo=payload=>{const info=text('div','', 'retrieval-status');const retrieval=payload.retrieval || {};const method=retrieval.semantic==='used'?'BM25 + semantic retrieval':'BM25/metadata retrieval';const semantic=retrieval.semantic==='used'?'Semantic retrieval enabled':retrieval.semantic==='disabled'?'Semantic retrieval disabled':'Semantic retrieval unavailable';info.textContent=[method,semantic,'Diverse sources'].join(' · ');return info};
+renderRetrievalInfo=payload=>{const info=text('div','', 'retrieval-status');const retrieval=payload.retrieval || {};const method=retrieval.semantic==='used'?'BM25 + semantic retrieval':'BM25/metadata retrieval';const semantic=retrieval.semantic==='used'?'Semantic retrieval enabled':retrieval.semantic==='disabled'?'Semantic retrieval disabled':'Semantic retrieval unavailable';const graph=!['disabled','unavailable',undefined].includes(retrieval.graph)?'GraphRAG enabled':'GraphRAG disabled';info.textContent=[method,semantic,graph,'Diverse sources'].join(' · ');return info};
 const defaultRenderResponse=renderResponse;
 renderResponse=(payload,question,latency)=>{defaultRenderResponse(payload,question,latency);document.querySelectorAll('.relevance > div:first-child').forEach(node=>{node.textContent=node.textContent.replace('Retrieval score','Relative retrieval score')});if((payload.retrieval||{}).evidence_mode==='transferable_fallback'){const head=document.querySelector('.results-head > div');if(head)head.append(text('p','No direct project-specific evidence was found. Showing transferable evidence from related LLPS-enzyme systems.','retrieval-status'));}};
 form.addEventListener('submit',event=>{event.preventDefault();submitQuestion(input.value)});renderInitial();checkHealth();
 </script></body></html>"""
 
 
-def health_payload(evidence_path: Path) -> dict[str, object]:
+def health_payload(evidence_path: Path, *, semantic_enabled: bool = False, graph_enabled: bool = False) -> dict[str, object]:
     """Stable `/health` payload used by the browser connection indicator."""
-    return {"ok": evidence_path.is_file(), "evidence_path": str(evidence_path)}
+    return {"ok": evidence_path.is_file(), "evidence_path": str(evidence_path), "semantic_enabled": semantic_enabled, "graph_enabled": graph_enabled}
 
 
-def make_handler(evidence_path: Path) -> type[BaseHTTPRequestHandler]:
+def make_handler(
+    evidence_path: Path,
+    *,
+    semantic_enabled: bool = False,
+    graph_enabled: bool = False,
+    graph_path: Path | None = None,
+) -> type[BaseHTTPRequestHandler]:
     """Build the fixed-database handler for serving and local HTTP tests."""
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             if urlparse(self.path).path == "/health":
-                self._json(health_payload(evidence_path))
+                self._json(health_payload(evidence_path, semantic_enabled=semantic_enabled, graph_enabled=graph_enabled))
             elif urlparse(self.path).path == "/":
                 body = PAGE.encode("utf-8")
                 self.send_response(HTTPStatus.OK)
@@ -101,14 +107,17 @@ def make_handler(evidence_path: Path) -> type[BaseHTTPRequestHandler]:
                     raise ValueError("question must be a non-empty string")
                 mode = payload.get("mode", "retrieve_only")
                 constraints = payload.get("constraints")
-                semantic_enabled = payload.get("semantic_enabled", False)
+                request_semantic = payload.get("semantic_enabled", semantic_enabled)
+                request_graph = payload.get("graph_enabled", graph_enabled)
                 if mode not in {"retrieve_only", "synthesize"}:
                     raise ValueError("mode must be 'retrieve_only' or 'synthesize'")
                 if constraints is not None and not isinstance(constraints, dict):
                     raise ValueError("constraints must be an object")
-                if not isinstance(semantic_enabled, bool):
+                if not isinstance(request_semantic, bool):
                     raise ValueError("semantic_enabled must be a boolean")
-                self._json(answer_question(question, evidence_path, mode=mode, constraints=constraints, semantic_enabled=semantic_enabled))
+                if not isinstance(request_graph, bool):
+                    raise ValueError("graph_enabled must be a boolean")
+                self._json(answer_question(question, evidence_path, mode=mode, constraints=constraints, semantic_enabled=request_semantic, graph_enabled=request_graph, graph_path=graph_path))
             except (ValueError, json.JSONDecodeError) as exc:
                 self._json({"ok": False, "status": "invalid_request", "answer": str(exc), "sources": []}, HTTPStatus.BAD_REQUEST)
 
@@ -122,8 +131,16 @@ def make_handler(evidence_path: Path) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def serve(evidence_path: Path, *, host: str = "127.0.0.1", port: int = 8765) -> None:
+def serve(
+    evidence_path: Path,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    semantic_enabled: bool = False,
+    graph_enabled: bool = False,
+    graph_path: Path | None = None,
+) -> None:
     """Serve a fixed evidence file. Bind localhost by default for safety."""
-    server = ThreadingHTTPServer((host, port), make_handler(evidence_path))
+    server = ThreadingHTTPServer((host, port), make_handler(evidence_path, semantic_enabled=semantic_enabled, graph_enabled=graph_enabled, graph_path=graph_path))
     print(f"Evidence QA listening at http://{host}:{port}/ (database: {evidence_path})")
     server.serve_forever()
