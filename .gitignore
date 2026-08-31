@@ -28,5 +28,11 @@ outputs_test/
 .env.*
 !.env.example
 
+# Dashboard frontend dependencies and build output.
+software/dashboard/node_modules/
+software/dashboard/dist/
+software/dashboard/.pnpm-store/
+software/dashboard/*.tsbuildinfo
+
 docs/agent_tutorial.md
 docs/agent_framework_notes.md

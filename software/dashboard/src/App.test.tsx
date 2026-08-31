@@ -1,0 +1,3 @@
+import { render, screen } from "@testing-library/react"; import { beforeEach, describe, expect, it, vi } from "vitest"; import App from "./App";
+vi.mock("./api", () => ({ getDag: vi.fn(), getRun: vi.fn(), startRun: vi.fn() })); import { getDag } from "./api";
+describe("Dashboard", () => { beforeEach(() => { vi.mocked(getDag).mockResolvedValue([{ id:"m0", name:"M0 · Data validation", description:"Validate.", inputs:["project YAML"], outputs:["summary"], run_available:true }]); }); it("renders runtime-backed DAG data", async () => { render(<App/>); expect(await screen.findByText("M0 · Data validation")).toBeTruthy(); expect(screen.getByText("Standalone runtime available")).toBeTruthy(); }); });

@@ -30,6 +30,7 @@ tools_app = typer.Typer(help="Inspect and call MCP-style local tools.")
 agent_app = typer.Typer(help="Plan and run conservative dry-lab agent workflows.")
 parameters_app = typer.Typer(help="Inspect reviewed scientific parameters and provenance.")
 project_app = typer.Typer(help="Inspect the registry-backed project state.")
+software_app = typer.Typer(help="Run the local software dashboard.")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(literature_app, name="literature")
 app.add_typer(multichain_app, name="multichain")
@@ -37,6 +38,18 @@ app.add_typer(tools_app, name="tools")
 app.add_typer(agent_app, name="agent")
 app.add_typer(parameters_app, name="parameters")
 app.add_typer(project_app, name="project")
+app.add_typer(software_app, name="software")
+
+
+@software_app.command("serve")
+def serve_software_dashboard(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8780, "--port", min=1, max=65535),
+) -> None:
+    """Serve the local Dashboard API; start the React dev server separately."""
+    from igem_drylab.software.dashboard import serve as serve_dashboard
+
+    serve_dashboard(host=host, port=port)
 
 
 @pipeline_app.command("validate")

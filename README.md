@@ -59,6 +59,21 @@ igem-drylab pipeline run configs/m1_m4_example.yaml
 
 The example writes artifacts under `outputs/m1-m4-demo/`. It is a software demonstration, not a project-specific prediction.
 
+## Software Dashboard MVP
+
+The optional Dashboard is a React/TypeScript client with a thin FastAPI transport layer. The client displays the real M0–M5 workflow contract and invokes existing local MCP-style tools; it does not reimplement scientific calculations.
+
+```bash
+python -m pip install -e ".[test,software]"
+igem-drylab software serve --port 8780
+
+cd software/dashboard
+pnpm install
+pnpm dev
+```
+
+Open the Vite URL (normally `http://127.0.0.1:5173`). M0 validates a selected configuration through `igem.pipeline.validate`. M4 invokes `igem.pipeline.run_stage`, which runs its existing deterministic M1–M3 prerequisites before M4. M1, M2, M3, and M5 are deliberately shown as unavailable for isolated execution because no standalone existing tool contract exposes them yet; the Dashboard returns that state rather than fabricating a result. Attachments are selected locally in this MVP but are not uploaded or persisted.
+
 To inspect available local tools:
 
 ```bash
@@ -165,6 +180,7 @@ Key packages:
 - `igem_drylab.parsers` and `igem_drylab.scoring` — external-tool result parsing and transparent screens
 - `igem_drylab.mcp` — local MCP-style tool contracts
 - `igem_drylab.agent` — optional planner, memory, policy, execution, and recovery framework
+- `igem_drylab.software` — optional FastAPI transport for the local Dashboard
 
 ## Agent orchestration benchmark
 
