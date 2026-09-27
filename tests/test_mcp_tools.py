@@ -168,6 +168,8 @@ def test_scoring_mcp_tools_return_structured_results():
             "reference_json": "examples/real_metrics/freesasa_reference.json",
             "chain": "A",
             "residues": [10, 11, 12],
+            "model_configuration_hash": "freesasa-default-v1",
+            "reference_configuration_hash": "freesasa-default-v1",
         },
     ).as_protocol_dict()["structuredContent"]
     assert sasa["ok"] is True
@@ -177,12 +179,14 @@ def test_scoring_mcp_tools_return_structured_results():
         "igem.scoring.m2_structure",
         {
             "candidate_id": "demo",
+            "core_ca_rmsd_angstrom": 0.6,
             "sasa_retention": 0.9,
             "pocket_rmsd_angstrom": 0.8,
             "iptm": 0.8,
             "mean_plddt": 85.0,
             "interface_contact_count": 30,
             "clash_count": 0,
+            "clash_cutoff_angstrom": 2.5,
         },
     ).as_protocol_dict()["structuredContent"]
     assert m2["ok"] is True
@@ -194,10 +198,15 @@ def test_scoring_mcp_tools_return_structured_results():
             "candidate_id": "demo",
             "reference_vina_output": "examples/real_metrics/vina_reference.txt",
             "fusion_vina_output": "examples/real_metrics/vina_fusion.txt",
+            "reference_configuration_hash": "vina-config-v1",
+            "fusion_configuration_hash": "vina-config-v1",
+            "reference_ligand_hash": "ligand-v1",
+            "fusion_ligand_hash": "ligand-v1",
         },
     ).as_protocol_dict()["structuredContent"]
     assert docking["ok"] is True
-    assert docking["result"]["passes_negative_screen"] is True
+    assert docking["result"]["status"] == "valid"
+    assert docking["result"]["passes_negative_screen"] is None
 
     m4 = registry.call(
         "igem.scoring.m4_ode",

@@ -72,7 +72,7 @@ pnpm install
 pnpm dev
 ```
 
-Open the Vite URL (normally `http://127.0.0.1:5173`). M0 validates a selected configuration through `igem.pipeline.validate`. M4 invokes `igem.pipeline.run_stage`, which runs its existing deterministic M1–M3 prerequisites before M4. M1, M2, M3, and M5 are deliberately shown as unavailable for isolated execution because no standalone existing tool contract exposes them yet; the Dashboard returns that state rather than fabricating a result. Attachments are selected locally in this MVP but are not uploaded or persisted.
+Open the Vite URL (normally `http://127.0.0.1:5173`). M0 validates a selected configuration through `igem.pipeline.validate`. M4 invokes `igem.pipeline.run_stage`, which runs its existing deterministic M1–M3 prerequisites before M4. The Dashboard has not yet wired its isolated stage buttons to the newer M1/M2 transport tools, so it still returns an unavailable state rather than fabricating a result; M3 and M5 also remain unavailable for isolated Dashboard execution. Attachments are selected locally in this MVP but are not uploaded or persisted.
 
 To inspect available local tools:
 
@@ -240,7 +240,9 @@ igem-drylab-mcp
 # equivalent: python -m igem_drylab.mcp.server
 ```
 
-It uses stdio by default and exposes typed tools including `igem.m1.compute_features`, `igem.m1.screen_sequence`, `igem.compute.check_tool`, and `igem.compute.run_tool`. The test suite starts the stdio subprocess with an MCP client, performs protocol discovery, lists tools, and calls the M1 calculator.
+It uses stdio by default and exposes typed tools including `igem.m1.compute_features`, `igem.m1.screen_sequence`, `igem.m2.calculate_geometry`, `igem.m2.screen_structure`, `igem.m2.pocket_sasa`, `igem.m2.compare_docking`, `igem.m2.site_cooccupancy`, `igem.compute.check_tool`, and `igem.compute.run_tool`. The test suite uses an MCP client for protocol discovery and real tool calls, and separately launches the stdio subprocess to verify the transport entry point.
+
+The exact M2 confidence gates, formulas, provenance requirements, and non-claims are documented in [`docs/m2_v2_implementation_contract.md`](docs/m2_v2_implementation_contract.md).
 
 ## Contributing
 

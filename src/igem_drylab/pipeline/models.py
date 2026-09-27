@@ -61,17 +61,28 @@ class M2FusionAssessment(ScientificResult):
     construct_definition: dict[str, Any]
     structure_model: str | None = None
     structure_source_tool: str | None = None
+    structure_source_tool_version: str | None = None
     structure_artifact_path: str | None = None
     structure_artifact_sha256: str | None = None
+    reference_structure_id: str | None = None
+    reference_artifact_sha256: str | None = None
+    geometry_input_sha256: str | None = None
+    sasa_configuration_hash: str | None = None
+    clash_rule_provenance: str | None = None
     available_metrics: list[str] = Field(default_factory=list)
     missing_metrics: list[str] = Field(default_factory=list)
-    confidence_level: Literal["none", "partial", "complete"] = "none"
+    screen_verdict: Literal["pass", "review", "reject", "blocked"] = "blocked"
+    confidence_gate: Literal["high", "medium", "low", "missing"] = "missing"
+    formula_version: str | None = None
+    core_ca_rmsd_angstrom: float | None = Field(default=None, ge=0)
     heuristic_structure_risk: float | None = Field(default=None, ge=0, le=1)
     pocket_sasa_retention: float | None = Field(default=None, ge=0)
     pocket_rmsd_angstrom: float | None = Field(default=None, ge=0)
+    tail_pocket_min_distance_angstrom: float | None = Field(default=None, ge=0)
     clash_count: int | None = Field(default=None, ge=0)
+    clash_cutoff_angstrom: float | None = Field(default=None, gt=0)
     recommended_for_m3: bool = False
-    threshold_origin: str = "project_heuristic"
+    threshold_origin: str = "M2-V2-2026-09-27-project-screening-rule"
     notes: str = ""
 
 

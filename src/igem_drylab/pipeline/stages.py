@@ -25,7 +25,7 @@ from igem_drylab.published_reference import run_published_reference, write_publi
 from igem_drylab.parameters import ParameterRecord, full_m4_kinetic_requirements, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.parameters.requirements import requirement_name_to_kernel_key, requirements_for_stage
 from igem_drylab.parameters.dimensions import normalize_concentration
-from igem_drylab.scoring.m2_structure import load_m2_structure_metrics, score_m2_structure
+from igem_drylab.scoring.m2_structure import M2StructureMetrics, load_m2_structure_metrics, score_m2_structure
 from igem_drylab.wetlab import compare_prediction, diagnose_discrepancy, evaluate_residual_significance, load_wetlab_results, quality_control, replicate_variation, fit_mechanistic_parameter
 from igem_drylab.wetlab.canonical import canonicalize_metabolite
 
@@ -167,21 +167,99 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
                 candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, status="insufficient_data",
                 data_quality="demo_fixture" if config.execution.mode == "demo" else "predicted",
                 structure_model=None,
-                missing_inputs=["structure metrics: SASA, pocket RMSD, clashes, ipTM, pLDDT"],
-                recommended_next_action=["supply parsed structure-prediction and pocket-screen metrics"], notes="No structure metrics were supplied; no risk score was generated.",
+                missing_inputs=["structure metrics: core/pocket C-alpha RMSD, pocket SASA retention, clashes with cutoff, folded-region pLDDT"],
+                recommended_next_action=["supply parsed structure-prediction and audited pocket-screen metrics"], notes="No structure metrics were supplied; M2 is blocked and no risk score was generated.",
             ))
             continue
+        if config.execution.mode == "real":
+            provenance_missing = _missing_m2_formal_evidence(row, config.stages.m2_fusion.structure_metrics_file)
+            if provenance_missing:
+                assessments.append(M2FusionAssessment(
+                    candidate_id=candidate.candidate_id,
+                    construct_id=candidate.construct_id,
+                    construct_definition=candidate.construct_definition,
+                    status="insufficient_data",
+                    data_quality="predicted",
+                    structure_model=row.source_model or row.source_tool,
+                    structure_source_tool=row.source_tool,
+                    structure_source_tool_version=row.source_tool_version,
+                    structure_artifact_path=row.artifact_path,
+                    structure_artifact_sha256=row.artifact_sha256,
+                    reference_structure_id=row.reference_structure_id,
+                    reference_artifact_sha256=row.reference_artifact_sha256,
+                    geometry_input_sha256=row.geometry_input_sha256,
+                    sasa_configuration_hash=row.sasa_configuration_hash,
+                    clash_rule_provenance=row.clash_rule_provenance,
+                    screen_verdict="blocked",
+                    missing_inputs=provenance_missing,
+                    recommended_next_action=["supply hash-verified M2 structures, reviewed residue mappings, and tool/config provenance"],
+                    notes="Formal M2 evidence gate failed; supplied numeric metrics were not scored.",
+                ))
+                continue
         scored = score_m2_structure(row)
         assessments.append(M2FusionAssessment(
             candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, structure_model=row.source_model or row.source_tool,
-            structure_source_tool=row.source_tool, structure_artifact_path=row.artifact_path, structure_artifact_sha256=row.artifact_sha256,
+            structure_source_tool=row.source_tool, structure_source_tool_version=row.source_tool_version,
+            structure_artifact_path=row.artifact_path, structure_artifact_sha256=row.artifact_sha256,
+            reference_structure_id=row.reference_structure_id, reference_artifact_sha256=row.reference_artifact_sha256,
+            geometry_input_sha256=row.geometry_input_sha256, sasa_configuration_hash=row.sasa_configuration_hash,
+            clash_rule_provenance=row.clash_rule_provenance,
             status=scored.status, data_quality="predicted", available_metrics=scored.available_metrics, missing_metrics=scored.missing_metrics,
-            confidence_level="complete" if not scored.missing_metrics else "partial", heuristic_structure_risk=scored.heuristic_structure_risk,
-            pocket_sasa_retention=row.sasa_retention, pocket_rmsd_angstrom=row.pocket_rmsd_angstrom, clash_count=row.clash_count,
-            recommended_for_m3=scored.recommended_for_m3, notes="; ".join(scored.reasons),
+            screen_verdict=scored.verdict, confidence_gate=scored.confidence_gate, formula_version=scored.formula_version,
+            core_ca_rmsd_angstrom=row.core_ca_rmsd_angstrom, heuristic_structure_risk=None,
+            pocket_sasa_retention=row.sasa_retention, pocket_rmsd_angstrom=row.pocket_rmsd_angstrom,
+            tail_pocket_min_distance_angstrom=row.tail_pocket_min_distance_angstrom,
+            clash_count=row.clash_count, clash_cutoff_angstrom=row.clash_cutoff_angstrom,
+            recommended_for_m3=scored.recommended_for_m3, threshold_origin=scored.threshold_origin, notes="; ".join(scored.reasons),
         ))
     write_models(stage_dir, "fusion_assessments", assessments)
     return assessments, _stage_output("m2_structure_screen", stage_dir, "fusion_assessments", len(assessments))
+
+
+def _missing_m2_formal_evidence(row: M2StructureMetrics, metrics_file: Path | None) -> list[str]:
+    required = {
+        "source_tool": row.source_tool,
+        "source_tool_version": row.source_tool_version,
+        "artifact_path": row.artifact_path,
+        "artifact_sha256": row.artifact_sha256,
+        "reference_structure_id": row.reference_structure_id,
+        "reference_artifact_sha256": row.reference_artifact_sha256,
+        "geometry_input_sha256": row.geometry_input_sha256,
+        "sasa_configuration_hash": row.sasa_configuration_hash,
+        "clash_rule_provenance": row.clash_rule_provenance,
+        "pocket_definition_source_ref": row.pocket_definition_source_ref,
+        "residue_mapping_source_ref": row.residue_mapping_source_ref,
+        "core_residue_ids": row.core_residue_ids,
+        "pocket_residue_ids": row.pocket_residue_ids,
+        "core_mean_plddt": row.core_mean_plddt,
+        "pocket_mean_plddt": row.pocket_mean_plddt,
+        "ligand_buried_assessment": row.ligand_buried,
+        "recruitment_domain_buried_assessment": row.recruitment_domain_buried,
+        "scaffold_interface_disrupted_assessment": row.scaffold_interface_disrupted,
+    }
+    missing = [f"M2 provenance: {name}" for name, value in required.items() if value in (None, "", [])]
+    if row.artifact_path and row.artifact_sha256:
+        artifact = Path(row.artifact_path)
+        if not artifact.is_absolute() and metrics_file is not None:
+            artifact = metrics_file.parent / artifact
+        if not artifact.is_file():
+            missing.append("M2 structure artifact file")
+        else:
+            if sha256(artifact.read_bytes()).hexdigest() != row.artifact_sha256:
+                missing.append("M2 structure artifact SHA-256 match")
+    if row.clash_count is not None and row.clash_count > 0:
+        collision_evidence = {
+            "independent_conformation_count": row.independent_conformation_count,
+            "severe_clash_conformation_count": row.severe_clash_conformation_count,
+            "persistent_severe_clash": row.persistent_severe_clash,
+            "direct_pocket_occlusion": row.direct_pocket_occlusion,
+        }
+        missing.extend(
+            f"M2 collision evidence: {name}"
+            for name, value in collision_evidence.items()
+            if value is None
+        )
+    return sorted(set(missing))
 
 
 def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAssessment]) -> tuple[list[M3ConcentrationAssessment], StageOutput]:
@@ -192,6 +270,15 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
     records: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
         if not assessment.recommended_for_m3:
+            records.append(M3ConcentrationAssessment(
+                candidate_id=assessment.candidate_id,
+                construct_id=assessment.construct_id,
+                status="insufficient_data",
+                data_quality=assessment.data_quality,
+                missing_inputs=assessment.missing_inputs or assessment.missing_metrics or [f"M2 verdict: {assessment.screen_verdict}"],
+                recommended_next_action=["resolve the recorded M2 block/review/reject before quantitative M3"],
+                notes="M3 preserved the candidate record but did not calculate concentrations from an ineligible M2 result.",
+            ))
             continue
         construct_id = assessment.construct_id
         condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,8 +20,12 @@ class PocketSasaResult(BaseModel):
     reference_sasa: float = Field(gt=0)
     retention: float = Field(ge=0)
     loss_fraction: float = Field(ge=0)
-    threshold_loss_fraction: float = Field(default=0.15, ge=0, le=1)
-    passes: bool
+    threshold_loss_fraction: float = Field(default=0.30, ge=0, le=1)
+    status: Literal["valid", "insufficient_data"]
+    same_configuration_verified: bool
+    model_configuration_hash: str | None = None
+    reference_configuration_hash: str | None = None
+    passes: bool | None
     source: str
 
 
@@ -65,7 +69,9 @@ def compute_pocket_sasa_retention(
     reference_json: Path | None = None,
     chain: str,
     residues: Iterable[int],
-    threshold_loss_fraction: float = 0.15,
+    threshold_loss_fraction: float = 0.30,
+    model_configuration_hash: str | None = None,
+    reference_configuration_hash: str | None = None,
 ) -> PocketSasaResult:
     if not 0 <= threshold_loss_fraction <= 1:
         raise ValueError("threshold_loss_fraction must be between 0 and 1")
@@ -73,10 +79,18 @@ def compute_pocket_sasa_retention(
         model_sasa = sum_residue_areas(parse_freesasa_json(model_json), chain=chain, residues=residues)
         reference_sasa = sum_residue_areas(parse_freesasa_json(reference_json), chain=chain, residues=residues)
         source = "freesasa_json"
+        same_configuration = (
+            model_configuration_hash is not None
+            and reference_configuration_hash is not None
+            and model_configuration_hash == reference_configuration_hash
+        )
     elif model_pdb and reference_pdb:
         model_sasa = residue_sasa(model_pdb, chain=chain, residues=residues)
         reference_sasa = residue_sasa(reference_pdb, chain=chain, residues=residues)
         source = "freesasa_python_api"
+        # Both structures are evaluated by the same API call with the same
+        # library defaults, so configuration identity is established here.
+        same_configuration = True
     else:
         raise ValueError("Provide either model/reference JSON files or model/reference PDB files")
     if reference_sasa <= 0:
@@ -89,7 +103,11 @@ def compute_pocket_sasa_retention(
         retention=retention,
         loss_fraction=loss,
         threshold_loss_fraction=threshold_loss_fraction,
-        passes=loss <= threshold_loss_fraction,
+        status="valid" if same_configuration else "insufficient_data",
+        same_configuration_verified=same_configuration,
+        model_configuration_hash=model_configuration_hash,
+        reference_configuration_hash=reference_configuration_hash,
+        passes=retention >= 1.0 - threshold_loss_fraction if same_configuration else None,
         source=source,
     )
 

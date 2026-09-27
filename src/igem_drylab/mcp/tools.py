@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,8 @@ from igem_drylab.parsers.freesasa import compute_pocket_sasa_retention
 from igem_drylab.parsers.calvados import parse_calvados_output
 from igem_drylab.parsers.structure_prediction import parse_structure_prediction_output
 from igem_drylab.scoring.m2_structure import M2StructureMetrics, score_m2_structure
+from igem_drylab.scoring.m2_site_geometry import M2SiteGeometryInput, analyse_site_cooccupancy
+from igem_drylab.structure_metrics import aligned_ca_rmsds, count_inter_module_clashes, tail_pocket_min_distance
 from igem_drylab.scoring.m4_reaction import (
     DockingPenalty,
     compute_docking_penalty,
@@ -379,7 +382,9 @@ def scoring_pocket_sasa(arguments: JsonObject) -> McpToolResult:
         reference_json=_optional_path(arguments, "reference_json"),
         chain=_require_str(arguments, "chain"),
         residues=residues,
-        threshold_loss_fraction=float(arguments.get("threshold_loss_fraction", 0.15)),
+        threshold_loss_fraction=float(arguments.get("threshold_loss_fraction", 0.30)),
+        model_configuration_hash=arguments.get("model_configuration_hash") if isinstance(arguments.get("model_configuration_hash"), str) else None,
+        reference_configuration_hash=arguments.get("reference_configuration_hash") if isinstance(arguments.get("reference_configuration_hash"), str) else None,
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
@@ -387,6 +392,85 @@ def scoring_pocket_sasa(arguments: JsonObject) -> McpToolResult:
 def scoring_m2_structure(arguments: JsonObject) -> McpToolResult:
     result = score_m2_structure(M2StructureMetrics.model_validate(arguments))
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m2_site_cooccupancy(arguments: JsonObject) -> McpToolResult:
+    result = analyse_site_cooccupancy(M2SiteGeometryInput.model_validate(arguments))
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m2_calculate_geometry(arguments: JsonObject) -> McpToolResult:
+    core_residues = arguments.get("core_residues")
+    pocket_residues = arguments.get("pocket_residues")
+    tail_residues = arguments.get("tail_residues")
+    for name, value in (("core_residues", core_residues), ("pocket_residues", pocket_residues)):
+        if not isinstance(value, list) or not value or not all(isinstance(item, int) for item in value):
+            raise ValueError(f"{name} must be a non-empty list of residue integers")
+    model_pdb = Path(_require_str(arguments, "model_pdb"))
+    reference_chain = _require_str(arguments, "reference_chain")
+    model_chain = _require_str(arguments, "model_chain")
+    reference_pdb = Path(_require_str(arguments, "reference_pdb"))
+    core_mapping = _parse_residue_mapping(arguments.get("core_residue_mapping"), "core_residue_mapping")
+    pocket_mapping = _parse_residue_mapping(arguments.get("pocket_residue_mapping"), "pocket_residue_mapping")
+    result = aligned_ca_rmsds(
+        reference_pdb,
+        model_pdb,
+        reference_chain=reference_chain,
+        model_chain=model_chain,
+        core_residues=core_residues,
+        pocket_residues=pocket_residues,
+        core_residue_mapping=core_mapping,
+        pocket_residue_mapping=pocket_mapping,
+    )
+    result.update(
+        formula_version="m2-v2-2026-09-27",
+        reference_pdb_sha256=sha256(reference_pdb.read_bytes()).hexdigest(),
+        model_pdb_sha256=sha256(model_pdb.read_bytes()).hexdigest(),
+    )
+    if tail_residues is not None:
+        if not isinstance(tail_residues, list) or not tail_residues or not all(isinstance(item, int) for item in tail_residues):
+            raise ValueError("tail_residues must be a non-empty list of residue integers")
+        result["tail_pocket_min_distance_angstrom"] = tail_pocket_min_distance(
+            model_pdb,
+            chain=model_chain,
+            tail_residues=tail_residues,
+            pocket_residues=pocket_residues,
+        )
+    first_residues = arguments.get("first_module_residues")
+    second_residues = arguments.get("second_module_residues")
+    if first_residues is not None or second_residues is not None:
+        if not isinstance(first_residues, list) or not isinstance(second_residues, list):
+            raise ValueError("both first_module_residues and second_module_residues are required for clashes")
+        if not isinstance(arguments.get("clash_cutoff_angstrom"), (int, float)):
+            raise ValueError("clash_cutoff_angstrom must be explicitly supplied from the reviewed M2 rule")
+        result.update(
+            count_inter_module_clashes(
+                model_pdb,
+                first_chain=arguments.get("first_module_chain", model_chain),
+                first_residues=first_residues,
+                second_chain=arguments.get("second_module_chain", model_chain),
+                second_residues=second_residues,
+                cutoff_angstrom=float(arguments["clash_cutoff_angstrom"]),
+            )
+        )
+    return McpToolResult.ok({"ok": True, "result": result})
+
+
+def _parse_residue_mapping(value: object, name: str) -> list[tuple[int, int]] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{name} must be a non-empty list")
+    pairs: list[tuple[int, int]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError(f"each {name} item must be an object")
+        reference_residue = item.get("reference_residue")
+        model_residue = item.get("model_residue")
+        if not isinstance(reference_residue, int) or not isinstance(model_residue, int):
+            raise ValueError(f"each {name} item requires integer reference_residue and model_residue")
+        pairs.append((reference_residue, model_residue))
+    return pairs
 
 
 def parser_structure_prediction(arguments: JsonObject) -> McpToolResult:
@@ -407,7 +491,10 @@ def scoring_docking_penalty(arguments: JsonObject) -> McpToolResult:
         candidate_id=_require_str(arguments, "candidate_id"),
         reference_vina_output=Path(_require_str(arguments, "reference_vina_output")),
         fusion_vina_output=Path(_require_str(arguments, "fusion_vina_output")),
-        allowed_loss_kcal_mol=float(arguments.get("allowed_loss_kcal_mol", 1.0)),
+        reference_configuration_hash=arguments.get("reference_configuration_hash") if isinstance(arguments.get("reference_configuration_hash"), str) else None,
+        fusion_configuration_hash=arguments.get("fusion_configuration_hash") if isinstance(arguments.get("fusion_configuration_hash"), str) else None,
+        reference_ligand_hash=arguments.get("reference_ligand_hash") if isinstance(arguments.get("reference_ligand_hash"), str) else None,
+        fusion_ligand_hash=arguments.get("fusion_ligand_hash") if isinstance(arguments.get("fusion_ligand_hash"), str) else None,
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
@@ -986,7 +1073,7 @@ M1_PARSE_SECONDARY_STRUCTURE_TOOL = McpTool(
 SCORING_POCKET_SASA_TOOL = McpTool(
     name="igem.scoring.pocket_sasa",
     title="Calculate pocket SASA retention",
-    description="Compare model and reference pocket SASA from FreeSASA JSON or PDB inputs.",
+    description="Compare the same pocket residues under the same FreeSASA setup; M2 V2 retention cutoff is 0.70.",
     input_schema=_schema(
         {
             "model_json": {"type": "string"},
@@ -996,8 +1083,53 @@ SCORING_POCKET_SASA_TOOL = McpTool(
             "chain": {"type": "string"},
             "residues": {"type": "array", "items": {"type": "integer"}},
             "threshold_loss_fraction": {"type": "number"},
+            "model_configuration_hash": {"type": "string"},
+            "reference_configuration_hash": {"type": "string"},
         },
         ["chain", "residues"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M2_CALCULATE_GEOMETRY_TOOL = McpTool(
+    name="igem.m2.calculate_geometry",
+    title="Calculate M2 V2 C-alpha geometry and explicit clashes",
+    description=(
+        "Kabsch-align model and reference on the declared core C-alpha atoms, calculate core/pocket "
+        "C-alpha RMSD, optional tail-pocket minimum distance, and explicit inter-module heavy-atom clashes."
+    ),
+    input_schema=_schema(
+        {
+            "reference_pdb": {"type": "string"},
+            "model_pdb": {"type": "string"},
+            "reference_chain": {"type": "string"},
+            "model_chain": {"type": "string"},
+            "core_residues": {"type": "array", "items": {"type": "integer"}, "minItems": 3},
+            "pocket_residues": {"type": "array", "items": {"type": "integer"}, "minItems": 1},
+            "core_residue_mapping": {
+                "type": "array",
+                "minItems": 3,
+                "items": _schema(
+                    {"reference_residue": {"type": "integer"}, "model_residue": {"type": "integer"}},
+                    ["reference_residue", "model_residue"],
+                ),
+            },
+            "pocket_residue_mapping": {
+                "type": "array",
+                "minItems": 1,
+                "items": _schema(
+                    {"reference_residue": {"type": "integer"}, "model_residue": {"type": "integer"}},
+                    ["reference_residue", "model_residue"],
+                ),
+            },
+            "tail_residues": {"type": "array", "items": {"type": "integer"}, "minItems": 1},
+            "first_module_chain": {"type": "string"},
+            "first_module_residues": {"type": "array", "items": {"type": "integer"}},
+            "second_module_chain": {"type": "string"},
+            "second_module_residues": {"type": "array", "items": {"type": "integer"}},
+            "clash_cutoff_angstrom": {"type": "number", "exclusiveMinimum": 0},
+        },
+        ["reference_pdb", "model_pdb", "reference_chain", "model_chain", "core_residues", "pocket_residues"],
     ),
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
@@ -1005,20 +1137,83 @@ SCORING_POCKET_SASA_TOOL = McpTool(
 SCORING_M2_STRUCTURE_TOOL = McpTool(
     name="igem.scoring.m2_structure",
     title="Score M2 structure compatibility",
-    description="Apply transparent rule-based structural screening from SASA/RMSD/PAE/confidence/clash metrics.",
+    description="Apply M2 V2 confidence gates and explicit 0.70 pocket-SASA/4 A core-C-alpha-RMSD negative rules without a composite score.",
     input_schema=_schema(
         {
             "candidate_id": {"type": "string"},
+            "source_tool": {"type": "string"},
+            "source_tool_version": {"type": "string"},
+            "source_model": {"type": "string"},
+            "artifact_path": {"type": "string"},
+            "artifact_sha256": {"type": "string"},
+            "reference_structure_id": {"type": "string"},
+            "reference_artifact_sha256": {"type": "string"},
+            "geometry_input_sha256": {"type": "string"},
+            "sasa_configuration_hash": {"type": "string"},
+            "clash_rule_provenance": {"type": "string"},
+            "pocket_definition_source_ref": {"type": "string"},
+            "residue_mapping_source_ref": {"type": "string"},
+            "core_residue_ids": {"type": "array", "items": {"type": "integer"}},
+            "pocket_residue_ids": {"type": "array", "items": {"type": "integer"}},
             "sasa_retention": {"type": "number"},
+            "core_ca_rmsd_angstrom": {"type": "number"},
             "pocket_rmsd_angstrom": {"type": "number"},
             "mean_interdomain_pae": {"type": "number"},
             "iptm": {"type": "number"},
             "mean_plddt": {"type": "number"},
             "interface_contact_count": {"type": "integer"},
             "clash_count": {"type": "integer"},
+            "clash_cutoff_angstrom": {"type": "number"},
+            "core_mean_plddt": {"type": "number"},
+            "pocket_mean_plddt": {"type": "number"},
+            "independent_conformation_count": {"type": "integer"},
+            "severe_clash_conformation_count": {"type": "integer"},
+            "persistent_severe_clash": {"type": "boolean"},
+            "direct_pocket_occlusion": {"type": "boolean"},
+            "ligand_buried": {"type": "boolean"},
+            "recruitment_domain_buried": {"type": "boolean"},
+            "scaffold_interface_disrupted": {"type": "boolean"},
             "notes": {"type": "string"},
         },
         ["candidate_id"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M2_SITE_COOCCUPANCY_TOOL = McpTool(
+    name="igem.m2.site_cooccupancy",
+    title="Solve species-specific M2 site co-occupancy",
+    description=(
+        "Solve the declared OC/DMT site conflict graph exactly and return species-specific ranges and "
+        "Pareto combinations; never collapse the graph to one shared binding efficiency."
+    ),
+    input_schema=_schema(
+        {
+            "scaffold_id": {"type": "string"},
+            "assembly_applicability_confirmed": {"type": "boolean"},
+            "assembly_subunit_count": {"type": "integer", "minimum": 1},
+            "sh3_sites_per_subunit": {"type": "integer", "minimum": 0},
+            "pdz_sites_per_subunit": {"type": "integer", "minimum": 0},
+            "sites": {
+                "type": "array",
+                "minItems": 1,
+                "items": _schema(
+                    {
+                        "site_id": {"type": "string"},
+                        "species": {"type": "string", "enum": ["OC", "DMT"]},
+                        "geometrically_accessible": {"type": "boolean"},
+                    },
+                    ["site_id", "species"],
+                ),
+            },
+            "conflict_edges": {
+                "type": "array",
+                "items": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+            },
+            "model_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "clash_rule_provenance": {"type": "string"},
+        },
+        ["scaffold_id", "sites", "model_ids", "clash_rule_provenance"],
     ),
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
@@ -1054,7 +1249,10 @@ SCORING_DOCKING_PENALTY_TOOL = McpTool(
             "candidate_id": {"type": "string"},
             "reference_vina_output": {"type": "string"},
             "fusion_vina_output": {"type": "string"},
-            "allowed_loss_kcal_mol": {"type": "number"},
+            "reference_configuration_hash": {"type": "string"},
+            "fusion_configuration_hash": {"type": "string"},
+            "reference_ligand_hash": {"type": "string"},
+            "fusion_ligand_hash": {"type": "string"},
         },
         ["candidate_id", "reference_vina_output", "fusion_vina_output"],
     ),
@@ -1278,6 +1476,8 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (MULTICHAIN_ASSESS_INTERFACE_TOOL, multichain_assess_interface),
     (MULTICHAIN_EXPAND_FTH1_ARMS_TOOL, multichain_expand_fth1_arms),
     (SCORING_POCKET_SASA_TOOL, scoring_pocket_sasa),
+    (M2_CALCULATE_GEOMETRY_TOOL, m2_calculate_geometry),
+    (M2_SITE_COOCCUPANCY_TOOL, m2_site_cooccupancy),
     (SCORING_M2_STRUCTURE_TOOL, scoring_m2_structure),
     (PARSER_STRUCTURE_PREDICTION_TOOL, parser_structure_prediction),
     (PARSER_CALVADOS_TOOL, parser_calvados),
