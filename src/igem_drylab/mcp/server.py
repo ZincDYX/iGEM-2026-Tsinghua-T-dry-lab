@@ -301,6 +301,19 @@ def m3_solve_equilibrium(inputs: dict[str, Any]) -> dict[str, Any]:
 
 
 @server.tool(
+    name="igem.m4.solve_steady_state",
+    title="Solve documented M4 ten-reaction steady state",
+    description=(
+        "Solve the original eight steady-state balances. Requires explicit V_in and k_sec for compounds "
+        "8-15 and blocks nonzero M15 steady state without an M15 outlet."
+    ),
+    structured_output=True,
+)
+def m4_solve_steady_state(inputs: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m4.solve_steady_state", inputs)
+
+
+@server.tool(
     name="igem.compute.check_tool",
     title="Check an explicitly configured scientific executable",
     description="Resolve the configured command and report whether its real executable is available.",

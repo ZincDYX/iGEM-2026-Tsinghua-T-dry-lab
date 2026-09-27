@@ -152,7 +152,11 @@ class M4ReactionPrediction(ScientificResult):
     # Deprecated compatibility alias.  This model has no extracellular export term.
     leakage_fraction: float | None = Field(default=None, ge=0, le=1)
     productivity: float | None = Field(default=None, ge=0)
-    recommendation: Literal["drop", "iterate", "test", "insufficient_data"] = "insufficient_data"
+    recommendation: Literal["drop", "iterate", "test", "insufficient_data"] | None = "insufficient_data"
+    yield_abs: float | None = Field(default=None, ge=0)
+    secretion_loss: float | None = Field(default=None, ge=0)
+    steady_state_residuals: dict[str, float] = Field(default_factory=dict)
+    steady_state_fluxes: dict[str, float] = Field(default_factory=dict)
     baseline_comparison: dict[str, float] = Field(default_factory=dict)
     bottleneck: str = "insufficient_data"
     trajectory_artifact: Path | None = None

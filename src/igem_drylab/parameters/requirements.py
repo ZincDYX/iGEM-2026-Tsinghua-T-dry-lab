@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-Dimension = Literal["dimensionless", "concentration", "rate"]
+Dimension = Literal["dimensionless", "concentration", "rate", "concentration_rate"]
 
 
 class ParameterRequirement(BaseModel):
@@ -35,6 +35,8 @@ def _requirement(name: str, parameter_type: str, **identity: str | None) -> Para
         return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="concentration", canonical_unit="uM", minimum=0.0, minimum_inclusive=parameter_type == "abundance", **identity)
     if parameter_type in {"kcat", "degradation_rate", "export_rate"}:
         return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="rate", canonical_unit="1/h", minimum=0.0, **identity)
+    if parameter_type == "input_flux":
+        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="concentration_rate", canonical_unit="uM/h", minimum=0.0, minimum_inclusive=False, **identity)
     return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="dimensionless", **identity)
 
 
@@ -42,8 +44,8 @@ def m3_requirements() -> list[ParameterRequirement]:
     """Inputs for the documented M3 S1--S5/E1--E6 equilibrium."""
     return [
         _requirement("phi", "phi"),
-        *[_requirement(f"{enzyme}_total", "abundance", enzyme_id=enzyme.upper()) for enzyme in ("pt", "oc", "dmt")],
-        *[_requirement(f"partition_{species}", "kp", species_id=species.upper()) for species in ("pt", "oc", "dmt")],
+        *[_requirement(f"{enzyme}_total", "abundance", enzyme_id=enzyme.upper()) for enzyme in ("ptr", "pt", "oc", "dmt")],
+        *[_requirement(f"partition_{species}", "kp", species_id=species.upper()) for species in ("ptr", "pt", "oc", "dmt")],
         _requirement("c_dense_scaffold", "abundance"),
         _requirement("kd_sh3", "kd"),
         _requirement("kd_pdz", "kd"),
@@ -107,6 +109,14 @@ def full_m4_kinetic_requirements(*, include_transport: bool = False, include_act
     return requirements
 
 
+def m4_markdown_steady_requirements() -> list[ParameterRequirement]:
+    return [
+        *full_m4_kinetic_requirements(),
+        _requirement("input_flux_8", "input_flux", species_id="8"),
+        *[_requirement(f"ksec_{compound}", "export_rate", species_id=compound) for compound in ("8", "9", "10", "11", "12", "13", "14", "15")],
+    ]
+
+
 def m4_requirements(*, include_degradation: bool = False) -> list[ParameterRequirement]:
     requirements = [
         *m3_requirements(),
@@ -158,12 +168,14 @@ def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bo
             return author_native_m3_effective_ratio_requirements() if author_native else m3_effective_ratio_requirements()
         mode = getattr(project.stages.m3_concentration, "recruitment_mode", "finite_site")
         core = legacy_m3_independent_partition_requirements() if mode == "legacy_independent_partition" else m3_requirements()
-        if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") == "galatea_full_competitive":
+        if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") in {"galatea_full_competitive", "markdown_steady_state"}:
             core = core + [_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")]
         auxiliary = [item for recruitment in getattr(project.stages.m3_concentration, "recruitment", []) for item in recruitment_requirements(recruitment, binding_model=project.stages.m3_concentration.binding_model)]
         return core + auxiliary if include_auxiliary else core
     if stage == "m4":
         m4 = project.stages.m4_reaction
+        if getattr(m4, "network_mode", "legacy_reduced") == "markdown_steady_state":
+            return m4_markdown_steady_requirements()
         if getattr(m4, "network_mode", "legacy_reduced") == "galatea_full_competitive":
             if m4.unit_mode == "author_native_sensitivity":
                 return author_native_m4_sensitivity_requirements(include_activity=m4.activity_mode == "sensitivity_parameters")

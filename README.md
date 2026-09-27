@@ -240,9 +240,9 @@ igem-drylab-mcp
 # equivalent: python -m igem_drylab.mcp.server
 ```
 
-It uses stdio by default and exposes typed tools including `igem.m1.compute_features`, `igem.m1.screen_sequence`, `igem.m2.calculate_geometry`, `igem.m2.screen_structure`, `igem.m2.pocket_sasa`, `igem.m2.compare_docking`, `igem.m2.site_cooccupancy`, `igem.m3.solve_equilibrium`, `igem.compute.check_tool`, and `igem.compute.run_tool`. The test suite uses an MCP client for protocol discovery and real tool calls, and separately launches the stdio subprocess to verify the transport entry point.
+It uses stdio by default and exposes typed tools including `igem.m1.compute_features`, `igem.m1.screen_sequence`, `igem.m2.calculate_geometry`, `igem.m2.screen_structure`, `igem.m2.pocket_sasa`, `igem.m2.compare_docking`, `igem.m2.site_cooccupancy`, `igem.m3.solve_equilibrium`, `igem.m4.solve_steady_state`, `igem.compute.check_tool`, and `igem.compute.run_tool`. The test suite uses an MCP client for protocol discovery and real tool calls, and separately launches the stdio subprocess to verify the transport entry point.
 
-The exact M2 confidence gates, formulas, provenance requirements, and non-claims are documented in [`docs/m2_v2_implementation_contract.md`](docs/m2_v2_implementation_contract.md). The conservative M3 S1–S5/E1–E10 implementation and its unit/capacity boundaries are documented in [`docs/m3_s1_e10_implementation_contract.md`](docs/m3_s1_e10_implementation_contract.md).
+The exact M2 confidence gates, formulas, provenance requirements, and non-claims are documented in [`docs/m2_v2_implementation_contract.md`](docs/m2_v2_implementation_contract.md). The conservative M3 S1–S5/E1–E10 implementation and its unit/capacity boundaries are documented in [`docs/m3_s1_e10_implementation_contract.md`](docs/m3_s1_e10_implementation_contract.md). The original M4 Step 0–8 steady-state solver and its existence/non-claim boundaries are documented in [`docs/m4_step0_step8_implementation_contract.md`](docs/m4_step0_step8_implementation_contract.md).
 
 ## Contributing
 

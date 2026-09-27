@@ -9,7 +9,7 @@ import math
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ParameterSourceType = Literal["literature", "wetlab", "prediction", "assumption"]
-ParameterType = Literal["kcat", "km", "kd", "kp", "phi", "abundance", "activity_ratio", "degradation_rate", "export_rate", "hill_coefficient", "other"]
+ParameterType = Literal["kcat", "km", "kd", "kp", "phi", "abundance", "activity_ratio", "degradation_rate", "export_rate", "input_flux", "hill_coefficient", "other"]
 ReviewStatus = Literal["extracted", "validated", "approved", "rejected"]
 
 

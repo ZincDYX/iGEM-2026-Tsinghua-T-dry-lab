@@ -187,9 +187,11 @@ def test_pipeline_finite_site_mode_consumes_m2_geometry_and_s1_e6_parameters(tmp
     config.execution.allow_assumptions = True
     values = {
         "phi": 0.1,
+        "ptr_total": 1.0,
         "pt_total": 1.0,
         "oc_total": 3.0,
         "dmt_total": 2.0,
+        "partition_ptr": 1.0,
         "partition_pt": 1.0,
         "partition_oc": 5.0,
         "partition_dmt": 2.0,

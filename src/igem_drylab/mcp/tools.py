@@ -17,6 +17,7 @@ from igem_drylab.literature.sources import LiteratureSearchQuery, search_literat
 from igem_drylab.multichain import assess_interface, build_multichain_input, expand_fth1_arms, solve_binding_equilibrium
 from igem_drylab.multichain.models import ProteinChain
 from igem_drylab.m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
+from igem_drylab.m4_steady_state import M4SteadyStateInput, solve_m4_steady_state
 from igem_drylab.parsers.freesasa import compute_pocket_sasa_retention
 from igem_drylab.parsers.calvados import parse_calvados_output
 from igem_drylab.parsers.structure_prediction import parse_structure_prediction_output
@@ -402,6 +403,11 @@ def m2_site_cooccupancy(arguments: JsonObject) -> McpToolResult:
 
 def m3_solve_equilibrium(arguments: JsonObject) -> McpToolResult:
     result = solve_m3_equilibrium(M3EquilibriumInput.model_validate(arguments))
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m4_solve_steady_state(arguments: JsonObject) -> McpToolResult:
+    result = solve_m4_steady_state(M4SteadyStateInput.model_validate(arguments))
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
 
@@ -1247,6 +1253,17 @@ M3_SOLVE_EQUILIBRIUM_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
 
+M4_SOLVE_STEADY_STATE_TOOL = McpTool(
+    name="igem.m4.solve_steady_state",
+    title="Solve documented M4 ten-reaction steady state",
+    description=(
+        "Solve the eight original Step 5 balances with phase-specific competitive kinetics and explicit "
+        "secretion outlets; block nonzero M15 steady state when no M15 outlet exists."
+    ),
+    input_schema=M4SteadyStateInput.model_json_schema(),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
 PARSER_STRUCTURE_PREDICTION_TOOL = McpTool(
     name="igem.parsers.structure_prediction",
     title="Parse ColabFold/AF3/Boltz/Chai/ABCFold prediction outputs",
@@ -1508,6 +1525,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (M2_CALCULATE_GEOMETRY_TOOL, m2_calculate_geometry),
     (M2_SITE_COOCCUPANCY_TOOL, m2_site_cooccupancy),
     (M3_SOLVE_EQUILIBRIUM_TOOL, m3_solve_equilibrium),
+    (M4_SOLVE_STEADY_STATE_TOOL, m4_solve_steady_state),
     (SCORING_M2_STRUCTURE_TOOL, scoring_m2_structure),
     (PARSER_STRUCTURE_PREDICTION_TOOL, parser_structure_prediction),
     (PARSER_CALVADOS_TOOL, parser_calvados),

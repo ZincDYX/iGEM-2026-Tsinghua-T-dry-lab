@@ -73,5 +73,6 @@ stages:
   m3_concentration:
     binding_model: independent
   m4_reaction:
+    network_mode: legacy_reduced
     target_product: glabridin
     t_end: 24.0

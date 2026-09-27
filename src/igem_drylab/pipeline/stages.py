@@ -20,6 +20,7 @@ from igem_drylab.constructs import (
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_enrichment, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
+from igem_drylab.m4_steady_state import M4PhaseEnzymeInput, M4ReactionInput, M4SteadyStateInput, solve_m4_steady_state
 from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
 from igem_drylab.full_network import PhaseDistribution, TemporalGate, TransportParameters
 from igem_drylab.published_reference import run_published_reference, write_published_reference_reproduction
@@ -487,16 +488,18 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                     notes="; ".join(exact.warnings),
                 ))
                 continue
-            pt_input = EnrichmentInput(
-                species_id="PT",
-                total_concentration=selected["pt_total"].canonical_value,
-                partition_coefficient=selected["partition_pt"].canonical_value,
-                partition_source=selected["partition_pt"].selected_parameter.source_reference,
-                partition_uncertainty=selected["partition_pt"].selected_parameter.uncertainty,
-            )
-            pt = calculate_enrichment(pt_input, phi=phi)
+            background = {
+                enzyme: calculate_enrichment(EnrichmentInput(
+                    species_id=enzyme,
+                    total_concentration=selected[f"{enzyme.lower()}_total"].canonical_value,
+                    partition_coefficient=selected[f"partition_{enzyme.lower()}"].canonical_value,
+                    partition_source=selected[f"partition_{enzyme.lower()}"].selected_parameter.source_reference,
+                    partition_uncertainty=selected[f"partition_{enzyme.lower()}"].selected_parameter.uncertainty,
+                ), phi=phi)
+                for enzyme in ("PTR", "PT")
+            }
             enzyme_distribution = {
-                "PT": {"dense": pt.dense_concentration, "dilute": pt.dilute_concentration, "partition_coefficient": pt.partition_coefficient},
+                **{enzyme: {"dense": item.dense_concentration, "dilute": item.dilute_concentration, "partition_coefficient": item.partition_coefficient} for enzyme, item in background.items()},
                 "OC": {"dense": exact.oc.total_dense_um, "dilute": exact.oc.free_dilute_um, "partition_coefficient": selected["partition_oc"].canonical_value},
                 "DMT": {"dense": exact.dmt.total_dense_um, "dilute": exact.dmt.free_dilute_um, "partition_coefficient": selected["partition_dmt"].canonical_value},
             }
@@ -510,7 +513,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 "DMT": exact.dmt.bound_fraction_of_whole_cell_total,
             }
             dense_fractions = {
-                "PT": pt.fraction_in_dense,
+                **{enzyme: item.fraction_in_dense for enzyme, item in background.items()},
                 "OC": exact.oc.dense_phase_fraction_of_whole_cell_total,
                 "DMT": exact.dmt.dense_phase_fraction_of_whole_cell_total,
             }
@@ -521,6 +524,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 condition_id=condition_id,
                 phi=phi,
                 enzyme_distribution=enzyme_distribution,
+                metabolite_partition_coefficients={compound: selected[f"partition_x{compound}"].canonical_value for compound in ("8", "9", "10", "11", "12", "13", "14", "15") if f"partition_x{compound}" in selected},
                 binding_recruited_fraction=bound_fractions,
                 site_occupancy=site_occupancy,
                 parameter_ids=parameter_ids,
@@ -528,7 +532,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 assumptions=[
                     "M3 S1-S5/E1-E6 rapid-equilibrium cytosolic two-phase model",
                     "M2 confirmed independent treatment of joint site occupancy",
-                    "PT uses independent two-phase partition because S1-E6 only specify OC/DMT binding",
+                    "PTR/PT use independent two-phase partition because S1-E6 only specify OC/DMT binding",
                 ],
             )
             records.append(M3ConcentrationAssessment(
@@ -537,7 +541,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 status="valid",
                 data_quality="mixed",
                 concentrations={
-                    "PT": pt.model_dump(mode="json"),
+                    **{enzyme: item.model_dump(mode="json") for enzyme, item in background.items()},
                     "OC": {"dense_concentration": exact.oc.total_dense_um, "dilute_concentration": exact.oc.free_dilute_um},
                     "DMT": {"dense_concentration": exact.dmt.total_dense_um, "dilute_concentration": exact.dmt.free_dilute_um},
                 },
@@ -615,9 +619,11 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
 def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_count_basis: str) -> list[str]:
     allowed_sources = {
         "phi": {"wetlab"},
+        "ptr_total": {"wetlab"},
         "pt_total": {"wetlab"},
         "oc_total": {"wetlab"},
         "dmt_total": {"wetlab"},
+        "partition_ptr": {"wetlab", "literature"},
         "partition_pt": {"wetlab", "literature"},
         "partition_oc": {"wetlab", "literature"},
         "partition_dmt": {"wetlab", "literature"},
@@ -625,6 +631,7 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
         "kd_sh3": {"wetlab", "literature"},
         "kd_pdz": {"wetlab", "literature"},
     }
+    allowed_sources.update({name: {"wetlab", "literature"} for name in selected if name.startswith("partition_x")})
     missing: list[str] = []
     for name, allowed in allowed_sources.items():
         resolution = selected[name]
@@ -642,6 +649,8 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
 
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
+    if config.stages.m4_reaction.network_mode == "markdown_steady_state":
+        return _run_markdown_steady_m4(config, run_dir, assessments)
     if config.stages.m4_reaction.network_mode == "published_reference":
         return _run_published_reference_m4(config, run_dir)
     if config.stages.m4_reaction.network_mode == "galatea_full_competitive":
@@ -700,6 +709,129 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 notes=f"M4 consumed candidate-specific M3 enzyme distributions; {'modeled degradation loss=' + format(delayed.modeled_degradation_loss, '.3g') if gates.enable_degradation else 'mass-balance error=' + format(delayed.mass_balance_error, '.3g')}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
+
+
+def _run_markdown_steady_m4(
+    config: ProjectConfig,
+    run_dir: Path,
+    assessments: list[M3ConcentrationAssessment],
+) -> tuple[list[M4ReactionPrediction], StageOutput]:
+    stage_dir = run_dir / "m4_markdown_steady_state"
+    settings = config.stages.m4_reaction
+    requirements = requirements_for_stage(config, "m4")
+    records: list[M4ReactionPrediction] = []
+    for item in assessments:
+        context = item.m4_candidate_context
+        if item.status != "valid" or context is None:
+            records.append(_m4_insufficient(item.candidate_id, config, ["valid conservative M3 context"], construct_id=item.construct_id))
+            continue
+        selected, missing = validate_parameters(
+            config.parameters,
+            requirements=requirements,
+            allow_assumptions=config.execution.allow_assumptions,
+            host=config.experimental_context.host,
+            strain=config.experimental_context.strain,
+            assay_system=config.experimental_context.assay_system,
+            pH=config.experimental_context.pH,
+            temperature_c=config.experimental_context.temperature_c,
+            construct_id=context.construct_id,
+            condition_id=context.condition_id,
+            require_provenance=config.execution.mode == "real" and config.execution.require_provenance,
+        )
+        required_files = []
+        if settings.reaction_network_file is None:
+            required_files.append("reaction_network_file")
+        if settings.steady_state_initial_guess_um is None:
+            required_files.append("steady_state_initial_guess_um")
+        if set(context.enzyme_distribution) != {"PTR", "PT", "OC", "DMT"}:
+            required_files.append("M3 PTR/PT/OC/DMT phase concentrations")
+        if set(context.metabolite_partition_coefficients) != {str(index) for index in range(8, 16)}:
+            required_files.append("M3 Kp8-Kp15")
+        if missing or required_files:
+            records.append(_m4_insufficient(item.candidate_id, config, [*missing, *required_files], construct_id=item.construct_id))
+            continue
+        if config.execution.mode == "real":
+            bad_sources = [
+                name for name, resolution in selected.items()
+                if resolution.selected_parameter is None or resolution.selected_parameter.source_type not in {"wetlab", "literature"}
+            ]
+            if bad_sources:
+                records.append(_m4_insufficient(item.candidate_id, config, [f"formal measured/verified M4 source: {name}" for name in bad_sources], construct_id=item.construct_id))
+                continue
+        source_reactions = load_author_native_reactions(settings.reaction_network_file)
+        reaction_inputs = [
+            M4ReactionInput(
+                reaction_id=reaction.reaction_id,
+                enzyme=reaction.enzyme,
+                substrate=reaction.substrate,
+                product=reaction.product,
+                kcat_per_h=selected[f"kcat_{reaction.reaction_id.lower()}"].canonical_value,
+                km_um=selected[f"km_{reaction.reaction_id.lower()}"].canonical_value,
+                parameter_ids=[
+                    selected[f"kcat_{reaction.reaction_id.lower()}"].selected_parameter.parameter_id,
+                    selected[f"km_{reaction.reaction_id.lower()}"].selected_parameter.parameter_id,
+                ],
+            )
+            for reaction in source_reactions
+        ]
+        parameter_ids = sorted(
+            resolution.selected_parameter.parameter_id
+            for resolution in selected.values()
+            if resolution.selected_parameter
+        )
+        result = solve_m4_steady_state(M4SteadyStateInput(
+            candidate_id=item.candidate_id,
+            construct_id=context.construct_id,
+            condition_id=context.condition_id,
+            phi=context.phi,
+            enzymes={name: M4PhaseEnzymeInput(dense_um=value["dense"], dilute_um=value["dilute"], m3_source_id=item.candidate_id) for name, value in context.enzyme_distribution.items()},
+            metabolite_kp=context.metabolite_partition_coefficients,
+            reactions=reaction_inputs,
+            input_flux_um_per_h=selected["input_flux_8"].canonical_value,
+            secretion_rate_per_h={compound: selected[f"ksec_{compound}"].canonical_value for compound in ("8", "9", "10", "11", "12", "13", "14", "15")},
+            secretion_normalization="original_unweighted_dilute_concentration",
+            initial_guess_um=settings.steady_state_initial_guess_um,
+            input_parameter_ids=sorted({*context.parameter_ids, *parameter_ids}),
+        ))
+        if result.status != "valid":
+            records.append(M4ReactionPrediction(
+                candidate_id=item.candidate_id,
+                construct_id=context.construct_id,
+                condition_id=context.condition_id,
+                target_product=settings.target_product,
+                status="insufficient_data" if result.status == "blocked" else "failed",
+                data_quality="mixed",
+                missing_inputs=result.warnings,
+                recommendation=None,
+                candidate_context=context,
+                parameter_ids=result.input_parameter_ids,
+                notes="M4 steady-state solution was not released.",
+            ))
+            continue
+        records.append(M4ReactionPrediction(
+            candidate_id=item.candidate_id,
+            construct_id=context.construct_id,
+            condition_id=context.condition_id,
+            target_product=settings.target_product,
+            status="valid",
+            data_quality="mixed",
+            final_15=result.concentrations_cell_average_um["15"],
+            final_13=result.concentrations_cell_average_um["13"],
+            yield_abs=result.yield_abs,
+            secretion_loss=result.secretion_loss_8_to_14,
+            recommendation=None,
+            candidate_context=context,
+            simulation_inputs={"formula_version": result.formula_version, "secretion_normalization": "original_unweighted_dilute_concentration"},
+            steady_state_fluxes=result.reaction_flux_um_per_h,
+            steady_state_residuals=result.steady_state_residual_um_per_h,
+            mechanistic_diagnostics={"mass_invariant_residual": result.mass_invariant_residual or 0.0},
+            parameter_ids=result.input_parameter_ids,
+            provenance_summary=_merge_provenance(context.provenance_summary, _provenance_summary(selected.values())),
+            assumptions=result.warnings,
+            notes="Original M4 Step 0-8 steady-state output; no ranking, robustness, sensitivity, or scaffold scan was invented.",
+        ))
+    write_models(stage_dir, "reaction_predictions", records)
+    return records, _stage_output("m4_markdown_steady_state", stage_dir, "reaction_predictions", len(records))
 
 
 def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:

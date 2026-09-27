@@ -219,6 +219,7 @@ class M4Config(StrictScientificConfig):
     initial_state: InitialStateConfig | None = None
     full_network_initial_state: FullNetworkInitialStateConfig | None = None
     reaction_network_file: Path | None = None
+    steady_state_initial_guess_um: dict[str, float] | None = None
     pt_gate: InductionGateConfig | None = None
     oc_gate: InductionGateConfig | None = None
     dmt_gate: InductionGateConfig | None = None
@@ -231,7 +232,7 @@ class M4Config(StrictScientificConfig):
     # The legacy reduced kernel remains for existing projects. New Galatea work
     # must explicitly opt into the audited full network rather than receiving a
     # silent interpretation of legacy five-state inputs.
-    network_mode: Literal["legacy_reduced", "galatea_full_competitive", "published_reference"] = "legacy_reduced"
+    network_mode: Literal["markdown_steady_state", "legacy_reduced", "galatea_full_competitive", "published_reference"] = "markdown_steady_state"
     scenario_mode: Literal[
         "published_reference", "homogeneous_constitutive", "homogeneous_published_like_temporal",
         "galatea_spatial", "galatea_spatiotemporal_ablation"
@@ -252,6 +253,11 @@ class M4Config(StrictScientificConfig):
             raise ValueError("published_reference_scenario_requires_published_reference_network")
         if self.network_mode == "legacy_reduced" and self.scenario_mode != "homogeneous_constitutive":
             raise ValueError("legacy_reduced_supports_only_homogeneous_constitutive")
+        if self.network_mode == "markdown_steady_state" and self.scenario_mode != "homogeneous_constitutive":
+            raise ValueError("markdown_steady_state_uses_the_original_constitutive_steady_equations")
+        if self.steady_state_initial_guess_um is not None:
+            if set(self.steady_state_initial_guess_um) != {str(index) for index in range(8, 16)} or any(value < 0 for value in self.steady_state_initial_guess_um.values()):
+                raise ValueError("steady_state_initial_guess_requires_nonnegative_compounds_8_to_15")
         if self.network_mode == "galatea_full_competitive" and self.scenario_mode == "published_reference":
             raise ValueError("full_network_cannot_route_to_published_reference")
         if self.scenario_mode == "galatea_spatial" and self.dmt_gate is not None:
