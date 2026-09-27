@@ -17,12 +17,13 @@ from igem_drylab.constructs import (
     compute_sequence_features,
     screen_sequence_v3,
 )
-from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
+from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_enrichment, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
+from igem_drylab.m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
 from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
 from igem_drylab.full_network import PhaseDistribution, TemporalGate, TransportParameters
 from igem_drylab.published_reference import run_published_reference, write_published_reference_reproduction
-from igem_drylab.parameters import ParameterRecord, full_m4_kinetic_requirements, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
+from igem_drylab.parameters import ParameterRecord, ParameterResolution, full_m4_kinetic_requirements, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.parameters.requirements import requirement_name_to_kernel_key, requirements_for_stage
 from igem_drylab.parameters.dimensions import normalize_concentration
 from igem_drylab.scoring.m2_structure import M2StructureMetrics, load_m2_structure_metrics, score_m2_structure
@@ -172,7 +173,11 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             ))
             continue
         if config.execution.mode == "real":
-            provenance_missing = _missing_m2_formal_evidence(row, config.stages.m2_fusion.structure_metrics_file)
+            provenance_missing = _missing_m2_formal_evidence(
+                row,
+                config.stages.m2_fusion.structure_metrics_file,
+                require_m3_geometry=config.stages.m3_concentration.recruitment_mode == "finite_site",
+            )
             if provenance_missing:
                 assessments.append(M2FusionAssessment(
                     candidate_id=candidate.candidate_id,
@@ -190,6 +195,14 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
                     geometry_input_sha256=row.geometry_input_sha256,
                     sasa_configuration_hash=row.sasa_configuration_hash,
                     clash_rule_provenance=row.clash_rule_provenance,
+                    s_sh3=row.s_sh3, s_pdz=row.s_pdz,
+                    eta_acc_sh3=row.eta_acc_sh3, eta_acc_pdz=row.eta_acc_pdz,
+                    eta_bind_sh3=row.eta_bind_sh3, eta_bind_pdz=row.eta_bind_pdz,
+                    site_count_basis=row.site_count_basis,
+                    joint_occupancy_independent=row.joint_occupancy_independent,
+                    m2_geometry_id=row.m2_geometry_id,
+                    v_scaffold_nm3=row.v_scaffold_nm3, v_enzyme_nm3=row.v_enzyme_nm3,
+                    volume_method=row.volume_method,
                     screen_verdict="blocked",
                     missing_inputs=provenance_missing,
                     recommended_next_action=["supply hash-verified M2 structures, reviewed residue mappings, and tool/config provenance"],
@@ -204,6 +217,14 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             reference_structure_id=row.reference_structure_id, reference_artifact_sha256=row.reference_artifact_sha256,
             geometry_input_sha256=row.geometry_input_sha256, sasa_configuration_hash=row.sasa_configuration_hash,
             clash_rule_provenance=row.clash_rule_provenance,
+            s_sh3=row.s_sh3, s_pdz=row.s_pdz,
+            eta_acc_sh3=row.eta_acc_sh3, eta_acc_pdz=row.eta_acc_pdz,
+            eta_bind_sh3=row.eta_bind_sh3, eta_bind_pdz=row.eta_bind_pdz,
+            site_count_basis=row.site_count_basis,
+            joint_occupancy_independent=row.joint_occupancy_independent,
+            m2_geometry_id=row.m2_geometry_id,
+            v_scaffold_nm3=row.v_scaffold_nm3, v_enzyme_nm3=row.v_enzyme_nm3,
+            volume_method=row.volume_method,
             status=scored.status, data_quality="predicted", available_metrics=scored.available_metrics, missing_metrics=scored.missing_metrics,
             screen_verdict=scored.verdict, confidence_gate=scored.confidence_gate, formula_version=scored.formula_version,
             core_ca_rmsd_angstrom=row.core_ca_rmsd_angstrom, heuristic_structure_risk=None,
@@ -216,7 +237,12 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     return assessments, _stage_output("m2_structure_screen", stage_dir, "fusion_assessments", len(assessments))
 
 
-def _missing_m2_formal_evidence(row: M2StructureMetrics, metrics_file: Path | None) -> list[str]:
+def _missing_m2_formal_evidence(
+    row: M2StructureMetrics,
+    metrics_file: Path | None,
+    *,
+    require_m3_geometry: bool,
+) -> list[str]:
     required = {
         "source_tool": row.source_tool,
         "source_tool_version": row.source_tool_version,
@@ -237,6 +263,24 @@ def _missing_m2_formal_evidence(row: M2StructureMetrics, metrics_file: Path | No
         "recruitment_domain_buried_assessment": row.recruitment_domain_buried,
         "scaffold_interface_disrupted_assessment": row.scaffold_interface_disrupted,
     }
+    if row.v_scaffold_nm3 is not None or row.v_enzyme_nm3 is not None:
+        required.update({
+            "v_scaffold_nm3": row.v_scaffold_nm3,
+            "v_enzyme_nm3": row.v_enzyme_nm3,
+            "volume_method": row.volume_method,
+        })
+    if require_m3_geometry:
+        required.update({
+            "s_sh3": row.s_sh3,
+            "s_pdz": row.s_pdz,
+            "eta_acc_sh3": row.eta_acc_sh3,
+            "eta_acc_pdz": row.eta_acc_pdz,
+            "eta_bind_sh3": row.eta_bind_sh3,
+            "eta_bind_pdz": row.eta_bind_pdz,
+            "site_count_basis": row.site_count_basis,
+            "joint_occupancy_independent": row.joint_occupancy_independent,
+            "m2_geometry_id": row.m2_geometry_id,
+        })
     missing = [f"M2 provenance: {name}" for name, value in required.items() if value in (None, "", [])]
     if row.artifact_path and row.artifact_sha256:
         artifact = Path(row.artifact_path)
@@ -347,6 +391,180 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                        if author_native else "Effective-ratio M3 mode: recruitment changes mass-conserving OC/DMT phase abundance, not kcat.")
             ))
             continue
+        if config.stages.m3_concentration.recruitment_mode == "finite_site":
+            geometry_missing = [
+                name
+                for name in (
+                    "s_sh3", "s_pdz", "eta_acc_sh3", "eta_acc_pdz", "eta_bind_sh3", "eta_bind_pdz",
+                    "site_count_basis", "joint_occupancy_independent", "m2_geometry_id",
+                )
+                if getattr(assessment, name) is None
+            ]
+            if geometry_missing:
+                records.append(M3ConcentrationAssessment(
+                    candidate_id=assessment.candidate_id,
+                    construct_id=construct_id,
+                    status="insufficient_data",
+                    data_quality="predicted",
+                    missing_inputs=[f"M2 geometry: {name}" for name in geometry_missing],
+                    recommended_next_action=["supply the reviewed M2 site-count/accessibility/co-occupancy contract"],
+                    notes="M3 S1 could not be evaluated; no concentration was generated.",
+                ))
+                continue
+            c_dense_record = selected["c_dense_scaffold"].selected_parameter
+            assert c_dense_record is not None
+            declared_c_dense_basis = c_dense_record.conditions.get("entity_basis")
+            if declared_c_dense_basis is not None and declared_c_dense_basis != assessment.site_count_basis:
+                records.append(M3ConcentrationAssessment(
+                    candidate_id=assessment.candidate_id,
+                    construct_id=construct_id,
+                    status="insufficient_data",
+                    data_quality="mixed",
+                    missing_inputs=["c_dense_scaffold entity_basis matching M2 site_count_basis"],
+                    recommended_next_action=["reconcile scaffold monomer versus complete-assembly concentration units"],
+                    notes="M3 did not insert an implicit scaffold oligomer multiplier.",
+                ))
+                continue
+            if config.execution.mode == "real":
+                source_violations = _m3_formal_source_violations(selected, assessment.site_count_basis)
+                if source_violations:
+                    records.append(M3ConcentrationAssessment(
+                        candidate_id=assessment.candidate_id,
+                        construct_id=construct_id,
+                        status="insufficient_data",
+                        data_quality="mixed",
+                        missing_inputs=source_violations,
+                        recommended_next_action=["replace predicted/underspecified M3 inputs with matching measured or verified evidence"],
+                        notes="Formal M3 source gate rejected an otherwise numeric input set.",
+                    ))
+                    continue
+            exact = solve_m3_equilibrium(M3EquilibriumInput(
+                candidate_id=assessment.candidate_id,
+                construct_id=construct_id,
+                s_sh3=assessment.s_sh3,
+                s_pdz=assessment.s_pdz,
+                eta_acc_sh3=assessment.eta_acc_sh3,
+                eta_acc_pdz=assessment.eta_acc_pdz,
+                eta_bind_sh3=assessment.eta_bind_sh3,
+                eta_bind_pdz=assessment.eta_bind_pdz,
+                site_count_basis=assessment.site_count_basis,
+                c_dense_basis=declared_c_dense_basis or assessment.site_count_basis,
+                joint_occupancy_independent=assessment.joint_occupancy_independent,
+                m2_geometry_id=assessment.m2_geometry_id,
+                phi=phi,
+                c_dense_um=selected["c_dense_scaffold"].canonical_value,
+                kd_sh3_um=selected["kd_sh3"].canonical_value,
+                kd_pdz_um=selected["kd_pdz"].canonical_value,
+                k_oc=selected["partition_oc"].canonical_value,
+                k_dmt=selected["partition_dmt"].canonical_value,
+                c_oc_total_um=selected["oc_total"].canonical_value,
+                c_dmt_total_um=selected["dmt_total"].canonical_value,
+                v_scaffold_nm3=assessment.v_scaffold_nm3,
+                v_enzyme_nm3=assessment.v_enzyme_nm3,
+                volume_method=assessment.volume_method,
+                input_parameter_ids=sorted(
+                    resolution.selected_parameter.parameter_id
+                    for resolution in selected.values()
+                    if resolution.selected_parameter
+                ),
+            ))
+            if exact.status != "valid" or exact.oc is None or exact.dmt is None:
+                records.append(M3ConcentrationAssessment(
+                    candidate_id=assessment.candidate_id,
+                    construct_id=construct_id,
+                    status="insufficient_data",
+                    data_quality="mixed",
+                    formula_version=exact.formula_version,
+                    effective_site_counts={"SH3": exact.n_sh3_effective, "PDZ": exact.n_pdz_effective},
+                    capacity_status="conflict" if exact.status == "capacity_conflict" else "not_evaluated",
+                    maximum_dense_enzyme_concentration_um=exact.maximum_dense_enzyme_concentration_um,
+                    capacity_excess_um=exact.capacity_excess_um,
+                    missing_inputs=[] if exact.status == "capacity_conflict" else list(exact.warnings),
+                    recommended_next_action=[
+                        "resolve M2 joint co-occupancy" if exact.status == "insufficient_data" else
+                        "revise the construct or solve a capacity-constrained conservative model"
+                    ],
+                    notes="; ".join(exact.warnings),
+                ))
+                continue
+            pt_input = EnrichmentInput(
+                species_id="PT",
+                total_concentration=selected["pt_total"].canonical_value,
+                partition_coefficient=selected["partition_pt"].canonical_value,
+                partition_source=selected["partition_pt"].selected_parameter.source_reference,
+                partition_uncertainty=selected["partition_pt"].selected_parameter.uncertainty,
+            )
+            pt = calculate_enrichment(pt_input, phi=phi)
+            enzyme_distribution = {
+                "PT": {"dense": pt.dense_concentration, "dilute": pt.dilute_concentration, "partition_coefficient": pt.partition_coefficient},
+                "OC": {"dense": exact.oc.total_dense_um, "dilute": exact.oc.free_dilute_um, "partition_coefficient": selected["partition_oc"].canonical_value},
+                "DMT": {"dense": exact.dmt.total_dense_um, "dilute": exact.dmt.free_dilute_um, "partition_coefficient": selected["partition_dmt"].canonical_value},
+            }
+            parameter_ids = sorted(
+                resolution.selected_parameter.parameter_id
+                for resolution in selected.values()
+                if resolution.selected_parameter
+            )
+            bound_fractions = {
+                "OC": exact.oc.bound_fraction_of_whole_cell_total,
+                "DMT": exact.dmt.bound_fraction_of_whole_cell_total,
+            }
+            dense_fractions = {
+                "PT": pt.fraction_in_dense,
+                "OC": exact.oc.dense_phase_fraction_of_whole_cell_total,
+                "DMT": exact.dmt.dense_phase_fraction_of_whole_cell_total,
+            }
+            site_occupancy = {"OC": exact.oc.site_occupancy, "DMT": exact.dmt.site_occupancy}
+            context = M4CandidateContext(
+                candidate_id=assessment.candidate_id,
+                construct_id=construct_id,
+                condition_id=condition_id,
+                phi=phi,
+                enzyme_distribution=enzyme_distribution,
+                binding_recruited_fraction=bound_fractions,
+                site_occupancy=site_occupancy,
+                parameter_ids=parameter_ids,
+                provenance_summary=_provenance_summary(selected.values()),
+                assumptions=[
+                    "M3 S1-S5/E1-E6 rapid-equilibrium cytosolic two-phase model",
+                    "M2 confirmed independent treatment of joint site occupancy",
+                    "PT uses independent two-phase partition because S1-E6 only specify OC/DMT binding",
+                ],
+            )
+            records.append(M3ConcentrationAssessment(
+                candidate_id=assessment.candidate_id,
+                construct_id=construct_id,
+                status="valid",
+                data_quality="mixed",
+                concentrations={
+                    "PT": pt.model_dump(mode="json"),
+                    "OC": {"dense_concentration": exact.oc.total_dense_um, "dilute_concentration": exact.oc.free_dilute_um},
+                    "DMT": {"dense_concentration": exact.dmt.total_dense_um, "dilute_concentration": exact.dmt.free_dilute_um},
+                },
+                dense_oc_dmt_ratio=exact.dense_oc_dmt_ratio,
+                whole_cell_oc_dmt_ratio=exact.whole_cell_oc_dmt_ratio,
+                fraction_in_dense=dense_fractions,
+                binding_recruitment_status="valid",
+                binding_recruited_fraction=bound_fractions,
+                site_occupancy=site_occupancy,
+                formula_version=exact.formula_version,
+                free_dense_concentration={"OC": exact.oc.free_dense_um, "DMT": exact.dmt.free_dense_um},
+                free_dilute_concentration={"OC": exact.oc.free_dilute_um, "DMT": exact.dmt.free_dilute_um},
+                bound_dense_concentration={"OC": exact.oc.bound_dense_um, "DMT": exact.dmt.bound_dense_um},
+                bound_fraction_of_whole_cell_total=bound_fractions,
+                mass_balance_residual_um={"OC": exact.oc.mass_balance_residual_um, "DMT": exact.dmt.mass_balance_residual_um},
+                effective_site_counts={"SH3": exact.n_sh3_effective, "PDZ": exact.n_pdz_effective},
+                capacity_status="within_capacity" if exact.maximum_dense_enzyme_concentration_um is not None else "not_evaluated",
+                maximum_dense_enzyme_concentration_um=exact.maximum_dense_enzyme_concentration_um,
+                capacity_excess_um=exact.capacity_excess_um,
+                normalized_sensitivities_e10=exact.normalized_sensitivities_e10,
+                recommended_for_m4=True,
+                parameter_ids=parameter_ids,
+                provenance_summary=_provenance_summary(selected.values()),
+                m4_candidate_context=context,
+                notes="M3 used the documented conservative S1-S5/E1-E6 equations; E5 bound fractions remain distinct from whole-dense-phase fractions.",
+            ))
+            continue
         inputs = [EnrichmentInput(species_id=item, total_concentration=selected[f"{item.lower()}_total"].canonical_value,
             partition_coefficient=selected[f"partition_{item.lower()}"].canonical_value,
             partition_source=selected[f"partition_{item.lower()}"].selected_parameter.source_reference,
@@ -392,6 +610,35 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
     write_models(stage_dir, "concentration_assessments", records)
     return records, _stage_output("m3_enrichment", stage_dir, "concentration_assessments", len(records))
+
+
+def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_count_basis: str) -> list[str]:
+    allowed_sources = {
+        "phi": {"wetlab"},
+        "pt_total": {"wetlab"},
+        "oc_total": {"wetlab"},
+        "dmt_total": {"wetlab"},
+        "partition_pt": {"wetlab", "literature"},
+        "partition_oc": {"wetlab", "literature"},
+        "partition_dmt": {"wetlab", "literature"},
+        "c_dense_scaffold": {"wetlab", "literature"},
+        "kd_sh3": {"wetlab", "literature"},
+        "kd_pdz": {"wetlab", "literature"},
+    }
+    missing: list[str] = []
+    for name, allowed in allowed_sources.items():
+        resolution = selected[name]
+        record = resolution.selected_parameter
+        if record is None or record.source_type not in allowed:
+            missing.append(f"formal M3 source for {name}: {sorted(allowed)}")
+    c_dense_record = selected["c_dense_scaffold"].selected_parameter
+    if c_dense_record is not None and c_dense_record.conditions.get("entity_basis") != site_count_basis:
+        missing.append("c_dense_scaffold conditions.entity_basis matching M2 site_count_basis")
+    for name in ("kd_sh3", "kd_pdz"):
+        record = selected[name].selected_parameter
+        if record is not None and not record.conditions.get("binding_pair"):
+            missing.append(f"{name} conditions.binding_pair")
+    return sorted(set(missing))
 
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:

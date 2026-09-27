@@ -69,6 +69,18 @@ class M2FusionAssessment(ScientificResult):
     geometry_input_sha256: str | None = None
     sasa_configuration_hash: str | None = None
     clash_rule_provenance: str | None = None
+    s_sh3: int | None = Field(default=None, ge=0)
+    s_pdz: int | None = Field(default=None, ge=0)
+    eta_acc_sh3: float | None = Field(default=None, ge=0, le=1)
+    eta_acc_pdz: float | None = Field(default=None, ge=0, le=1)
+    eta_bind_sh3: float | None = Field(default=None, ge=0, le=1)
+    eta_bind_pdz: float | None = Field(default=None, ge=0, le=1)
+    site_count_basis: Literal["scaffold_monomer", "complete_assembly"] | None = None
+    joint_occupancy_independent: bool | None = None
+    m2_geometry_id: str | None = None
+    v_scaffold_nm3: float | None = Field(default=None, gt=0)
+    v_enzyme_nm3: float | None = Field(default=None, gt=0)
+    volume_method: str | None = None
     available_metrics: list[str] = Field(default_factory=list)
     missing_metrics: list[str] = Field(default_factory=list)
     screen_verdict: Literal["pass", "review", "reject", "blocked"] = "blocked"
@@ -96,6 +108,18 @@ class M3ConcentrationAssessment(ScientificResult):
     binding_recruitment_status: Literal["not_requested", "valid", "insufficient_data"] = "not_requested"
     binding_recruited_fraction: dict[str, float] = Field(default_factory=dict)
     site_occupancy: dict[str, float] = Field(default_factory=dict)
+    formula_version: str | None = None
+    free_dense_concentration: dict[str, float] = Field(default_factory=dict)
+    free_dilute_concentration: dict[str, float] = Field(default_factory=dict)
+    bound_dense_concentration: dict[str, float] = Field(default_factory=dict)
+    bound_fraction_of_whole_cell_total: dict[str, float] = Field(default_factory=dict)
+    mass_balance_residual_um: dict[str, float] = Field(default_factory=dict)
+    effective_site_counts: dict[str, float] = Field(default_factory=dict)
+    capacity_status: Literal["not_evaluated", "within_capacity", "conflict"] = "not_evaluated"
+    maximum_dense_enzyme_concentration_um: float | None = Field(default=None, ge=0)
+    capacity_excess_um: float | None = Field(default=None, ge=0)
+    rho_star_candidates: dict[str, float] = Field(default_factory=dict)
+    normalized_sensitivities_e10: dict[str, float] = Field(default_factory=dict)
     recommended_for_m4: bool = False
     m4_candidate_context: M4CandidateContext | None = None
     notes: str = ""

@@ -39,7 +39,19 @@ def _requirement(name: str, parameter_type: str, **identity: str | None) -> Para
 
 
 def m3_requirements() -> list[ParameterRequirement]:
-    """M3 only uses enzyme abundance/Kp, not fixed metabolite state totals."""
+    """Inputs for the documented M3 S1--S5/E1--E6 equilibrium."""
+    return [
+        _requirement("phi", "phi"),
+        *[_requirement(f"{enzyme}_total", "abundance", enzyme_id=enzyme.upper()) for enzyme in ("pt", "oc", "dmt")],
+        *[_requirement(f"partition_{species}", "kp", species_id=species.upper()) for species in ("pt", "oc", "dmt")],
+        _requirement("c_dense_scaffold", "abundance"),
+        _requirement("kd_sh3", "kd"),
+        _requirement("kd_pdz", "kd"),
+    ]
+
+
+def legacy_m3_independent_partition_requirements() -> list[ParameterRequirement]:
+    """Historical partition-only mode retained only for explicit regressions."""
     return [
         _requirement("phi", "phi"),
         *[_requirement(f"{enzyme}_total", "abundance", enzyme_id=enzyme.upper()) for enzyme in ("pt", "oc", "dmt")],
@@ -144,7 +156,8 @@ def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bo
         author_native = getattr(project.stages.m4_reaction, "unit_mode", "physical") == "author_native_sensitivity"
         if getattr(project.stages.m3_concentration, "recruitment_mode", "finite_site") == "effective_ratio":
             return author_native_m3_effective_ratio_requirements() if author_native else m3_effective_ratio_requirements()
-        core = m3_requirements()
+        mode = getattr(project.stages.m3_concentration, "recruitment_mode", "finite_site")
+        core = legacy_m3_independent_partition_requirements() if mode == "legacy_independent_partition" else m3_requirements()
         if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") == "galatea_full_competitive":
             core = core + [_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")]
         auxiliary = [item for recruitment in getattr(project.stages.m3_concentration, "recruitment", []) for item in recruitment_requirements(recruitment, binding_model=project.stages.m3_concentration.binding_model)]

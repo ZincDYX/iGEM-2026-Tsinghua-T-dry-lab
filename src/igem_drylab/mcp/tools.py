@@ -16,6 +16,7 @@ from igem_drylab.literature.database import build_database_from_manifest
 from igem_drylab.literature.sources import LiteratureSearchQuery, search_literature, write_search_manifest
 from igem_drylab.multichain import assess_interface, build_multichain_input, expand_fth1_arms, solve_binding_equilibrium
 from igem_drylab.multichain.models import ProteinChain
+from igem_drylab.m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
 from igem_drylab.parsers.freesasa import compute_pocket_sasa_retention
 from igem_drylab.parsers.calvados import parse_calvados_output
 from igem_drylab.parsers.structure_prediction import parse_structure_prediction_output
@@ -396,6 +397,11 @@ def scoring_m2_structure(arguments: JsonObject) -> McpToolResult:
 
 def m2_site_cooccupancy(arguments: JsonObject) -> McpToolResult:
     result = analyse_site_cooccupancy(M2SiteGeometryInput.model_validate(arguments))
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m3_solve_equilibrium(arguments: JsonObject) -> McpToolResult:
+    result = solve_m3_equilibrium(M3EquilibriumInput.model_validate(arguments))
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
 
@@ -1173,6 +1179,18 @@ SCORING_M2_STRUCTURE_TOOL = McpTool(
             "ligand_buried": {"type": "boolean"},
             "recruitment_domain_buried": {"type": "boolean"},
             "scaffold_interface_disrupted": {"type": "boolean"},
+            "s_sh3": {"type": "integer", "minimum": 0},
+            "s_pdz": {"type": "integer", "minimum": 0},
+            "eta_acc_sh3": {"type": "number", "minimum": 0, "maximum": 1},
+            "eta_acc_pdz": {"type": "number", "minimum": 0, "maximum": 1},
+            "eta_bind_sh3": {"type": "number", "minimum": 0, "maximum": 1},
+            "eta_bind_pdz": {"type": "number", "minimum": 0, "maximum": 1},
+            "site_count_basis": {"type": "string", "enum": ["scaffold_monomer", "complete_assembly"]},
+            "joint_occupancy_independent": {"type": "boolean"},
+            "m2_geometry_id": {"type": "string"},
+            "v_scaffold_nm3": {"type": "number", "exclusiveMinimum": 0},
+            "v_enzyme_nm3": {"type": "number", "exclusiveMinimum": 0},
+            "volume_method": {"type": "string"},
             "notes": {"type": "string"},
         },
         ["candidate_id"],
@@ -1215,6 +1233,17 @@ M2_SITE_COOCCUPANCY_TOOL = McpTool(
         },
         ["scaffold_id", "sites", "model_ids", "clash_rule_provenance"],
     ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M3_SOLVE_EQUILIBRIUM_TOOL = McpTool(
+    name="igem.m3.solve_equilibrium",
+    title="Solve M3 S1-S5 and E1-E10 equilibrium",
+    description=(
+        "Solve the documented two-phase free/bound OC and DMT mass balances, preserve the E5 bound "
+        "fraction definition, and block rather than rescale a capacity conflict."
+    ),
+    input_schema=M3EquilibriumInput.model_json_schema(),
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
 
@@ -1478,6 +1507,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (SCORING_POCKET_SASA_TOOL, scoring_pocket_sasa),
     (M2_CALCULATE_GEOMETRY_TOOL, m2_calculate_geometry),
     (M2_SITE_COOCCUPANCY_TOOL, m2_site_cooccupancy),
+    (M3_SOLVE_EQUILIBRIUM_TOOL, m3_solve_equilibrium),
     (SCORING_M2_STRUCTURE_TOOL, scoring_m2_structure),
     (PARSER_STRUCTURE_PREDICTION_TOOL, parser_structure_prediction),
     (PARSER_CALVADOS_TOOL, parser_calvados),

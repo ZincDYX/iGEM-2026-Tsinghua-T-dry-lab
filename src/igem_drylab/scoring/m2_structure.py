@@ -53,6 +53,21 @@ class M2StructureMetrics(BaseModel):
     recruitment_domain_buried: bool | None = None
     scaffold_interface_disrupted: bool | None = None
 
+    # Reviewed M2 -> M3 geometry contract. These remain predicted geometry,
+    # not measured binding probabilities.
+    s_sh3: int | None = Field(default=None, ge=0)
+    s_pdz: int | None = Field(default=None, ge=0)
+    eta_acc_sh3: float | None = Field(default=None, ge=0, le=1)
+    eta_acc_pdz: float | None = Field(default=None, ge=0, le=1)
+    eta_bind_sh3: float | None = Field(default=None, ge=0, le=1)
+    eta_bind_pdz: float | None = Field(default=None, ge=0, le=1)
+    site_count_basis: Literal["scaffold_monomer", "complete_assembly"] | None = None
+    joint_occupancy_independent: bool | None = None
+    m2_geometry_id: str | None = None
+    v_scaffold_nm3: float | None = Field(default=None, gt=0)
+    v_enzyme_nm3: float | None = Field(default=None, gt=0)
+    volume_method: str | None = None
+
     # Q4 collision evidence. One rigid-model clash count is never enough for
     # rejection; persistence and direct functional occlusion are explicit.
     clash_count: int | None = Field(default=None, ge=0)
@@ -138,6 +153,9 @@ def score_m2_structure(metrics: M2StructureMetrics) -> M2StructureScore:
         "pocket_definition_source_ref",
         "residue_mapping_source_ref",
         "formula_version",
+        "m2_geometry_id",
+        "site_count_basis",
+        "volume_method",
     }
     present = sorted(
         name

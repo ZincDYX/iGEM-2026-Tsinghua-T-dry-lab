@@ -144,7 +144,7 @@ class M3Config(StrictScientificConfig):
     binding_model: Literal["independent", "hill"] = "independent"
     hill_coefficient: float | None = Field(default=None, gt=0)
     recruitment: list["RecruitmentConfig"] = Field(default_factory=list)
-    recruitment_mode: Literal["finite_site", "effective_ratio"] = "finite_site"
+    recruitment_mode: Literal["finite_site", "legacy_independent_partition", "effective_ratio"] = "finite_site"
     slot_ratio_sh3_to_pdz: float | None = Field(default=None, ge=0)
     total_recruited_fraction: float | None = Field(default=None, ge=0, le=1)
     recruitment_bias_oc_vs_dmt: float = Field(default=1.0, ge=0)

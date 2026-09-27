@@ -288,6 +288,19 @@ def m2_compare_docking(
 
 
 @server.tool(
+    name="igem.m3.solve_equilibrium",
+    title="Solve M3 S1-S5 and E1-E10 equilibrium",
+    description=(
+        "Solve the documented two-phase OC/DMT free-plus-bound mass balances. Capacity conflicts are "
+        "reported without the non-conserving proportional rescaling from the draft."
+    ),
+    structured_output=True,
+)
+def m3_solve_equilibrium(inputs: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m3.solve_equilibrium", inputs)
+
+
+@server.tool(
     name="igem.compute.check_tool",
     title="Check an explicitly configured scientific executable",
     description="Resolve the configured command and report whether its real executable is available.",
