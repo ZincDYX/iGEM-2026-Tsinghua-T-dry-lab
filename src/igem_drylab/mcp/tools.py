@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from igem_drylab.literature import answer_question, build_prompt, compact_evidence_sources, extract_records_chunked, extract_records_from_text, get_evidence_detail, load_schema
 from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article_xml, search_scopus
 from igem_drylab.literature.icl import load_icl_examples
@@ -30,7 +32,19 @@ from igem_drylab.parameters import ParameterRecord, ParameterRegistry, m3_requir
 from igem_drylab.parameters.requirements import requirements_for_stage
 from igem_drylab.literature.evidence_contract import DegradationRateEvidence, EnzymeKineticsEvidence, LlpsPartitioningEvidence, PhaseActivityEvidence, PhaseVolumeEvidence, ProteinAbundanceEvidence, RecruitmentBindingEvidence, map_evidence_to_requirement
 from igem_drylab.project_state import ProjectState
-from igem_drylab.constructs import ConstructRegistry
+from igem_drylab.constructs import (
+    ConstructRegistry,
+    DisorderEvidence,
+    FusionToolEvidence,
+    M1FeatureDefinitions,
+    M1V3Rules,
+    SecondaryStructureEvidence,
+    SequenceFeatures,
+    compute_sequence_features,
+    parse_iupred2a_output,
+    parse_secondary_structure_output,
+    screen_sequence_v3,
+)
 from igem_drylab.wetlab import MeasurementMapping, load_wetlab_results, parameter_updates_from_measurements, quality_control
 from igem_drylab.wetlab.parameter_update import approve_and_persist_parameter
 
@@ -196,6 +210,72 @@ def compute_run_tool(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok({"ok": result.status not in {"failed", "missing_executable"}, "run": result.model_dump(mode="json")})
 
 
+def m1_compute_features(arguments: JsonObject) -> McpToolResult:
+    definitions_path = Path(
+        arguments.get("feature_definitions_file")
+        or Path(__file__).resolve().parents[3] / "configs" / "m1_feature_definitions.yaml"
+    )
+    definitions, digest = M1FeatureDefinitions.from_yaml(definitions_path)
+    motifs = arguments.get("forbidden_amino_acid_motifs", [])
+    if not isinstance(motifs, list) or not all(isinstance(item, str) for item in motifs):
+        raise ValueError("forbidden_amino_acid_motifs must be a list of strings")
+    result = compute_sequence_features(
+        _require_str(arguments, "sequence"),
+        definitions=definitions,
+        definitions_sha256=digest,
+        forbidden_motifs=tuple(motifs),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m1_screen_sequence(arguments: JsonObject) -> McpToolResult:
+    feature_result = m1_compute_features(arguments).structured_content["result"]
+    rules_path = Path(
+        arguments.get("rules_file")
+        or Path(__file__).resolve().parents[3] / "configs" / "m1_rules_v3.yaml"
+    )
+    rules = M1V3Rules.model_validate(yaml.safe_load(rules_path.read_text(encoding="utf-8")))
+    disorder_payload = arguments.get("disorder_evidence")
+    secondary_payload = arguments.get("secondary_structure_evidence")
+    fusion_payload = arguments.get("fusion_evidence")
+    result = screen_sequence_v3(
+        features=SequenceFeatures.model_validate(feature_result),
+        sequence_kind=arguments.get("sequence_kind", "enzyme_ligand_linker"),
+        rules=rules,
+        disorder=None if disorder_payload is None else DisorderEvidence.model_validate(disorder_payload),
+        secondary_structure=(
+            None if secondary_payload is None else SecondaryStructureEvidence.model_validate(secondary_payload)
+        ),
+        fusion_evidence=None if fusion_payload is None else FusionToolEvidence.model_validate(fusion_payload),
+        localization_context=arguments.get("localization_context", "cytosolic"),
+        require_external_evidence=bool(arguments.get("require_external_evidence", True)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m1_parse_iupred2a(arguments: JsonObject) -> McpToolResult:
+    result = parse_iupred2a_output(
+        Path(_require_str(arguments, "path")),
+        tool_version=_require_str(arguments, "tool_version"),
+        input_sha256=_require_str(arguments, "input_sha256"),
+        score_boundary=float(arguments.get("score_boundary", 0.5)),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m1_parse_secondary_structure(arguments: JsonObject) -> McpToolResult:
+    tool_name = _require_str(arguments, "tool_name")
+    if tool_name not in {"PSIPRED", "JPred"}:
+        raise ValueError("tool_name must be PSIPRED or JPred")
+    result = parse_secondary_structure_output(
+        Path(_require_str(arguments, "path")),
+        tool_name=tool_name,  # type: ignore[arg-type]
+        tool_version=_require_str(arguments, "tool_version"),
+        input_sha256=_require_str(arguments, "input_sha256"),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
 def _persist_standard_output(tool_name: str, result: Any) -> Any:
     """Materialize machine-readable stdout for downstream local tools.
 
@@ -203,7 +283,17 @@ def _persist_standard_output(tool_name: str, result: Any) -> Any:
     stdout. Persisting those streams makes the next stage reproducible without
     parsing an agent trace. Empty mock output is intentionally not written.
     """
-    filenames = {"autodock_vina": "vina_stdout.txt", "freesasa": "freesasa.json"}
+    filenames = {
+        "autodock_vina": "vina_stdout.txt",
+        "freesasa": "freesasa.json",
+        "iupred2a": "iupred2a.txt",
+        "protparam": "protparam.txt",
+        "tango": "tango.txt",
+        "pasta2": "pasta2.txt",
+        "fuzdrop": "fuzdrop.txt",
+        "catgranule": "catgranule.txt",
+        "pspredictor": "pspredictor.txt",
+    }
     filename = filenames.get(tool_name)
     if filename is None or result.output_dir is None or not result.stdout.strip():
         return result
@@ -814,6 +904,85 @@ MULTICHAIN_EXPAND_FTH1_ARMS_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
 
+M1_COMPUTE_FEATURES_TOOL = McpTool(
+    name="igem.m1.compute_features",
+    title="Compute audited M1 V3 sequence features",
+    description=(
+        "Compute the explicit 2026-09-27 M1 sequence equations using a versioned residue-set and "
+        "hydropathy definition file. This does not predict LLPS or assign a functional probability."
+    ),
+    input_schema=_schema(
+        {
+            "sequence": {"type": "string"},
+            "feature_definitions_file": {"type": "string"},
+            "forbidden_amino_acid_motifs": {"type": "array", "items": {"type": "string"}},
+        },
+        ["sequence"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M1_SCREEN_SEQUENCE_TOOL = McpTool(
+    name="igem.m1.screen_sequence",
+    title="Apply M1 V3 negative-screen rules",
+    description=(
+        "Apply the exact M1 V3 hard-screen boundaries to computed features and provenance-bearing "
+        "IUPred2A, PSIPRED/JPred, SignalP, DeepTMHMM, and TANGO/PASTA evidence. Missing formal "
+        "evidence blocks rather than being imputed."
+    ),
+    input_schema=_schema(
+        {
+            "sequence": {"type": "string"},
+            "sequence_kind": {
+                "type": "string",
+                "enum": ["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"],
+            },
+            "localization_context": {"type": "string", "enum": ["cytosolic", "er_anchored"]},
+            "feature_definitions_file": {"type": "string"},
+            "rules_file": {"type": "string"},
+            "forbidden_amino_acid_motifs": {"type": "array", "items": {"type": "string"}},
+            "disorder_evidence": {"type": "object"},
+            "secondary_structure_evidence": {"type": "object"},
+            "fusion_evidence": {"type": "object"},
+            "require_external_evidence": {"type": "boolean", "default": True},
+        },
+        ["sequence", "sequence_kind"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M1_PARSE_IUPRED2A_TOOL = McpTool(
+    name="igem.m1.parse_iupred2a",
+    title="Parse a real IUPred2A residue-score file",
+    description="Calculate disorder mean/fraction and longest ordered/disordered runs from real IUPred2A output.",
+    input_schema=_schema(
+        {
+            "path": {"type": "string"},
+            "tool_version": {"type": "string"},
+            "input_sha256": {"type": "string"},
+            "score_boundary": {"type": "number", "default": 0.5},
+        },
+        ["path", "tool_version", "input_sha256"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M1_PARSE_SECONDARY_STRUCTURE_TOOL = McpTool(
+    name="igem.m1.parse_secondary_structure",
+    title="Parse a real PSIPRED or JPred output file",
+    description="Calculate alpha/beta fraction and longest structured run from PSIPRED SS2 or JPred states.",
+    input_schema=_schema(
+        {
+            "path": {"type": "string"},
+            "tool_name": {"type": "string", "enum": ["PSIPRED", "JPred"]},
+            "tool_version": {"type": "string"},
+            "input_sha256": {"type": "string"},
+        },
+        ["path", "tool_name", "tool_version", "input_sha256"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
 SCORING_POCKET_SASA_TOOL = McpTool(
     name="igem.scoring.pocket_sasa",
     title="Calculate pocket SASA retention",
@@ -1100,6 +1269,10 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PIPELINE_PLAN_STAGE_TOOL, pipeline_plan_stage),
     (COMPUTE_CHECK_TOOL, compute_check_tool),
     (COMPUTE_RUN_TOOL, compute_run_tool),
+    (M1_COMPUTE_FEATURES_TOOL, m1_compute_features),
+    (M1_SCREEN_SEQUENCE_TOOL, m1_screen_sequence),
+    (M1_PARSE_IUPRED2A_TOOL, m1_parse_iupred2a),
+    (M1_PARSE_SECONDARY_STRUCTURE_TOOL, m1_parse_secondary_structure),
     (MULTICHAIN_BUILD_INPUT_TOOL, multichain_build_input),
     (MULTICHAIN_BINDING_EQUILIBRIUM_TOOL, multichain_binding_equilibrium),
     (MULTICHAIN_ASSESS_INTERFACE_TOOL, multichain_assess_interface),

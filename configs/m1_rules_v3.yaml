@@ -1,0 +1,12 @@
+rule_version: m1-v3-2026-09-27
+linker_min_length: 5
+linker_max_length: 25
+scaffold_linker_min_length: 10
+max_hydrophobic_run_reject: 5
+idr_hydrophobic_fraction_reject: 0.35
+linker_hydrophobic_fraction_reject: 0.40
+idr_min_longest_disordered_run: 20
+idr_min_disorder_mean: 0.5
+idr_max_longest_folded_run: 10
+max_secondary_structure_fraction: 0.10
+disorder_boundary: 0.5

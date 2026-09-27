@@ -5,8 +5,18 @@ from dataclasses import replace
 from hashlib import sha256
 import numpy as np
 import json
+import yaml
 
-from igem_drylab.constructs import ConstructRegistry, assess_linker
+from igem_drylab.constructs import (
+    ConstructRegistry,
+    DisorderEvidence,
+    FusionToolEvidence,
+    M1FeatureDefinitions,
+    M1V3Rules,
+    SecondaryStructureEvidence,
+    compute_sequence_features,
+    screen_sequence_v3,
+)
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
@@ -27,10 +37,14 @@ from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, 
 def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], StageOutput]:
     """Perform sequence/definition negative screening, not LLPS prediction."""
     stage_dir = run_dir / "m1_construct_screen"
-    definitions = config.inputs.constructs + [_definition_from_registry(item) for item in ConstructRegistry(config.inputs.construct_records).query()]
-    definitions = definitions or _legacy_demo_definitions(config)
+    settings = config.stages.m1_llps
+    feature_definitions, definitions_hash = M1FeatureDefinitions.from_yaml(settings.feature_definitions_file)
+    rules = M1V3Rules.model_validate(yaml.safe_load(settings.rules_file.read_text(encoding="utf-8")))
+    predictor_evidence = _load_m1_predictor_evidence(settings.predictor_evidence_file)
+    construct_definitions = config.inputs.constructs + [_definition_from_registry(item) for item in ConstructRegistry(config.inputs.construct_records).query()]
+    construct_definitions = construct_definitions or _legacy_demo_definitions(config)
     candidates: list[M1Candidate] = []
-    for definition in definitions:
+    for definition in construct_definitions:
         linker_id = definition.linker_ids[0] if definition.linker_ids else None
         linker = next((item for item in config.inputs.linkers if item.id == linker_id), None)
         flags: list[str] = []
@@ -38,33 +52,100 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
         if linker is None:
             flags.append("linker_not_specified_or_not_found")
         else:
-            result = assess_linker(linker.sequence, forbidden_motifs=tuple(config.stages.m1_llps.forbidden_motifs))
+            result = compute_sequence_features(
+                linker.sequence,
+                definitions=feature_definitions,
+                definitions_sha256=definitions_hash,
+                forbidden_motifs=tuple(settings.forbidden_motifs),
+            )
             features = result.as_dict()
-            if result.forbidden_motifs:
-                flags.append("forbidden_motif")
-            if result.aggregation_risk_flag:
-                flags.append("sequence_aggregation_risk_proxy")
+            evidence = predictor_evidence.get(linker.id, {})
+            screen = screen_sequence_v3(
+                features=result,
+                sequence_kind=linker.sequence_kind,
+                rules=rules,
+                disorder=(
+                    DisorderEvidence.model_validate(evidence["disorder"])
+                    if isinstance(evidence.get("disorder"), dict)
+                    else None
+                ),
+                secondary_structure=(
+                    SecondaryStructureEvidence.model_validate(evidence["secondary_structure"])
+                    if isinstance(evidence.get("secondary_structure"), dict)
+                    else None
+                ),
+                fusion_evidence=(
+                    FusionToolEvidence.model_validate(evidence["fusion"])
+                    if isinstance(evidence.get("fusion"), dict)
+                    else None
+                ),
+                localization_context=(
+                    "er_anchored" if "ER" in (definition.fusion_orientation or "").upper() else "cytosolic"
+                ),
+                require_external_evidence=(
+                    config.execution.mode == "real" and settings.require_external_evidence_in_real_mode
+                ),
+            )
+            flags.extend(screen.hard_reject_reasons)
+            if screen.verdict == "blocked":
+                flags.append("missing_required_M1_predictor_evidence")
         if config.inputs.idr_id is None:
             flags.append("idr_not_explicitly_specified")
         elif config.inputs.idr_id not in definition.components:
             flags.append("idr_not_in_construct_components")
         priority = None
-        if config.execution.mode == "demo" and features is not None:
-            priority = round(max(0.0, 1.0 - 0.45 * len(flags) - 0.55 * float(features["hydrophobic_fraction"])), 3)
+        screen_verdict = screen.verdict if linker is not None else "blocked"
+        missing_predictors = screen.missing_required_evidence if linker is not None else []
+        recommended = not flags or definition.experimental_baseline
         candidates.append(M1Candidate(
             candidate_id=f"M1-{definition.id}", construct_id=definition.id, construct_definition=definition.model_dump(), scaffold_id=definition.scaffold_id,
             linker_id=linker_id, idr_id=config.inputs.idr_id, linker_features=features, screen_flags=flags,
-            engineering_priority_score=priority, recommended_for_m2=not flags,
-            status="valid" if not flags else "insufficient_data",
+            formula_version=(result.formula_version if linker is not None else None),
+            rule_version=rules.rule_version,
+            feature_definitions_sha256=(result.feature_definitions_sha256 if linker is not None else None),
+            sequence_sha256=(result.sequence_sha256 if linker is not None else None),
+            sequence_screen_verdict=screen_verdict,
+            missing_predictor_evidence=missing_predictors,
+            engineering_priority_score=priority, recommended_for_m2=recommended,
+            status=(
+                "invalid_input"
+                if screen_verdict == "reject"
+                else ("insufficient_data" if flags or screen_verdict == "blocked" else "valid")
+            ),
             data_quality="demo_fixture" if config.execution.mode == "demo" else "heuristic",
-            missing_inputs=[flag for flag in flags if "not_specified" in flag or "not_found" in flag],
-            recommended_next_action=["specify IDR and construct components in config"] if flags else [],
-            notes="Engineering sequence screen only; it is not an LLPS probability or proof.",
+            missing_inputs=[
+                *[flag for flag in flags if "not_specified" in flag or "not_found" in flag],
+                *missing_predictors,
+            ],
+            recommended_next_action=(
+                ["provide real versioned M1 predictor outputs for the exact sequence hash"]
+                if missing_predictors and config.execution.mode == "real"
+                else (["specify IDR and construct components in config"] if flags else [])
+            ),
+            notes=(
+                "M1 V3 negative screen with exact feature equations. Soft-risk auto-grading and rank_score "
+                "remain unavailable because the source does not define every risk direction or reviewed weights. "
+                + (
+                    "This measured experimental baseline remains eligible for retrospective M2 assessment; "
+                    "that does not turn its missing M1 evidence into a pass."
+                    if definition.experimental_baseline and flags
+                    else ""
+                )
+            ),
         ))
     candidates.sort(key=lambda item: item.engineering_priority_score if item.engineering_priority_score is not None else -1.0, reverse=True)
     candidates = candidates[:config.stages.m1_llps.top_n]
     write_models(stage_dir, "candidates", candidates)
     return candidates, _stage_output("m1_construct_screen", stage_dir, "candidates", len(candidates))
+
+
+def _load_m1_predictor_evidence(path: Path | None) -> dict[str, dict[str, object]]:
+    if path is None:
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not all(isinstance(key, str) and isinstance(value, dict) for key, value in payload.items()):
+        raise ValueError("M1 predictor evidence must be an object keyed by linker/sequence id")
+    return payload
 
 
 def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) -> tuple[list[M2FusionAssessment], StageOutput]:

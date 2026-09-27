@@ -43,6 +43,12 @@ class M1Candidate(ScientificResult):
     linker_id: str | None = None
     idr_id: str | None = None
     linker_features: dict[str, Any] | None = None
+    formula_version: str | None = None
+    rule_version: str | None = None
+    feature_definitions_sha256: str | None = None
+    sequence_sha256: str | None = None
+    sequence_screen_verdict: Literal["pass", "review", "reject", "blocked"] | None = None
+    missing_predictor_evidence: list[str] = Field(default_factory=list)
     screen_flags: list[str] = Field(default_factory=list)
     engineering_priority_score: float | None = Field(default=None, ge=0, le=1)
     recommended_for_m2: bool = False

@@ -9,6 +9,9 @@ from igem_drylab.parameters import ParameterRecord
 from igem_drylab.constructs import ConstructRecord
 
 
+DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[3] / "configs"
+
+
 class RunConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = "demo-run"
@@ -67,6 +70,7 @@ class LinkerConfig(BaseModel):
     id: str
     sequence: str
     source: str = "unknown"
+    sequence_kind: Literal["enzyme_ligand_linker", "scaffold_linker", "rigid_linker"] = "enzyme_ligand_linker"
 
 
 class ConstructDefinition(BaseModel):
@@ -82,6 +86,7 @@ class ConstructDefinition(BaseModel):
     recruitment_tags: list[str] = Field(default_factory=list)
     enzyme_ids: list[str] = Field(default_factory=list)
     oc_n_terminal_truncation: bool | None = None
+    experimental_baseline: bool = False
 
     @model_validator(mode="after")
     def _one_linker_contract(self) -> "ConstructDefinition":
@@ -114,6 +119,10 @@ class ToolConfig(BaseModel):
 class M1Config(StrictScientificConfig):
     top_n: int = Field(default=10, ge=1)
     forbidden_motifs: list[str] = Field(default_factory=list)
+    feature_definitions_file: Path = DEFAULT_CONFIG_DIR / "m1_feature_definitions.yaml"
+    rules_file: Path = DEFAULT_CONFIG_DIR / "m1_rules_v3.yaml"
+    predictor_evidence_file: Path | None = None
+    require_external_evidence_in_real_mode: bool = True
 
 
 class M2Config(StrictScientificConfig):
@@ -370,6 +379,15 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         scaffold.structure_pdb = _resolve_path(scaffold.structure_pdb, base_dir)  # type: ignore[assignment]
     for tool in config.tools.values():
         tool.repo_path = _resolve_path(tool.repo_path, base_dir)  # type: ignore[assignment]
+    config.stages.m1_llps.feature_definitions_file = _resolve_path(
+        config.stages.m1_llps.feature_definitions_file,
+        base_dir,
+    )  # type: ignore[assignment]
+    config.stages.m1_llps.rules_file = _resolve_path(config.stages.m1_llps.rules_file, base_dir)  # type: ignore[assignment]
+    config.stages.m1_llps.predictor_evidence_file = _resolve_path(
+        config.stages.m1_llps.predictor_evidence_file,
+        base_dir,
+    )  # type: ignore[assignment]
     config.stages.m2_fusion.structure_metrics_file = _resolve_path(
         config.stages.m2_fusion.structure_metrics_file,
         base_dir,
@@ -377,7 +395,11 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
     config.stages.m4_reaction.reaction_network_file = _resolve_path(config.stages.m4_reaction.reaction_network_file, base_dir)  # type: ignore[assignment]
     config.stages.m5_feedback.wetlab_results_file = _resolve_path(config.stages.m5_feedback.wetlab_results_file, base_dir)  # type: ignore[assignment]
     if config.execution.mode == "real":
-        required_files = [config.inputs.protein_fasta]
+        required_files = [
+            config.inputs.protein_fasta,
+            config.stages.m1_llps.feature_definitions_file,
+            config.stages.m1_llps.rules_file,
+        ]
         required_files.extend(item.sdf for item in config.inputs.ligands if item.sdf is not None)
         required_files.extend(item.structure_pdb for item in [*config.inputs.enzymes, *config.inputs.scaffolds] if item.structure_pdb is not None)
         required_files.extend([config.stages.m2_fusion.structure_metrics_file, config.stages.m5_feedback.wetlab_results_file])

@@ -211,6 +211,17 @@ def create_tool_adapter(name: str, config: ToolConfig | None) -> ExternalToolAda
         "autodock_vina": DockingAdapter,
         "signalp": SequenceScreeningAdapter,
         "deeptmhmm": SequenceScreeningAdapter,
+        "iupred2a": SequenceScreeningAdapter,
+        "psipred": SequenceScreeningAdapter,
+        "jpred": SequenceScreeningAdapter,
+        "seg": SequenceScreeningAdapter,
+        "protparam": SequenceScreeningAdapter,
+        "tango": SequenceScreeningAdapter,
+        "pasta2": SequenceScreeningAdapter,
+        "fuzdrop": SequenceScreeningAdapter,
+        "catgranule": SequenceScreeningAdapter,
+        "pspredictor": SequenceScreeningAdapter,
+        "mpipi": LlpsSimulationAdapter,
     }
     return adapter_types.get(name, ExternalToolAdapter)(name, config)
 

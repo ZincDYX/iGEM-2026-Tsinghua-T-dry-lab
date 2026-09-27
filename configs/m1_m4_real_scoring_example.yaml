@@ -39,12 +39,14 @@ inputs:
       source: Kuroiwa et al. EMBO Reports 2026, PGL-3(D1-D2-3(GGGGS)-RGG), Addgene 250141
   constructs:
     - id: FTH1-pgl3_3x_ggggs
+      experimental_baseline: true
       components: [FTH1, IDR, pgl3_3x_ggggs]
       domain_order: [FTH1, linker, IDR]
       fusion_orientation: C_terminal_scaffold_appendage
       linker_ids: [pgl3_3x_ggggs]
       scaffold_id: FTH1
     - id: SpyTag_SpyCatcher-pgl3_3x_ggggs
+      experimental_baseline: true
       components: [SpyTag_SpyCatcher, IDR, pgl3_3x_ggggs]
       linker_ids: [pgl3_3x_ggggs]
       scaffold_id: SpyTag_SpyCatcher

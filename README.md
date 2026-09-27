@@ -210,17 +210,19 @@ copy .env.example .env  # Windows PowerShell/cmd users may also create this manu
 
 ## External tools and APIs
 
-The Python package itself depends only on NumPy, SciPy, Pydantic, PyYAML, Typer, and Requests. Optional integrations include:
+The Python package depends on NumPy, SciPy, Pydantic, PyYAML, Typer, Requests, and the official Python MCP SDK. Optional scientific executables include:
 
 | Integration | Role | Required? |
 | --- | --- | --- |
+| IUPred2A + PSIPRED/JPred | M1 disorder and secondary-structure evidence | Required for the applicable formal M1 screen |
+| SignalP 6 + DeepTMHMM + TANGO/PASTA 2 | M1 full-fusion negative screening | Required for a formal cytosolic M1 pass |
 | ColabFold Multimer | structure prediction | No |
 | FreeSASA | pocket accessibility | No |
 | AutoDock Vina | small-molecule docking screen | No |
 | CALVADOS | coarse-grained condensate simulation parsing | No |
 | OpenAI-compatible API | optional literature extraction, planning, embeddings, synthesis | No |
 
-For external compute commands, switch the intended adapter from `mode: mock` to `mode: external` in a configuration and point it to an installed executable or wrapper. Commands are rendered without a shell.
+For external compute commands, use `mode: external` and point the adapter to an installed executable or version-pinned wrapper. Commands are rendered without a shell. A configured command is not treated as evidence that the program is installed: `igem.compute.check_tool` reports real availability, and a formal run blocks on missing artifacts. Mock mode is demonstration-only and cannot produce formal M1–M4 evidence.
 
 ## Agent and MCP interface
 
@@ -231,7 +233,14 @@ igem-drylab agent dry-run examples/agent/validate_config_task.json
 igem-drylab agent run examples/agent/validate_config_task.json
 ```
 
-The local MCP-style registry can be inspected with `igem-drylab tools list`. It is a tool-contract layer, not a network MCP server.
+The local registry can still be inspected with `igem-drylab tools list`. A transport-level MCP server is also provided using the official Python SDK:
+
+```bash
+igem-drylab-mcp
+# equivalent: python -m igem_drylab.mcp.server
+```
+
+It uses stdio by default and exposes typed tools including `igem.m1.compute_features`, `igem.m1.screen_sequence`, `igem.compute.check_tool`, and `igem.compute.run_tool`. The test suite starts the stdio subprocess with an MCP client, performs protocol discovery, lists tools, and calls the M1 calculator.
 
 ## Contributing
 
