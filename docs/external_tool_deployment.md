@@ -1,19 +1,19 @@
 # External-tool deployment contract
 
-Measured on `air-lab` on 2026-10-03. Byte counts use `du -sb`; the hard budget is 10 GiB = 10,737,418,240 bytes.
+Measured on `air-lab` on 2026-10-03 after the MCP runtime was installed. Byte counts are the conservative logical-file totals returned by `igem.compute.audit_deployment`; the hard budget is 10 GiB = 10,737,418,240 bytes.
 
 ## Lean deployed environment
 
 | Deployment root | Bytes | Verified behavior |
 |---|---:|---|
-| `/mnt/data/dyx/miniconda3/envs/drylab-m1m2` | 6,355,035,598 | ColabFold 1.6.2 GPU run; FreeSASA calculation; Vina 1.2.7 docking; Meeko import; JPred REST v1.5 probe; BioLib CLI |
-| `/mnt/data/dyx/redirect/dongyuxin/cache/colabfold` | 3,722,751,216 | Local AlphaFold/ColabFold parameter cache used by the GPU smoke run |
-| `/mnt/data/dyx/drylab-tools` | 256,397 | Standalone NCBI SEG executable |
-| **Total external deployment** | **10,078,043,211** | **659,375,029 bytes below 10 GiB** |
+| `/mnt/data/dyx/miniconda3/envs/drylab-m1m2` | 6,547,731,215 | ColabFold 1.6.2 GPU run; FreeSASA calculation; Vina 1.2.7 docking; Meeko import; JPred REST v1.5; BioLib CLI; MCP 2.3.0 server/client |
+| `/mnt/data/dyx/redirect/dongyuxin/cache/colabfold` | 3,722,743,024 | Local AlphaFold/ColabFold parameter cache used by the GPU smoke run |
+| `/mnt/data/dyx/drylab-tools` | 211,341 | Standalone NCBI SEG executable |
+| **Total external deployment** | **10,270,685,580** | **466,732,660 bytes below 10 GiB** |
 
-Smoke-test inputs and outputs occupy another 751,363 bytes under `/mnt/data/dyx/drylab-tool-smoke`; even when counted, the total remains below 10 GiB.
+Smoke-test inputs and outputs occupy another 758,346 bytes under `/mnt/data/dyx/drylab-tool-smoke`; even when counted, the total remains below 10 GiB. The clean deployed source tree is separate from the external-tool budget and occupies 2,629,704 bytes.
 
-The deployment audit must include these roots in the project YAML `deployment_paths` and call `igem.compute.audit_deployment` before a formal run. Nested paths are deduplicated by the audit.
+The deployment audit must include these roots in the project YAML `deployment_paths` and call `igem.compute.audit_deployment` before a formal run. Nested paths are deduplicated by the audit. A real stdio MCP smoke call listed 18 tools, passed this audit, invoked `igem.compute.run_tool`, and wrote both FreeSASA output and its run manifest.
 
 ## Formal M1/M2 routes
 
