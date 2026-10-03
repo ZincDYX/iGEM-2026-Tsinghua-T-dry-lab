@@ -52,6 +52,61 @@ def m1_compute_features(
 
 
 @server.tool(
+    name="igem.m1.validate_construct_sequence",
+    title="Assemble and validate a sequenced construct",
+    description="Compare ordered protein parts with the translated coding DNA and scan declared restriction motifs.",
+    structured_output=True,
+)
+def m1_validate_construct_sequence(
+    construct_id: str,
+    ordered_part_ids: list[str],
+    part_sequences: dict[str, str],
+    coding_dna: str | None = None,
+    forbidden_restriction_sites: dict[str, str] | None = None,
+    require_sequence_evidence: bool = True,
+) -> dict[str, Any]:
+    return _call_local(
+        "igem.m1.validate_construct_sequence",
+        {
+            "construct_id": construct_id,
+            "ordered_part_ids": ordered_part_ids,
+            "part_sequences": part_sequences,
+            "coding_dna": coding_dna,
+            "forbidden_restriction_sites": forbidden_restriction_sites,
+            "require_sequence_evidence": require_sequence_evidence,
+        },
+    )
+
+
+@server.tool(
+    name="igem.m1.compute_protparam",
+    title="Compute local ProtParam cross-check",
+    description="Calculate molecular weight, theoretical pI, and composition with versioned Biopython ProtParam.",
+    structured_output=True,
+)
+def m1_compute_protparam(sequence: str) -> dict[str, Any]:
+    return _call_local("igem.m1.compute_protparam", {"sequence": sequence})
+
+
+@server.tool(
+    name="igem.m1.parse_seg",
+    title="Parse real SEG low-complexity output",
+    description="Parse one NCBI segmasker FASTA artifact and calculate the low-complexity fraction.",
+    structured_output=True,
+)
+def m1_parse_seg(path: str, tool_version: str, input_sha256: str, expected_length: int) -> dict[str, Any]:
+    return _call_local(
+        "igem.m1.parse_seg",
+        {
+            "path": path,
+            "tool_version": tool_version,
+            "input_sha256": input_sha256,
+            "expected_length": expected_length,
+        },
+    )
+
+
+@server.tool(
     name="igem.m1.screen_sequence",
     title="Apply M1 V3 negative-screen rules",
     description=(
@@ -69,7 +124,10 @@ def m1_screen_sequence(
     forbidden_amino_acid_motifs: list[str] | None = None,
     disorder_evidence: dict[str, Any] | None = None,
     secondary_structure_evidence: dict[str, Any] | None = None,
+    seg_evidence: dict[str, Any] | None = None,
+    protparam_evidence: dict[str, Any] | None = None,
     fusion_evidence: dict[str, Any] | None = None,
+    full_fusion_sha256: str | None = None,
     require_external_evidence: bool = True,
 ) -> dict[str, Any]:
     arguments: dict[str, Any] = {
@@ -79,7 +137,10 @@ def m1_screen_sequence(
         "forbidden_amino_acid_motifs": forbidden_amino_acid_motifs or [],
         "disorder_evidence": disorder_evidence,
         "secondary_structure_evidence": secondary_structure_evidence,
+        "seg_evidence": seg_evidence,
+        "protparam_evidence": protparam_evidence,
         "fusion_evidence": fusion_evidence,
+        "full_fusion_sha256": full_fusion_sha256,
         "require_external_evidence": require_external_evidence,
     }
     if feature_definitions_file is not None:
@@ -321,6 +382,19 @@ def m4_solve_steady_state(inputs: dict[str, Any]) -> dict[str, Any]:
 )
 def check_external_tool(config_path: str, tool_name: str) -> dict[str, Any]:
     return _call_local("igem.compute.check_tool", {"config_path": config_path, "tool_name": tool_name})
+
+
+@server.tool(
+    name="igem.compute.audit_deployment",
+    title="Audit external-tool disk budget",
+    description="Measure unique deployment roots and report whether they fit within the declared byte budget.",
+    structured_output=True,
+)
+def audit_external_tool_deployment(config_path: str, budget_bytes: int = 10 * 1024**3) -> dict[str, Any]:
+    return _call_local(
+        "igem.compute.audit_deployment",
+        {"config_path": config_path, "budget_bytes": budget_bytes},
+    )
 
 
 @server.tool(

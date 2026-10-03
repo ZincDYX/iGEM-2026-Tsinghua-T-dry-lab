@@ -109,8 +109,8 @@ def test_official_mcp_server_calls_m4_steady_state() -> None:
 def test_pipeline_routes_markdown_steady_state_without_decision_fields(tmp_path: Path) -> None:
     network = tmp_path / "reactions.csv"
     network.write_text(
-        "reaction_id,enzyme,substrate,product,kcat_derived_author_native,Km_author_native\n"
-        + "".join(f"{rid},{enzyme},{substrate},{product},1,1\n" for rid, enzyme, substrate, product in REACTIONS),
+        "reaction_id,enzyme,substrate,product\n"
+        + "".join(f"{rid},{enzyme},{substrate},{product}\n" for rid, enzyme, substrate, product in REACTIONS),
         encoding="utf-8",
     )
     config = load_config(Path("configs/m1_m4_example.yaml"))

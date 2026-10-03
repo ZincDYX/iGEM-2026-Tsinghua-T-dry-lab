@@ -22,6 +22,9 @@ class ConstructRecord(BaseModel):
     linker_sequences: dict[str, str] = Field(default_factory=dict)
     promoter: str | None = None
     copy_number: str | None = None
+    coding_dna: str | None = None
+    sequence_source_ref: str | None = None
+    forbidden_restriction_sites: dict[str, str] | None = None
     experimental_conditions: dict[str, str | float] = Field(default_factory=dict)
     measured_outputs: dict[str, float | str] = Field(default_factory=dict)
     source_type: str
@@ -33,7 +36,24 @@ class ConstructRecord(BaseModel):
     notes: str = ""
 
     def candidate_definition(self) -> dict[str, object]:
-        return {"id": self.construct_id, "components": self.proteins + list(self.linker_sequences), "domain_order": self.domain_order, "fusion_orientation": self.fusion_orientation, "linker_ids": list(self.linker_sequences), "scaffold_id": self.scaffold, "recruitment_tags": self.ligand_tags, "enzyme_ids": [item for item in self.proteins if item in {"PT", "OC", "DMT"}], "provenance": {"source_type": self.source_type, "doi": self.doi, "record_id": self.construct_id}}
+        return {
+            "id": self.construct_id,
+            "components": self.proteins + list(self.linker_sequences),
+            "domain_order": self.domain_order,
+            "fusion_orientation": self.fusion_orientation,
+            "linker_ids": list(self.linker_sequences),
+            "scaffold_id": self.scaffold,
+            "recruitment_tags": self.ligand_tags,
+            "enzyme_ids": [item for item in self.proteins if item in {"PT", "OC", "DMT"}],
+            "coding_dna": self.coding_dna,
+            "sequence_source_ref": self.sequence_source_ref,
+            "forbidden_restriction_sites": self.forbidden_restriction_sites,
+            "provenance": {
+                "source_type": self.source_type,
+                "doi": self.doi,
+                "record_id": self.construct_id,
+            },
+        }
 
 
 class ConstructRegistry:

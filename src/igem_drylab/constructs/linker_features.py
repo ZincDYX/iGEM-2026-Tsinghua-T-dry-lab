@@ -153,10 +153,32 @@ class SecondaryStructureEvidence(BaseModel):
     longest_ss_run: int
 
 
+class SegEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tool_name: Literal["SEG"] = "SEG"
+    tool_version: str
+    source_file: Path
+    input_sha256: str
+    sequence_length: int = Field(ge=1)
+    low_complexity_positions: list[int] = Field(default_factory=list)
+    low_complexity_fraction: float = Field(ge=0, le=1)
+
+
+class ProtParamEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tool_name: Literal["Biopython ProtParam"] = "Biopython ProtParam"
+    tool_version: str
+    input_sha256: str
+    molecular_weight_da: float = Field(gt=0)
+    theoretical_pi: float = Field(ge=0, le=14)
+    amino_acid_counts: dict[str, int]
+
+
 class FusionToolEvidence(BaseModel):
     """Normalized, provenance-bearing observations from full-fusion tools."""
 
     model_config = ConfigDict(extra="forbid")
+    input_sha256: str | None = None
     signalp_tool_version: str | None = None
     signalp_source_file: Path | None = None
     signal_peptide_with_clear_cleavage: bool | None = None
@@ -180,6 +202,8 @@ class M1ScreenResult(BaseModel):
     features: SequenceFeatures
     disorder: DisorderEvidence | None = None
     secondary_structure: SecondaryStructureEvidence | None = None
+    seg: SegEvidence | None = None
+    protparam: ProtParamEvidence | None = None
     fusion_evidence: FusionToolEvidence | None = None
     verdict: Literal["pass", "review", "reject", "blocked"]
     hard_reject_reasons: list[str] = Field(default_factory=list)
@@ -340,6 +364,64 @@ def parse_secondary_structure_output(
     )
 
 
+def parse_seg_fasta(
+    path: Path,
+    *,
+    tool_version: str,
+    input_sha256: str,
+    expected_length: int,
+) -> SegEvidence:
+    """Parse one SEG-masked FASTA record; lowercase or X marks low complexity."""
+
+    records: list[str] = []
+    current: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(">"):
+            if current:
+                records.append("".join(current))
+                current = []
+            continue
+        current.append(line)
+    if current:
+        records.append("".join(current))
+    if len(records) != 1:
+        raise ValueError("SEG output must contain exactly one FASTA record")
+    masked = records[0]
+    if len(masked) != expected_length:
+        raise ValueError("SEG output length does not match the input sequence")
+    positions = [index for index, residue in enumerate(masked, start=1) if residue.islower() or residue.upper() == "X"]
+    return SegEvidence(
+        tool_version=tool_version,
+        source_file=path,
+        input_sha256=input_sha256,
+        sequence_length=expected_length,
+        low_complexity_positions=positions,
+        low_complexity_fraction=len(positions) / expected_length,
+    )
+
+
+def compute_protparam_evidence(sequence: str, *, input_sha256: str) -> ProtParamEvidence:
+    """Calculate the M1 ProtParam cross-check locally with versioned Biopython."""
+
+    try:
+        import Bio
+        from Bio.SeqUtils.ProtParam import ProteinAnalysis
+    except ImportError as exc:  # pragma: no cover - dependency is declared
+        raise RuntimeError("Biopython is required for ProtParam evidence") from exc
+    normalized = normalize_amino_acid_sequence(sequence)
+    analysis = ProteinAnalysis(normalized)
+    return ProtParamEvidence(
+        tool_version=Bio.__version__,
+        input_sha256=input_sha256,
+        molecular_weight_da=analysis.molecular_weight(),
+        theoretical_pi=analysis.isoelectric_point(),
+        amino_acid_counts=analysis.count_amino_acids(),
+    )
+
+
 def screen_sequence_v3(
     *,
     features: SequenceFeatures,
@@ -347,7 +429,10 @@ def screen_sequence_v3(
     rules: M1V3Rules,
     disorder: DisorderEvidence | None = None,
     secondary_structure: SecondaryStructureEvidence | None = None,
+    seg: SegEvidence | None = None,
+    protparam: ProtParamEvidence | None = None,
     fusion_evidence: FusionToolEvidence | None = None,
+    full_fusion_sha256: str | None = None,
     localization_context: Literal["cytosolic", "er_anchored"] = "cytosolic",
     require_external_evidence: bool = True,
 ) -> M1ScreenResult:
@@ -391,6 +476,15 @@ def screen_sequence_v3(
         else:
             reject.append("secondary_structure_fraction_at_least_0_10")
 
+    if seg is None:
+        missing.append("SEG_output")
+    elif seg.input_sha256 != features.sequence_sha256:
+        reject.append("SEG_input_hash_mismatch")
+    if protparam is None:
+        missing.append("ProtParam_output")
+    elif protparam.input_sha256 != features.sequence_sha256:
+        reject.append("ProtParam_input_hash_mismatch")
+
     if fusion_evidence is None:
         missing.extend(
             [
@@ -400,6 +494,12 @@ def screen_sequence_v3(
             ]
         )
     else:
+        if full_fusion_sha256 is None:
+            missing.append("assembled_full_fusion_sequence_hash")
+        elif fusion_evidence.input_sha256 is None:
+            missing.append("full_fusion_tool_input_hash")
+        elif fusion_evidence.input_sha256 != full_fusion_sha256:
+            reject.append("full_fusion_tool_input_hash_mismatch")
         if fusion_evidence.signal_peptide_with_clear_cleavage is None:
             missing.append("SignalP_full_fusion_output")
         elif fusion_evidence.signal_peptide_with_clear_cleavage and localization_context == "cytosolic":
@@ -436,6 +536,8 @@ def screen_sequence_v3(
         features=features,
         disorder=disorder,
         secondary_structure=secondary_structure,
+        seg=seg,
+        protparam=protparam,
         fusion_evidence=fusion_evidence,
         verdict=verdict,
         hard_reject_reasons=reject,

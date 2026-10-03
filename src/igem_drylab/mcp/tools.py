@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from igem_drylab.external_tools import TEN_GIB, audit_deployment
 from igem_drylab.literature import answer_question, build_prompt, compact_evidence_sources, extract_records_chunked, extract_records_from_text, get_evidence_detail, load_schema
 from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article_xml, search_scopus
 from igem_drylab.literature.icl import load_icl_examples
@@ -43,10 +44,15 @@ from igem_drylab.constructs import (
     FusionToolEvidence,
     M1FeatureDefinitions,
     M1V3Rules,
+    ProtParamEvidence,
+    SegEvidence,
     SecondaryStructureEvidence,
     SequenceFeatures,
+    assemble_and_validate_construct,
+    compute_protparam_evidence,
     compute_sequence_features,
     parse_iupred2a_output,
+    parse_seg_fasta,
     parse_secondary_structure_output,
     screen_sequence_v3,
 )
@@ -200,6 +206,14 @@ def compute_check_tool(arguments: JsonObject) -> McpToolResult:
     )
 
 
+def compute_audit_deployment(arguments: JsonObject) -> McpToolResult:
+    config = load_config(Path(_require_str(arguments, "config_path")))
+    budget_bytes = _optional_int(arguments, "budget_bytes", TEN_GIB, minimum=1)
+    paths = [path for tool in config.tools.values() for path in tool.deployment_paths]
+    result = audit_deployment(paths, budget_bytes=budget_bytes)
+    return McpToolResult.ok({"ok": result.within_budget, "deployment": result.model_dump(mode="json")})
+
+
 def compute_run_tool(arguments: JsonObject) -> McpToolResult:
     config = load_config(Path(_require_str(arguments, "config_path")))
     tool_name = _require_str(arguments, "tool_name")
@@ -212,7 +226,10 @@ def compute_run_tool(arguments: JsonObject) -> McpToolResult:
     adapter = create_tool_adapter(tool_name, config.tools.get(tool_name))
     result = adapter.run(output_dir=output_dir, dry_run=dry_run, timeout_seconds=timeout_seconds, **context)
     result = _persist_standard_output(tool_name, result)
-    return McpToolResult.ok({"ok": result.status not in {"failed", "missing_executable"}, "run": result.model_dump(mode="json")})
+    return McpToolResult.ok({
+        "ok": result.status in {"succeeded", "dry_run", "mock"},
+        "run": result.model_dump(mode="json"),
+    })
 
 
 def m1_compute_features(arguments: JsonObject) -> McpToolResult:
@@ -233,6 +250,44 @@ def m1_compute_features(arguments: JsonObject) -> McpToolResult:
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
 
+def m1_validate_construct_sequence(arguments: JsonObject) -> McpToolResult:
+    ordered = arguments.get("ordered_part_ids")
+    sequences = arguments.get("part_sequences")
+    sites = arguments.get("forbidden_restriction_sites")
+    if not isinstance(ordered, list) or not all(isinstance(item, str) for item in ordered):
+        raise ValueError("ordered_part_ids must be a list of strings")
+    if not isinstance(sequences, dict) or not all(isinstance(key, str) and isinstance(value, str) for key, value in sequences.items()):
+        raise ValueError("part_sequences must be an object of amino-acid strings")
+    if sites is not None and (not isinstance(sites, dict) or not all(isinstance(key, str) and isinstance(value, str) for key, value in sites.items())):
+        raise ValueError("forbidden_restriction_sites must be an object of DNA motifs")
+    result = assemble_and_validate_construct(
+        construct_id=_require_str(arguments, "construct_id"),
+        ordered_part_ids=ordered,
+        part_sequences=sequences,
+        coding_dna=arguments.get("coding_dna"),
+        forbidden_restriction_sites=sites,
+        require_sequence_evidence=bool(arguments.get("require_sequence_evidence", True)),
+    )
+    return McpToolResult.ok({"ok": result.status == "valid", "result": result.model_dump(mode="json")})
+
+
+def m1_compute_protparam(arguments: JsonObject) -> McpToolResult:
+    sequence = _require_str(arguments, "sequence")
+    sequence_hash = sha256("".join(sequence.split()).upper().encode("ascii")).hexdigest()
+    result = compute_protparam_evidence(sequence, input_sha256=sequence_hash)
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m1_parse_seg(arguments: JsonObject) -> McpToolResult:
+    result = parse_seg_fasta(
+        Path(_require_str(arguments, "path")),
+        tool_version=_require_str(arguments, "tool_version"),
+        input_sha256=_require_str(arguments, "input_sha256"),
+        expected_length=_optional_int(arguments, "expected_length", 0, minimum=1),
+    )
+    return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
 def m1_screen_sequence(arguments: JsonObject) -> McpToolResult:
     feature_result = m1_compute_features(arguments).structured_content["result"]
     rules_path = Path(
@@ -243,6 +298,8 @@ def m1_screen_sequence(arguments: JsonObject) -> McpToolResult:
     disorder_payload = arguments.get("disorder_evidence")
     secondary_payload = arguments.get("secondary_structure_evidence")
     fusion_payload = arguments.get("fusion_evidence")
+    seg_payload = arguments.get("seg_evidence")
+    protparam_payload = arguments.get("protparam_evidence")
     result = screen_sequence_v3(
         features=SequenceFeatures.model_validate(feature_result),
         sequence_kind=arguments.get("sequence_kind", "enzyme_ligand_linker"),
@@ -251,7 +308,10 @@ def m1_screen_sequence(arguments: JsonObject) -> McpToolResult:
         secondary_structure=(
             None if secondary_payload is None else SecondaryStructureEvidence.model_validate(secondary_payload)
         ),
+        seg=None if seg_payload is None else SegEvidence.model_validate(seg_payload),
+        protparam=None if protparam_payload is None else ProtParamEvidence.model_validate(protparam_payload),
         fusion_evidence=None if fusion_payload is None else FusionToolEvidence.model_validate(fusion_payload),
+        full_fusion_sha256=arguments.get("full_fusion_sha256"),
         localization_context=arguments.get("localization_context", "cytosolic"),
         require_external_evidence=bool(arguments.get("require_external_evidence", True)),
     )
@@ -893,6 +953,23 @@ COMPUTE_CHECK_TOOL = McpTool(
     ),
 )
 
+COMPUTE_AUDIT_DEPLOYMENT_TOOL = McpTool(
+    name="igem.compute.audit_deployment",
+    title="Audit external-tool disk budget",
+    description="Measure unique configured deployment roots and enforce the default 10 GiB tool budget.",
+    input_schema=_schema(
+        {
+            "config_path": {"type": "string"},
+            "budget_bytes": {"type": "integer", "minimum": 1, "default": TEN_GIB},
+        },
+        ["config_path"],
+    ),
+    output_schema=_schema(
+        {"ok": {"type": "boolean"}, "deployment": {"type": "object"}},
+        additional_properties=True,
+    ),
+)
+
 COMPUTE_RUN_TOOL = McpTool(
     name="igem.compute.run_tool",
     title="Run configured compute tool",
@@ -1021,6 +1098,48 @@ M1_COMPUTE_FEATURES_TOOL = McpTool(
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
 )
 
+M1_VALIDATE_CONSTRUCT_SEQUENCE_TOOL = McpTool(
+    name="igem.m1.validate_construct_sequence",
+    title="Assemble and validate a sequenced construct",
+    description="Assemble ordered protein parts, compare the translated coding DNA, record boundaries, and scan wet-lab restriction motifs.",
+    input_schema=_schema(
+        {
+            "construct_id": {"type": "string"},
+            "ordered_part_ids": {"type": "array", "items": {"type": "string"}},
+            "part_sequences": {"type": "object", "additionalProperties": {"type": "string"}},
+            "coding_dna": {"type": "string"},
+            "forbidden_restriction_sites": {"type": "object", "additionalProperties": {"type": "string"}},
+            "require_sequence_evidence": {"type": "boolean", "default": True},
+        },
+        ["construct_id", "ordered_part_ids", "part_sequences"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M1_COMPUTE_PROTPARAM_TOOL = McpTool(
+    name="igem.m1.compute_protparam",
+    title="Compute local ProtParam cross-check",
+    description="Calculate molecular weight, theoretical pI, and amino-acid counts with versioned Biopython ProtParam.",
+    input_schema=_schema({"sequence": {"type": "string"}}, ["sequence"]),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+M1_PARSE_SEG_TOOL = McpTool(
+    name="igem.m1.parse_seg",
+    title="Parse real SEG low-complexity output",
+    description="Parse one SEG-masked FASTA artifact and calculate the low-complexity residue fraction.",
+    input_schema=_schema(
+        {
+            "path": {"type": "string"},
+            "tool_version": {"type": "string"},
+            "input_sha256": {"type": "string"},
+            "expected_length": {"type": "integer", "minimum": 1},
+        },
+        ["path", "tool_version", "input_sha256", "expected_length"],
+    ),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
 M1_SCREEN_SEQUENCE_TOOL = McpTool(
     name="igem.m1.screen_sequence",
     title="Apply M1 V3 negative-screen rules",
@@ -1042,7 +1161,10 @@ M1_SCREEN_SEQUENCE_TOOL = McpTool(
             "forbidden_amino_acid_motifs": {"type": "array", "items": {"type": "string"}},
             "disorder_evidence": {"type": "object"},
             "secondary_structure_evidence": {"type": "object"},
+            "seg_evidence": {"type": "object"},
+            "protparam_evidence": {"type": "object"},
             "fusion_evidence": {"type": "object"},
+            "full_fusion_sha256": {"type": "string"},
             "require_external_evidence": {"type": "boolean", "default": True},
         },
         ["sequence", "sequence_kind"],
@@ -1512,8 +1634,12 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PIPELINE_RUN_STAGE_TOOL, pipeline_run_stage),
     (PIPELINE_PLAN_STAGE_TOOL, pipeline_plan_stage),
     (COMPUTE_CHECK_TOOL, compute_check_tool),
+    (COMPUTE_AUDIT_DEPLOYMENT_TOOL, compute_audit_deployment),
     (COMPUTE_RUN_TOOL, compute_run_tool),
     (M1_COMPUTE_FEATURES_TOOL, m1_compute_features),
+    (M1_VALIDATE_CONSTRUCT_SEQUENCE_TOOL, m1_validate_construct_sequence),
+    (M1_COMPUTE_PROTPARAM_TOOL, m1_compute_protparam),
+    (M1_PARSE_SEG_TOOL, m1_parse_seg),
     (M1_SCREEN_SEQUENCE_TOOL, m1_screen_sequence),
     (M1_PARSE_IUPRED2A_TOOL, m1_parse_iupred2a),
     (M1_PARSE_SECONDARY_STRUCTURE_TOOL, m1_parse_secondary_structure),

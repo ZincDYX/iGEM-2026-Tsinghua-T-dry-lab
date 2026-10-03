@@ -87,6 +87,9 @@ class ConstructDefinition(BaseModel):
     enzyme_ids: list[str] = Field(default_factory=list)
     oc_n_terminal_truncation: bool | None = None
     experimental_baseline: bool = False
+    coding_dna: str | None = None
+    sequence_source_ref: str | None = None
+    forbidden_restriction_sites: dict[str, str] | None = None
 
     @model_validator(mode="after")
     def _one_linker_contract(self) -> "ConstructDefinition":
@@ -113,6 +116,7 @@ class ToolConfig(BaseModel):
     mode: Literal["mock", "external"] = "mock"
     repo_path: Path | None = None
     command: str | None = None
+    deployment_paths: list[Path] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -385,6 +389,10 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         scaffold.structure_pdb = _resolve_path(scaffold.structure_pdb, base_dir)  # type: ignore[assignment]
     for tool in config.tools.values():
         tool.repo_path = _resolve_path(tool.repo_path, base_dir)  # type: ignore[assignment]
+        tool.deployment_paths = [
+            path if path.is_absolute() else base_dir / path
+            for path in tool.deployment_paths
+        ]
     config.stages.m1_llps.feature_definitions_file = _resolve_path(
         config.stages.m1_llps.feature_definitions_file,
         base_dir,

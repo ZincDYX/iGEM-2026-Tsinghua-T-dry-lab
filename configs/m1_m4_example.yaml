@@ -57,7 +57,7 @@ tools:
   freesasa:
     enabled: true
     mode: mock
-    command: freesasa --format=json {pdb_file}
+    command: igem-freesasa --pdb {pdb_file} --output {output_dir}/freesasa.json
   autodock_vina:
     enabled: true
     mode: mock

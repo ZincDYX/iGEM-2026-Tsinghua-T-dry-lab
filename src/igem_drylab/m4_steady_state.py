@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+import csv
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from scipy.optimize import least_squares
 
-from .full_network import COMPOUNDS, ENZYME_SUBSTRATES, REACTIONS, PhaseDistribution, ReactionKinetics, _phase_rates, phase_partition
+from .full_network import (
+    COMPOUNDS,
+    ENZYME_SUBSTRATES,
+    REACTIONS,
+    PhaseDistribution,
+    ReactionKinetics,
+    phase_competitive_rates,
+    phase_partition,
+)
 
 
 M4_FORMULA_VERSION = "m4-step0-step8-2026-09-27"
@@ -87,6 +97,23 @@ class M4SteadyStateResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+def load_m4_reaction_identities(path: Path) -> tuple[tuple[str, str, str, str], ...]:
+    """Read only the canonical identity fields required by the steady-state model."""
+
+    with path.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    required = {"reaction_id", "enzyme", "substrate", "product"}
+    if not rows or not required.issubset(rows[0]):
+        raise ValueError("M4_reaction_network_requires_identity_columns")
+    identities = tuple(
+        (row["reaction_id"], row["enzyme"], row["substrate"], row["product"])
+        for row in rows
+    )
+    if identities != REACTIONS:
+        raise ValueError("M4_requires_canonical_R1_to_R10_network_R10_is_14_to_15")
+    return identities
+
+
 def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
     """Solve the eight original steady-state balances without dynamic substitution."""
 
@@ -114,8 +141,8 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
         for index, compound in enumerate(COMPOUNDS):
             phases = phase_partition(float(cell_average[index]), payload.metabolite_kp[compound], payload.phi)
             dense[compound], dilute[compound] = phases.dense, phases.dilute
-        dense_rates = _phase_rates(dense, {name: item.dense for name, item in enzymes.items()}, reactions, {name: 1.0 for name in ENZYME_SUBSTRATES}, 1.0)
-        dilute_rates = _phase_rates(dilute, {name: item.dilute for name, item in enzymes.items()}, reactions, {name: 1.0 for name in ENZYME_SUBSTRATES}, 1.0)
+        dense_rates = phase_competitive_rates(dense, {name: item.dense for name, item in enzymes.items()}, reactions, {name: 1.0 for name in ENZYME_SUBSTRATES}, 1.0)
+        dilute_rates = phase_competitive_rates(dilute, {name: item.dilute for name, item in enzymes.items()}, reactions, {name: 1.0 for name in ENZYME_SUBSTRATES}, 1.0)
         flux = {
             reaction_id: payload.phi * dense_rates[reaction_id] + (1.0 - payload.phi) * dilute_rates[reaction_id]
             for reaction_id, *_ in REACTIONS

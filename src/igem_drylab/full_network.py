@@ -196,7 +196,7 @@ class FullNetworkResult:
     unit_mode: Literal["physical", "author_native_sensitivity"]
 
 
-def _phase_rates(phase_substrates: dict[str, float], enzymes: dict[str, float], reactions: tuple[ReactionKinetics, ...], activities: dict[str, float], dmt_gate: float) -> dict[str, float]:
+def phase_competitive_rates(phase_substrates: dict[str, float], enzymes: dict[str, float], reactions: tuple[ReactionKinetics, ...], activities: dict[str, float], dmt_gate: float) -> dict[str, float]:
     rates: dict[str, float] = {}
     by_enzyme: dict[str, list[ReactionKinetics]] = {enzyme: [] for enzyme in ENZYME_SUBSTRATES}
     for reaction in reactions:
@@ -242,8 +242,8 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
         dense_enzymes = {enzyme: item.dense for enzyme, item in params.enzyme_distributions.items()}
         dilute_enzymes = {enzyme: item.dilute for enzyme, item in params.enzyme_distributions.items()}
         gate = params.dmt_gate.value(time)
-        dense_rates = _phase_rates(dense, dense_enzymes, params.reactions, params.activity_dense, gate)
-        dilute_rates = _phase_rates(dilute, dilute_enzymes, params.reactions, params.activity_dilute, gate)
+        dense_rates = phase_competitive_rates(dense, dense_enzymes, params.reactions, params.activity_dense, gate)
+        dilute_rates = phase_competitive_rates(dilute, dilute_enzymes, params.reactions, params.activity_dilute, gate)
         rates = {reaction_id: params.phi * dense_rates[reaction_id] + (1.0 - params.phi) * dilute_rates[reaction_id] for reaction_id, *_ in REACTIONS}
         derivative = np.zeros(8)
         for reaction_id, _enzyme, substrate, product in REACTIONS:
@@ -266,8 +266,8 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
         intracellular = state[:8]
         dense = {compound: phase_partition(float(intracellular[index]), params.metabolite_kp[compound], params.phi).dense for index, compound in enumerate(COMPOUNDS)}
         dilute = {compound: phase_partition(float(intracellular[index]), params.metabolite_kp[compound], params.phi).dilute for index, compound in enumerate(COMPOUNDS)}
-        dense_rates = _phase_rates(dense, {enzyme: item.dense for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dense, params.dmt_gate.value(float(time)))
-        dilute_rates = _phase_rates(dilute, {enzyme: item.dilute for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dilute, params.dmt_gate.value(float(time)))
+        dense_rates = phase_competitive_rates(dense, {enzyme: item.dense for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dense, params.dmt_gate.value(float(time)))
+        dilute_rates = phase_competitive_rates(dilute, {enzyme: item.dilute for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dilute, params.dmt_gate.value(float(time)))
         fluxes[:, column] = [params.phi * dense_rates[reaction_id] + (1 - params.phi) * dilute_rates[reaction_id] for reaction_id, *_ in REACTIONS]
     integrals = {reaction_id: float(np.trapezoid(fluxes[index], solved.t)) for index, (reaction_id, *_rest) in enumerate(REACTIONS)}
     initial_8 = initial_intracellular["8"]

@@ -13,14 +13,17 @@ from igem_drylab.constructs import (
     FusionToolEvidence,
     M1FeatureDefinitions,
     M1V3Rules,
+    ProtParamEvidence,
+    SegEvidence,
     SecondaryStructureEvidence,
+    assemble_and_validate_construct,
     compute_sequence_features,
     screen_sequence_v3,
 )
 from igem_drylab.enrichment import EnrichmentInput, RecruitmentInput, calculate_enrichment, calculate_many, calculate_recruitment
 from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simulate_glabridin
 from igem_drylab.m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
-from igem_drylab.m4_steady_state import M4PhaseEnzymeInput, M4ReactionInput, M4SteadyStateInput, solve_m4_steady_state
+from igem_drylab.m4_steady_state import M4PhaseEnzymeInput, M4ReactionInput, M4SteadyStateInput, load_m4_reaction_identities, solve_m4_steady_state
 from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
 from igem_drylab.full_network import PhaseDistribution, TemporalGate, TransportParameters
 from igem_drylab.published_reference import run_published_reference, write_published_reference_reproduction
@@ -43,14 +46,35 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
     feature_definitions, definitions_hash = M1FeatureDefinitions.from_yaml(settings.feature_definitions_file)
     rules = M1V3Rules.model_validate(yaml.safe_load(settings.rules_file.read_text(encoding="utf-8")))
     predictor_evidence = _load_m1_predictor_evidence(settings.predictor_evidence_file)
+    protein_sequences = _read_fasta_sequences(config.inputs.protein_fasta)
+    linker_sequences = {item.id: item.sequence for item in config.inputs.linkers}
     construct_definitions = config.inputs.constructs + [_definition_from_registry(item) for item in ConstructRegistry(config.inputs.construct_records).query()]
     construct_definitions = construct_definitions or _legacy_demo_definitions(config)
     candidates: list[M1Candidate] = []
+    sequence_qc_records: list[dict[str, object]] = []
+    sequence_by_construct: dict[str, str] = {}
     for definition in construct_definitions:
         linker_id = definition.linker_ids[0] if definition.linker_ids else None
         linker = next((item for item in config.inputs.linkers if item.id == linker_id), None)
         flags: list[str] = []
         features = None
+        ordered_parts = _ordered_construct_parts(definition)
+        sequence_qc = assemble_and_validate_construct(
+            construct_id=definition.id,
+            ordered_part_ids=ordered_parts,
+            part_sequences={**protein_sequences, **linker_sequences},
+            coding_dna=definition.coding_dna,
+            forbidden_restriction_sites=definition.forbidden_restriction_sites,
+            require_sequence_evidence=config.execution.mode == "real",
+        )
+        sequence_qc_records.append(sequence_qc.model_dump(mode="json"))
+        if sequence_qc.full_protein_sequence is not None:
+            sequence_by_construct[definition.id] = sequence_qc.full_protein_sequence
+        if config.execution.mode == "real":
+            flags.extend(sequence_qc.errors)
+            flags.extend(sequence_qc.missing_inputs)
+        if sequence_qc.restriction_hits:
+            flags.append("wetlab_forbidden_DNA_site_present")
         if linker is None:
             flags.append("linker_not_specified_or_not_found")
         else:
@@ -76,11 +100,22 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
                     if isinstance(evidence.get("secondary_structure"), dict)
                     else None
                 ),
+                seg=(
+                    SegEvidence.model_validate(evidence["seg"])
+                    if isinstance(evidence.get("seg"), dict)
+                    else None
+                ),
+                protparam=(
+                    ProtParamEvidence.model_validate(evidence["protparam"])
+                    if isinstance(evidence.get("protparam"), dict)
+                    else None
+                ),
                 fusion_evidence=(
                     FusionToolEvidence.model_validate(evidence["fusion"])
                     if isinstance(evidence.get("fusion"), dict)
                     else None
                 ),
+                full_fusion_sha256=sequence_qc.protein_sha256,
                 localization_context=(
                     "er_anchored" if "ER" in (definition.fusion_orientation or "").upper() else "cytosolic"
                 ),
@@ -95,6 +130,8 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
             flags.append("idr_not_explicitly_specified")
         elif config.inputs.idr_id not in definition.components:
             flags.append("idr_not_in_construct_components")
+        if config.execution.mode == "real" and not definition.sequence_source_ref:
+            flags.append("construct_sequence_source_not_specified")
         priority = None
         screen_verdict = screen.verdict if linker is not None else "blocked"
         missing_predictors = screen.missing_required_evidence if linker is not None else []
@@ -106,17 +143,20 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
             rule_version=rules.rule_version,
             feature_definitions_sha256=(result.feature_definitions_sha256 if linker is not None else None),
             sequence_sha256=(result.sequence_sha256 if linker is not None else None),
+            full_sequence_sha256=sequence_qc.protein_sha256,
+            sequence_qc=sequence_qc.model_dump(mode="json"),
             sequence_screen_verdict=screen_verdict,
             missing_predictor_evidence=missing_predictors,
             engineering_priority_score=priority, recommended_for_m2=recommended,
             status=(
                 "invalid_input"
-                if screen_verdict == "reject"
+                if screen_verdict == "reject" or sequence_qc.status == "invalid" or sequence_qc.restriction_hits
                 else ("insufficient_data" if flags or screen_verdict == "blocked" else "valid")
             ),
             data_quality="demo_fixture" if config.execution.mode == "demo" else "heuristic",
             missing_inputs=[
                 *[flag for flag in flags if "not_specified" in flag or "not_found" in flag],
+                *sequence_qc.missing_inputs,
                 *missing_predictors,
             ],
             recommended_next_action=(
@@ -138,6 +178,31 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
     candidates.sort(key=lambda item: item.engineering_priority_score if item.engineering_priority_score is not None else -1.0, reverse=True)
     candidates = candidates[:config.stages.m1_llps.top_n]
     write_models(stage_dir, "candidates", candidates)
+    (stage_dir / "construct_sequence.fasta").write_text(
+        "".join(f">{construct_id}\n{sequence}\n" for construct_id, sequence in sequence_by_construct.items()),
+        encoding="utf-8",
+    )
+    (stage_dir / "sequence_qc.json").write_text(
+        json.dumps(sequence_qc_records, indent=2), encoding="utf-8"
+    )
+    (stage_dir / "part_boundaries.json").write_text(
+        json.dumps(
+            {
+                record["construct_id"]: record["part_boundaries"]
+                for record in sequence_qc_records
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (stage_dir / "m1_survivors.fasta").write_text(
+        "".join(
+            f">{item.construct_id}\n{sequence_by_construct[item.construct_id]}\n"
+            for item in candidates
+            if item.recommended_for_m2 and item.construct_id in sequence_by_construct
+        ),
+        encoding="utf-8",
+    )
     return candidates, _stage_output("m1_construct_screen", stage_dir, "candidates", len(candidates))
 
 
@@ -148,6 +213,36 @@ def _load_m1_predictor_evidence(path: Path | None) -> dict[str, dict[str, object
     if not isinstance(payload, dict) or not all(isinstance(key, str) and isinstance(value, dict) for key, value in payload.items()):
         raise ValueError("M1 predictor evidence must be an object keyed by linker/sequence id")
     return payload
+
+
+def _ordered_construct_parts(definition: ConstructDefinition) -> list[str]:
+    tokens = definition.domain_order or definition.components
+    ordered: list[str] = []
+    for token in tokens:
+        if token.lower() == "linker" and len(definition.linker_ids) == 1:
+            ordered.append(definition.linker_ids[0])
+        else:
+            ordered.append(token)
+    return ordered
+
+
+def _read_fasta_sequences(path: Path) -> dict[str, str]:
+    records: dict[str, list[str]] = {}
+    current: str | None = None
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(">"):
+            current = line[1:].split()[0]
+            if current in records:
+                raise ValueError(f"duplicate_fasta_id:{current}")
+            records[current] = []
+        elif current is None:
+            raise ValueError("FASTA_sequence_before_header")
+        else:
+            records[current].append(line)
+    return {identifier: "".join(parts) for identifier, parts in records.items()}
 
 
 def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) -> tuple[list[M2FusionAssessment], StageOutput]:
@@ -758,21 +853,21 @@ def _run_markdown_steady_m4(
             if bad_sources:
                 records.append(_m4_insufficient(item.candidate_id, config, [f"formal measured/verified M4 source: {name}" for name in bad_sources], construct_id=item.construct_id))
                 continue
-        source_reactions = load_author_native_reactions(settings.reaction_network_file)
+        reaction_identities = load_m4_reaction_identities(settings.reaction_network_file)
         reaction_inputs = [
             M4ReactionInput(
-                reaction_id=reaction.reaction_id,
-                enzyme=reaction.enzyme,
-                substrate=reaction.substrate,
-                product=reaction.product,
-                kcat_per_h=selected[f"kcat_{reaction.reaction_id.lower()}"].canonical_value,
-                km_um=selected[f"km_{reaction.reaction_id.lower()}"].canonical_value,
+                reaction_id=reaction_id,
+                enzyme=enzyme,
+                substrate=substrate,
+                product=product,
+                kcat_per_h=selected[f"kcat_{reaction_id.lower()}"].canonical_value,
+                km_um=selected[f"km_{reaction_id.lower()}"].canonical_value,
                 parameter_ids=[
-                    selected[f"kcat_{reaction.reaction_id.lower()}"].selected_parameter.parameter_id,
-                    selected[f"km_{reaction.reaction_id.lower()}"].selected_parameter.parameter_id,
+                    selected[f"kcat_{reaction_id.lower()}"].selected_parameter.parameter_id,
+                    selected[f"km_{reaction_id.lower()}"].selected_parameter.parameter_id,
                 ],
             )
-            for reaction in source_reactions
+            for reaction_id, enzyme, substrate, product in reaction_identities
         ]
         parameter_ids = sorted(
             resolution.selected_parameter.parameter_id

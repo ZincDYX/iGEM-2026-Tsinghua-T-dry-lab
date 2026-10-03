@@ -47,6 +47,8 @@ class M1Candidate(ScientificResult):
     rule_version: str | None = None
     feature_definitions_sha256: str | None = None
     sequence_sha256: str | None = None
+    full_sequence_sha256: str | None = None
+    sequence_qc: dict[str, Any] | None = None
     sequence_screen_verdict: Literal["pass", "review", "reject", "blocked"] | None = None
     missing_predictor_evidence: list[str] = Field(default_factory=list)
     screen_flags: list[str] = Field(default_factory=list)

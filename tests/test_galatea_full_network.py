@@ -86,21 +86,21 @@ def test_full_network_mass_balance_nonnegative_and_flux_competition() -> None:
     assert result.diagnostics["mass_balance_error"] < 1e-7
     assert np.all(result.intracellular >= 0) and np.all(result.extracellular >= 0)
     # Raising substrate 9 at fixed DMT pool must not raise R7 (11 -> 15) at a fixed state.
-    from igem_drylab.full_network import _phase_rates
-    base = _phase_rates({"8": 0, "9": 0, "10": 0, "11": 1, "12": 0, "13": 0, "14": 0, "15": 0}, {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, reactions(), {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, 1)["R7"]
-    competitor = _phase_rates({"8": 0, "9": 10, "10": 0, "11": 1, "12": 0, "13": 0, "14": 0, "15": 0}, {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, reactions(), {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, 1)["R7"]
+    from igem_drylab.full_network import phase_competitive_rates
+    base = phase_competitive_rates({"8": 0, "9": 0, "10": 0, "11": 1, "12": 0, "13": 0, "14": 0, "15": 0}, {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, reactions(), {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, 1)["R7"]
+    competitor = phase_competitive_rates({"8": 0, "9": 10, "10": 0, "11": 1, "12": 0, "13": 0, "14": 0, "15": 0}, {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, reactions(), {enzyme: 1 for enzyme in ENZYME_SUBSTRATES}, 1)["R7"]
     assert competitor < base
 
 
 def test_each_enzyme_uses_one_competing_pool() -> None:
-    from igem_drylab.full_network import _phase_rates
+    from igem_drylab.full_network import phase_competitive_rates
     enzymes = {enzyme: 1.0 for enzyme in ENZYME_SUBSTRATES}
     activity = {enzyme: 1.0 for enzyme in ENZYME_SUBSTRATES}
     zeros = {compound: 0.0 for compound in COMPOUNDS}
     for reaction_id, primary, alternative in (("R1", "8", "12"), ("R2", "9", "13"), ("R3", "10", "14")):
         only_primary = {**zeros, primary: 1.0}
         with_alternative = {**only_primary, alternative: 10.0}
-        assert _phase_rates(with_alternative, enzymes, reactions(), activity, 1.0)[reaction_id] < _phase_rates(only_primary, enzymes, reactions(), activity, 1.0)[reaction_id]
+        assert phase_competitive_rates(with_alternative, enzymes, reactions(), activity, 1.0)[reaction_id] < phase_competitive_rates(only_primary, enzymes, reactions(), activity, 1.0)[reaction_id]
 
 
 def test_full_kernel_exposes_no_structure_or_docking_activity_input() -> None:

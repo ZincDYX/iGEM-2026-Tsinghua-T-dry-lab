@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from igem_drylab.external_tools import ExternalToolSpec, tool_spec
+
 from .config import ToolConfig
 
 
@@ -19,6 +21,7 @@ class AdapterResult(BaseModel):
     repo_path: Path | None
     command_preview: str | None
     notes: str
+    spec: ExternalToolSpec | None = None
 
 
 class ToolCommand(BaseModel):
@@ -55,22 +58,29 @@ class ExternalToolAdapter:
     def __init__(self, name: str, config: ToolConfig | None) -> None:
         self.name = name
         self.config = config or ToolConfig()
+        self.spec = tool_spec(name)
 
     def describe(self, command_preview: str | None = None) -> AdapterResult:
-        notes = (
-            "external execution placeholder"
-            if self.config.enabled and self.config.mode == "external"
-            else "deterministic mock execution"
-        )
+        if not self.config.enabled:
+            notes = "disabled"
+        elif self.config.mode == "mock":
+            notes = "demonstration-only mock"
+        else:
+            notes = "configured external execution"
         return AdapterResult(
             tool=self.name,
             mode=self.config.mode,
             repo_path=self.config.repo_path,
             command_preview=command_preview or self.config.command,
             notes=notes,
+            spec=self.spec,
         )
 
     def is_available(self) -> bool:
+        if not self.config.enabled or self.config.mode != "external":
+            return False
+        if self.config.repo_path is not None and not self.config.repo_path.is_dir():
+            return False
         command = self.config.command
         if not command:
             return False
@@ -81,7 +91,10 @@ class ExternalToolAdapter:
         if not self.config.command:
             raise ValueError(f"Tool '{self.name}' has no command configured")
         render_context = {key: _path_to_string(value) for key, value in context.items()}
-        rendered = self.config.command.format_map(_SafeFormatDict(render_context))
+        try:
+            rendered = self.config.command.format_map(render_context)
+        except KeyError as exc:
+            raise ValueError(f"Tool '{self.name}' is missing command value: {exc.args[0]}") from exc
         return ToolCommand(tool=self.name, argv=_split_command(rendered), cwd=self.config.repo_path)
 
     def run(
@@ -94,6 +107,15 @@ class ExternalToolAdapter:
         **context: Any,
     ) -> ToolRunResult:
         output_dir.mkdir(parents=True, exist_ok=True)
+        if not self.config.enabled:
+            return self._write_manifest(ToolRunResult(
+                tool=self.name,
+                mode=self.config.mode,
+                status="disabled",
+                argv=[],
+                output_dir=output_dir,
+                notes=f"Tool '{self.name}' is disabled in the project configuration.",
+            ))
         command = self.build_command(output_dir=output_dir, **context)
         if dry_run:
             result = ToolRunResult(
@@ -165,65 +187,8 @@ class ExternalToolAdapter:
         return result.model_copy(update={"manifest_file": manifest})
 
 
-class StructurePredictionAdapter(ExternalToolAdapter):
-    def predict(self, *, input_file: Path, output_dir: Path, dry_run: bool = False) -> ToolRunResult:
-        return self.run(input_file=input_file, output_dir=output_dir, dry_run=dry_run)
-
-
-class ColabFoldAdapter(StructurePredictionAdapter):
-    """Adapter for local ``colabfold_batch`` with the public MSA service.
-
-    ColabFold performs model inference on the configured machine.  For small,
-    serial batches it can obtain MSAs from the public MMseqs2 service, avoiding
-    a local sequence database.  This adapter does not bypass the service's
-    limits and does not turn the public MSA endpoint into a high-throughput API.
-    """
-
-
-class LlpsSimulationAdapter(ExternalToolAdapter):
-    def simulate(self, *, config_file: Path, output_dir: Path, dry_run: bool = False) -> ToolRunResult:
-        return self.run(config_file=config_file, output_dir=output_dir, dry_run=dry_run)
-
-
-class SasaAdapter(ExternalToolAdapter):
-    def calculate(self, *, pdb_file: Path, output_dir: Path, dry_run: bool = False) -> ToolRunResult:
-        return self.run(pdb_file=pdb_file, output_dir=output_dir, dry_run=dry_run)
-
-
-class DockingAdapter(ExternalToolAdapter):
-    def dock(self, *, config_file: Path, output_dir: Path, dry_run: bool = False) -> ToolRunResult:
-        return self.run(config_file=config_file, output_dir=output_dir, dry_run=dry_run)
-
-
-class SequenceScreeningAdapter(ExternalToolAdapter):
-    def predict(self, *, fasta_file: Path, output_dir: Path, dry_run: bool = False) -> ToolRunResult:
-        return self.run(fasta_file=fasta_file, output_dir=output_dir, dry_run=dry_run)
-
-
 def create_tool_adapter(name: str, config: ToolConfig | None) -> ExternalToolAdapter:
-    adapter_types: dict[str, type[ExternalToolAdapter]] = {
-        "colabfold": ColabFoldAdapter,
-        "abcfold": StructurePredictionAdapter,
-        "boltz": StructurePredictionAdapter,
-        "chai": StructurePredictionAdapter,
-        "calvados": LlpsSimulationAdapter,
-        "freesasa": SasaAdapter,
-        "autodock_vina": DockingAdapter,
-        "signalp": SequenceScreeningAdapter,
-        "deeptmhmm": SequenceScreeningAdapter,
-        "iupred2a": SequenceScreeningAdapter,
-        "psipred": SequenceScreeningAdapter,
-        "jpred": SequenceScreeningAdapter,
-        "seg": SequenceScreeningAdapter,
-        "protparam": SequenceScreeningAdapter,
-        "tango": SequenceScreeningAdapter,
-        "pasta2": SequenceScreeningAdapter,
-        "fuzdrop": SequenceScreeningAdapter,
-        "catgranule": SequenceScreeningAdapter,
-        "pspredictor": SequenceScreeningAdapter,
-        "mpipi": LlpsSimulationAdapter,
-    }
-    return adapter_types.get(name, ExternalToolAdapter)(name, config)
+    return ExternalToolAdapter(name, config)
 
 
 def _split_command(command: str) -> list[str]:
@@ -239,6 +204,4 @@ def _path_to_string(value: Any) -> Any:
     return value
 
 
-class _SafeFormatDict(dict[str, Any]):
-    def __missing__(self, key: str) -> str:
-        return "{" + key + "}"
+__all__ = ["AdapterResult", "ExternalToolAdapter", "ToolCommand", "ToolRunResult", "create_tool_adapter"]
