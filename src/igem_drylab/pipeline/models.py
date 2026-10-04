@@ -147,6 +147,9 @@ class M4CandidateContext(BaseModel):
     condition_id: str
     phi: float = Field(ge=0, lt=1)
     phi_source: str = "measured_input"
+    nominal_site_counts: dict[str, int] = Field(default_factory=dict)
+    m2_geometry_id: str | None = None
+    site_count_basis: str | None = None
     enzyme_distribution: dict[str, dict[str, float]]
     enzyme_sequence_sha256: dict[str, str] = Field(default_factory=dict)
     metabolite_partition_coefficients: dict[str, float] = Field(default_factory=dict)
@@ -160,6 +163,9 @@ class M4CandidateContext(BaseModel):
 
 
 class M4ReactionPrediction(ScientificResult):
+    analysis_result: dict[str, Any] | None = None
+    robustness: dict[str, Any] | None = None
+    sensitivity: dict[str, Any] | None = None
     candidate_id: str
     construct_id: str
     condition_id: str

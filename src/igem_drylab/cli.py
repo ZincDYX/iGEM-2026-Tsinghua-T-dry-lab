@@ -41,6 +41,25 @@ app.add_typer(project_app, name="project")
 app.add_typer(software_app, name="software")
 
 
+@pipeline_app.command("analyze-m4")
+def analyze_m4(prediction_file: Path, analysis_file: Path, output_file: Path):
+    from igem_drylab.design_analysis import M4AnalysisConfig, analyze_prediction
+    raw = json.loads(prediction_file.read_text(encoding="utf-8"))
+    result = analyze_prediction(raw.get("prediction_contract", raw),
+                                M4AnalysisConfig.model_validate_json(analysis_file.read_text(encoding="utf-8")))
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(json.dumps(result, indent=2, allow_nan=False), encoding="utf-8")
+
+
+@pipeline_app.command("scan-designs")
+def scan_designs(plan_file: Path, output_dir: Path):
+    from igem_drylab.design_analysis import FiniteDesignPlan, scan_scaffold_designs
+    plan = FiniteDesignPlan.model_validate_json(plan_file.read_text(encoding="utf-8"))
+    result = scan_scaffold_designs(plan, output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "design_decision.json").write_text(json.dumps(result, indent=2, allow_nan=False), encoding="utf-8")
+
+
 @software_app.command("serve")
 def serve_software_dashboard(
     host: str = typer.Option("127.0.0.1", "--host"),

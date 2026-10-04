@@ -669,6 +669,9 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 condition_id=condition_id,
                 phi=phi,
                 phi_source=exact.phi_source,
+                nominal_site_counts={"SH3": assessment.s_sh3, "PDZ": assessment.s_pdz},
+                m2_geometry_id=assessment.m2_geometry_id,
+                site_count_basis=assessment.site_count_basis,
                 enzyme_distribution=enzyme_distribution,
                 metabolite_partition_coefficients={compound: selected[f"partition_x{compound}"].canonical_value for compound in ("8", "9", "10", "11", "12", "13", "14", "15") if f"partition_x{compound}" in selected},
                 binding_recruited_fraction=bound_fractions,
@@ -817,6 +820,29 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
 
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
+    records, output = _run_m4_base(config, run_dir, assessments)
+    if config.stages.m4_reaction.analysis is not None:
+        from igem_drylab.design_analysis import analyze_prediction
+        for record in records:
+            if record.status != "valid":
+                continue
+            try:
+                for evidence in config.stages.m4_reaction.analysis.ranges:
+                    sources = [r for r in config.parameters if r.parameter_id in evidence.parameter_ids]
+                    if len(sources)!=len(evidence.parameter_ids) or any(r.name!=evidence.parameter_name or r.review_status!="approved"
+                            or r.parameter_id not in record.parameter_ids for r in sources):
+                        raise ValueError("analysis_range_requires_matching_approved_candidate_parameter_sources")
+                record.analysis_result = analyze_prediction(record.simulation_inputs["prediction_contract"], config.stages.m4_reaction.analysis)
+                record.robustness = record.analysis_result["robustness"]
+                record.sensitivity = record.analysis_result["sensitivity"]
+            except (ValueError, RuntimeError, KeyError) as error:
+                record.analysis_result = {"status":"insufficient_data","error":str(error)}
+        write_models(run_dir / "m4_analysis", "reaction_predictions_with_analysis", records)
+        write_models(output.directory, output.json_file.stem, records)
+    return records, output
+
+
+def _run_m4_base(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
     formal_missing = _formal_analysis_missing(config)
     if _is_formal(config) and config.stages.m4_reaction.activity_mode == "unity_assumption":
         formal_missing.append("formal M4 requires reviewed phase activity; unity is sensitivity-only")

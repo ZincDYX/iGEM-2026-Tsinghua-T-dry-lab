@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.constructs import ConstructRecord
 from igem_drylab.resources import default_config_path
+from igem_drylab.design_analysis import M4AnalysisConfig
 
 
 DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
@@ -266,6 +267,7 @@ class InductionGateConfig(StrictScientificConfig):
 
 
 class M4Config(StrictScientificConfig):
+    analysis: M4AnalysisConfig | None = None
     target_product: str = "glabridin"
     feed_compound_id: str | None = None
     feed_mode: Literal["batch_initial_state", "continuous_feed"] | None = None

@@ -11,6 +11,17 @@
 
 ## 待实施 / 待真实证据
 
+## 4. F2/F3 和有限设计决策
+
+- 独立 design_analysis 模块通过生产 M4 配置、CLI 和真实 stdio MCP 接入。局部严格使用原稿 1% 前向差分，附 0.5%/0.25% 步长诊断；Spearman 单列，绝不称偏导。
+- LHS 默认原稿 256 样本；每个变量必须声明经审核的真实范围或经验样本及来源，联合独立性依据和 σ 的 ddof 必须显式提供，不从 SEM 推范围。相关参数的联合抽样当前不支持，不能用独立抽样替代。
+- robustness 严格为 1/σ，零方差报告非有限倒数而不是虚假确定值；失败样本保留，部分有效样本的统计量标作条件统计。没有噪声模型，不给伪置信区间。
+- IDR 链使用全部原稿系数/物种描述子/适用域来源，在声明的映射点重新求原方程与差分，不将实测点导数乘另一个映射点 Kp。缺映射不生成谱。
+- F3 对 {1,2,3,4,6} 中用户提供的真实配置逐次重跑 M1→M2→M3→M4，核对该候选 M2 位点数，不复用原 3:1 几何。保留待合成标志、配置哈希、招募/产物/失败。无成本模型则明确成本未计算，不发明表达负担公式。
+- 有限外层决策只用显式目标及约束选择现有可行候选，输出 decision_id 与 r_target，供审核回流 E8/E9；不是全球最优，也不代表湿实验验证。
+- air-lab：26 passed，包含公式解析夹具、失败/常数秩相关、原稿稳态求解、映射点、逐项目重算及真实 stdio MCP，XML analysis.xml。
+- 实现方法依据：[SciPy LatinHypercube](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.qmc.LatinHypercube.html)、[Spearman](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.spearmanr.html)。实际发布环境及随机种子另行锁定，不把当前网页版本当服务器版本。
+
 ## 3. 直接 Kp 与依赖失效
 
 - 实测分配记录要求 dense/dilute 浓度及原数据哈希、校准、回收率、相体积来源；按明确物种映射形成未批准 Kp 候选，审核后才入库，不用 logP 或胞外比例代替。

@@ -100,9 +100,9 @@ class M4SteadyStateResult(BaseModel):
     mass_invariant_residual: float | None = None
     max_scaled_species_residual: float | None = None
     input_output_balance_relative_residual: float | None = None
-    robustness: None = None
-    sensitivity: None = None
-    scaffold_scan: None = None
+    robustness: dict | None = None
+    sensitivity: dict | None = None
+    scaffold_scan: list[dict] | None = None
     input_parameter_ids: list[str]
     warnings: list[str] = Field(default_factory=list)
 
