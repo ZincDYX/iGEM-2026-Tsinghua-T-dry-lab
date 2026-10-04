@@ -245,6 +245,12 @@ It uses stdio by default and exposes typed tools including `igem.m1.compute_feat
 
 The exact M2 confidence gates, formulas, provenance requirements, and non-claims are documented in [`docs/m2_v2_implementation_contract.md`](docs/m2_v2_implementation_contract.md). The conservative M3 S1–S5/E1–E10 implementation and its unit/capacity boundaries are documented in [`docs/m3_s1_e10_implementation_contract.md`](docs/m3_s1_e10_implementation_contract.md). The original M4 Step 0–8 steady-state solver and its existence/non-claim boundaries are documented in [`docs/m4_step0_step8_implementation_contract.md`](docs/m4_step0_step8_implementation_contract.md).
 
+## FusionLab local-first software (initial platform)
+
+The generic fusion-protein/self-assembly workspace is separate from the Galatea reference equations. It provides project import/confirmation, bounded DAG fan-out/map/gather, SQLite run recovery, versioned trusted-plugin environments, real stdio MCP discovery/calls, Scientist/Developer views, and a thin Tauri desktop shell. It does **not** treat composition calculations as proof of assembly or LLPS.
+
+See [platform design and startup](docs/fusionlab_platform.md), [plugin protocol and examples](docs/plugin_development.md), and [deployment/license audit](docs/external_tool_deployment.md). The current external-tool budget is **15 GB (decimal)**. The Windows source-first desktop shell requires an installed Python environment; a standalone bundled installer and untrusted-code sandbox are not provided.
+
 ## Contributing
 
 Use short-lived branches based on `develop`, add or update tests for behavioral changes, and open a pull request back to `develop`. Keep `main` for reviewed releases. Do not commit `.env`, generated outputs, raw private experimental data, model weights, or local review bundles.

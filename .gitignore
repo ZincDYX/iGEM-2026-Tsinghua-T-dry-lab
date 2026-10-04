@@ -33,6 +33,15 @@ software/dashboard/node_modules/
 software/dashboard/dist/
 software/dashboard/.pnpm-store/
 software/dashboard/*.tsbuildinfo
+software/dashboard/src-tauri/target/
+software/dashboard/src-tauri/gen/
+.pnpm-store/
+software/dashboard/src-tauri/icons/android/
+software/dashboard/src-tauri/icons/ios/
+software/dashboard/src-tauri/icons/Square*.png
+software/dashboard/src-tauri/icons/StoreLogo.png
+software/dashboard/test-results/
+software/dashboard/playwright-report/
 
 docs/agent_tutorial.md
 docs/agent_framework_notes.md
