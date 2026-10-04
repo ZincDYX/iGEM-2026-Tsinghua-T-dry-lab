@@ -825,6 +825,8 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
     for record in records:
         record.experimental_contract = {
             "assay_mode":settings.assay_mode,"expression_mode":settings.expression_mode,
+            "measurement_compartment":settings.measurement_compartment,
+            "assay_conditions":config.experimental_context.model_dump(mode="json"),
             "input_boundary":{"feed_mode":settings.feed_mode,"feed_compound_id":settings.feed_compound_id,
                               "feeding_time_h":settings.feeding_time_h},
             "confirmed_absent_enzymes":settings.confirmed_absent_enzymes,

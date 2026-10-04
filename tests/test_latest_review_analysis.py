@@ -101,12 +101,13 @@ def test_scan_reruns_each_complete_project_and_checks_actual_site_counts(monkeyp
     config = Path('configs/m1_m4_example.yaml')
     plan = FiniteDesignPlan(candidates=[ScaffoldCandidate(config_path=config,candidate_id='fixture',site_ratio=r,
             design_evidence_reference='fixture',synthesized=False) for r in [1,2]],
-        objective='yield_abs',objective_reference='fixture',decision_id='fixture-decision')
+        objective='yield_abs',objective_reference='fixture',decision_id='fixture-decision',decision_scope='software_fixture_only')
     result = scan_scaffold_designs(plan,tmp_path)
     assert calls==['scan-0','scan-1']
     assert result['scaffold_scan'][1]['status']=='failed'
     assert result['design_decision']['selected_candidate']['site_ratio']==1
-    assert result['design_decision']['r_target']==2.
+    assert result['design_decision']['r_target'] is None
+    assert result['design_decision']['exploratory_dense_ratio']==2.
 
 
 def test_stdio_MCP_analysis_calls_real_registered_solver():

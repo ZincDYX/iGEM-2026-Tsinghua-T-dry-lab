@@ -16,7 +16,8 @@ class ScientificAnalysisInput(BaseModel):
 
 class RangeEvidence(ScientificAnalysisInput):
     parameter_name: str
-    distribution: Literal["uniform", "empirical"]
+    distribution: Literal["uniform", "empirical", "interpolated_empirical"]
+    interpolation_reference: str | None = None
     lower: float | None = None
     upper: float | None = None
     empirical_values: list[float] = Field(default_factory=list)
@@ -31,7 +32,16 @@ class RangeEvidence(ScientificAnalysisInput):
                 raise ValueError("uniform_requires_evidenced_increasing_range")
         elif len(self.empirical_values) < 2 or min(self.empirical_values) == max(self.empirical_values):
             raise ValueError("empirical_requires_actual_nonconstant_samples")
+        if self.distribution == "interpolated_empirical" and not self.interpolation_reference:
+            raise ValueError("continuous_empirical_requires_reviewed_interpolation_reference")
         return self
+
+
+def sample_range(row: RangeEvidence, quantile: float) -> float:
+    if row.distribution == "uniform":
+        return float(row.lower + (row.upper - row.lower) * quantile)
+    return float(np.quantile(row.empirical_values, quantile,
+        method="inverted_cdf" if row.distribution == "empirical" else "linear"))
 
 
 class IDRMappingEvidence(ScientificAnalysisInput):
@@ -143,8 +153,7 @@ def analyze_response(settings, base_values, evaluate, base_yield):
         unit_samples = qmc.LatinHypercube(d=len(settings.ranges), seed=settings.random_seed).random(settings.samples)
         samples = []
         for sample_id, unit_row in enumerate(unit_samples):
-            values = {row.parameter_name: float(row.lower+(row.upper-row.lower)*u) if row.distribution=="uniform"
-                      else float(np.quantile(row.empirical_values, u)) for row,u in zip(settings.ranges,unit_row,strict=True)}
+            values = {row.parameter_name: sample_range(row,u) for row,u in zip(settings.ranges,unit_row,strict=True)}
             try:
                 result = float(evaluate(values))
                 if not np.isfinite(result):
@@ -168,6 +177,10 @@ def analyze_response(settings, base_values, evaluate, base_yield):
             "spearman":ranks, "samples":samples, "range_evidence":[row.model_dump() for row in settings.ranges],
             "independence_evidence_reference":settings.independence_evidence_reference,
             "random_seed":settings.random_seed}
+        global_result["sampling_methods"] = {row.parameter_name: (
+            "uniform_inverse_cdf" if row.distribution == "uniform" else
+            "discrete_inverse_ecdf_preserving_duplicate_weights" if row.distribution == "empirical" else
+            "continuous_linear_quantile_interpolation") for row in settings.ranges}
     chain = None
     if settings.idr_mapping:
         mapping = settings.idr_mapping
@@ -201,6 +214,68 @@ class ScaffoldCandidate(ScientificAnalysisInput):
     synthesized: bool  # A design is not implicitly an experimental construct.
 
 
+class DesignComparisonContract(ScientificAnalysisInput):
+    """Comparable meanings and physical boundaries, not equality of condition labels."""
+    model_kind: Literal["full_network_dynamic", "markdown_steady_state"]
+    formula_version: str = Field(min_length=1)
+    metric_definition: str = Field(min_length=1)
+    metric_unit: Literal["1", "uM/h"]
+    normalization: dict[str, str]
+    measurement_compartment: Literal["intracellular", "extracellular", "total_extract"]
+    assay_mode: Literal["substrate_feeding_functional", "full_pathway_production"]
+    expression_mode: Literal["constitutive", "induced"]
+    input_boundary: dict[str, str | float | None]
+    input_definition: dict
+    assay_conditions: dict[str, str | float | None]
+    interval_h: float | None = Field(default=None, gt=0)
+    steady_state_observation_reference: str | None = None
+
+    @model_validator(mode="after")
+    def complete_boundaries(self):
+        if any(self.assay_conditions.get(k) is None for k in ('host','strain','pH','temperature_c','assay_system')):
+            raise ValueError("comparison_requires_actual_assay_conditions")
+        if any(self.input_boundary.get(k) is None for k in ('feed_mode','feed_compound_id')):
+            raise ValueError("comparison_requires_feed_identity_and_boundary")
+        if self.model_kind == 'full_network_dynamic' and (self.interval_h is None or
+                self.input_boundary.get('feeding_time_h') is None):
+            raise ValueError("dynamic_comparison_requires_interval_and_feeding_time")
+        if self.model_kind == 'markdown_steady_state' and not self.steady_state_observation_reference:
+            raise ValueError("steady_comparison_requires_observation_evidence")
+        return self
+
+
+def _candidate_comparison(prediction, objective):
+    from .prediction import PredictionContract
+    contract = PredictionContract.model_validate(prediction.simulation_inputs.get('prediction_contract',{}))
+    if contract.concentration_unit != 'uM' or contract.time_unit != 'h':
+        raise ValueError('comparison_requires_physical_units')
+    definitions = {
+        ('markdown_steady_state','yield_abs'):('product_15_secretion_flux/input_8_flux','1'),
+        ('full_network_dynamic','yield_abs'):('net_15_generated/initial_convertible_backbone','1'),
+        ('full_network_dynamic','productivity'):('net_15_generated_cell_volume_equivalent/interval_h','uM/h'),
+    }
+    if (contract.model_kind,objective) not in definitions:
+        raise ValueError('objective_not_defined_for_selected_model')
+    definition,unit = definitions[(contract.model_kind,objective)]
+    experiment = contract.experiment_context
+    inputs = contract.kernel_inputs
+    boundary = ({'initial_intracellular':inputs['initial_intracellular'],
+        'initial_extracellular':inputs['initial_extracellular'],
+        'volumes_l':[contract.intracellular_volume_l,contract.extracellular_volume_l],
+        'temporal_gates':{k:inputs['parameters'][k] for k in ('pt_gate','oc_gate','dmt_gate')},
+        'transport':inputs['parameters']['transport']} if contract.model_kind == 'full_network_dynamic' else
+        {'input_flux_um_per_h':inputs['input_flux_um_per_h'],
+         'secretion_rate_per_h':inputs['secretion_rate_per_h'],
+         'secretion_normalization':inputs['secretion_normalization']})
+    return DesignComparisonContract(model_kind=contract.model_kind,formula_version=contract.formula_version,
+        metric_definition=definition,metric_unit=unit,normalization=contract.normalization,
+        measurement_compartment=experiment.get('measurement_compartment'),assay_mode=experiment.get('assay_mode'),
+        expression_mode=experiment.get('expression_mode'),input_boundary=experiment.get('input_boundary',{}),input_definition=boundary,
+        assay_conditions=experiment.get('assay_conditions',{}),
+        interval_h=contract.solver_settings.get('t_end'),
+        steady_state_observation_reference=experiment.get('steady_state_observation_reference'))
+
+
 class FiniteDesignPlan(ScientificAnalysisInput):
     candidates: list[ScaffoldCandidate] = Field(min_length=1)
     objective: Literal["yield_abs", "productivity"]
@@ -208,6 +283,15 @@ class FiniteDesignPlan(ScientificAnalysisInput):
     maximum_metrics: dict[str,float] = Field(default_factory=dict)
     objective_reference: str = Field(min_length=1)
     decision_id: str = Field(min_length=1)
+    decision_scope: Literal["formal_conditional_mechanism", "software_fixture_only", "exploratory_sensitivity"]
+    comparison_contract: DesignComparisonContract | None = None
+    varying_design_factors: list[Literal["idr", "linker", "site_topology", "localization"]] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def explicit_formal_comparison(self):
+        if self.decision_scope == "formal_conditional_mechanism" and self.comparison_contract is None:
+            raise ValueError("formal_decision_requires_comparison_contract")
+        return self
 
 
 def scan_scaffold_designs(plan: FiniteDesignPlan, output_dir: Path) -> dict:
@@ -224,23 +308,55 @@ def scan_scaffold_designs(plan: FiniteDesignPlan, output_dir: Path) -> dict:
             if prediction is None or prediction.status!="valid" or prediction.candidate_context is None:
                 raise ValueError("candidate_not_valid_after_fresh_M1_M2_M3_M4")
             context = prediction.candidate_context
+            formal = plan.decision_scope == 'formal_conditional_mechanism'
+            grades = {'evidence_ready':prediction.evidence_ready,'data_quality':prediction.data_quality,
+                'claim_scope':prediction.claim_scope,'context_evidence_ready':context.evidence_ready,
+                'context_claim_scope':context.claim_scope}
+            comparison = None
+            if formal and (not prediction.evidence_ready or not context.evidence_ready or
+                    prediction.data_quality not in {'measured','fitted','literature','mixed'} or
+                    prediction.claim_scope != 'conditional_mechanism' or context.claim_scope != 'conditional_mechanism' or
+                    prediction.provenance_summary.get('assumption',0) or context.provenance_summary.get('assumption',0)):
+                rows.append({'candidate':candidate.model_dump(mode='json'),'status':'rejected',
+                    'error':'candidate_not_formally_eligible','evidence_grades':grades})
+                continue
+            if plan.comparison_contract is not None:
+                comparison = _candidate_comparison(prediction,plan.objective)
+                actual,expected = comparison.model_dump(),plan.comparison_contract.model_dump()
+                # Independent steady references may differ; their presence is mandatory,
+                # while the actual model and assay facts determine comparability.
+                differences = [k for k in expected if k != 'steady_state_observation_reference' and actual[k] != expected[k]]
+                if differences:
+                    rows.append({'candidate':candidate.model_dump(mode='json'),'status':'rejected',
+                        'error':'incompatible_comparison_contract:'+','.join(differences),
+                        'comparison_contract':actual,'evidence_grades':grades})
+                    continue
             counts = context.nominal_site_counts
             if not counts or counts.get("PDZ",0)==0 or counts.get("SH3")/counts["PDZ"]!=candidate.site_ratio:
                 raise ValueError("declared_scan_ratio_does_not_match_candidate_M2_site_counts")
             metrics = {"yield_abs":prediction.yield_abs, "productivity":prediction.productivity}
             metrics.update(prediction.mechanistic_diagnostics)
+            required_metrics = set(plan.minimum_metrics) | set(plan.maximum_metrics) | {plan.objective}
+            missing = [k for k in required_metrics if k not in metrics or metrics[k] is None]
+            if missing:
+                raise ValueError('missing_or_unknown_decision_metrics:'+','.join(sorted(missing)))
             feasible = metrics[plan.objective] is not None and all(metrics.get(k) is not None and metrics[k]>=v for k,v in plan.minimum_metrics.items()) and all(metrics.get(k) is not None and metrics[k]<=v for k,v in plan.maximum_metrics.items())
             oc,dmt = context.enzyme_distribution["OC"]["dense"],context.enzyme_distribution["DMT"]["dense"]
             rows.append({"candidate":candidate.model_dump(mode="json"),"status":"valid","feasible":feasible,
                 "metrics":metrics,"dense_oc_dmt_ratio":oc/dmt if dmt else None,"context":context.model_dump(),
                 "config_sha256":sha256(raw).hexdigest(),"manifest":manifest.model_dump(mode="json"),
                 "expression_cost":"not_evaluated_without_declared_cost_model"})
+            rows[-1].update(evidence_grades=grades,comparison_contract=comparison.model_dump() if comparison else None)
         except (ValueError,RuntimeError,OSError) as error:
             rows.append({"candidate":candidate.model_dump(mode="json"),"status":"failed","error":str(error)})
     feasible = [row for row in rows if row.get("feasible")]
     best = max(feasible,key=lambda row:row["metrics"][plan.objective]) if feasible else None
-    return {"schema_version":"finite-scaffold-scan-v1","scaffold_scan":rows,
+    formal = plan.decision_scope == 'formal_conditional_mechanism'
+    return {"schema_version":"finite-scaffold-scan-v2","scaffold_scan":rows,
         "design_decision":{"decision_id":plan.decision_id,"objective":plan.objective,"objective_reference":plan.objective_reference,
             "constraints":{"minimum":plan.minimum_metrics,"maximum":plan.maximum_metrics},
-            "selected_candidate":best["candidate"] if best else None,"r_target":best["dense_oc_dmt_ratio"] if best else None,
+            "selected_candidate":best["candidate"] if best else None,"r_target":best["dense_oc_dmt_ratio"] if best and formal else None,
+            "exploratory_dense_ratio":best["dense_oc_dmt_ratio"] if best and not formal else None,
+            "decision_scope":plan.decision_scope,"comparison_contract":plan.comparison_contract.model_dump() if plan.comparison_contract else None,
+            "varying_design_factors":plan.varying_design_factors,
             "scope":"finite_evidence_covered_candidates_not_global_optimum_or_wetlab_validation"}}

@@ -269,6 +269,7 @@ class InductionGateConfig(StrictScientificConfig):
 class M4Config(StrictScientificConfig):
     analysis: M4AnalysisConfig | None = None
     assay_mode: Literal["substrate_feeding_functional", "full_pathway_production"] | None = None
+    measurement_compartment: Literal["intracellular", "extracellular", "total_extract"] | None = None
     expression_mode: Literal["constitutive", "induced"] | None = None
     feeding_time_h: float | None = Field(default=None, ge=0)
     confirmed_absent_enzymes: dict[Literal["PTR", "PT", "OC", "DMT"], str] = Field(default_factory=dict)
