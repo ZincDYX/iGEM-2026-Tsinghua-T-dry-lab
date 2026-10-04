@@ -119,7 +119,9 @@ def validate_candidate_against_registry(records: list[ParameterRecord], candidat
 def validate_candidate_for_approval(project: "ProjectConfig", candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str) -> None:
     """Project-config convenience wrapper around the shared approval boundary."""
     formal = project.execution.mode == "real" and project.execution.analysis_grade == "formal_measured"
-    if formal and candidate.condition_id != project.stages.m4_reaction.condition_id:
+    from igem_drylab.pipeline.config import canonical_m4_condition_id
+    target_condition = canonical_m4_condition_id(project.stages.m4_reaction)
+    if formal and candidate.condition_id != target_condition:
         raise ValueError("candidate_target_condition_mismatch")
     validate_candidate_against_registry(project.parameters, candidate, requirement, reviewer,
         formal_context=project.experimental_context if formal else None)

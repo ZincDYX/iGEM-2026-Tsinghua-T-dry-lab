@@ -52,11 +52,33 @@ def test_replicate_variation_uses_canonical_units_and_censoring() -> None:
 
 
 def test_mcp_approval_requires_reviewer_and_revalidates_candidate(tmp_path: Path) -> None:
+    import yaml
+    from test_experimental_condition_chain import assay
+    from igem_drylab.pipeline import load_config
+    from igem_drylab.pipeline.config import ExperimentalContext
+    from igem_drylab.parameters import ParameterRegistry,resolve_requirement
+    from igem_drylab.parameters.requirements import requirements_for_stage
     source = Path("configs/m1_m4_real_scoring_example.yaml")
     config = source.read_text(encoding="utf-8").replace("../examples/", str((Path("examples").resolve())).replace("\\", "/") + "/")
     project = tmp_path / "project.yaml"
     project.write_text(config, encoding="utf-8")
     candidate = {"parameter_id": "reviewed-phi", "name": "phi", "value": 0.2, "unit": "1", "parameter_type": "phi", "source_type": "wetlab", "source_reference": "assay:rep1", "review_status": "validated"}
+    registry=create_default_registry()
+    rejected=registry.call('igem.parameters.approve',{'config_path':str(project),'candidate':candidate,
+        'stage':'m3','requirement_name':'phi','reviewer':'human'})
+    assert rejected.is_error
+    actual=load_config(project)
+    actual.experimental_context=ExperimentalContext(host='yeast',strain='s',temperature_c=30.,pH=7.,assay_system='in_cell')
+    actual.stages.m4_reaction.condition_id='d'
+    project.write_text(yaml.safe_dump(actual.model_dump(mode='json')),encoding='utf-8')
+    candidate.update(construct_id='c',condition_id='d',conditions=assay().parameter_conditions())
+    assert registry.call('igem.parameters.approve',{'config_path':str(project),'candidate':candidate,
+        'stage':'m3','requirement_name':'phi','reviewer':''}).is_error
     result = create_default_registry().call("igem.parameters.approve", {"config_path": str(project), "candidate": candidate, "stage": "m3", "requirement_name": "phi", "reviewer": "human"})
     assert result.is_error is False
     assert result.as_protocol_dict()["structuredContent"]["approved_parameter"]["approved_by"] == "human"
+    reloaded=load_config(project)
+    requirement=next(r for r in requirements_for_stage(reloaded,'m3') if r.name=='phi')
+    resolved=resolve_requirement(ParameterRegistry(reloaded.parameters),requirement,reloaded.experimental_context,
+        allow_assumptions=False,construct_id='c',condition_id='d',require_provenance=True)
+    assert resolved.status=='resolved' and resolved.canonical_value==.2

@@ -68,6 +68,10 @@ def test_observation_roundtrip_in_each_compartment(tmp_path, compartment, basis)
 
 def test_full_fit_uses_same_kernel_and_value_changes_fingerprint(tmp_path):
     from test_experimental_condition_chain import assay
+    from igem_drylab.parameters import ParameterRegistry,resolve_requirement,ParameterRecord
+    from igem_drylab.parameters.requirements import requirements_for_stage
+    from igem_drylab.pipeline.config import ExperimentalContext
+    from igem_drylab.wetlab.parameter_update import validate_candidate_against_registry
     initial = state(x8=1)
     params = parameters()
     simulated = simulate_full_network(params, initial_intracellular=initial, t_end=2, points=21)
@@ -77,6 +81,8 @@ def test_full_fit_uses_same_kernel_and_value_changes_fingerprint(tmp_path):
         concentration_basis="cell_volume", assay_conditions=assay(), metabolites={name: simulated.intracellular[COMPOUNDS.index(name)].tolist() for name in ("13", "15")})
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
     config.execution.mode = "demo"
+    for enzyme in config.inputs.enzymes:
+        if enzyme.id == 'OC': enzyme.sequence_sha256='b'*64
     config.stages.m4_reaction = M4Config(network_mode="galatea_full_competitive", scenario_mode="galatea_spatial", reaction_network_file=tmp_path / "identity.csv",
         full_network_initial_state=FullNetworkInitialStateConfig(intracellular=initial))
     config.stages.m5_feedback.fit_plan = FitPlanConfig(parameter_name="kcat_r3", bounds=(0.2, 2), observables=["13", "15"])
@@ -89,6 +95,14 @@ def test_full_fit_uses_same_kernel_and_value_changes_fingerprint(tmp_path):
     assert first["candidate"]["review_status"] == "validated"
     assert first["candidate"]["conditions"] == result.assay_conditions.parameter_conditions()
     assert first["candidate"]["construct_id"] == 'c'
+    candidate=ParameterRecord.model_validate(first['candidate'])
+    requirement=next(r for r in requirements_for_stage(config,'m4') if r.name=='kcat_r3')
+    target=ExperimentalContext(host='yeast',strain='s',temperature_c=30.,pH=7.,assay_system='in_cell')
+    validate_candidate_against_registry([],candidate,requirement,'reviewer',formal_context=target)
+    approved=candidate.model_copy(update={'review_status':'approved','approved_by':'reviewer'})
+    resolved=resolve_requirement(ParameterRegistry([approved]),requirement,target,allow_assumptions=False,
+        construct_id='c',condition_id='d',require_provenance=True)
+    assert resolved.status=='resolved' and resolved.canonical_value==pytest.approx(1.,rel=0.,abs=1e-4)
     result.raw_data_sha256 = "different-raw-JSON-format"
     unchanged = _fit_plan_candidate(config, prediction, result, compare_prediction(path, result))
     assert unchanged["candidate"]["parameter_id"] == first["candidate"]["parameter_id"]

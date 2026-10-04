@@ -14,10 +14,13 @@ def test_direct_measurement_ranks_above_model_fit():
 
 
 def test_wetlab_parameter_candidate_keeps_scope_and_direct_provenance():
-    result = WetLabResult(experiment_id="e", construct_id="construct", condition_id="condition", replicate_id="r", protein_abundance={"OC": 3}, metabolite_time=[0], metabolites={"13": [0]}, control_available=True, biological_replicate_count=2)
+    from test_experimental_condition_chain import assay
+    conditions=assay(condition_id='condition')
+    result = WetLabResult(experiment_id="e", construct_id="construct", condition_id="condition", replicate_id="r", assay_conditions=conditions, protein_abundance={"OC": 3}, metabolite_time=[0], metabolites={"13": [0]}, control_available=True, biological_replicate_count=2)
     project = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
     candidate = parameter_updates_from_measurements(project, [result], quality_control([result]), [MeasurementMapping(target_stage="m3", target_requirement_name="oc_total", source_field="protein_abundance.OC", unit="uM")])[0]
     assert (candidate.construct_id, candidate.condition_id, candidate.derivation_type) == ("construct", "condition", "direct_measurement")
+    assert candidate.conditions==conditions.parameter_conditions()
 
 
 def test_lod_loq_are_per_timepoint_censor_masks():

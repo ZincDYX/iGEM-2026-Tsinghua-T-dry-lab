@@ -16,6 +16,7 @@ class ProjectState(BaseModel):
     approved_parameters: list[ParameterRecord] = Field(default_factory=list)
     experimental_context: ExperimentalContext = Field(default_factory=ExperimentalContext)
     formal_approval_required: bool = False
+    target_condition_ids: dict[str,str | None] = Field(default_factory=dict)
     available_artifacts: list[str] = Field(default_factory=list)
     completed_stages: list[str] = Field(default_factory=list)
     pending_measurements: list[str] = Field(default_factory=list)
@@ -34,7 +35,9 @@ class ProjectState(BaseModel):
 
     @classmethod
     def from_project(cls, project: object) -> "ProjectState":
-        return cls(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"], experimental_context=project.experimental_context, formal_approval_required=project.execution.mode == "real" and project.execution.analysis_grade == "formal_measured", requirements_by_stage={stage: requirements_for_stage(project, stage) for stage in ("m3", "m4")})
+        from .pipeline.config import canonical_m4_condition_id
+        condition=canonical_m4_condition_id(project.stages.m4_reaction)
+        return cls(project_id=project.run.id, constructs=project.inputs.construct_records, approved_parameters=[item for item in project.parameters if item.review_status == "approved"], experimental_context=project.experimental_context, formal_approval_required=project.execution.mode == "real" and project.execution.analysis_grade == "formal_measured", target_condition_ids={'m3':condition,'m4':condition}, requirements_by_stage={stage: requirements_for_stage(project, stage) for stage in ("m3", "m4")})
 
     def approve_parameter(self, candidate: ParameterRecord, *, reviewer: str, target_stage: str = "m4", target_requirement_name: str | None = None) -> "ProjectState":
         """Return updated state; persistence remains an explicit caller action."""
@@ -44,6 +47,8 @@ class ProjectState(BaseModel):
             raise ValueError("unknown_target_requirement")
         # Local import avoids a pipeline/wet-lab import cycle during package startup.
         from .wetlab.parameter_update import validate_candidate_against_registry
+        if self.formal_approval_required and target_stage in self.target_condition_ids and candidate.condition_id != self.target_condition_ids[target_stage]:
+            raise ValueError('candidate_target_condition_mismatch')
         validate_candidate_against_registry(self.approved_parameters, candidate, requirement, reviewer,
             formal_context=self.experimental_context if self.formal_approval_required else None)
         approved = candidate.model_copy(update={"review_status": "approved", "approved_by": reviewer, "validation_flags": [*candidate.validation_flags, f"approved_by:{reviewer}"]})
