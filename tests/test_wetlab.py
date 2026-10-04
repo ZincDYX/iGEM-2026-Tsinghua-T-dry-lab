@@ -6,7 +6,7 @@ from igem_drylab.wetlab import WetLabResult, diagnose_discrepancy, fit_scale_par
 def test_m5_fit_recovers_single_scale_with_synthetic_data():
     predicted = [1, 2, 3, 4, 5]
     observed = (np.asarray(predicted) * 1.8).tolist()
-    fit = fit_scale_parameter(predicted, observed, bootstrap_samples=20)
+    fit = fit_scale_parameter(predicted, observed, bootstrap_samples=20, independent_samples=True)
     assert fit.best_fit == 1.8
     assert fit.confidence_interval is not None
 
