@@ -8,7 +8,7 @@ jobs:
         include:
           - python: '3.10'
             numpy: 'numpy==1.24.4'
-            scipy: 'scipy==1.10.1'
+            scipy: 'scipy==1.12.0'
           - python: '3.13'
             numpy: 'numpy>=2'
             scipy: 'scipy>=1.14'

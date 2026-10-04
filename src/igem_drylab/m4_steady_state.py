@@ -61,6 +61,7 @@ class M4SteadyStateInput(BaseModel):
     initial_guess_um: dict[str, float]
     input_parameter_ids: list[str] = Field(min_length=1)
     residual_tolerance_um_per_h: float = Field(default=1e-8, gt=0)
+    relative_residual_tolerance: float = Field(default=1e-6, gt=0, lt=1)
 
     @model_validator(mode="after")
     def _validate_complete_network(self) -> "M4SteadyStateInput":
@@ -95,6 +96,8 @@ class M4SteadyStateResult(BaseModel):
     yield_abs: float | None = Field(default=None, ge=0)
     secretion_loss_8_to_14: float | None = Field(default=None, ge=0)
     mass_invariant_residual: float | None = None
+    max_scaled_species_residual: float | None = None
+    input_output_balance_relative_residual: float | None = None
     robustness: None = None
     sensitivity: None = None
     scaffold_scan: None = None
@@ -139,6 +142,17 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
         name: PhaseDistribution(item.dense_um, item.dilute_um)
         for name, item in payload.enzymes.items()
     }
+    active_edges = [(item.substrate,item.product) for item in payload.reactions if item.kcat_per_h > 0 and
+                    (payload.phi*payload.enzymes[item.enzyme].dense_um*payload.enzymes[item.enzyme].activity_dense_ratio +
+                     (1-payload.phi)*payload.enzymes[item.enzyme].dilute_um*payload.enzymes[item.enzyme].activity_dilute_ratio) > 0]
+    drains = {c for c in COMPOUNDS if payload.secretion_rate_per_h[c] > 0}
+    while True:
+        expanded = drains | {a for a,b in active_edges if b in drains}
+        if expanded == drains:
+            break
+        drains = expanded
+    if "8" not in drains:
+        return _blocked(payload, "positive_input_has_no_reachable_declared_outlet")
 
     def evaluate(cell_average: np.ndarray) -> tuple[np.ndarray, dict[str, float], dict[str, float], dict[str, float], dict[str, float]]:
         dense: dict[str, float] = {}
@@ -168,7 +182,7 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
 
     initial = np.asarray([payload.initial_guess_um[compound] for compound in COMPOUNDS], dtype=float)
     solved = least_squares(
-        lambda values: evaluate(values)[0],
+        lambda values: evaluate(values)[0] / payload.input_flux_um_per_h,
         initial,
         bounds=(np.zeros(8), np.full(8, np.inf)),
         xtol=1e-12,
@@ -178,7 +192,16 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
     )
     residual, flux, secretion, dense, dilute = evaluate(solved.x)
     maximum_residual = float(np.max(np.abs(residual)))
-    if not solved.success or maximum_residual > payload.residual_tolerance_um_per_h:
+    scaled_residual = maximum_residual / payload.input_flux_um_per_h
+    production_15 = flux["R7"] + flux["R10"]
+    yield_abs = production_15 / payload.input_flux_um_per_h
+    secretion_loss = sum(secretion[str(index)] for index in range(8, 15)) / payload.input_flux_um_per_h
+    invariant = yield_abs + secretion_loss - 1.0
+    global_balance = sum(secretion.values()) / payload.input_flux_um_per_h - 1.0
+    finite = np.all(np.isfinite(solved.x)) and np.all(np.isfinite(residual)) and all(np.isfinite(v) for v in [*flux.values(),*secretion.values(),invariant,global_balance])
+    if (not solved.success or not finite or scaled_residual > payload.relative_residual_tolerance or
+            maximum_residual > max(payload.residual_tolerance_um_per_h,payload.relative_residual_tolerance*payload.input_flux_um_per_h) or
+            abs(invariant) > payload.relative_residual_tolerance or abs(global_balance) > payload.relative_residual_tolerance):
         return M4SteadyStateResult(
             candidate_id=payload.candidate_id,
             construct_id=payload.construct_id,
@@ -188,12 +211,11 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
             concentrations_cell_average_um={compound: float(solved.x[index]) for index, compound in enumerate(COMPOUNDS)},
             steady_state_residual_um_per_h={compound: float(residual[index]) for index, compound in enumerate(COMPOUNDS)},
             input_parameter_ids=payload.input_parameter_ids,
+            mass_invariant_residual=float(invariant) if np.isfinite(invariant) else None,
+            max_scaled_species_residual=float(scaled_residual) if np.isfinite(scaled_residual) else None,
+            input_output_balance_relative_residual=float(global_balance) if np.isfinite(global_balance) else None,
             warnings=[f"steady_state_solver_failed_or_residual_exceeded_tolerance:{solved.message}"],
         )
-    production_15 = flux["R7"] + flux["R10"]
-    yield_abs = production_15 / payload.input_flux_um_per_h
-    secretion_loss = sum(secretion[str(index)] for index in range(8, 15)) / payload.input_flux_um_per_h
-    invariant = yield_abs + secretion_loss - 1.0
     return M4SteadyStateResult(
         candidate_id=payload.candidate_id,
         construct_id=payload.construct_id,
@@ -209,11 +231,14 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
         yield_abs=yield_abs,
         secretion_loss_8_to_14=secretion_loss,
         mass_invariant_residual=invariant,
+        max_scaled_species_residual=scaled_residual,
+        input_output_balance_relative_residual=global_balance,
         input_parameter_ids=payload.input_parameter_ids,
         warnings=[
             "R10_substrate_corrected_to_M14_per_canonical_reaction_table",
             "Vsec_uses_original_unweighted_ksec_times_dilute_concentration_definition",
             "robustness_sensitivity_and_scaffold_scan_withheld_without_reviewed_distributions_or_constructs",
+            "valid_means_balanced_numerical_root_not_stability_or_uniqueness_validation",
         ],
     )
 

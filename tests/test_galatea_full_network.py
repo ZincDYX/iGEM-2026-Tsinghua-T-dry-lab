@@ -317,12 +317,13 @@ def test_tiny_negative_states_are_clipped_only_within_tolerance(monkeypatch: pyt
         success = True
         message = ""
         t = np.array([0.0, 1.0])
-        y = np.zeros((16, 2))
+        y = np.zeros((42, 2))
 
     Solution.y[0, 1] = -1e-10
     monkeypatch.setattr("igem_drylab.full_network.solve_ivp", lambda *args, **kwargs: Solution())
-    result = simulate_full_network(full_params(), initial_intracellular=initial(), t_end=1)
+    result = simulate_full_network(full_params(), initial_intracellular={name: 0.0 for name in COMPOUNDS}, t_end=1)
     assert np.all(result.intracellular >= 0)
+    assert result.raw_intracellular[0, 1] == -1e-10
 
 
 def test_author_native_parser_is_unitless_and_public() -> None:
