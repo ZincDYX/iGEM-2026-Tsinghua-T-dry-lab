@@ -11,6 +11,18 @@
 
 ## 待实施 / 待真实证据
 
+## 7. 实际工具执行与输出完整性
+
+- 外部 runner 增加实际执行文件、明确输入文件、输出文件及 stdout/stderr 哈希；超时/执行失败保留 manifest，不抹去失败链。mock/dry_run 不赋予真实执行身份；哈希不是不可伪造的执行证明。
+- FreeSASA 输出绑定真实 PDB、包版本、显式默认 Parameters、分类器/结构选项及配置哈希；不改变此前默认 SASA 方法。
+- 实际 stdio MCP 重跑已部署 FreeSASA 并调用生产 parse_freesasa_json。发现并修复 stdout 摘要覆盖残基 JSON 的实际问题；旧失败作业目录保留，最终作业为 actual-freesasa-mcp-final。
+- air-lab：17 passed（tool-records.xml）加真实工具/解析验收。重新审计五个部署根含历史兼容环境，共 11,079,683,786 字节 < 15,000,000,000；无新安装。
+- 工具输出格式依据 [FreeSASA 官方 Python 文档](https://freesasa.github.io/python/classes.html)。这只是工具 smoke，不是实际融合 ORF 的 M2 生物学验证。SignalP/DeepTMHMM/TANGO/PASTA 本轮未执行，也未解除自动解析/许可缺口。
+
+## 全套回归发现的附加修复
+
+首次全套 394 passed / 1 failed：M5 新诊断中的 numpy.bool 不能写入 JSON；已显式转换 Python bool，30 项 M5/生产 M4→M5 回归通过，XML m5-serialization.xml。保留 first 日志/XML，不删除失败记录或放宽验收。
+
 ## 6. 标定—冻结—留出
 
 - 新增 research_validation 和 CLI/MCP：冻结真实求解器设置、完整 kernel_inputs、源码哈希、环境版本、参数文件哈希、训练数据清单/哈希/观测身份和结论范围。

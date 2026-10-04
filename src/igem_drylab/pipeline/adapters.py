@@ -5,6 +5,7 @@ import shlex
 import shutil
 import subprocess
 import time
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,11 @@ class ToolRunResult(BaseModel):
     manifest_file: Path | None = None
     notes: str = ""
     outputs: dict[str, Path] = Field(default_factory=dict)
+    executable_sha256: str | None = None
+    input_sha256: dict[str, str] = Field(default_factory=dict)
+    output_sha256: dict[str, str] = Field(default_factory=dict)
+    stdout_sha256: str | None = None
+    stderr_sha256: str | None = None
 
 
 class ExternalToolAdapter:
@@ -104,6 +110,7 @@ class ExternalToolAdapter:
         dry_run: bool = False,
         timeout_seconds: int = 3600,
         expected_outputs: dict[str, Path] | None = None,
+        input_files: dict[str, Path] | None = None,
         **context: Any,
     ) -> ToolRunResult:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -155,14 +162,22 @@ class ExternalToolAdapter:
             return self._write_manifest(result)
 
         started = time.perf_counter()
-        completed = subprocess.run(
-            command.argv,
-            cwd=command.cwd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
+        executable = Path(shutil.which(command.argv[0]) or command.argv[0]).resolve()
+        input_hashes = {str(Path(path).resolve()):sha256(Path(path).read_bytes()).hexdigest() for path in (input_files or {}).values()}
+        executable_hash = sha256(executable.read_bytes()).hexdigest()
+        try:
+            completed = subprocess.run(command.argv,cwd=command.cwd,capture_output=True,text=True,
+                                       timeout=timeout_seconds,check=False)
+        except (subprocess.TimeoutExpired, OSError) as error:
+            stdout = getattr(error,"stdout",None) or ""
+            stderr = getattr(error,"stderr",None) or ""
+            if isinstance(stdout,bytes): stdout = stdout.decode("utf-8",errors="replace")
+            if isinstance(stderr,bytes): stderr = stderr.decode("utf-8",errors="replace")
+            return self._write_manifest(ToolRunResult(tool=self.name,mode=self.config.mode,
+                status="timed_out" if isinstance(error,subprocess.TimeoutExpired) else "execution_failed",
+                argv=command.argv,cwd=command.cwd,stdout=stdout,stderr=stderr,
+                duration_seconds=round(time.perf_counter()-started,3),output_dir=output_dir,
+                executable_sha256=executable_hash,input_sha256=input_hashes,notes=str(error)))
         duration = round(time.perf_counter() - started, 3)
         result = ToolRunResult(
             tool=self.name,
@@ -176,12 +191,18 @@ class ExternalToolAdapter:
             duration_seconds=duration,
             output_dir=output_dir,
             outputs=expected_outputs or {},
+            executable_sha256=executable_hash,
+            input_sha256=input_hashes,
         )
         return self._write_manifest(result)
 
     def _write_manifest(self, result: ToolRunResult) -> ToolRunResult:
         if result.output_dir is None:
             return result
+        result = result.model_copy(update={
+            "output_sha256":{str(path.resolve()):sha256(path.read_bytes()).hexdigest() for path in result.outputs.values() if path.is_file()},
+            "stdout_sha256":sha256(result.stdout.encode()).hexdigest(),
+            "stderr_sha256":sha256(result.stderr.encode()).hexdigest()})
         manifest = result.output_dir / f"{self.name}_tool_run.json"
         manifest.write_text(result.model_dump_json(indent=2), encoding="utf-8")
         return result.model_copy(update={"manifest_file": manifest})

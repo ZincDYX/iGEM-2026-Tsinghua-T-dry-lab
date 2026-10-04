@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from hashlib import sha256
+from importlib.metadata import version
 from pathlib import Path
 
 
@@ -14,7 +16,12 @@ def calculate_residue_sasa(pdb: Path, output: Path) -> dict[str, object]:
         raise RuntimeError("install the 'sasa' optional dependency to run FreeSASA") from exc
 
     structure = freesasa.Structure(str(pdb))
-    result = freesasa.calc(structure)
+    parameters = freesasa.Parameters()
+    result = freesasa.calc(structure, parameters)
+    configuration = {"algorithm":parameters.algorithm(),"probe_radius_angstrom":parameters.probeRadius(),
+                     "n_points":parameters.nPoints(),"n_slices":parameters.nSlices(),"n_threads":parameters.nThreads(),
+                     "structure_options":freesasa.Structure.defaultOptions,
+                     "classifier":"built_in_default_bound_to_recorded_FreeSASA_version"}
     residue_areas = {
         chain: {
             residue: {
@@ -29,6 +36,10 @@ def calculate_residue_sasa(pdb: Path, output: Path) -> dict[str, object]:
     }
     record: dict[str, object] = {
         "input_pdb": str(pdb.resolve()),
+        "input_pdb_sha256":sha256(pdb.read_bytes()).hexdigest(),
+        "tool_name":"FreeSASA","tool_version":version("freesasa"),
+        "sasa_configuration":configuration,
+        "sasa_configuration_sha256":sha256(json.dumps(configuration,sort_keys=True,separators=(",",":")).encode()).hexdigest(),
         "totalArea": float(result.totalArea()),
         "residueAreas": residue_areas,
     }

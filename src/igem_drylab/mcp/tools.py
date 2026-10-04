@@ -366,8 +366,19 @@ def _persist_standard_output(tool_name: str, result: Any) -> Any:
     if filename is None or result.output_dir is None or not result.stdout.strip():
         return result
     output_file = result.output_dir / filename
+    preserved = {}
+    if tool_name == "freesasa" and output_file.is_file():
+        # The Python wrapper already wrote full residue JSON. Its stdout is
+        # only a summary; do not overwrite the scientific artifact with it.
+        preserved = {"freesasa":output_file}
+        output_file = result.output_dir / "freesasa_stdout.json"
     output_file.write_text(result.stdout, encoding="utf-8")
-    return result.model_copy(update={"outputs": {**result.outputs, "standard_output": output_file}})
+    updated = result.model_copy(update={"outputs": {**result.outputs, **preserved,"standard_output": output_file},
+        "output_sha256":{**result.output_sha256,**{str(p.resolve()):sha256(p.read_bytes()).hexdigest() for p in preserved.values()},
+                         str(output_file.resolve()):sha256(output_file.read_bytes()).hexdigest()}})
+    if updated.manifest_file:
+        updated.manifest_file.write_text(updated.model_dump_json(indent=2),encoding="utf-8")
+    return updated
 
 
 def multichain_build_input(arguments: JsonObject) -> McpToolResult:
