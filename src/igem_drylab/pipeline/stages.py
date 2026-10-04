@@ -78,6 +78,10 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
         flags = list(qc.errors)
         if config.execution.mode == "real":
             flags.extend(qc.missing_inputs)
+            if construct.localization_context is None:
+                flags.append("localization_context_not_specified")
+            if construct.localization_context == "er_anchored" and not construct.localization_design_evidence:
+                flags.append("ER_localization_design_evidence_not_specified")
             if not construct.sequence_source_ref:
                 flags.append("construct_sequence_source_not_specified")
             if construct.oc_n_terminal_truncation and construct.oc_truncation_mapping is None:
@@ -115,6 +119,17 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
                 flags.append("full_fusion:missing_required_M1_predictor_evidence")
             missing_predictors.extend(f"full_fusion:{name}" for name in full.missing_required_evidence)
         rejected = qc.status == "invalid" or bool(qc.restriction_hits) or any(row["verdict"] == "reject" for row in [*screens.values(), *([fusion_screen] if fusion_screen else [])])
+        review_reasons = sorted({reason for row in [*screens.values(), *([fusion_screen] if fusion_screen else [])]
+                                for reason in row.get("review_reasons", [])})
+        if config.execution.mode == "real" and review_reasons:
+            review = construct.m1_review or {}
+            fingerprint = sha256(json.dumps({"full_sequence_sha256": qc.protein_sha256,
+                "localization_context": construct.localization_context, "screens": screens,
+                "full_fusion_screen": fusion_screen}, sort_keys=True).encode()).hexdigest()
+            if not (review.get("reviewer") and review.get("source_reference") and
+                    review.get("decision") == "approved" and review.get("screen_sha256") == fingerprint and
+                    set(review_reasons) <= set(review.get("approved_reasons", []))):
+                flags.append("M1_review_pending:" + fingerprint)
         status = "invalid_input" if rejected else ("insufficient_data" if flags else "valid")
         retrospective = construct.experimental_baseline and status != "valid"
         eligible = status == "valid"
@@ -127,7 +142,7 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
             formula_version=next((row["formula_version"] for row in screens.values()), None), rule_version=rules.rule_version,
             feature_definitions_sha256=digest, sequence_sha256=first_features["sequence_sha256"] if first_features else None,
             full_sequence_sha256=qc.protein_sha256, sequence_qc=qc.model_dump(mode="json"),
-            sequence_screen_verdict="reject" if rejected else ("blocked" if flags else ("review" if missing_predictors else "pass")),
+            sequence_screen_verdict="reject" if rejected else ("review" if any(flag.startswith("M1_review_pending") for flag in flags) else ("blocked" if flags else ("review" if missing_predictors else "pass"))),
             screen_flags=sorted(set(flags)), missing_predictor_evidence=sorted(set(missing_predictors)),
             engineering_priority_score=None, recommended_for_m2=eligible, retrospective_only=retrospective,
             eligibility="eligible" if eligible else ("retrospective_only" if retrospective else ("rejected" if rejected else "blocked")),
@@ -155,12 +170,12 @@ def _screen_m1_sequence(sequence, kind, fragment_evidence, fusion_evidence, defi
         payload = fragment_evidence.get(key)
         return model.model_validate(payload) if isinstance(payload, dict) else None
     fusion = fusion_evidence.get("fusion", fragment_evidence.get("fusion"))
-    return screen_sequence_v3(features=features, sequence_kind=kind, rules=rules,
+    return screen_sequence_v3(features=features, sequence=sequence, sequence_kind=kind, rules=rules,
         disorder=parsed("disorder", DisorderEvidence), secondary_structure=parsed("secondary_structure", SecondaryStructureEvidence),
         seg=parsed("seg", SegEvidence), protparam=parsed("protparam", ProtParamEvidence),
         fusion_evidence=FusionToolEvidence.model_validate(fusion) if isinstance(fusion, dict) else None,
         full_fusion_sha256=fusion_hash,
-        localization_context="er_anchored" if "ER" in (construct.fusion_orientation or "").upper() else "cytosolic",
+        localization_context=construct.localization_context or "cytosolic",
         require_external_evidence=config.execution.mode == "real" and settings.require_external_evidence_in_real_mode)
 
 

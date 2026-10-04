@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,9 @@ class ConstructRecord(BaseModel):
     recruitment_domains: list[str] = Field(default_factory=list)
     ligand_tags: list[str] = Field(default_factory=list)
     fusion_orientation: str | None = None
+    localization_context: Literal["cytosolic", "er_anchored"] | None = None
+    localization_design_evidence: str | None = None
+    m1_review: dict | None = None
     domain_order: list[str] = Field(default_factory=list)
     linker_sequences: dict[str, str] = Field(default_factory=dict)
     promoter: str | None = None
@@ -41,6 +45,9 @@ class ConstructRecord(BaseModel):
             "components": list(dict.fromkeys([*self.proteins, *([self.idr] if self.idr else []), *self.linker_sequences])),
             "domain_order": self.domain_order,
             "fusion_orientation": self.fusion_orientation,
+            "localization_context": self.localization_context,
+            "localization_design_evidence": self.localization_design_evidence,
+            "m1_review": self.m1_review,
             "linker_ids": list(self.linker_sequences),
             "idr_ids": [self.idr] if self.idr else [],
             "sequences": {**self.sequences, **self.linker_sequences},

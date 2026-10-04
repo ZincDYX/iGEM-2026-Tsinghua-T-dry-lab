@@ -99,6 +99,9 @@ class ConstructDefinition(BaseModel):
     parts: list[OrderedPartConfig] = Field(default_factory=list)
     domain_order: list[str] = Field(default_factory=list)
     fusion_orientation: str | None = None
+    localization_context: Literal["cytosolic", "er_anchored"] | None = None
+    localization_design_evidence: str | None = None
+    m1_review: dict[str, Any] | None = None
     linker_ids: list[str] = Field(default_factory=list)
     scaffold_id: str | None = None
     recruitment_tags: list[str] = Field(default_factory=list)

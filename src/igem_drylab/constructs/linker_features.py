@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from collections import Counter
 from hashlib import sha256
-from math import log2
+from math import log2, isfinite, isclose
 from pathlib import Path
 from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from igem_drylab.resources import default_config_path
+from .tool_evidence import ToolEvidenceProvenance, verify_artifact
 
 STANDARD_AMINO_ACIDS = frozenset("ACDEFGHIKLMNPQRSTVWY")
 
@@ -141,6 +142,7 @@ class DisorderEvidence(BaseModel):
     disorder_fraction: float
     longest_disordered_run: int
     longest_folded_run: int
+    provenance: ToolEvidenceProvenance | None = None
 
 
 class SecondaryStructureEvidence(BaseModel):
@@ -152,6 +154,7 @@ class SecondaryStructureEvidence(BaseModel):
     states: str
     ss_fraction: float
     longest_ss_run: int
+    provenance: ToolEvidenceProvenance | None = None
 
 
 class SegEvidence(BaseModel):
@@ -163,6 +166,7 @@ class SegEvidence(BaseModel):
     sequence_length: int = Field(ge=1)
     low_complexity_positions: list[int] = Field(default_factory=list)
     low_complexity_fraction: float = Field(ge=0, le=1)
+    provenance: ToolEvidenceProvenance | None = None
 
 
 class ProtParamEvidence(BaseModel):
@@ -192,6 +196,7 @@ class FusionToolEvidence(BaseModel):
     continuous_high_aggregation_hotspots: int | None = Field(default=None, ge=0)
     restriction_source_file: Path | None = None
     forbidden_dna_sites: list[str] = Field(default_factory=list)
+    provenance: dict[str, ToolEvidenceProvenance] = Field(default_factory=dict)
 
 
 class M1ScreenResult(BaseModel):
@@ -303,6 +308,7 @@ def parse_iupred2a_output(
     """Parse the standard whitespace IUPred2A per-residue output."""
 
     scores: list[float] = []
+    residues: list[str] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -310,9 +316,17 @@ def parse_iupred2a_output(
         fields = line.split()
         if len(fields) < 3:
             raise ValueError(f"invalid IUPred2A row: {raw}")
-        scores.append(float(fields[2]))
+        if int(fields[0]) != len(scores) + 1 or fields[1].upper() not in STANDARD_AMINO_ACIDS:
+            raise ValueError("IUPred2A_residue_index_or_letter_invalid")
+        residues.append(fields[1].upper())
+        score = float(fields[2])
+        if not isfinite(score) or not 0 <= score <= 1:
+            raise ValueError("IUPred2A_score_must_be_finite_in_zero_to_one")
+        scores.append(score)
     if not scores:
         raise ValueError("IUPred2A output contains no per-residue scores")
+    if sha256("".join(residues).encode("ascii")).hexdigest() != input_sha256:
+        raise ValueError("IUPred2A_residue_sequence_hash_mismatch")
     disordered = [score >= score_boundary for score in scores]
     return DisorderEvidence(
         tool_version=tool_version,
@@ -337,6 +351,7 @@ def parse_secondary_structure_output(
     """Parse PSIPRED SS2 rows or a JPred ``jnetpred:`` state line."""
 
     states: list[str] = []
+    residues: list[str] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -348,11 +363,21 @@ def parse_secondary_structure_output(
                 if char in "CHE"
             )
             continue
+        if line.lower().startswith("align1:"):
+            residues.extend(line.split(":", 1)[1].replace(",", "").upper())
+            continue
         fields = line.split()
         if len(fields) >= 3 and fields[0].isdigit() and fields[2].upper() in {"C", "H", "E"}:
+            if int(fields[0]) != len(states) + 1 or fields[1].upper() not in STANDARD_AMINO_ACIDS:
+                raise ValueError("secondary_structure_residue_index_or_letter_invalid")
+            if len(fields) < 6 or any(not isfinite(float(p)) or not 0 <= float(p) <= 1 for p in fields[3:6]):
+                raise ValueError("secondary_structure_probabilities_invalid")
+            residues.append(fields[1].upper())
             states.append(fields[2].upper())
     if not states:
         raise ValueError("secondary-structure output contains no C/H/E states")
+    if len(residues) != len(states) or sha256("".join(residues).encode("ascii")).hexdigest() != input_sha256:
+        raise ValueError("secondary_structure_residue_sequence_hash_mismatch")
     structured = [state in {"H", "E"} for state in states]
     return SecondaryStructureEvidence(
         tool_name=tool_name,
@@ -434,12 +459,16 @@ def screen_sequence_v3(
     protparam: ProtParamEvidence | None = None,
     fusion_evidence: FusionToolEvidence | None = None,
     full_fusion_sha256: str | None = None,
+    sequence: str | None = None,
     localization_context: Literal["cytosolic", "er_anchored"] = "cytosolic",
     require_external_evidence: bool = True,
 ) -> M1ScreenResult:
     reject: list[str] = []
     review: list[str] = []
     missing: list[str] = []
+    if require_external_evidence:
+        _verify_sequence_evidence(features, sequence, disorder, secondary_structure, seg, protparam, fusion_evidence,
+                                  full_fusion_sha256, missing)
 
     is_linker = sequence_kind not in {"idr", "full_fusion"}
     if is_linker and (features.length < rules.linker_min_length or features.length > rules.linker_max_length):
@@ -546,6 +575,76 @@ def screen_sequence_v3(
         review_reasons=review,
         missing_required_evidence=missing,
     )
+
+
+def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, protparam, fusion, fusion_hash, missing):
+    """Reparse actual bytes before any declared summary can qualify a design."""
+    normalized = normalize_amino_acid_sequence(sequence) if sequence is not None else None
+    if normalized is not None and sha256(normalized.encode()).hexdigest() != features.sequence_sha256:
+        raise ValueError("M1_sequence_features_hash_mismatch")
+    for evidence, parser, fields in (
+        (disorder, parse_iupred2a_output, ("scores", "disorder_mean", "disorder_fraction", "longest_disordered_run", "longest_folded_run")),
+        (secondary, parse_secondary_structure_output, ("states", "ss_fraction", "longest_ss_run")),
+        (seg, parse_seg_fasta, ("sequence_length", "low_complexity_positions", "low_complexity_fraction")),
+    ):
+        if evidence is None:
+            continue
+        if evidence.input_sha256 != features.sequence_sha256:
+            continue  # existing screen reports the input mismatch as a rejection
+        if evidence is disorder and len(evidence.scores) != features.length:
+            raise ValueError("IUPred2A_length_mismatch")
+        if evidence is secondary and len(evidence.states) != features.length:
+            raise ValueError("secondary_structure_length_mismatch")
+        observations = {key: getattr(evidence, key) for key in fields}
+        if not verify_artifact(evidence.provenance, evidence.source_file, evidence.tool_name,
+                               evidence.tool_version, evidence.input_sha256, observations):
+            missing.append(evidence.tool_name + "_verified_artifact_and_execution_or_review_record")
+            continue
+        keywords = {"tool_version": evidence.tool_version, "input_sha256": evidence.input_sha256}
+        if evidence is disorder:
+            keywords["score_boundary"] = evidence.score_boundary
+        elif evidence is secondary:
+            keywords["tool_name"] = evidence.tool_name
+        else:
+            keywords["expected_length"] = features.length
+        parsed = parser(evidence.source_file, **keywords)
+        for key in fields:
+            declared, actual = getattr(evidence, key), getattr(parsed, key)
+            equal = isclose(declared, actual, rel_tol=1e-12, abs_tol=1e-12) if isinstance(actual, float) else declared == actual
+            if not equal:
+                raise ValueError(evidence.tool_name + "_summary_or_array_mismatch:" + key)
+        if evidence is seg:
+            if normalized is None:
+                missing.append("SEG_input_sequence_for_residue_verification")
+            else:
+                masked = "".join(line.strip() for line in evidence.source_file.read_text().splitlines() if not line.startswith(">"))
+                if any(letter.upper() != "X" and letter.upper() != expected for letter, expected in zip(masked, normalized, strict=True)):
+                    raise ValueError("SEG_residue_sequence_mismatch")
+    if protparam is not None and protparam.input_sha256 == features.sequence_sha256:
+        if normalized is None:
+            missing.append("ProtParam_input_sequence_for_local_recalculation")
+        else:
+            actual = compute_protparam_evidence(normalized, input_sha256=features.sequence_sha256)
+            if actual.model_dump() != protparam.model_dump():
+                raise ValueError("ProtParam_recomputed_evidence_mismatch")
+    if fusion is not None and fusion.input_sha256 == fusion_hash:
+        entries = (
+            ("SignalP", fusion.signalp_source_file, fusion.signalp_tool_version,
+             {"signal_peptide_with_clear_cleavage": fusion.signal_peptide_with_clear_cleavage}),
+            ("DeepTMHMM", fusion.deeptmhmm_source_file, fusion.deeptmhmm_tool_version,
+             {"transmembrane_helix_count": fusion.transmembrane_helix_count}),
+            (fusion.aggregation_tool or "TANGO_or_PASTA2", fusion.aggregation_source_file, fusion.aggregation_tool_version,
+             {"continuous_high_aggregation_hotspots": fusion.continuous_high_aggregation_hotspots}),
+        )
+        for name, path, version, observations in entries:
+            provenance = fusion.provenance.get(name)
+            # No arbitrary universal parser/aggregation threshold is invented.
+            # Until a version-specific parser is registered these interpretations
+            # require a byte-bound human review, explicitly not an automatic job.
+            if not verify_artifact(provenance, path, name, version, fusion_hash, observations):
+                missing.append(name + "_verified_raw_output_and_review")
+            elif provenance.origin != "manual_review":
+                missing.append(name + "_version_specific_automatic_parser_not_available")
 
 
 def _longest_boolean_run(values: list[bool], target: bool) -> int:

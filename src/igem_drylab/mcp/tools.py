@@ -304,6 +304,7 @@ def m1_screen_sequence(arguments: JsonObject) -> McpToolResult:
     protparam_payload = arguments.get("protparam_evidence")
     result = screen_sequence_v3(
         features=SequenceFeatures.model_validate(feature_result),
+        sequence=_require_str(arguments, "sequence"),
         sequence_kind=arguments.get("sequence_kind", "enzyme_ligand_linker"),
         rules=rules,
         disorder=None if disorder_payload is None else DisorderEvidence.model_validate(disorder_payload),

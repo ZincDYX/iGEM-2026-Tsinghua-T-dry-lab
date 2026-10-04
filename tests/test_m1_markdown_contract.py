@@ -121,7 +121,7 @@ def test_seg_and_protparam_produce_versioned_cross_checks(tmp_path: Path) -> Non
 def test_iupred_parser_calculates_mean_fraction_and_runs(tmp_path: Path) -> None:
     output = tmp_path / "iupred.txt"
     output.write_text("1 A 0.8\n2 A 0.7\n3 A 0.2\n4 A 0.1\n", encoding="utf-8")
-    evidence = parse_iupred2a_output(output, tool_version="2A", input_sha256="abc")
+    evidence = parse_iupred2a_output(output, tool_version="2A", input_sha256=sha256(b"AAAA").hexdigest())
 
     assert evidence.disorder_mean == pytest.approx(0.45)
     assert evidence.disorder_fraction == pytest.approx(0.5)
@@ -183,7 +183,7 @@ def test_v3_screen_passes_only_with_matching_external_evidence(tmp_path: Path) -
         full_fusion_sha256=sequence_hash,
     )
 
-    assert result.verdict == "pass"
+    assert result.verdict == "blocked"  # declarations without real byte-bound artifacts never qualify
     assert result.rank_score is None
 
 
