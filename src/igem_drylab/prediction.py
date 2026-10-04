@@ -4,11 +4,32 @@ from copy import deepcopy
 from typing import Literal
 
 import numpy as np
+import scipy
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .full_network import COMPOUNDS, FullNetworkParameters, PhaseDistribution, ReactionKinetics, TemporalGate, TransportParameters, simulate_full_network
+from .full_network import COMPOUNDS, FULL_NETWORK_FORMULA_VERSION, FullNetworkParameters, PhaseDistribution, ReactionKinetics, TemporalGate, TransportParameters, simulate_full_network
 from .kinetics import InductionGate
-from .m4_steady_state import M4SteadyStateInput, solve_m4_steady_state
+from .m4_steady_state import M4_ACTIVITY_FORMULA_VERSION, M4_FORMULA_VERSION, M4SteadyStateInput, solve_m4_steady_state
+
+
+class DynamicSolverSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    t_end: float = Field(gt=0)
+    points: int = Field(ge=2)
+    method: Literal["LSODA", "BDF", "Radau"]
+    rtol: float = Field(gt=0, lt=1)
+    atol: float = Field(gt=0)
+    integration_version: Literal["adaptive-cumulative-v1"]
+    scipy_version: str
+
+
+class SteadySolverSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    method: Literal["least_squares"]
+    residual_tolerance_um_per_h: float = Field(gt=0)
+    relative_residual_tolerance: float = Field(gt=0, lt=1)
+    integration_version: Literal["scaled-residual-v1"]
+    scipy_version: str
 
 
 class PredictionContract(BaseModel):
@@ -28,6 +49,39 @@ class PredictionContract(BaseModel):
 
     @model_validator(mode="after")
     def validate_series(self):
+        if (self.model_kind, self.formula_version) not in _REPLAY_ADAPTERS:
+            raise ValueError("unsupported_formula_version_explicit_migration_required")
+        if (self.time_unit, self.concentration_unit) not in {("h", "uM"), ("author_native_day_axis", "author_native")}:
+            raise ValueError("prediction_unit_pair_mismatch")
+        dynamic = self.model_kind == "full_network_dynamic"
+        expected = {"intracellular", "extracellular"} if dynamic else {"intracellular"}
+        if set(self.concentrations) != expected or any(set(species) != set(COMPOUNDS) for species in self.concentrations.values()):
+            raise ValueError("prediction_requires_complete_compartments_and_species")
+        if self.normalization != {key: "cell_volume" if key == "intracellular" else "medium_volume" for key in expected}:
+            raise ValueError("prediction_compartment_normalization_mismatch")
+        settings_type = DynamicSolverSettings if dynamic else SteadySolverSettings
+        self.solver_settings = settings_type.model_validate(self.solver_settings).model_dump()
+        if dynamic:
+            mode = self.kernel_inputs.get("parameters", {}).get("unit_mode")
+            if (mode == "physical") != (self.concentration_unit == "uM") or mode not in {"physical", "author_native_sensitivity"}:
+                raise ValueError("prediction_kernel_unit_mode_mismatch")
+            transport = self.kernel_inputs["parameters"]["transport"]
+            if (self.intracellular_volume_l != transport["intracellular_volume_l"] or
+                    self.extracellular_volume_l != transport["extracellular_volume_l"]):
+                raise ValueError("prediction_kernel_volume_mismatch")
+            if not self.time or self.time[0] != 0 or self.time[-1] != self.solver_settings["t_end"]:
+                raise ValueError("prediction_time_solver_interval_mismatch")
+        else:
+            if self.time or self.time_unit != "h":
+                raise ValueError("steady_prediction_requires_physical_units_and_no_time_curve")
+            if self.kernel_inputs.get("formula_version") != self.formula_version:
+                raise ValueError("prediction_kernel_formula_version_mismatch")
+            parsed = M4SteadyStateInput.model_validate(self.kernel_inputs)
+            if parsed.formula_version != self.formula_version:
+                raise ValueError("prediction_formula_upgrade_requires_explicit_migration")
+            for key in ("residual_tolerance_um_per_h", "relative_residual_tolerance"):
+                if getattr(parsed, key) != self.solver_settings[key]:
+                    raise ValueError("prediction_kernel_solver_settings_mismatch")
         count = len(self.time) if self.model_kind == "full_network_dynamic" else 1
         if self.model_kind == "full_network_dynamic" and (count < 2 or any(right <= left for left, right in zip(self.time, self.time[1:]))):
             raise ValueError("prediction_time_must_be_strictly_increasing")
@@ -81,7 +135,7 @@ def dynamic_contract(params, result, initial_intracellular, initial_extracellula
         normalization={"intracellular": "cell_volume", "extracellular": "medium_volume"},
         intracellular_volume_l=params.transport.intracellular_volume_l, extracellular_volume_l=params.transport.extracellular_volume_l,
         kernel_inputs={"parameters": asdict(params), "initial_intracellular": initial_intracellular, "initial_extracellular": initial_extracellular},
-        solver_settings={"t_end": t_end, "points": points, "method": "LSODA", "rtol": 1e-8, "atol": 1e-12}).model_dump(mode="json")
+        solver_settings={**result.solver_settings, "t_end": t_end, "points": points, "scipy_version": scipy.__version__}).model_dump(mode="json")
 
 
 def steady_contract(payload, result):
@@ -89,7 +143,9 @@ def steady_contract(payload, result):
         time_unit="h", concentration_unit="uM", concentrations={
             "intracellular": {name: [value] for name, value in result.concentrations_cell_average_um.items()}},
         normalization={"intracellular": "cell_volume"}, kernel_inputs=payload.model_dump(mode="json"),
-        solver_settings={"method": "least_squares", "residual_tolerance_um_per_h": payload.residual_tolerance_um_per_h}).model_dump(mode="json")
+        solver_settings={"method": "least_squares", "residual_tolerance_um_per_h": payload.residual_tolerance_um_per_h,
+                         "relative_residual_tolerance": payload.relative_residual_tolerance,
+                         "integration_version": "scaled-residual-v1", "scipy_version": scipy.__version__}).model_dump(mode="json")
 
 
 def replay_prediction(payload, parameter_name, value):
@@ -97,30 +153,42 @@ def replay_prediction(payload, parameter_name, value):
     contract = PredictionContract.model_validate(payload)
     if contract.concentration_unit != "uM":
         raise ValueError("author_native_prediction_cannot_fit_absolute_measurements")
-    if contract.model_kind == "markdown_steady_state":
-        inputs = deepcopy(contract.kernel_inputs)
-        if parameter_name.startswith(("kcat_r", "km_r")):
-            prefix, reaction_id = parameter_name.split("_", 1)
-            reaction = next((row for row in inputs["reactions"] if row["reaction_id"].lower() == reaction_id), None)
-            if reaction is None:
-                raise ValueError("fit_parameter_not_in_selected_model")
-            reaction["kcat_per_h" if prefix == "kcat" else "km_um"] = value
-        elif parameter_name == "input_flux_8":
-            inputs["input_flux_um_per_h"] = value
-        elif parameter_name.startswith("ksec_") and parameter_name[5:] in COMPOUNDS:
-            inputs["secretion_rate_per_h"][parameter_name[5:]] = value
-        elif parameter_name.startswith("activity_"):
-            _, phase, enzyme = parameter_name.split("_", 2)
-            if phase not in {"dense", "dilute"} or enzyme.upper() not in inputs["enzymes"]:
-                raise ValueError("fit_parameter_not_in_selected_model")
-            inputs["enzymes"][enzyme.upper()][f"activity_{phase}_ratio"] = value
-        else:
-            raise ValueError("fit_adapter_does_not_support_parameter")
-        parsed = M4SteadyStateInput.model_validate(inputs)
-        result = solve_m4_steady_state(parsed)
-        if result.status != "valid":
-            raise ValueError("fit_steady_state_solver_not_valid")
-        return steady_contract(parsed, result)
+    if not np.isfinite(value):
+        raise ValueError("fit_parameter_must_be_finite")
+    if contract.solver_settings["scipy_version"] != scipy.__version__:
+        raise ValueError("prediction_replay_requires_recorded_scipy_environment")
+    return _REPLAY_ADAPTERS[(contract.model_kind, contract.formula_version)](contract, parameter_name, value)
+
+
+def _replay_steady(contract, parameter_name, value):
+    inputs = deepcopy(contract.kernel_inputs)
+    if parameter_name.startswith(("kcat_r", "km_r")):
+        prefix, reaction_id = parameter_name.split("_", 1)
+        reaction = next((row for row in inputs["reactions"] if row["reaction_id"].lower() == reaction_id), None)
+        if reaction is None:
+            raise ValueError("fit_parameter_not_in_selected_model")
+        reaction["kcat_per_h" if prefix == "kcat" else "km_um"] = value
+    elif parameter_name == "input_flux_8":
+        inputs["input_flux_um_per_h"] = value
+    elif parameter_name.startswith("ksec_") and parameter_name[5:] in COMPOUNDS:
+        inputs["secretion_rate_per_h"][parameter_name[5:]] = value
+    elif parameter_name.startswith("activity_"):
+        if contract.formula_version != M4_ACTIVITY_FORMULA_VERSION:
+            raise ValueError("activity_parameter_requires_explicit_formula_migration")
+        _, phase, enzyme = parameter_name.split("_", 2)
+        if phase not in {"dense", "dilute"} or enzyme.upper() not in inputs["enzymes"]:
+            raise ValueError("fit_parameter_not_in_selected_model")
+        inputs["enzymes"][enzyme.upper()][f"activity_{phase}_ratio"] = value
+    else:
+        raise ValueError("fit_adapter_does_not_support_parameter")
+    parsed = M4SteadyStateInput.model_validate(inputs)
+    result = solve_m4_steady_state(parsed)
+    if result.status != "valid":
+        raise ValueError("fit_steady_state_solver_not_valid")
+    return steady_contract(parsed, result)
+
+
+def _replay_dynamic(contract, parameter_name, value):
     inputs = deepcopy(contract.kernel_inputs)
     raw = inputs["parameters"]
     if parameter_name.startswith(("kcat_r", "km_r")):
@@ -149,5 +217,13 @@ def replay_prediction(payload, parameter_name, value):
         raw[name] = TemporalGate(**row)
     params = FullNetworkParameters(**raw)
     result = simulate_full_network(params, initial_intracellular=inputs["initial_intracellular"],
-        initial_extracellular=inputs["initial_extracellular"], t_end=contract.solver_settings["t_end"], points=contract.solver_settings["points"])
+        initial_extracellular=inputs["initial_extracellular"],
+        **{key: contract.solver_settings[key] for key in ("t_end", "points", "method", "rtol", "atol")})
     return dynamic_contract(params, result, inputs["initial_intracellular"], inputs["initial_extracellular"], contract.solver_settings["t_end"], contract.solver_settings["points"])
+
+
+_REPLAY_ADAPTERS = {
+    ("full_network_dynamic", FULL_NETWORK_FORMULA_VERSION): _replay_dynamic,
+    ("markdown_steady_state", M4_FORMULA_VERSION): _replay_steady,
+    ("markdown_steady_state", M4_ACTIVITY_FORMULA_VERSION): _replay_steady,
+}
