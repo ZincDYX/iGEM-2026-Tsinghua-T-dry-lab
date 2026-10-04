@@ -40,170 +40,128 @@ from .models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, 
 
 
 def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], StageOutput]:
-    """Perform sequence/definition negative screening, not LLPS prediction."""
+    """Screen every declared ORF/IDR/linker; retain all audits, then budget eligibility."""
     stage_dir = run_dir / "m1_construct_screen"
     settings = config.stages.m1_llps
-    feature_definitions, definitions_hash = M1FeatureDefinitions.from_yaml(settings.feature_definitions_file)
+    definitions, digest = M1FeatureDefinitions.from_yaml(settings.feature_definitions_file)
     rules = M1V3Rules.model_validate(yaml.safe_load(settings.rules_file.read_text(encoding="utf-8")))
-    predictor_evidence = _load_m1_predictor_evidence(settings.predictor_evidence_file)
-    protein_sequences = _read_fasta_sequences(config.inputs.protein_fasta)
-    linker_sequences = {item.id: item.sequence for item in config.inputs.linkers}
-    construct_definitions = config.inputs.constructs + [_definition_from_registry(item) for item in ConstructRegistry(config.inputs.construct_records).query()]
-    construct_definitions = construct_definitions or _legacy_demo_definitions(config)
-    candidates: list[M1Candidate] = []
-    sequence_qc_records: list[dict[str, object]] = []
-    sequence_by_construct: dict[str, str] = {}
-    for definition in construct_definitions:
-        linker_id = definition.linker_ids[0] if definition.linker_ids else None
-        linker = next((item for item in config.inputs.linkers if item.id == linker_id), None)
-        flags: list[str] = []
-        features = None
-        ordered_parts = _ordered_construct_parts(definition)
-        sequence_qc = assemble_and_validate_construct(
-            construct_id=definition.id,
-            ordered_part_ids=ordered_parts,
-            part_sequences={**protein_sequences, **linker_sequences},
-            coding_dna=definition.coding_dna,
-            forbidden_restriction_sites=definition.forbidden_restriction_sites,
-            require_sequence_evidence=config.execution.mode == "real",
-        )
-        sequence_qc_records.append(sequence_qc.model_dump(mode="json"))
-        if sequence_qc.full_protein_sequence is not None:
-            sequence_by_construct[definition.id] = sequence_qc.full_protein_sequence
+    evidence = _load_m1_predictor_evidence(settings.predictor_evidence_file)
+    constructs = [*config.inputs.constructs, *[_definition_from_registry(record) for record in ConstructRegistry(config.inputs.construct_records).query()]]
+    constructs = constructs or _legacy_demo_definitions(config)
+    sequences = _read_fasta_sequences(config.inputs.protein_fasta)
+    def merge(identifier: str, sequence: str) -> None:
+        normalized = "".join(sequence.split()).upper()
+        if identifier in sequences and "".join(sequences[identifier].split()).upper() != normalized:
+            raise ValueError(f"conflicting_sequence_for_part:{identifier}")
+        sequences[identifier] = normalized
+    for linker in config.inputs.linkers:
+        merge(linker.id, linker.sequence)
+    for construct in constructs:
+        for identifier, sequence in construct.sequences.items():
+            merge(identifier, sequence)
+        for part in construct.parts:
+            if part.sequence is not None:
+                merge(part.id, part.sequence)
+    candidates = []
+    qc_records = []
+    full_sequences = {}
+    linker_kinds = {item.id: item.sequence_kind for item in config.inputs.linkers}
+    for construct in constructs:
+        ordered = _ordered_construct_parts(construct)
+        qc = assemble_and_validate_construct(construct_id=construct.id, ordered_part_ids=ordered,
+            part_sequences=sequences, coding_dna=construct.coding_dna,
+            forbidden_restriction_sites=construct.forbidden_restriction_sites,
+            require_sequence_evidence=config.execution.mode == "real")
+        qc_records.append(qc.model_dump(mode="json"))
+        if qc.full_protein_sequence is not None:
+            full_sequences[construct.id] = qc.full_protein_sequence
+        flags = list(qc.errors)
         if config.execution.mode == "real":
-            flags.extend(sequence_qc.errors)
-            flags.extend(sequence_qc.missing_inputs)
-        if sequence_qc.restriction_hits:
+            flags.extend(qc.missing_inputs)
+            if not construct.sequence_source_ref:
+                flags.append("construct_sequence_source_not_specified")
+            if construct.oc_n_terminal_truncation and construct.oc_truncation_mapping is None:
+                flags.append("OC_truncation_reference_and_residue_mapping_not_specified")
+        if qc.restriction_hits:
             flags.append("wetlab_forbidden_DNA_site_present")
-        if linker is None:
-            flags.append("linker_not_specified_or_not_found")
-        else:
-            result = compute_sequence_features(
-                linker.sequence,
-                definitions=feature_definitions,
-                definitions_sha256=definitions_hash,
-                forbidden_motifs=tuple(settings.forbidden_motifs),
-            )
-            features = result.as_dict()
-            evidence = predictor_evidence.get(linker.id, {})
-            screen = screen_sequence_v3(
-                features=result,
-                sequence_kind=linker.sequence_kind,
-                rules=rules,
-                disorder=(
-                    DisorderEvidence.model_validate(evidence["disorder"])
-                    if isinstance(evidence.get("disorder"), dict)
-                    else None
-                ),
-                secondary_structure=(
-                    SecondaryStructureEvidence.model_validate(evidence["secondary_structure"])
-                    if isinstance(evidence.get("secondary_structure"), dict)
-                    else None
-                ),
-                seg=(
-                    SegEvidence.model_validate(evidence["seg"])
-                    if isinstance(evidence.get("seg"), dict)
-                    else None
-                ),
-                protparam=(
-                    ProtParamEvidence.model_validate(evidence["protparam"])
-                    if isinstance(evidence.get("protparam"), dict)
-                    else None
-                ),
-                fusion_evidence=(
-                    FusionToolEvidence.model_validate(evidence["fusion"])
-                    if isinstance(evidence.get("fusion"), dict)
-                    else None
-                ),
-                full_fusion_sha256=sequence_qc.protein_sha256,
-                localization_context=(
-                    "er_anchored" if "ER" in (definition.fusion_orientation or "").upper() else "cytosolic"
-                ),
-                require_external_evidence=(
-                    config.execution.mode == "real" and settings.require_external_evidence_in_real_mode
-                ),
-            )
-            flags.extend(screen.hard_reject_reasons)
-            if screen.verdict == "blocked":
-                flags.append("missing_required_M1_predictor_evidence")
-        if config.inputs.idr_id is None:
-            flags.append("idr_not_explicitly_specified")
-        elif config.inputs.idr_id not in definition.components:
-            flags.append("idr_not_in_construct_components")
-        if config.execution.mode == "real" and not definition.sequence_source_ref:
-            flags.append("construct_sequence_source_not_specified")
-        priority = None
-        screen_verdict = screen.verdict if linker is not None else "blocked"
-        missing_predictors = screen.missing_required_evidence if linker is not None else []
-        recommended = not flags or definition.experimental_baseline
-        candidates.append(M1Candidate(
-            candidate_id=f"M1-{definition.id}", construct_id=definition.id, construct_definition=definition.model_dump(), scaffold_id=definition.scaffold_id,
-            linker_id=linker_id, idr_id=config.inputs.idr_id, linker_features=features, screen_flags=flags,
-            formula_version=(result.formula_version if linker is not None else None),
-            rule_version=rules.rule_version,
-            feature_definitions_sha256=(result.feature_definitions_sha256 if linker is not None else None),
-            sequence_sha256=(result.sequence_sha256 if linker is not None else None),
-            full_sequence_sha256=sequence_qc.protein_sha256,
-            sequence_qc=sequence_qc.model_dump(mode="json"),
-            sequence_screen_verdict=screen_verdict,
-            missing_predictor_evidence=missing_predictors,
-            engineering_priority_score=priority, recommended_for_m2=recommended,
-            status=(
-                "invalid_input"
-                if screen_verdict == "reject" or sequence_qc.status == "invalid" or sequence_qc.restriction_hits
-                else ("insufficient_data" if flags or screen_verdict == "blocked" else "valid")
-            ),
-            data_quality="demo_fixture" if config.execution.mode == "demo" else "heuristic",
-            missing_inputs=[
-                *[flag for flag in flags if "not_specified" in flag or "not_found" in flag],
-                *sequence_qc.missing_inputs,
-                *missing_predictors,
-            ],
-            recommended_next_action=(
-                ["provide real versioned M1 predictor outputs for the exact sequence hash"]
-                if missing_predictors and config.execution.mode == "real"
-                else (["specify IDR and construct components in config"] if flags else [])
-            ),
-            notes=(
-                "M1 V3 negative screen with exact feature equations. Soft-risk auto-grading and rank_score "
-                "remain unavailable because the source does not define every risk direction or reviewed weights. "
-                + (
-                    "This measured experimental baseline remains eligible for retrospective M2 assessment; "
-                    "that does not turn its missing M1 evidence into a pass."
-                    if definition.experimental_baseline and flags
-                    else ""
-                )
-            ),
-        ))
-    candidates.sort(key=lambda item: item.engineering_priority_score if item.engineering_priority_score is not None else -1.0, reverse=True)
-    candidates = candidates[:config.stages.m1_llps.top_n]
+        kinds = {identifier: linker_kinds.get(identifier, "enzyme_ligand_linker") for identifier in construct.linker_ids}
+        kinds.update({identifier: "idr" for identifier in construct.idr_ids})
+        kinds.update({part.id: part.kind for part in construct.parts if part.kind in {"idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"}})
+        if config.inputs.idr_id in ordered:
+            kinds[config.inputs.idr_id] = "idr"
+        screens = {}
+        missing_predictors = []
+        for identifier, kind in kinds.items():
+            if identifier not in ordered:
+                flags.append(f"declared_screen_part_not_in_ORF:{identifier}")
+                continue
+            if identifier not in sequences:
+                flags.append(f"sequence_not_found:{identifier}")
+                continue
+            screened = _screen_m1_sequence(sequences[identifier], kind, evidence.get(identifier, {}),
+                evidence.get(construct.id, {}), definitions, digest, rules, settings, config, qc.protein_sha256, construct)
+            screens[identifier] = screened.model_dump(mode="json")
+            flags.extend(f"{identifier}:{reason}" for reason in screened.hard_reject_reasons)
+            if screened.verdict == "blocked":
+                flags.append(f"{identifier}:missing_required_M1_predictor_evidence")
+            missing_predictors.extend(f"{identifier}:{name}" for name in screened.missing_required_evidence)
+        fusion_screen = {}
+        if qc.full_protein_sequence is not None:
+            full = _screen_m1_sequence(qc.full_protein_sequence, "full_fusion", evidence.get(construct.id, {}),
+                evidence.get(construct.id, {}), definitions, digest, rules, settings, config, qc.protein_sha256, construct)
+            fusion_screen = full.model_dump(mode="json")
+            flags.extend(f"full_fusion:{reason}" for reason in full.hard_reject_reasons)
+            if full.verdict == "blocked":
+                flags.append("full_fusion:missing_required_M1_predictor_evidence")
+            missing_predictors.extend(f"full_fusion:{name}" for name in full.missing_required_evidence)
+        rejected = qc.status == "invalid" or bool(qc.restriction_hits) or any(row["verdict"] == "reject" for row in [*screens.values(), *([fusion_screen] if fusion_screen else [])])
+        status = "invalid_input" if rejected else ("insufficient_data" if flags else "valid")
+        retrospective = construct.experimental_baseline and status != "valid"
+        eligible = status == "valid"
+        first_linker = next((identifier for identifier in construct.linker_ids if identifier in screens), None)
+        first_features = screens[first_linker]["features"] if first_linker else None
+        candidates.append(M1Candidate(candidate_id=f"M1-{construct.id}", construct_id=construct.id,
+            construct_definition=construct.model_dump(mode="json"), scaffold_id=construct.scaffold_id,
+            linker_id=first_linker, idr_id=next((identifier for identifier, kind in kinds.items() if kind == "idr"), None),
+            linker_features=first_features, part_screens=screens, full_fusion_screen=fusion_screen,
+            formula_version=next((row["formula_version"] for row in screens.values()), None), rule_version=rules.rule_version,
+            feature_definitions_sha256=digest, sequence_sha256=first_features["sequence_sha256"] if first_features else None,
+            full_sequence_sha256=qc.protein_sha256, sequence_qc=qc.model_dump(mode="json"),
+            sequence_screen_verdict="reject" if rejected else ("blocked" if flags else ("review" if missing_predictors else "pass")),
+            screen_flags=sorted(set(flags)), missing_predictor_evidence=sorted(set(missing_predictors)),
+            engineering_priority_score=None, recommended_for_m2=eligible, retrospective_only=retrospective,
+            eligibility="eligible" if eligible else ("retrospective_only" if retrospective else ("rejected" if rejected else "blocked")),
+            status=status, numerically_solved=qc.full_protein_sequence is not None, evidence_ready=eligible,
+            claim_scope="sequence_negative_screen", data_quality="demo_fixture" if config.execution.mode == "demo" else "heuristic",
+            missing_inputs=sorted(set(flags + (missing_predictors if config.execution.mode == "real" else []))),
+            notes="All ORFs and declared fragments audited. No ranking weights invented; eligible budget follows user input order. Baseline is diagnostic only when blocked/rejected."))
+    eligible = [item for item in candidates if item.eligibility == "eligible"]
+    for item in eligible[settings.top_n:]:
+        item.eligibility = "budget_deferred"
+        item.recommended_for_m2 = False
+        item.notes += " Deferred by top_n compute budget, not a scientific rejection."
     write_models(stage_dir, "candidates", candidates)
-    (stage_dir / "construct_sequence.fasta").write_text(
-        "".join(f">{construct_id}\n{sequence}\n" for construct_id, sequence in sequence_by_construct.items()),
-        encoding="utf-8",
-    )
-    (stage_dir / "sequence_qc.json").write_text(
-        json.dumps(sequence_qc_records, indent=2), encoding="utf-8"
-    )
-    (stage_dir / "part_boundaries.json").write_text(
-        json.dumps(
-            {
-                record["construct_id"]: record["part_boundaries"]
-                for record in sequence_qc_records
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    (stage_dir / "m1_survivors.fasta").write_text(
-        "".join(
-            f">{item.construct_id}\n{sequence_by_construct[item.construct_id]}\n"
-            for item in candidates
-            if item.recommended_for_m2 and item.construct_id in sequence_by_construct
-        ),
-        encoding="utf-8",
-    )
+    (stage_dir / "construct_sequence.fasta").write_text("".join(f">{identifier}\n{sequence}\n" for identifier, sequence in full_sequences.items()), encoding="utf-8")
+    (stage_dir / "sequence_qc.json").write_text(json.dumps(qc_records, indent=2), encoding="utf-8")
+    (stage_dir / "part_boundaries.json").write_text(json.dumps({row["construct_id"]: row["part_boundaries"] for row in qc_records}, indent=2), encoding="utf-8")
+    (stage_dir / "m1_survivors.fasta").write_text("".join(f">{item.construct_id}\n{full_sequences[item.construct_id]}\n" for item in candidates if item.recommended_for_m2 and item.construct_id in full_sequences), encoding="utf-8")
     return candidates, _stage_output("m1_construct_screen", stage_dir, "candidates", len(candidates))
+
+
+def _screen_m1_sequence(sequence, kind, fragment_evidence, fusion_evidence, definitions, digest, rules, settings, config, fusion_hash, construct):
+    features = compute_sequence_features(sequence, definitions=definitions, definitions_sha256=digest,
+                                         forbidden_motifs=tuple(settings.forbidden_motifs))
+    def parsed(key, model):
+        payload = fragment_evidence.get(key)
+        return model.model_validate(payload) if isinstance(payload, dict) else None
+    fusion = fusion_evidence.get("fusion", fragment_evidence.get("fusion"))
+    return screen_sequence_v3(features=features, sequence_kind=kind, rules=rules,
+        disorder=parsed("disorder", DisorderEvidence), secondary_structure=parsed("secondary_structure", SecondaryStructureEvidence),
+        seg=parsed("seg", SegEvidence), protparam=parsed("protparam", ProtParamEvidence),
+        fusion_evidence=FusionToolEvidence.model_validate(fusion) if isinstance(fusion, dict) else None,
+        full_fusion_sha256=fusion_hash,
+        localization_context="er_anchored" if "ER" in (construct.fusion_orientation or "").upper() else "cytosolic",
+        require_external_evidence=config.execution.mode == "real" and settings.require_external_evidence_in_real_mode)
 
 
 def _load_m1_predictor_evidence(path: Path | None) -> dict[str, dict[str, object]]:
@@ -216,6 +174,8 @@ def _load_m1_predictor_evidence(path: Path | None) -> dict[str, dict[str, object
 
 
 def _ordered_construct_parts(definition: ConstructDefinition) -> list[str]:
+    if definition.parts:
+        return [part.id for part in definition.parts]
     tokens = definition.domain_order or definition.components
     ordered: list[str] = []
     for token in tokens:
@@ -251,7 +211,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     metrics = load_m2_structure_metrics(config.stages.m2_fusion.structure_metrics_file) if config.stages.m2_fusion.structure_metrics_file else {}
     assessments: list[M2FusionAssessment] = []
     for candidate in candidates:
-        if not candidate.recommended_for_m2:
+        if not candidate.recommended_for_m2 or candidate.status != "valid" or candidate.retrospective_only:
             assessments.append(M2FusionAssessment(
                 candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, status="insufficient_data",
                 data_quality=candidate.data_quality, missing_inputs=["M1 construct screen must pass"],
@@ -330,6 +290,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             clash_count=row.clash_count, clash_cutoff_angstrom=row.clash_cutoff_angstrom,
             recommended_for_m3=scored.recommended_for_m3, threshold_origin=scored.threshold_origin, notes="; ".join(scored.reasons),
         ))
+    _append_design_assessments(config, candidates, metrics, assessments)
     write_models(stage_dir, "fusion_assessments", assessments)
     return assessments, _stage_output("m2_structure_screen", stage_dir, "fusion_assessments", len(assessments))
 
@@ -340,6 +301,7 @@ def _missing_m2_formal_evidence(
     *,
     require_m3_geometry: bool,
     expected_sequence_sha256: str | None = None,
+    expected_design_hashes: dict[str, str] | None = None,
 ) -> list[str]:
     required = {
         "source_tool": row.source_tool,
@@ -385,7 +347,12 @@ def _missing_m2_formal_evidence(
             "m2_geometry_id": row.m2_geometry_id,
         })
     missing = [f"M2 provenance: {name}" for name, value in required.items() if value in (None, "", [])]
-    if not expected_sequence_sha256 or row.prediction_input_sequence_sha256 != expected_sequence_sha256:
+    if expected_design_hashes is not None:
+        if row.design_protein_sequence_sha256 != expected_design_hashes:
+            missing.append("M2 assembly input protein hashes matching all design ORFs")
+        if not set(expected_design_hashes.values()) <= set(row.chain_sequence_sha256.values()):
+            missing.append("M2 assembly chain mapping matching all design ORFs")
+    elif not expected_sequence_sha256 or row.prediction_input_sequence_sha256 != expected_sequence_sha256:
         missing.append("M2 prediction input sequence SHA-256 matching M1")
     if expected_sequence_sha256 and expected_sequence_sha256 not in row.chain_sequence_sha256.values():
         missing.append("M2 chain mapping matching the current protein construct")
@@ -420,6 +387,37 @@ def _missing_m2_formal_evidence(
     return sorted(set(missing))
 
 
+def _append_design_assessments(config, candidates, metrics, assessments):
+    candidate_by_id = {item.construct_id: item for item in candidates}
+    assessment_by_id = {item.construct_id: item for item in assessments}
+    for design in config.inputs.designs:
+        missing = [f"design protein M2 ready: {identifier}" for identifier in design.protein_construct_ids
+                   if identifier not in assessment_by_id or not assessment_by_id[identifier].recommended_for_m3]
+        candidate_id = f"Design-{design.id}"
+        row = metrics.get(candidate_id)
+        hashes = {identifier: candidate_by_id[identifier].full_sequence_sha256 for identifier in design.protein_construct_ids}
+        if row is None:
+            missing.append("design-level assembly geometry metrics")
+        elif config.execution.mode == "real":
+            missing.extend(_missing_m2_formal_evidence(row, config.stages.m2_fusion.structure_metrics_file,
+                require_m3_geometry=True, expected_design_hashes=hashes))
+        if _is_formal(config) and (not design.host or design.host != config.experimental_context.host or
+                                  not design.condition_id or design.condition_id != config.stages.m4_reaction.condition_id):
+            missing.append("design host and condition matching the formal experiment")
+        if missing:
+            assessments.append(M2FusionAssessment(candidate_id=candidate_id, construct_id=design.id,
+                construct_definition=design.model_dump(mode="json"), status="insufficient_data", missing_inputs=missing,
+                notes="No single protein pass can stand in for an entire design."))
+            continue
+        scored = score_m2_structure(row)
+        values = {key: value for key, value in row.model_dump().items() if key in M2FusionAssessment.model_fields}
+        values.update(candidate_id=candidate_id, construct_id=design.id, construct_definition=design.model_dump(mode="json"),
+            status=scored.status, screen_verdict=scored.verdict, recommended_for_m3=scored.recommended_for_m3,
+            evidence_ready=scored.recommended_for_m3, claim_scope="structure_negative_screen",
+            notes="All necessary ORFs and assembly input bindings checked; design-level geometry remains predicted evidence.")
+        assessments.append(M2FusionAssessment(**values))
+
+
 def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAssessment]) -> tuple[list[M3ConcentrationAssessment], StageOutput]:
     """Calculate species-specific two-phase concentrations from reviewed inputs."""
     stage_dir = run_dir / "m3_enrichment"
@@ -427,6 +425,11 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
     core_requirements = [item for item in requirements if item.blocking]
     records: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
+        if any(assessment.construct_id in design.protein_construct_ids for design in config.inputs.designs):
+            records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=assessment.construct_id,
+                status="insufficient_data", missing_inputs=["use the complete design-level M2 assessment"],
+                notes="Individual ORF is not an entire multi-protein cellular design."))
+            continue
         if not assessment.recommended_for_m3:
             records.append(M3ConcentrationAssessment(
                 candidate_id=assessment.candidate_id,

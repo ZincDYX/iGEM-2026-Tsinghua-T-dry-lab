@@ -38,10 +38,12 @@ class ConstructRecord(BaseModel):
     def candidate_definition(self) -> dict[str, object]:
         return {
             "id": self.construct_id,
-            "components": self.proteins + list(self.linker_sequences),
+            "components": list(dict.fromkeys([*self.proteins, *([self.idr] if self.idr else []), *self.linker_sequences])),
             "domain_order": self.domain_order,
             "fusion_orientation": self.fusion_orientation,
             "linker_ids": list(self.linker_sequences),
+            "idr_ids": [self.idr] if self.idr else [],
+            "sequences": {**self.sequences, **self.linker_sequences},
             "scaffold_id": self.scaffold,
             "recruitment_tags": self.ligand_tags,
             "enzyme_ids": [item for item in self.proteins if item in {"PT", "OC", "DMT"}],
@@ -57,7 +59,10 @@ class ConstructRecord(BaseModel):
 
 
 class ConstructRegistry:
-    def __init__(self, records: list[ConstructRecord] | None = None) -> None: self._records = list(records or [])
+    def __init__(self, records: list[ConstructRecord] | None = None) -> None:
+        self._records = list(records or [])
+        if len({item.construct_id for item in self._records}) != len(self._records):
+            raise ValueError("duplicate_construct_record_id")
     def add(self, record: ConstructRecord) -> None:
         if any(item.construct_id == record.construct_id for item in self._records): raise ValueError(f"duplicate construct_id: {record.construct_id}")
         self._records.append(record)

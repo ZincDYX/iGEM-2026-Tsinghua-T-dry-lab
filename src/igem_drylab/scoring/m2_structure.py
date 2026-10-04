@@ -27,6 +27,7 @@ class M2StructureMetrics(BaseModel):
     artifact_sha256: str | None = None
     prediction_input_sequence_sha256: str | None = None
     chain_sequence_sha256: dict[str, str] = Field(default_factory=dict)
+    design_protein_sequence_sha256: dict[str, str] = Field(default_factory=dict)
     reference_structure_id: str | None = None
     reference_artifact_path: str | None = None
     reference_artifact_sha256: str | None = None

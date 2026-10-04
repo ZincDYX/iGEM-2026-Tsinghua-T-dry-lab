@@ -14,7 +14,7 @@ DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[3] / "configs"
 
 class RunConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    id: str = "demo-run"
+    id: str = Field(default="demo-run", pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     output_dir: Path = Path("outputs")
 
 
@@ -72,15 +72,29 @@ class LinkerConfig(BaseModel):
     id: str
     sequence: str
     source: str = "unknown"
-    sequence_kind: Literal["enzyme_ligand_linker", "scaffold_linker", "rigid_linker"] = "enzyme_ligand_linker"
+    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"] = "enzyme_ligand_linker"
+
+
+class OrderedPartConfig(StrictScientificConfig):
+    id: str
+    kind: Literal["protein", "idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "tag"]
+    sequence: str | None = None
+
+
+class TruncationMapping(StrictScientificConfig):
+    reference_accession: str
+    deleted_reference_residues: list[int] = Field(min_length=1)
+    reference_to_fusion: dict[int, int]
+    source_reference: str
 
 
 class ConstructDefinition(BaseModel):
     """A wet-lab construct description; no fusion topology is inferred by code."""
 
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     model_config = ConfigDict(extra="forbid")
-    components: list[str] = Field(min_length=1)
+    components: list[str] = Field(default_factory=list)
+    parts: list[OrderedPartConfig] = Field(default_factory=list)
     domain_order: list[str] = Field(default_factory=list)
     fusion_orientation: str | None = None
     linker_ids: list[str] = Field(default_factory=list)
@@ -92,12 +106,30 @@ class ConstructDefinition(BaseModel):
     coding_dna: str | None = None
     sequence_source_ref: str | None = None
     forbidden_restriction_sites: dict[str, str] | None = None
+    idr_ids: list[str] = Field(default_factory=list)
+    sequences: dict[str, str] = Field(default_factory=dict)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    oc_truncation_mapping: TruncationMapping | None = None
 
     @model_validator(mode="after")
-    def _one_linker_contract(self) -> "ConstructDefinition":
-        if len(self.linker_ids) > 1:
-            raise ValueError("current_m1_contract_allows_exactly_one_linker_id")
+    def _parts_contract(self) -> "ConstructDefinition":
+        if not self.parts and not self.components:
+            raise ValueError("construct_requires_ordered_parts_or_components")
+        if self.parts and self.domain_order:
+            raise ValueError("use_parts_or_domain_order_not_both")
+        if len(self.linker_ids) > 1 and "linker" in self.domain_order:
+            raise ValueError("multiple_linkers_require_explicit_part_ids")
         return self
+
+
+class DesignConfig(StrictScientificConfig):
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+    protein_construct_ids: list[str] = Field(min_length=1)
+    required_enzyme_ids: list[str] = Field(default_factory=list)
+    host: str | None = None
+    promoters: dict[str, str] = Field(default_factory=dict)
+    integration_sites: dict[str, str] = Field(default_factory=dict)
+    condition_id: str | None = None
 
 
 class InputsConfig(BaseModel):
@@ -110,6 +142,7 @@ class InputsConfig(BaseModel):
     idr_id: str | None = None
     constructs: list[ConstructDefinition] = Field(default_factory=list)
     construct_records: list[ConstructRecord] = Field(default_factory=list)
+    designs: list[DesignConfig] = Field(default_factory=list)
 
 
 class ToolConfig(BaseModel):
@@ -352,11 +385,25 @@ class ProjectConfig(StrictScientificConfig):
             if len(values) != len(set(values)):
                 raise ValueError(f"duplicate_{label}_id")
         unique(self.inputs.linkers, "linker"); unique(self.inputs.scaffolds, "scaffold"); unique(self.inputs.enzymes, "enzyme"); unique(self.inputs.constructs, "construct")
+        unique(self.inputs.construct_records, "construct_record"); unique(self.inputs.designs, "design")
+        approved_records = [record for record in self.inputs.construct_records if record.review_status == "approved"]
+        definitions = [*self.inputs.constructs, *(ConstructDefinition.model_validate(record.candidate_definition()) for record in approved_records)]
+        unique(definitions, "combined_construct")
+        definitions_by_id = {item.id: item for item in definitions}
+        for design in self.inputs.designs:
+            if design.id in definitions_by_id or len(set(design.protein_construct_ids)) != len(design.protein_construct_ids):
+                raise ValueError("duplicate_design_or_protein_id")
+            if any(identifier not in definitions_by_id for identifier in design.protein_construct_ids):
+                raise ValueError("design_references_unknown_protein_construct")
+            enzymes = {enzyme for identifier in design.protein_construct_ids for enzyme in definitions_by_id[identifier].enzyme_ids}
+            if not set(design.required_enzyme_ids) <= enzymes:
+                raise ValueError("design_missing_required_enzyme_construct")
         ParameterRegistry = __import__("igem_drylab.parameters", fromlist=["ParameterRegistry"]).ParameterRegistry
         ParameterRegistry(self.parameters)
         linker_ids, scaffold_ids, enzyme_ids = {item.id for item in self.inputs.linkers}, {item.id for item in self.inputs.scaffolds}, {item.id for item in self.inputs.enzymes}
         for construct in self.inputs.constructs:
-            if any(item not in linker_ids for item in construct.linker_ids): raise ValueError("construct_references_unknown_linker")
+            embedded = set(construct.sequences) | {part.id for part in construct.parts}
+            if any(item not in linker_ids | embedded for item in construct.linker_ids): raise ValueError("construct_references_unknown_linker")
             if construct.scaffold_id and construct.scaffold_id not in scaffold_ids: raise ValueError("construct_references_unknown_scaffold")
             if any(item not in enzyme_ids for item in construct.enzyme_ids): raise ValueError("construct_references_unknown_enzyme")
         if self.execution.mode == "real" and self.stages.m4_reaction.condition_id is None and any((self.stages.m4_reaction.initial_state, self.stages.m4_reaction.full_network_initial_state, self.stages.m4_reaction.steady_state_initial_guess_um, self.stages.m4_reaction.pt_gate, self.stages.m4_reaction.oc_gate, self.stages.m4_reaction.dmt_gate)):
@@ -434,7 +481,10 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
     required_ids = {item.protein_id for item in config.inputs.enzymes}
     if config.inputs.idr_id is not None:
         required_ids.add(config.inputs.idr_id)
-    absent = sorted(required_ids - fasta_ids)
+    embedded_ids = {identifier for item in config.inputs.constructs for identifier in item.sequences}
+    embedded_ids.update(part.id for item in config.inputs.constructs for part in item.parts if part.sequence is not None)
+    embedded_ids.update(identifier for record in config.inputs.construct_records if record.review_status == "approved" for identifier in record.sequences)
+    absent = sorted(required_ids - fasta_ids - embedded_ids)
     if absent:
         raise ValueError(f"protein_id_missing_from_fasta:{','.join(absent)}")
     return config

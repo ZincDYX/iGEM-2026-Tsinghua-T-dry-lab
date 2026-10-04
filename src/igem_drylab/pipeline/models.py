@@ -46,6 +46,10 @@ class M1Candidate(ScientificResult):
     linker_id: str | None = None
     idr_id: str | None = None
     linker_features: dict[str, Any] | None = None
+    part_screens: dict[str, Any] = Field(default_factory=dict)
+    full_fusion_screen: dict[str, Any] = Field(default_factory=dict)
+    retrospective_only: bool = False
+    eligibility: Literal["eligible", "rejected", "blocked", "retrospective_only", "budget_deferred"] = "blocked"
     formula_version: str | None = None
     rule_version: str | None = None
     feature_definitions_sha256: str | None = None
@@ -171,7 +175,7 @@ class M4ReactionPrediction(ScientificResult):
     simulation_inputs: dict[str, Any] = Field(default_factory=dict)
     recommendation_evidence: list[str] = Field(default_factory=list)
     flux_integrals: dict[str, float] = Field(default_factory=dict)
-    mechanistic_diagnostics: dict[str, float] = Field(default_factory=dict)
+    mechanistic_diagnostics: dict[str, float | None] = Field(default_factory=dict)
     notes: str = ""
 
 

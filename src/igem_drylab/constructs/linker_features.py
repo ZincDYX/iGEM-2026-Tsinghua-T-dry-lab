@@ -197,7 +197,7 @@ class M1ScreenResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     formula_version: str
     rule_version: str
-    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"]
+    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "full_fusion"]
     localization_context: Literal["cytosolic", "er_anchored"]
     features: SequenceFeatures
     disorder: DisorderEvidence | None = None
@@ -425,7 +425,7 @@ def compute_protparam_evidence(sequence: str, *, input_sha256: str) -> ProtParam
 def screen_sequence_v3(
     *,
     features: SequenceFeatures,
-    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"],
+    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "full_fusion"],
     rules: M1V3Rules,
     disorder: DisorderEvidence | None = None,
     secondary_structure: SecondaryStructureEvidence | None = None,
@@ -440,12 +440,12 @@ def screen_sequence_v3(
     review: list[str] = []
     missing: list[str] = []
 
-    is_linker = sequence_kind != "idr"
+    is_linker = sequence_kind not in {"idr", "full_fusion"}
     if is_linker and (features.length < rules.linker_min_length or features.length > rules.linker_max_length):
         reject.append("linker_length_outside_5_to_25")
     if sequence_kind == "scaffold_linker" and features.length < rules.scaffold_linker_min_length:
         reject.append("scaffold_major_module_linker_shorter_than_10")
-    if features.max_hydrophobic_run >= rules.max_hydrophobic_run_reject:
+    if sequence_kind != "full_fusion" and features.max_hydrophobic_run >= rules.max_hydrophobic_run_reject:
         reject.append("continuous_hydrophobic_run_at_least_5")
     if sequence_kind == "idr" and features.hydrophobic_fraction >= rules.idr_hydrophobic_fraction_reject:
         reject.append("idr_hydrophobic_fraction_at_least_0_35")
@@ -466,24 +466,25 @@ def screen_sequence_v3(
                 reject.append("idr_disorder_mean_below_0_5")
             if disorder.longest_folded_run >= rules.idr_max_longest_folded_run:
                 reject.append("idr_folded_run_at_least_10")
-    if secondary_structure is None:
-        missing.append("PSIPRED_or_JPred_output")
-    elif secondary_structure.input_sha256 != features.sequence_sha256:
-        reject.append("secondary_structure_input_hash_mismatch")
-    elif secondary_structure.ss_fraction >= rules.max_secondary_structure_fraction:
-        if sequence_kind == "rigid_linker":
-            review.append("rigid_linker_secondary_structure_requires_design_review")
-        else:
-            reject.append("secondary_structure_fraction_at_least_0_10")
+    if sequence_kind != "full_fusion":
+        if secondary_structure is None:
+            missing.append("PSIPRED_or_JPred_output")
+        elif secondary_structure.input_sha256 != features.sequence_sha256:
+            reject.append("secondary_structure_input_hash_mismatch")
+        elif secondary_structure.ss_fraction >= rules.max_secondary_structure_fraction:
+            if sequence_kind == "rigid_linker":
+                review.append("rigid_linker_secondary_structure_requires_design_review")
+            else:
+                reject.append("secondary_structure_fraction_at_least_0_10")
 
-    if seg is None:
-        missing.append("SEG_output")
-    elif seg.input_sha256 != features.sequence_sha256:
-        reject.append("SEG_input_hash_mismatch")
-    if protparam is None:
-        missing.append("ProtParam_output")
-    elif protparam.input_sha256 != features.sequence_sha256:
-        reject.append("ProtParam_input_hash_mismatch")
+        if seg is None:
+            missing.append("SEG_output")
+        elif seg.input_sha256 != features.sequence_sha256:
+            reject.append("SEG_input_hash_mismatch")
+        if protparam is None:
+            missing.append("ProtParam_output")
+        elif protparam.input_sha256 != features.sequence_sha256:
+            reject.append("ProtParam_input_hash_mismatch")
 
     if fusion_evidence is None:
         missing.extend(
