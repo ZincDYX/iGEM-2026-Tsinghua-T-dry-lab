@@ -197,7 +197,13 @@ def test_production_full_m4_to_m5_comparison_and_fit(tmp_path):
         metabolite_partition_coefficients={name: 1 for name in COMPOUNDS})
     predictions, _ = run_m4(config, tmp_path, [M3ConcentrationAssessment(candidate_id="candidate", construct_id="c", m4_candidate_context=context, recommended_for_m4=True)])
     assert predictions[0].numerically_solved and not predictions[0].evidence_ready
-    data = json.loads(predictions[0].trajectory_artifact.read_text(encoding="utf-8"))["prediction_contract"]
+    artifact = json.loads(predictions[0].trajectory_artifact.read_text(encoding="utf-8"))
+    data = artifact["prediction_contract"]
+    assert set(artifact['raw_intracellular_cell_average'])==set(COMPOUNDS)
+    assert set(artifact['raw_extracellular'])==set(COMPOUNDS)
+    assert set(artifact['transport_integrals'])==set(COMPOUNDS)
+    assert artifact['solver_settings']['integration_version']=='adaptive-cumulative-v1'
+    assert artifact['diagnostics']['integrated_stoichiometry_max_abs_error']<1e-9
     records = [WetLabResult(experiment_id="synthetic", construct_id="c", condition_id="d", replicate_id=str(index),
         biological_replicate_count=2, control_available=True, measurement_compartment="intracellular", concentration_basis="cell_volume",
         metabolite_time=data["time"], metabolite_concentration_unit="uM", metabolites={name: data["concentrations"]["intracellular"][name] for name in ("13", "15")})
