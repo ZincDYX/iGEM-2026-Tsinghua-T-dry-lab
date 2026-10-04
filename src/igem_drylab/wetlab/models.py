@@ -10,6 +10,27 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Literal
 
 
+class AssayConditions(BaseModel):
+    """Reported experiment facts, never defaults copied from a target project."""
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    condition_id: str = Field(min_length=1)
+    source_reference: str = Field(min_length=1)
+    raw_data_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    verified_by: str = Field(min_length=1)
+    host: str | None = None
+    strain: str | None = None
+    temperature_c: float | None = None
+    pH: float | None = None
+    assay_system: str | None = None
+    phase: Literal["dense", "dilute"] | None = None
+    enzyme_sequence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    enzyme_concentration_definition: str | None = None
+    cofactor_conditions: str | None = None
+
+    def parameter_conditions(self) -> dict:
+        return self.model_dump(exclude_none=True, exclude={"condition_id"})
+
+
 class MetabolitePartitionMeasurement(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     dense_concentration_um: float = Field(gt=0)
@@ -19,6 +40,7 @@ class MetabolitePartitionMeasurement(BaseModel):
     calibration_reference: str = Field(min_length=1)
     recovery_reference: str = Field(min_length=1)
     phase_volume_reference: str = Field(min_length=1)
+    assay_condition_id: str | None = None
 
     @property
     def kp(self) -> float:
@@ -31,6 +53,9 @@ class WetLabResult(BaseModel):
     construct_id: str
     condition_id: str
     replicate_id: str
+    assay_conditions: AssayConditions | None = None
+    measurement_conditions: dict[str, AssayConditions] = Field(default_factory=dict)
+    measurement_condition_ids: dict[str, str] = Field(default_factory=dict)
     timestamp: datetime | None = None
     protein_abundance: dict[str, float] = Field(default_factory=dict)
     imaging: dict[str, float] = Field(default_factory=dict)
@@ -60,6 +85,22 @@ class WetLabResult(BaseModel):
     source_replicate_data: list[dict] = Field(default_factory=list)
     notes: str = ""
 
+    def conditions_for(self, source_field: str) -> AssayConditions | None:
+        """A measurement override resolves only against verified experiment records."""
+        reference = self.measurement_condition_ids.get(source_field)
+        if source_field.startswith("partition_measurements."):
+            measurement = self.partition_measurements.get(source_field.split(".", 1)[1])
+            if measurement and measurement.assay_condition_id:
+                if reference and reference != measurement.assay_condition_id:
+                    raise ValueError("conflicting_measurement_condition_references")
+                reference = measurement.assay_condition_id
+        if reference:
+            conditions = self.measurement_conditions.get(reference)
+            if conditions is None or conditions.condition_id != reference:
+                raise ValueError("unverified_measurement_condition_reference:" + reference)
+            return conditions
+        return self.assay_conditions
+
     def time_hours(self) -> list[float]:
         divisor = {"h": 1.0, "min": 60.0, "s": 3600.0}[self.metabolite_time_unit]
         return [time / divisor for time in self.metabolite_time]
@@ -70,6 +111,10 @@ class WetLabResult(BaseModel):
 
     @model_validator(mode="after")
     def _validate_series(self) -> "WetLabResult":
+        if self.assay_conditions and self.assay_conditions.condition_id != self.condition_id:
+            raise ValueError("assay_condition_identity_mismatch")
+        if any(key != value.condition_id for key, value in self.measurement_conditions.items()):
+            raise ValueError("measurement_condition_identity_mismatch")
         if not all(math.isfinite(value) for value in self.metabolite_time):
             raise ValueError("nonfinite_metabolite_time")
         if len(set(self.metabolite_time)) != len(self.metabolite_time) or any(right <= left for left, right in zip(self.metabolite_time, self.metabolite_time[1:])):

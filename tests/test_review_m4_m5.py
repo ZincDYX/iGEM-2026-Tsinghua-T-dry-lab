@@ -48,7 +48,7 @@ def test_zero_reaction_initial_product_and_feed_from_10_metrics():
 
 
 @pytest.mark.parametrize("compartment,basis", [("intracellular", "cell_volume"), ("extracellular", "medium_volume"), ("total_extract", "extraction_volume")])
-def test_dynamic_model_zero_residual_in_each_observation_compartment(tmp_path, compartment, basis):
+def test_observation_roundtrip_in_each_compartment(tmp_path, compartment, basis):
     params = replace(parameters(), transport=TransportParameters(enabled=True, rate=1, outside_over_inside={name: 1 for name in COMPOUNDS},
         intracellular_volume_l=1, extracellular_volume_l=10))
     initial = state(x8=1)
@@ -67,13 +67,14 @@ def test_dynamic_model_zero_residual_in_each_observation_compartment(tmp_path, c
 
 
 def test_full_fit_uses_same_kernel_and_value_changes_fingerprint(tmp_path):
+    from test_experimental_condition_chain import assay
     initial = state(x8=1)
     params = parameters()
     simulated = simulate_full_network(params, initial_intracellular=initial, t_end=2, points=21)
     contract = dynamic_contract(params, simulated, initial, state(), 2, 21)
     result = WetLabResult(experiment_id="synthetic", construct_id="c", condition_id="d", replicate_id="r",
         metabolite_time=simulated.time.tolist(), metabolite_concentration_unit="uM", measurement_compartment="intracellular",
-        concentration_basis="cell_volume", metabolites={name: simulated.intracellular[COMPOUNDS.index(name)].tolist() for name in ("13", "15")})
+        concentration_basis="cell_volume", assay_conditions=assay(), metabolites={name: simulated.intracellular[COMPOUNDS.index(name)].tolist() for name in ("13", "15")})
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
     config.execution.mode = "demo"
     config.stages.m4_reaction = M4Config(network_mode="galatea_full_competitive", scenario_mode="galatea_spatial", reaction_network_file=tmp_path / "identity.csv",
@@ -86,6 +87,8 @@ def test_full_fit_uses_same_kernel_and_value_changes_fingerprint(tmp_path):
     first = _fit_plan_candidate(config, prediction, result, compare_prediction(path, result))
     assert first["fit"]["best_fit"] == pytest.approx(1, abs=1e-4)
     assert first["candidate"]["review_status"] == "validated"
+    assert first["candidate"]["conditions"] == result.assay_conditions.parameter_conditions()
+    assert first["candidate"]["construct_id"] == 'c'
     result.raw_data_sha256 = "different-raw-JSON-format"
     unchanged = _fit_plan_candidate(config, prediction, result, compare_prediction(path, result))
     assert unchanged["candidate"]["parameter_id"] == first["candidate"]["parameter_id"]

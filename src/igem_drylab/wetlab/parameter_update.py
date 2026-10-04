@@ -52,6 +52,7 @@ def parameter_updates_from_measurements(
                 continue
             requirement = _requirement(project, mapping.target_stage, mapping.target_requirement_name)
             canonical = validate_requirement_value(value, mapping.unit, requirement)
+            assay = result.conditions_for(mapping.source_field)
             measurement = result.partition_measurements.get(mapping.source_field.removeprefix("partition_measurements."))
             if mapping.source_field.startswith("partition_measurements.") and (
                     requirement.parameter_type != "kp" or mapping.unit != "1" or
@@ -61,12 +62,12 @@ def parameter_updates_from_measurements(
                 parameter_id=f"{mapping.parameter_id_prefix}:{mapping.target_requirement_name}:{result.experiment_id}:{result.replicate_id}",
                 name=requirement.name, value=canonical, unit=requirement.canonical_unit,
                 parameter_type=requirement.parameter_type, species_id=requirement.species_id, source_type="wetlab",
-                derivation_type="direct_measurement", source_reference=f"{result.experiment_id}:{result.replicate_id}", conditions={"phase": requirement.phase} if requirement.phase else {},
+                derivation_type="direct_measurement", source_reference=f"{result.experiment_id}:{result.replicate_id}", conditions=assay.parameter_conditions() if assay else {},
                 enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id,
                 product_id=requirement.product_id, review_status="validated",
-                construct_id=result.construct_id, condition_id=result.condition_id,
+                construct_id=result.construct_id, condition_id=assay.condition_id if assay else result.condition_id,
                 supersedes=mapping.supersedes,
-                validation_flags=["requires_human_approval_before_model_use"],
+                validation_flags=["requires_human_approval_before_model_use"] + ([] if assay else ["experimental_conditions_not_reported"]),
                 derived_from=[measurement.raw_data_sha256, measurement.source_reference] if measurement else [],
                 notes=f"Requirement-aware mapping from wetlab field '{mapping.source_field}'." +
                     (f" Calibration: {measurement.calibration_reference}; recovery: {measurement.recovery_reference}; phase volumes: {measurement.phase_volume_reference}." if measurement else ""),
@@ -93,7 +94,7 @@ def _requirement(project: "ProjectConfig", stage: str, name: str) -> ParameterRe
     return requirement
 
 
-def validate_candidate_against_registry(records: list[ParameterRecord], candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str) -> None:
+def validate_candidate_against_registry(records: list[ParameterRecord], candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str, *, formal_context: object | None = None) -> None:
     """Validate the one approval boundary shared by state, CLI, MCP and YAML writes."""
     if not reviewer.strip() or candidate.review_status != "validated": raise ValueError("validated_candidate_and_reviewer_required")
     if candidate.name != requirement.name or candidate.parameter_type != requirement.parameter_type: raise ValueError("candidate_requirement_mismatch")
@@ -104,11 +105,24 @@ def validate_candidate_against_registry(records: list[ParameterRecord], candidat
     if candidate.source_type == "wetlab" and not candidate.source_reference: raise ValueError("wetlab_source_required")
     if candidate.derivation_type == "model_fit" and not candidate.derived_from: raise ValueError("model_fit_lineage_required")
     ParameterRegistry([*records, candidate])
+    if formal_context is not None:
+        from igem_drylab.parameters import resolve_requirement
+        approved = candidate.model_copy(update={"review_status": "approved", "approved_by": reviewer})
+        # Applicability of this candidate, not an unrelated existing alternative.
+        resolution = resolve_requirement(ParameterRegistry([approved.model_copy(update={"supersedes": None})]), requirement,
+            formal_context, allow_assumptions=False, construct_id=candidate.construct_id,
+            condition_id=candidate.condition_id, require_provenance=True)
+        if resolution.status != "resolved":
+            raise ValueError("candidate_not_formally_applicable:" + ",".join(resolution.reasons))
 
 
 def validate_candidate_for_approval(project: "ProjectConfig", candidate: ParameterRecord, requirement: ParameterRequirement, reviewer: str) -> None:
     """Project-config convenience wrapper around the shared approval boundary."""
-    validate_candidate_against_registry(project.parameters, candidate, requirement, reviewer)
+    formal = project.execution.mode == "real" and project.execution.analysis_grade == "formal_measured"
+    if formal and candidate.condition_id != project.stages.m4_reaction.condition_id:
+        raise ValueError("candidate_target_condition_mismatch")
+    validate_candidate_against_registry(project.parameters, candidate, requirement, reviewer,
+        formal_context=project.experimental_context if formal else None)
 
 
 def approve_and_persist_parameter(project_path: Path, candidate: ParameterRecord, *, reviewer: str, target_stage: str, target_requirement_name: str) -> ParameterRecord:

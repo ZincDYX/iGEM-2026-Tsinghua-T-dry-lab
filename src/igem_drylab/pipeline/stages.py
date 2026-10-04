@@ -1633,11 +1633,13 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
         "canonical_observations": {species: canonicalize_metabolite(result, species).model_dump(mode="json") for species in sorted(result.metabolites)},
         "source_replicate_data": result.source_replicate_data,
         "compartment": result.measurement_compartment, "basis": result.concentration_basis,
+        "assay_conditions": result.conditions_for("metabolites").model_dump(mode="json") if result.conditions_for("metabolites") else None,
         "extraction_volume_l": result.extraction_volume_l, "observation_kind": result.observation_kind,
         "parameter_ids": sorted(prediction.parameter_ids), "bounds": plan.bounds, "observables": plan.observables,
         "model_inputs": contract or inputs, "contract": "m4-fit-observation-v2"}
     dataset_hash = sha256(json.dumps(fingerprint_input, sort_keys=True).encode("utf-8")).hexdigest()[:16]
-    candidate = ParameterRecord(parameter_id=f"fit:{dataset_hash}", name=requirement.name, value=fit.best_fit, unit=requirement.canonical_unit, parameter_type=requirement.parameter_type, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, species_id=requirement.species_id, source_type="wetlab", derivation_type="model_fit", source_reference=source_lineage, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, conditions={"phase": requirement.phase} if requirement.phase else {}, derived_from=prediction.parameter_ids, notes=f"model_fit dataset_hash={dataset_hash}; target_requirement={requirement.name}; fit_bounds={plan.bounds}; observables={plan.observables}; source_lineage={source_lineage}; human approval is required before registry use.")
+    assay = result.conditions_for("metabolites")
+    candidate = ParameterRecord(parameter_id=f"fit:{dataset_hash}", name=requirement.name, value=fit.best_fit, unit=requirement.canonical_unit, parameter_type=requirement.parameter_type, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, species_id=requirement.species_id, source_type="wetlab", derivation_type="model_fit", source_reference=source_lineage, review_status="validated", construct_id=result.construct_id, condition_id=assay.condition_id if assay else result.condition_id, conditions=assay.parameter_conditions() if assay else {}, derived_from=[*prediction.parameter_ids, *([result.raw_data_sha256] if result.raw_data_sha256 else [])], notes=f"model_fit dataset_hash={dataset_hash}; target_requirement={requirement.name}; fit_bounds={plan.bounds}; observables={plan.observables}; source_lineage={source_lineage}; human approval is required before registry use.")
     if result.raw_data_sha256:
         candidate.notes += f"; raw_data_sha256={result.raw_data_sha256}"
     return {"fit": fit.model_dump(), "candidate": candidate.model_dump(mode="json")}
@@ -1685,6 +1687,9 @@ def _aggregate_fit_groups(results: list[object]) -> dict[tuple[str, str], object
 
 def _fit_group_key(result):
     base = (result.construct_id, result.condition_id)
+    assay = result.conditions_for("metabolites")
+    if assay:
+        base = (*base, json.dumps(assay.parameter_conditions(), sort_keys=True))
     if result.measurement_compartment is None:
         return base
     return (*base, result.measurement_compartment, result.concentration_basis, result.observation_kind, result.extraction_volume_l)

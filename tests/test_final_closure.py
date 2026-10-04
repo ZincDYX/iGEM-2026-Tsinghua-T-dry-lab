@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import pytest
+import yaml
 
 from igem_drylab.wetlab import WetLabResult, approve_and_persist_parameter, compare_prediction
 from igem_drylab.parameters import ParameterRecord
@@ -17,15 +19,31 @@ def test_wetlab_time_and_horizon_are_explicit(tmp_path):
 
 
 def test_human_approval_persists_and_reloads(tmp_path):
+    from test_experimental_condition_chain import assay
+    from igem_drylab.pipeline.config import ExperimentalContext
+    from igem_drylab.parameters import ParameterRegistry, resolve_requirement
+    from igem_drylab.parameters.requirements import requirements_for_stage
     source = Path("configs/m1_m4_real_scoring_example.yaml")
     project = tmp_path / "project.yaml"
     # Keep relative real-data inputs valid after moving the fixture into tmp_path.
     raw = source.read_text(encoding="utf-8").replace("../examples/", str((Path("examples").resolve())).replace("\\", "/") + "/")
     project.write_text(raw, encoding="utf-8")
     candidate = ParameterRecord(parameter_id="p", name="phi", value=0.1, unit="1", parameter_type="phi", source_type="wetlab", source_reference="E", review_status="validated")
+    with pytest.raises(ValueError,match='candidate_not_formally_applicable'):
+        approve_and_persist_parameter(project,candidate,reviewer='human',target_stage='m3',target_requirement_name='phi')
+    config = load_config(project)
+    config.experimental_context = ExperimentalContext(host='yeast',strain='s',temperature_c=30.,pH=7.,assay_system='in_cell')
+    config.stages.m4_reaction.condition_id = 'd'
+    project.write_text(yaml.safe_dump(config.model_dump(mode='json')),encoding='utf-8')
+    candidate = candidate.model_copy(update={'construct_id':'c','condition_id':'d','conditions':assay().parameter_conditions()})
     approved = approve_and_persist_parameter(project, candidate, reviewer="human", target_stage="m3", target_requirement_name="phi")
     assert approved.approved_by == "human"
     assert any(record.parameter_id == "p" for record in load_config(project).parameters)
+    reloaded = load_config(project)
+    requirement = next(r for r in requirements_for_stage(reloaded,'m3') if r.name == 'phi')
+    resolved = resolve_requirement(ParameterRegistry(reloaded.parameters),requirement,reloaded.experimental_context,
+        allow_assumptions=False,construct_id='c',condition_id='d',require_provenance=True)
+    assert resolved.status == 'resolved' and resolved.canonical_value == pytest.approx(.1,abs=1e-12)
 
 
 def test_replicate_variation_uses_replicate_ids_not_time_series():
