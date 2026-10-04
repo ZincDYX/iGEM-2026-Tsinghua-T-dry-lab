@@ -442,6 +442,24 @@ def design_scan_scaffolds(design_plan: dict[str, Any], output_dir: str) -> dict[
     return scan_scaffold_designs(FiniteDesignPlan.model_validate(design_plan), Path(output_dir))
 
 
+@server.tool(name="igem.research.freeze_prediction", structured_output=True,
+             description="Freeze source, solver, parameter and calibration bytes; not a validation claim.")
+def research_freeze_prediction(prediction_file: str, parameter_file: str, calibration_datasets: dict[str,str],
+                               freeze_id: str, construct_id: str, condition_id: str, claim_scope: str) -> dict[str,Any]:
+    from pathlib import Path
+    from igem_drylab.research_validation import freeze_prediction
+    return freeze_prediction(Path(prediction_file),Path(parameter_file),{k:Path(v) for k,v in calibration_datasets.items()},
+        freeze_id=freeze_id,construct_id=construct_id,condition_id=condition_id,claim_scope=claim_scope)
+
+
+@server.tool(name="igem.research.validate_holdout", structured_output=True,
+             description="Evaluate only held-out data against frozen predictions, without fitting or changing parameters.")
+def research_validate_holdout(snapshot: dict[str,Any], dataset_id: str, dataset_file: str) -> dict[str,Any]:
+    from pathlib import Path
+    from igem_drylab.research_validation import validate_holdout
+    return validate_holdout(snapshot,dataset_id,Path(dataset_file))
+
+
 def main() -> None:
     """Run the production MCP server over stdio."""
 

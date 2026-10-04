@@ -831,6 +831,12 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             "steady_state_observation_reference":settings.steady_state_observation_reference,
             "claim_scope":record.claim_scope,
             "approximation_scope":"rapid_phase_partition_and_independent_site_binding_not_experimental_validation"}
+        if record.trajectory_artifact and record.trajectory_artifact.is_file():
+            artifact = json.loads(record.trajectory_artifact.read_text(encoding="utf-8"))
+            if "prediction_contract" in artifact:
+                artifact.update(experimental_contract=record.experimental_contract,
+                                construct_id=record.construct_id,condition_id=record.condition_id)
+                record.trajectory_artifact.write_text(json.dumps(artifact),encoding="utf-8")
     if config.stages.m4_reaction.analysis is not None:
         from igem_drylab.design_analysis import analyze_prediction
         for record in records:

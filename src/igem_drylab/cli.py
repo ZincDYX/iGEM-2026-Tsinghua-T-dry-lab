@@ -51,6 +51,28 @@ def analyze_m4(prediction_file: Path, analysis_file: Path, output_file: Path):
     output_file.write_text(json.dumps(result, indent=2, allow_nan=False), encoding="utf-8")
 
 
+@pipeline_app.command("freeze-prediction")
+def freeze_research_prediction(prediction_file: Path, parameter_file: Path, plan_file: Path, output_file: Path):
+    from igem_drylab.research_validation import freeze_prediction
+    plan = json.loads(plan_file.read_text(encoding="utf-8"))
+    sources = {name:Path(path) for name,path in plan.pop("calibration_datasets").items()}
+    snapshot = freeze_prediction(prediction_file,parameter_file,sources,**plan)
+    output_file.parent.mkdir(parents=True,exist_ok=True)
+    if output_file.exists():
+        raise ValueError("freeze_output_exists_create_a_new_freeze")
+    output_file.write_text(json.dumps(snapshot,indent=2,allow_nan=False),encoding="utf-8")
+
+
+@pipeline_app.command("validate-holdout")
+def validate_research_holdout(freeze_file: Path, dataset_id: str, dataset_file: Path, output_file: Path):
+    from igem_drylab.research_validation import validate_holdout
+    result = validate_holdout(json.loads(freeze_file.read_text(encoding="utf-8")),dataset_id,dataset_file)
+    output_file.parent.mkdir(parents=True,exist_ok=True)
+    if output_file.exists():
+        raise ValueError("holdout_output_exists_preserve_prior_validation")
+    output_file.write_text(json.dumps(result,indent=2,allow_nan=False),encoding="utf-8")
+
+
 @pipeline_app.command("scan-designs")
 def scan_designs(plan_file: Path, output_dir: Path):
     from igem_drylab.design_analysis import FiniteDesignPlan, scan_scaffold_designs
