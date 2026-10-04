@@ -308,6 +308,9 @@ def scan_scaffold_designs(plan: FiniteDesignPlan, output_dir: Path) -> dict:
             if prediction is None or prediction.status!="valid" or prediction.candidate_context is None:
                 raise ValueError("candidate_not_valid_after_fresh_M1_M2_M3_M4")
             context = prediction.candidate_context
+            if (context.candidate_id,context.construct_id,context.condition_id) != (
+                    prediction.candidate_id,prediction.construct_id,prediction.condition_id):
+                raise ValueError('M3_M4_candidate_identity_mismatch')
             formal = plan.decision_scope == 'formal_conditional_mechanism'
             grades = {'evidence_ready':prediction.evidence_ready,'data_quality':prediction.data_quality,
                 'claim_scope':prediction.claim_scope,'context_evidence_ready':context.evidence_ready,
