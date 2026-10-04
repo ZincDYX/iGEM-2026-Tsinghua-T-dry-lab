@@ -52,6 +52,9 @@ export function ScientificResults({ run }: { run: Run }) {
               : "未获得符合容差的稳态：以下数值只能用于诊断，不能作为有效预测。"}
           </p>
           <p className="muted">{String(pathway.solver_message)}</p>
+          <p className="muted">
+            当前为用户输入参数的机制计算器，参数尚未经过注册表适用性审核；数值收敛不代表已校准的产率或滴内活性预测。
+          </p>
           <table>
             <thead>
               <tr>

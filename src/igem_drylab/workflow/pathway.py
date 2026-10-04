@@ -113,6 +113,10 @@ def solve_pathway(model: Pathway) -> dict[str, object]:
     valid = bool(solution.success and np.max(np.abs(residual)) <= model.residual_tolerance)
     return {
         "status": "valid" if valid else "solver_failed", "pathway_id": model.id,
+        "numerically_solved": valid,
+        "evidence_ready": False,
+        "claim_scope": "user_supplied_mechanistic_calculator",
+        "evidence_status": "unreviewed_user_inputs",
         "rate_law": model.rate_law, "concentration_unit": "uM", "time_unit": "h",
         "concentrations_average_um": dict(zip(model.species, solution.x.tolist())),
         "concentrations_dense_um": dict(zip(model.species, dense.tolist())),
