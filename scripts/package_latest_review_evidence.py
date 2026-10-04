@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--results',type=Path,required=True)
     parser.add_argument('--commit',required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--scope',default='server_software_regressions_not_biological_validation')
+    parser.add_argument('--mutation-summary',type=Path)
     args = parser.parse_args()
     repo = args.repository.resolve()
     checked = []
@@ -39,15 +41,31 @@ def main():
     counts = {key:sum(int(s.attrib.get(key,0)) for s in suites) for key in ('tests','failures','errors','skipped')}
     if not counts['tests'] or any(counts[k] for k in ('failures','errors','skipped')):
         raise ValueError('final_server_tests_not_fully_passed')
+    groups={}
+    risk_ids=set()
+    for suite in suites:
+        for case in suite.findall('testcase'):
+            properties=case.find('properties')
+            metadata={p.attrib['name']:p.attrib.get('value','') for p in properties} if properties is not None else {}
+            group=metadata.get('test_group','regression')
+            groups[group]=groups.get(group,0)+1
+            if metadata.get('risk_id'):risk_ids.add(metadata['risk_id'])
+    mutations=None
+    if args.mutation_summary:
+        mutations=json.loads(args.mutation_summary.read_text())
+        if not mutations.get('passed') or not mutations.get('production_sources_unchanged'):
+            raise ValueError('directed_numeric_fault_audit_not_passed')
     lock = subprocess.check_output([str(Path('/mnt/data/dyx/miniconda3/envs/drylab-m1m2/bin/python')),'-m','pip','freeze','--all'],text=True)
     (args.results/'production_environment.lock.txt').write_text(lock)
     summary = {'commit':args.commit,'backend_tests':counts,
         'duration_seconds':sum(float(s.attrib.get('time',0)) for s in suites),
-        'scope':'server_software_regressions_and_actual_FreeSASA_MCP_smoke_not_biological_validation',
+        'scope':args.scope,
+        'test_groups':groups,'tracked_risk_ids':sorted(risk_ids),
+        'directed_numeric_fault_audit':mutations,
         'paper_reproduction':'prior_c1da257_evidence_retained_not_rerun_in_this_release',
         'pending':['real_fusion_phase_and_activity_inputs_and_independent_holdout','genetic_absence_active_subnetwork',
             'correlated_parameter_sampling_and_verified_IDR_mapping','new_licensed_predictor_jobs_and_version_specific_parsers',
-            'ER_stability_multiple_roots_and_non_equilibrium_extensions'],
+            'formal_transport_evidence_adapter','ER_stability_multiple_roots_and_non_equilibrium_extensions'],
         'verified_files':len(checked)}
     (args.results/'validation_summary.json').write_text(json.dumps(summary,indent=2))
     files = [p for p in sorted(args.results.rglob('*')) if p.is_file() and p.suffix in {'.xml','.log','.json','.txt','.md'} and p.name!='EVIDENCE_MANIFEST.json']

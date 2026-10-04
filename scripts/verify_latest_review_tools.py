@@ -14,8 +14,8 @@ from igem_drylab.external_tools import audit_deployment
 from igem_drylab.parsers.freesasa import parse_freesasa_json
 
 
-async def main(run_name):
-    root = Path('/mnt/data/dyx/glabridin-reproduction/results/latest-review-20261004')
+async def main(run_name,root):
+    root.mkdir(parents=True,exist_ok=True)
     pdb = Path('/mnt/data/dyx/drylab-tool-smoke/two_chain_interface.pdb')
     if not run_name.replace("-","").isalnum():
         raise ValueError("run_name_must_be_single_alphanumeric_directory")
@@ -46,6 +46,8 @@ async def main(run_name):
         '/mnt/data/dyx/drylab-tool-smoke',
         '/mnt/data/dyx/drylab-envs/glabridin-reference')]
     audit = audit_deployment(roots)
+    if not audit.within_budget:
+        raise RuntimeError('external_deployment_exceeds_15GB')
     summary = {'scope':'real_external_tool_smoke_not_project_fusion_ORF_or_biological_validation',
         'input_pdb_sha256':sha256(pdb.read_bytes()).hexdigest(),'output_sha256':sha256(raw).hexdigest(),
         'FreeSASA_python_version':version('freesasa'),'deployment_audit':audit.model_dump(),
@@ -59,4 +61,6 @@ async def main(run_name):
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-name',default='actual-freesasa-mcp-final')
-    asyncio.run(main(parser.parse_args().run_name))
+    parser.add_argument('--results-root',type=Path,default=Path('/mnt/data/dyx/glabridin-reproduction/results/latest-review-20261004'))
+    args=parser.parse_args()
+    asyncio.run(main(args.run_name,args.results_root))
