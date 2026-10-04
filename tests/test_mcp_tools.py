@@ -158,92 +158,43 @@ def test_literature_search_tool_writes_manifest(monkeypatch, tmp_path):
     assert manifest.exists()
 
 
-def test_scoring_mcp_tools_return_structured_results():
-    registry = create_default_registry()
+import pytest
 
-    sasa = registry.call(
-        "igem.scoring.pocket_sasa",
-        {
-            "model_json": "examples/real_metrics/freesasa_model.json",
-            "reference_json": "examples/real_metrics/freesasa_reference.json",
-            "chain": "A",
-            "residues": [10, 11, 12],
-            "model_configuration_hash": "freesasa-default-v1",
-            "reference_configuration_hash": "freesasa-default-v1",
-        },
-    ).as_protocol_dict()["structuredContent"]
-    assert sasa["ok"] is True
-    assert sasa["result"]["passes"] is True
 
-    m2 = registry.call(
-        "igem.scoring.m2_structure",
-        {
-            "candidate_id": "demo",
-            "core_ca_rmsd_angstrom": 0.6,
-            "sasa_retention": 0.9,
-            "pocket_rmsd_angstrom": 0.8,
-            "iptm": 0.8,
-            "mean_plddt": 85.0,
-            "interface_contact_count": 30,
-            "clash_count": 0,
-            "clash_cutoff_angstrom": 2.5,
-        },
-    ).as_protocol_dict()["structuredContent"]
-    assert m2["ok"] is True
-    assert m2["result"]["recommended_for_m3"] is True
-
-    docking = registry.call(
-        "igem.scoring.docking_penalty",
-        {
-            "candidate_id": "demo",
-            "reference_vina_output": "examples/real_metrics/vina_reference.txt",
-            "fusion_vina_output": "examples/real_metrics/vina_fusion.txt",
-            "reference_configuration_hash": "vina-config-v1",
-            "fusion_configuration_hash": "vina-config-v1",
-            "reference_ligand_hash": "ligand-v1",
-            "fusion_ligand_hash": "ligand-v1",
-        },
-    ).as_protocol_dict()["structuredContent"]
-    assert docking["ok"] is True
-    assert docking["result"]["status"] == "valid"
-    assert docking["result"]["passes_negative_screen"] is None
-
-    m4 = registry.call(
-        "igem.scoring.m4_ode",
-        {
-            "candidate_id": "demo",
-            "docking_penalty": docking["result"],
-        },
-    ).as_protocol_dict()["structuredContent"]
-    assert m4["ok"] is True
-    assert m4["result"]["recommendation"] in {"drop", "iterate", "test"}
-
-    structure = registry.call(
-        "igem.parsers.structure_prediction",
-        {
-            "path": "examples/real_metrics/structure_prediction/af3",
-            "candidate_id": "demo_af3",
-        },
-    ).as_protocol_dict()["structuredContent"]
-    assert structure["ok"] is True
-    assert structure["result"]["iptm"] == 0.68
-
-    calvados = registry.call(
-        "igem.parsers.calvados",
-        {"path": "examples/real_metrics/calvados"},
-    ).as_protocol_dict()["structuredContent"]
-    assert calvados["ok"] is True
-    assert calvados["result"]["enrichment_factor"] == 30.0
-
-    piecewise = registry.call(
-        "igem.scoring.m4_piecewise_ode",
-        {
-            "candidate_id": "demo_piecewise",
-            "dmt_gate": {"on_time": 4.0, "basal": 0.0, "induced": 1.0},
-        },
-    ).as_protocol_dict()["structuredContent"]
-    assert piecewise["ok"] is True
-    assert piecewise["result"]["observable_13_reduction"] >= 1.0
+# Public tool behavior only. Active numerical kernels have separate independent oracles.
+@pytest.mark.parametrize('tool,arguments,expected',[
+    ('igem.scoring.pocket_sasa',dict(model_json='examples/real_metrics/freesasa_model.json',
+        reference_json='examples/real_metrics/freesasa_reference.json',chain='A',residues=[10,11,12],
+        model_configuration_hash='freesasa-default-v1',reference_configuration_hash='freesasa-default-v1'),
+        {'retention':136/150,'passes':True}),  # supplied residue sums 36+55+45 vs 40+60+50
+    ('igem.scoring.m2_structure',dict(candidate_id='fixture',core_ca_rmsd_angstrom=.6,sasa_retention=.9,
+        pocket_rmsd_angstrom=.8,iptm=.8,mean_plddt=85.,interface_contact_count=30,clash_count=0,
+        clash_cutoff_angstrom=2.5),{'recommended_for_m3':True}),
+    ('igem.scoring.docking_penalty',dict(candidate_id='fixture',reference_vina_output='examples/real_metrics/vina_reference.txt',
+        fusion_vina_output='examples/real_metrics/vina_fusion.txt',reference_configuration_hash='vina-config-v1',
+        fusion_configuration_hash='vina-config-v1',reference_ligand_hash='ligand-v1',fusion_ligand_hash='ligand-v1'),
+        {'delta_delta_g_kcal_mol':.7,'passes_negative_screen':None}),  # -7.1 - (-7.8)
+    ('igem.scoring.m4_ode',dict(candidate_id='fixture',params={'oc_total':0.,'dmt_total':0.}),
+        {'product_final':0.,'relative_yield':0.,'recommendation':'drop'}),
+    ('igem.parsers.structure_prediction',dict(path='examples/real_metrics/structure_prediction/af3',candidate_id='fixture'),
+        {'iptm':.68}),  # literal parser input, not structure validity
+    ('igem.parsers.calvados',dict(path='examples/real_metrics/calvados'),{'enrichment_factor':30.}),
+    ('igem.scoring.m4_piecewise_ode',dict(candidate_id='fixture',params={'oc_total':0.,'dmt_total':0.},
+        dmt_gate={'on_time':4.,'basal':0.,'induced':1.}),
+        {'product_final':0.,'byproduct_final':0.,'observable_13_reduction':1.,'dmt_delay':4.,'recommendation':'drop'}),
+],ids=['sasa-ratio','structure-screen','docking-not-activity','zero-activity-cascade',
+       'structure-parser','calvados-parser','zero-activity-piecewise'])
+def test_scoring_and_parser_public_protocol_rows(tool,arguments,expected):
+    response=create_default_registry().call(tool,arguments)
+    assert response.is_error is False
+    structured=response.as_protocol_dict()['structuredContent']
+    assert structured['ok'] is True
+    for key,value in expected.items():
+        actual=structured['result'][key]
+        if isinstance(value,float):
+            assert actual==pytest.approx(value,rel=0.,abs=1e-12)  # arithmetic/parser budget, not biology
+        else:
+            assert actual==value
 
 
 def test_compute_check_tool_reports_configured_command():

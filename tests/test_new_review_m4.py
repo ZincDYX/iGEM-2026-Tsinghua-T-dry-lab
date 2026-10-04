@@ -36,7 +36,11 @@ def test_step_boundary_has_no_trapezoid_pulse():
 def test_supported_solvers_agree_on_integrated_reaction(method):
     result=simulate_full_network(single_reaction(),initial_intracellular={c:float(c=='9') for c in COMPOUNDS},
                                  t_end=.01,points=2,method=method,rtol=1e-10,atol=1e-13)
-    assert result.flux_integrals['R5']==pytest.approx(.999876605426726,abs=2e-9)
+    # Single MM fixture: S0=Km=1, Vmax=1000, t=.01 => S+ln(S)=-9.
+    # Consumption is 1-W(exp(-9)), not a fitted/golden production output.
+    from scipy.special import lambertw
+    from math import exp
+    assert result.flux_integrals['R5']==pytest.approx(1-float(lambertw(exp(-9)).real),rel=0.,abs=2e-9)
     assert result.solver_settings['method']==method
 
 

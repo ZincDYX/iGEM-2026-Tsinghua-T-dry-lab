@@ -8,7 +8,12 @@ from igem_drylab.pipeline import load_config, run_pipeline
 from igem_drylab.pipeline.config import InductionGateConfig, InitialStateConfig
 
 
-def test_synthetic_m1_to_m5_workflow_has_no_network(tmp_path):
+def test_software_fixture_workflow_blocks_external_network(tmp_path,monkeypatch):
+    import socket
+    def forbid_network(*args,**kwargs):
+        raise AssertionError('software fixture workflow attempted network access')
+    monkeypatch.setattr(socket.socket,'connect',forbid_network)
+    monkeypatch.setattr(socket,'create_connection',forbid_network)
     config = load_config(Path("configs/m1_m4_real_scoring_example.yaml"))
     config.execution.mode = "demo"
     config.execution.require_provenance = False

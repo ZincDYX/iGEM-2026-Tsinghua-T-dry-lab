@@ -1,7 +1,7 @@
 from igem_drylab.parameters import ParameterRecord, validate_parameters
 
 
-def test_parameter_registry_requires_review_and_provenance():
+def test_legacy_name_lookup_reports_missing_approved_parameter():
     record = ParameterRecord(
         parameter_id="km-oc", name="km_oc", value=1.2, unit="uM", source_type="literature",
         source_reference="Table 1", doi="10.1000/example", evidence_text="Km was reported in Table 1.", review_status="approved",

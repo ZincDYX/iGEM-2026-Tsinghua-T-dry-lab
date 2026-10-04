@@ -38,6 +38,7 @@ def _rules() -> M1V3Rules:
 
 
 def test_m1_feature_equations_match_markdown_definitions() -> None:
+    # Ten distinct equally frequent residues => H=log2(10), GS=2/10, FWY=3/10.
     definitions, digest = _definitions()
     result = compute_sequence_features("GSAKRDEFWY", definitions=definitions, definitions_sha256=digest)
 
@@ -129,7 +130,7 @@ def test_iupred_parser_calculates_mean_fraction_and_runs(tmp_path: Path) -> None
     assert evidence.longest_folded_run == 2
 
 
-def test_v3_screen_passes_only_with_matching_external_evidence(tmp_path: Path) -> None:
+def test_v3_screen_blocks_unbound_external_evidence_declarations(tmp_path: Path) -> None:
     sequence = "GGGGSGGGGS"
     sequence_hash = sha256(sequence.encode("ascii")).hexdigest()
     definitions, digest = _definitions()

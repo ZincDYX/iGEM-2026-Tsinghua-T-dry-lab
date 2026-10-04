@@ -331,10 +331,12 @@ def test_author_native_parser_is_unitless_and_public() -> None:
     assert _safe_expression("46.59/53.41") == pytest.approx(46.59 / 53.41)
 
 
-def test_uploaded_author_reference_matches_fixed_regression_fixture(tmp_path: Path) -> None:
+def test_uploaded_author_reference_matches_fixed_regression_fixture(tmp_path: Path,pytestconfig) -> None:
     root = Path(__file__).parents[1]
     author_file = root / "published_reference" / "author_uploaded" / "simulation-network-glabridin-final.py"
     if not author_file.exists():
+        if pytestconfig.getoption('--require-author-reference'):
+            pytest.fail('blocked: required immutable author reference input is unavailable')
         pytest.skip("private author_uploaded reference files are intentionally unavailable in a clean clone")
     fixture = json.loads((Path(__file__).parent / "fixtures" / "published_reference_regression.json").read_text(encoding="utf-8"))
     first = run_published_reference(root)

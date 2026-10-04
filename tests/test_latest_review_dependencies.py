@@ -8,7 +8,7 @@ from igem_drylab.wetlab.models import MetabolitePartitionMeasurement
 from test_new_review_m4 import single_reaction
 
 
-def test_kp_forward_replay_repartitions_all_substrates():
+def test_kp_replay_homogeneous_control_and_unsupported_parameters():
     params = single_reaction()
     initial = {c: 0. for c in COMPOUNDS}
     initial['9'] = 1.
@@ -18,7 +18,7 @@ def test_kp_forward_replay_repartitions_all_substrates():
     assert replay['kernel_inputs']['parameters']['metabolite_kp']['9'] == 10.
     assert payload['kernel_inputs']['parameters']['metabolite_kp']['9'] == 1.
     # The fixture is homogeneous: no fabricated phase effect.
-    assert np.allclose(replay['concentrations']['intracellular']['15'], result.intracellular[7])
+    np.testing.assert_allclose(replay['concentrations']['intracellular']['13'], result.intracellular[5],rtol=0.,atol=1e-10)
     with pytest.raises(ValueError, match='must_be_positive'):
         replay_prediction(payload, 'partition_x9', 0.)
     with pytest.raises(ValueError, match='does_not_support'):

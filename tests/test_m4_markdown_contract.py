@@ -79,6 +79,14 @@ def test_step2_to_step6_steady_state_fluxes_and_invariant() -> None:
     assert result.secretion_loss_8_to_14 is not None
     assert result.mass_invariant_residual == pytest.approx(0.0, abs=1e-7)
     assert result.robustness is None and result.sensitivity is None and result.scaffold_scan is None
+    # Independent per-species stoichiometry from the original reaction table.
+    v=result.reaction_flux_um_per_h; s=result.secretion_flux_um_per_h
+    balance={'8':.5-v['R1']-v['R4']-s['8'], '9':v['R1']-v['R2']-v['R5']-s['9'],
+        '10':v['R2']-v['R3']-v['R6']-s['10'], '11':v['R3']-v['R7']-s['11'],
+        '12':v['R4']-v['R8']-s['12'], '13':v['R5']+v['R8']-v['R9']-s['13'],
+        '14':v['R6']+v['R9']-v['R10']-s['14'], '15':v['R7']+v['R10']-s['15']}
+    assert max(abs(x) for x in balance.values())<1e-8  # uM/h solver residual budget
+    assert sum(s.values()) == pytest.approx(.5,rel=0.,abs=1e-8)
 
 
 def test_phi_zero_uses_explicit_single_phase_path_without_division_by_phi() -> None:

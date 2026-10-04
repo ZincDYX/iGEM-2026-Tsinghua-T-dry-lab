@@ -57,6 +57,14 @@ def test_s1_and_e1_to_e6_follow_declared_equations_and_conserve_mass() -> None:
     )
     assert abs(result.oc.mass_balance_residual_um) < 1e-10
     assert abs(result.dmt.mass_balance_residual_um) < 1e-10
+    # E2/E3 independent quadratic root: A*f + B*f/(Kd+f) = E_total.
+    for species,total,kp,kd,site_count in [(result.oc,3.,5.,2.,3*.8*.75),(result.dmt,2.,2.,4.,1*.9*.5)]:
+        a=.1+.9/kp
+        b=.1*site_count*20.
+        linear=a*kd+b-total
+        expected=(-linear+(linear*linear+4*a*total*kd)**.5)/(2*a)
+        assert species.free_dense_um == pytest.approx(expected,rel=0.,abs=1e-10)
+        assert .1*(species.free_dense_um+species.bound_dense_um)+.9*species.free_dilute_um == pytest.approx(total,rel=0.,abs=1e-10)
     assert result.oc.bound_fraction_of_whole_cell_total == pytest.approx(
         0.1 * result.oc.bound_dense_um / 3.0
     )

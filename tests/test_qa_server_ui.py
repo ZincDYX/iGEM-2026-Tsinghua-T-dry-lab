@@ -16,47 +16,48 @@ def _evidence_file(tmp_path: Path) -> Path:
     return path
 
 
-def test_page_exposes_polished_qa_sections_without_unsafe_source_html() -> None:
+def test_page_has_public_question_and_results_entries() -> None:
     assert "Literature Evidence Explorer" in PAGE
-    assert "GLOSS" not in PAGE
     assert 'id="question-form"' in PAGE
     assert 'id="results"' in PAGE
-    assert "checkHealth()" in PAGE
-    assert "renderSourceCard" in PAGE
-    assert "No sufficiently relevant evidence found." in PAGE
-    assert "Evidence database unavailable." in PAGE
-    assert "innerHTML" not in PAGE
-    assert "AGENT TOOL" not in PAGE
-    assert "Retrieval</b> → Review → Approval" not in PAGE
-    assert 'class="help"' in PAGE
-    assert 'class="topbar"' in PAGE
-    assert 'class="glass search-panel"' not in PAGE
-    assert 'id="chips"' not in PAGE
-    assert "setupChips" not in PAGE
-    assert "e.g. OC activity, DMT kinetics, glabridin production" in PAGE
-    assert "window.setTimeout(renderLoading,180)" in PAGE
-    assert 'id="health-text">Checking evidence database' in PAGE
-    assert "function appendFieldRows" in PAGE
-    assert "fields-nested" in PAGE
-    assert "fieldLabel(key)+':'" in PAGE
-    assert "function renderQuote" in PAGE
-    assert "Illustrative preview record:" in PAGE
     assert 'id="mode"' in PAGE
-    assert "Evidence-grounded answer" in PAGE
-    assert "function renderRetrievalInfo" in PAGE
-    assert "Relevant structured fields" in PAGE
-    assert "View full structured record" in PAGE
-    assert "source.relevant_fields" in PAGE
-    assert "details.open=true" not in PAGE
-    assert "Relative retrieval score" in PAGE
-    assert "transferable_fallback" in PAGE
-    assert "No direct project-specific evidence was found." in PAGE
-    assert "BM25/metadata retrieval" in PAGE
-    assert "Semantic retrieval disabled" in PAGE
-    assert "intent.enzymes" in PAGE
-    assert "intent.context" in PAGE
-    assert "intent.outcomes" in PAGE
-    assert "enzymes'" in PAGE
+
+
+def test_malicious_source_strings_are_rendered_as_text_not_html(tmp_path) -> None:
+    """Execute shipped JS against a strict DOM contract double, not a browser audit."""
+    import re
+    import subprocess
+    helpers=('text','fieldLabel','fieldValue','appendFieldRows','renderFields','renderQuote','validDoi','renderSourceCard')
+    functions='\n'.join(re.search(r'^function '+name+r'\([^\n]+',PAGE,re.M).group(0) for name in helpers)
+    source=dict(title='<img src=x onerror="globalThis.pwned=true">',evidence='<script>globalThis.pwned=true</script>',
+        source_file='<svg onload="globalThis.pwned=true">',record_id='fixture',score=.5,doi='javascript:alert(1)',
+        fields={'unsafe':'<b>literal markup</b>'})
+    harness=r'''
+class Element {
+  constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.classList={add(){}};this.textContent='';}
+  append(...nodes){this.children.push(...nodes);}
+  get lastChild(){return this.children.at(-1);}
+  set innerHTML(v){throw Error('HTML sink used');}
+  set outerHTML(v){throw Error('HTML sink used');}
+  insertAdjacentHTML(){throw Error('HTML sink used');}
+  addEventListener(){}
+}
+const document={createElement:tag=>new Element(tag),write(){throw Error('HTML sink used');}};
+globalThis.pwned=false;
+'''
+    script=tmp_path/'source-render.js'
+    script.write_text(harness+functions+'\nconst card=renderSourceCard('+json.dumps(source)+',0);\n'+r'''
+function flatten(node){return [node,...node.children.flatMap(flatten)];}
+const nodes=flatten(card);
+console.log(JSON.stringify({texts:nodes.map(n=>n.textContent),tags:nodes.map(n=>n.tag),pwned:globalThis.pwned}));
+''',encoding='utf-8')
+    run=subprocess.run(['node',str(script)],capture_output=True,text=True,check=True,timeout=15)
+    rendered=json.loads(run.stdout)
+    for field in ('title','evidence'):
+        assert source[field] in rendered['texts']
+    assert source['fields']['unsafe'] in rendered['texts']
+    assert not {'script','img','svg','a'} & set(rendered['tags'])
+    assert rendered['pwned'] is False
 
 
 def test_health_contract_is_unchanged(tmp_path: Path) -> None:

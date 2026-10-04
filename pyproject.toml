@@ -34,3 +34,13 @@ igem-freesasa = "igem_drylab.freesasa_runner:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "scientific_algorithm: independent software mathematical or physical oracle",
+  "data_contract: applicability, identity, approval, provenance and censoring",
+  "integration: actual cross-component or protocol behavior; mock scope declared",
+  "platform: process, storage, recovery or isolation behavior",
+  "smoke: software entry and artifact shape only",
+  "ui: HTTP and source rendering public behavior",
+  "reference_reproduction: immutable author-native regression, not complete paper validation",
+  "regression: retained legacy software regression not yet individually risk-classified",
+]

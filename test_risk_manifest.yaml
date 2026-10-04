@@ -1,0 +1,133 @@
+schema_version: test-risk-v1
+claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
+risks:
+  - risk_id: MU01
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_independent_numeric_oracles.py::test_MU01_active_kp_replay_matches_two_phase_initial_rate", "tests/test_independent_numeric_oracles.py::test_supported_replay_parameter_families_change_active_product_initial_rate"]
+    requirement_or_formula_source: iGEM_current_status_review_20261004.md section 9.3A; original two-phase competitive MM
+    oracle_type: independently_hand_calculated_initial_rate
+    fixture_scope: software_fixture_only
+    formula_version: galatea-dynamic-volume-v2-2026-10-04
+    units: uM/h
+    tolerance_basis: absolute 1e-6 uM/h short-time truncation budget; error from ignored Kp is 0.01776
+    expected_faults: [new_Kp_saved_but_not_used_by_solver]
+  - risk_id: MU02
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_independent_numeric_oracles.py::test_MU02_observation_matches_independent_amount_normalization"]
+    requirement_or_formula_source: iGEM_current_status_review_20261004.md section 9.3B
+    oracle_type: independent_amount_divided_by_extraction_volume
+    fixture_scope: software_fixture_only
+    formula_version: m4-prediction-v2
+    units: uM; L; umol
+    tolerance_basis: absolute 1e-12 uM arithmetic; no solver-derived expected observation
+    expected_faults: [remove_compartment_volume_weights]
+  - risk_id: MU03
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_independent_numeric_oracles.py::test_MU03_holdout_nonzero_error_has_hand_computed_statistics"]
+    requirement_or_formula_source: iGEM_current_status_review_20261004.md section 9.3C
+    oracle_type: hand_residuals_RMSE_MAE_bias_with_partial_censoring
+    fixture_scope: software_fixture_only
+    formula_version: research-holdout-v1
+    units: uM; min-to-h; mM-to-uM
+    tolerance_basis: absolute 1e-12 uM for elementary arithmetic
+    expected_faults: [hardcoded_zero_RMSE, wrong_residual_sign, wrong_quantified_population]
+  - risk_id: M3_BINDING_MASS
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_m3_markdown_contract.py::test_s1_and_e1_to_e6_follow_declared_equations_and_conserve_mass"]
+    requirement_or_formula_source: docs/m3_s1_e10_implementation_contract.md S1; E1-E6
+    oracle_type: independent_quadratic_root_and_raw_phase_amount
+    fixture_scope: software_fixture_only
+    formula_version: m3-s1-e10-2026-09-27
+    units: uM
+    tolerance_basis: absolute 1e-10 uM floating-point root and conservation budget
+    expected_faults: [wrong_free_or_bound_concentration_with_self_reported_zero_residual]
+  - risk_id: M4_COMPETITION
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_independent_numeric_oracles.py::test_competitive_OC_initial_flux_has_both_substrates_phase_weights_and_correct_products", "tests/test_m4_markdown_contract.py::test_step2_to_step6_steady_state_fluxes_and_invariant"]
+    requirement_or_formula_source: docs/m4_step0_step8_implementation_contract.md original competitive denominator and species balances
+    oracle_type: hand_two_substrate_flux_and_independent_stoichiometric_balance
+    fixture_scope: software_fixture_only
+    formula_version: galatea-dynamic-volume-v2-2026-10-04; m4-steady original version
+    units: uM; uM/h
+    tolerance_basis: flux absolute 1e-12; short-time derivative 1e-6; steady residual 1e-8 uM/h
+    expected_faults: [missing_competitor, missing_phi_weight, wrong_reaction_product]
+  - risk_id: F2_ACTIVE_RESPONSE
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_independent_numeric_oracles.py::test_active_steady_F2_response_matches_independent_scalar_balance"]
+    requirement_or_formula_source: original F2 forward 1%, 0.5%, 0.25%; original secretion normalization
+    oracle_type: independent_scalar_bisection_balance_nonzero_yield
+    fixture_scope: software_fixture_only
+    formula_version: original_m4_steady_and_forward_difference
+    units: yield fraction; dY/dKp
+    tolerance_basis: yield absolute 1e-6; derivative 1e-4 includes steady solve error amplified by delta
+    expected_faults: [ignored_Kp_perturbation]
+  - risk_id: EMPIRICAL_SEMANTICS
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_design_decision_contract.py::test_discrete_empirical_inverse_cdf_retains_atoms_duplicates_and_seed"]
+    requirement_or_formula_source: review section 3.3; NumPy inverted_cdf semantics
+    oracle_type: exact_discrete_atoms_and_duplicate_frequencies
+    fixture_scope: software_fixture_only
+    formula_version: discrete_inverse_ecdf
+    units: dimensionless_Kp
+    tolerance_basis: exact integer frequencies and atoms; seeded equality
+    expected_faults: [implicit_continuous_quantile_interpolation]
+  - risk_id: C01_CONDITION_CHAIN
+    group: data_contract
+    test_nodeids: ["tests/test_experimental_condition_chain.py::test_measurement_approval_to_formal_resolver_has_exact_conditions", "tests/test_experimental_condition_chain.py::test_per_measurement_protocol_override_does_not_use_project_defaults", "tests/test_final_closure.py::test_human_approval_persists_and_reloads", "tests/test_review_m4_m5.py::test_full_fit_uses_same_kernel_and_value_changes_fingerprint"]
+    requirement_or_formula_source: review section 3.1; formal registry applicability
+    oracle_type: exact_condition_and_sequence_identity_positive_negative_chain
+    fixture_scope: software_fixture_only_not_experimental_truth
+    formula_version: formal_registry_existing_gates
+    units: requirement canonical units; pH; Celsius
+    tolerance_basis: exact identities and field equality; numeric conversion absolute 1e-12
+    expected_faults: [dropped_conditions, project_defaults_as_measured_facts, mismatched_sequence]
+  - risk_id: F3_FORMAL_COMPARISON
+    group: data_contract
+    test_nodeids: ["tests/test_design_decision_contract.py::test_comparable_physical_candidates_with_different_condition_labels_rank", "tests/test_design_decision_contract.py::test_higher_metric_ineligible_or_incomparable_candidate_never_sets_target", "tests/test_design_decision_contract.py::test_typo_constraint_is_explicit_failure_not_silent_infeasibility"]
+    requirement_or_formula_source: review section 3.2
+    oracle_type: explicitly_declared_comparison_and_evidence_admission
+    fixture_scope: upstream_pipeline_mock_boundary_only
+    formula_version: finite-scaffold-scan-v2
+    units: uM/h; dimensionless ratio
+    tolerance_basis: exact public eligibility and comparison mismatch reasons
+    expected_faults: [demo_promoted_to_formal, mixed_boundaries_ranked, typo_silently_ignored]
+  - risk_id: M2_RESOURCE_HASH
+    group: integration
+    test_nodeids: ["tests/test_real_scoring_pipeline.py::test_complete_hash_verified_M2_metrics_are_consumed_and_each_resource_is_bound"]
+    requirement_or_formula_source: formal M2 provenance gate
+    oracle_type: independent_file_bytes_hashes_and_raw_metric_consumption
+    fixture_scope: file_backed_software_fixture_M1_input_explicitly_constructed
+    formula_version: m2-v2-2026-09-27
+    units: Angstrom; SASA ratio
+    tolerance_basis: exact SHA-256 and supplied numerical fields
+    expected_faults: [all_resources_compared_to_model_hash, tampered_resource_accepted]
+  - risk_id: UI_TEXT_RENDER
+    group: ui
+    test_nodeids: ["tests/test_qa_server_ui.py::test_malicious_source_strings_are_rendered_as_text_not_html", "tests/test_qa_server_ui.py::test_local_http_demo_smoke_preserves_root_health_and_qa_routes"]
+    requirement_or_formula_source: UI source-data text safety and HTTP contract
+    oracle_type: actual_JavaScript_rendering_with_strict_DOM_double_and_local_HTTP
+    fixture_scope: DOM_contract_double_not_full_browser_security_audit
+    formula_version: not_applicable
+    units: not_applicable
+    tolerance_basis: exact literal text; no executable markup nodes or dangerous HTML sinks
+    expected_faults: [source_string_inserted_as_HTML]
+  - risk_id: AUTHOR_ENDPOINT
+    group: reference_reproduction
+    test_nodeids: ["tests/test_galatea_full_network.py::test_uploaded_author_reference_matches_fixed_regression_fixture"]
+    requirement_or_formula_source: immutable author-uploaded code and published_reference_regression.json
+    oracle_type: historical_author_native_endpoint_regression
+    fixture_scope: author_native_regression_not_complete_paper_reproduction
+    formula_version: immutable_author_native
+    units: author_native
+    tolerance_basis: retained existing rtol 1e-8 and atol 1e-12 for regression; not experimental tolerance
+    expected_faults: [missing_required_author_input, changed_author_endpoint]
+  - risk_id: F3_FRESH_NUMERIC_CHAIN
+    group: integration
+    test_nodeids: ["tests/test_fresh_design_integration.py::test_actual_finite_scan_creates_new_M2_geometry_M3_distribution_and_M4_flux"]
+    requirement_or_formula_source: review section 9.4; actual M2-to-M3-to-M4 fresh pipeline
+    oracle_type: actual_pipeline_artifacts_independent_M3_quadratic_root_and_M4_initial_flux
+    fixture_scope: software_fixture_only_no_mock_pipeline_no_experimental_parameters
+    formula_version: m3-s1-e10-2026-09-27; galatea-dynamic-volume-v2-2026-10-04
+    units: uM; uM/h
+    tolerance_basis: absolute 1e-10 uM root/conservation and uM/h initial flux
+    expected_faults: [reused_M2_geometry, reused_M3_distribution, ignored_site_counts_in_M4]
