@@ -22,7 +22,7 @@ The design review used two supplied books as principles rather than instructions
 - A microservice per scientific tool: too much operational coupling for one local workflow, with no independent scaling or ownership need.
 - One adapter subclass per command: shallow modules that merely inherit behavior and obscure the common execution policy.
 - Automatic fallbacks and guessed defaults: they can turn missing measurements, credentials, or artifacts into apparently valid scientific results.
-- Bundling every optional simulation stack: incompatible with the 10 GiB deployment constraint and unnecessary for the formal M1–M4 path.
+- Bundling every optional simulation stack: unnecessary for the formal M1–M4 path. The user updated the deployment limit to 15 GB (15,000,000,000 bytes) on 2026-10-04. The earlier 10 GiB interpretation of the original 10 GB requirement was incorrect; see the corrected deployment audit.
 
 ## Consequences
 

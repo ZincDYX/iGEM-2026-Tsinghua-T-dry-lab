@@ -1,0 +1,9 @@
+{
+  "protocol_version": "1", "id": "sequence_composition", "name": "独立序列组成插件",
+  "description": "仅用 Python 标准库分析氨基酸计数；独立于 Galatea 和平台包。",
+  "version": "1.0.0", "capability": "sequence_composition", "license": "MIT",
+  "entrypoint": "composition.py", "runtime": "python_venv",
+  "input_schema": {"type":"object","properties":{"sequence":{"type":"string","minLength":1}},"required":["sequence"],"additionalProperties":false},
+  "output_schema": {"type":"object","properties":{"length":{"type":"integer"},"counts":{"type":"object"},"python_prefix":{"type":"string"}},"required":["length","counts","python_prefix"],"additionalProperties":false},
+  "permissions": [], "timeout_seconds": 30, "idempotent": true
+}

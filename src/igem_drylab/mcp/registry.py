@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import jsonschema
 
 from .tools import TOOL_BINDINGS
 from .types import JsonObject, McpTool, McpToolResult, ToolHandler
@@ -26,9 +27,10 @@ class ToolRegistry:
             return McpToolResult.error(f"Unknown tool: {name}", error_type="unknown_tool")
         _tool, handler = self._tools[name]
         try:
+            jsonschema.Draft202012Validator(_tool.input_schema).validate(arguments)
             return handler(arguments)
         except Exception as exc:  # noqa: BLE001 - MCP tools should report structured failures.
-            return McpToolResult.error(str(exc), error_type=exc.__class__.__name__)
+            return McpToolResult.error(str(exc), error_type=getattr(exc, "code", exc.__class__.__name__))
 
 
 def create_default_registry() -> ToolRegistry:

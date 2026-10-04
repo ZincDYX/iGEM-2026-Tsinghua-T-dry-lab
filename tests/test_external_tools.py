@@ -4,16 +4,23 @@ from pathlib import Path
 import sys
 
 import yaml
+import pytest
 
-from igem_drylab.external_tools import TEN_GIB, audit_deployment, tool_spec
+from igem_drylab.external_tools import DEPLOYMENT_BUDGET_BYTES, audit_deployment, tool_spec
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline.config import ToolConfig
 
 
 def test_catalog_keeps_formal_route_and_scientific_boundary_together() -> None:
+    assert DEPLOYMENT_BUDGET_BYTES == 15_000_000_000
     assert tool_spec("colabfold").formal_stage == "M2"
     assert tool_spec("signalp").route == "licensed_local_or_api"
     assert tool_spec("unknown") is None
+
+
+def test_missing_deployment_root_is_not_counted_as_zero(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="deployment_root_missing"):
+        audit_deployment([tmp_path / "missing-tool"])
 
 
 def test_deployment_audit_deduplicates_nested_roots(tmp_path: Path) -> None:
@@ -93,7 +100,7 @@ def test_mcp_deployment_audit_uses_unique_configured_paths(tmp_path: Path) -> No
 
     response = create_default_registry().call(
         "igem.compute.audit_deployment",
-        {"config_path": str(config_path), "budget_bytes": TEN_GIB},
+        {"config_path": str(config_path), "budget_bytes": DEPLOYMENT_BUDGET_BYTES},
     )
 
     assert response.is_error is False

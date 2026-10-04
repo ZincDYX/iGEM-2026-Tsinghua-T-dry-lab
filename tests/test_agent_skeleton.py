@@ -73,7 +73,7 @@ def test_agent_blocks_when_required_input_is_missing(tmp_path):
 def test_agent_replans_after_recoverable_failure_and_stops_at_limit(tmp_path):
     registry = ToolRegistry()
     tool = McpTool(name="test.malformed", title="test", description="test", input_schema={"type": "object"}, output_schema=None)
-    registry.register(tool, lambda _arguments: McpToolResult.error("malformed structure artifact"))
+    registry.register(tool, lambda _arguments: McpToolResult.error("malformed structure artifact", error_type="invalid_scientific_artifact"))
 
     class PlannerBackend:
         def create_plan(self, task, context, available_tools):

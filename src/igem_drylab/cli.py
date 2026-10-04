@@ -45,11 +45,12 @@ app.add_typer(software_app, name="software")
 def serve_software_dashboard(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8780, "--port", min=1, max=65535),
+    data_dir: Path = typer.Option(Path("outputs/platform"), "--data-dir"),
 ) -> None:
     """Serve the local Dashboard API; start the React dev server separately."""
     from igem_drylab.software.dashboard import serve as serve_dashboard
 
-    serve_dashboard(host=host, port=port)
+    serve_dashboard(host=host, port=port, data_dir=data_dir)
 
 
 @pipeline_app.command("validate")

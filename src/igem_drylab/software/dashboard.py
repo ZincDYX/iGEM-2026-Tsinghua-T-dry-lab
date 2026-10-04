@@ -4,11 +4,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from secrets import compare_digest
 from threading import Lock, Thread
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -105,18 +107,53 @@ class DashboardRuns:
                 update(self._runs[run_id])
 
 
-def create_app(registry: ToolRegistry | None = None) -> FastAPI:
-    """Build a local API app whose only execution path is the existing registry."""
+def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = None, session_token: str | None = None) -> FastAPI:
+    """Build the durable platform API and retain deprecated legacy routes."""
     tool_registry = registry or create_default_registry()
     runs = DashboardRuns()
     app = FastAPI(title="iGEM Dry-Lab Dashboard API", version="0.1.0")
-    app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+    from .platform_api import platform_router
+    app.include_router(platform_router(data_dir or Path("outputs/platform")))
 
-    @app.get("/api/dashboard/dag", response_model=list[DashboardModule])
+    if session_token:
+        @app.middleware("http")
+        async def authenticate(request: Request, call_next):
+            if request.method != "OPTIONS":
+                supplied = request.headers.get("X-FusionLab-Token", "")
+                # Download links cannot set headers. Only artifact GET accepts
+                # the session token as a query parameter; access logging is off
+                # in the desktop launcher, and links use noreferrer.
+                if request.method == "GET" and request.url.path.startswith("/api/platform/artifacts/"):
+                    supplied = request.query_params.get("token", supplied)
+                if not compare_digest(supplied, session_token):
+                    return JSONResponse(status_code=401, content={"detail": {"code": "unauthorized", "message": "Desktop session token required"}})
+            return await call_next(request)
+
+    from igem_drylab.workflow.models import WorkflowError
+    from igem_drylab.workflow.tools import ToolFailure
+
+    @app.exception_handler(WorkflowError)
+    def workflow_failure(request: Request, exc: WorkflowError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": str(exc)}})
+
+    @app.exception_handler(ToolFailure)
+    def tool_failure(request: Request, exc: ToolFailure) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": {"code": exc.code, "message": str(exc)}})
+
+    @app.exception_handler(ValueError)
+    def invalid_input(request: Request, exc: ValueError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": {"code": "invalid_input", "message": str(exc)}})
+
+    @app.exception_handler(KeyError)
+    def missing_record(request: Request, exc: KeyError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": {"code": "not_found", "message": str(exc)}})
+    app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "tauri://localhost", "http://tauri.localhost"], allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-FusionLab-Token"])
+
+    @app.get("/api/dashboard/dag", response_model=list[DashboardModule], deprecated=True)
     def get_dag() -> list[DashboardModule]:
         return _MODULES
 
-    @app.post("/api/dashboard/runs", response_model=DashboardRun, status_code=202)
+    @app.post("/api/dashboard/runs", response_model=DashboardRun, status_code=202, deprecated=True)
     def start_run(request: DashboardRunRequest) -> DashboardRun:
         module = _BY_ID.get(request.module_id)
         if module is None:
@@ -128,7 +165,7 @@ def create_app(registry: ToolRegistry | None = None) -> FastAPI:
         Thread(target=_execute, args=(runs, tool_registry, run.run_id, request), daemon=True).start()
         return run
 
-    @app.get("/api/dashboard/runs/{run_id}", response_model=DashboardRun)
+    @app.get("/api/dashboard/runs/{run_id}", response_model=DashboardRun, deprecated=True)
     def get_run(run_id: str) -> DashboardRun:
         run = runs.get(run_id)
         if run is None:
@@ -161,9 +198,9 @@ def _tool_request(request: DashboardRunRequest) -> tuple[str, dict[str, object]]
     raise ValueError(f"Module {request.module_id} has no standalone runtime tool.")
 
 
-def serve(*, host: str, port: int) -> None:
+def serve(*, host: str, port: int, data_dir: Path | None = None) -> None:
     try:
         import uvicorn
     except ImportError as exc:
         raise RuntimeError("Dashboard requires the optional dependency group: pip install -e '.[software]'") from exc
-    uvicorn.run(create_app(), host=host, port=port)
+    uvicorn.run(create_app(data_dir=data_dir), host=host, port=port)

@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from igem_drylab.external_tools import TEN_GIB, audit_deployment
+from igem_drylab.external_tools import DEPLOYMENT_BUDGET_BYTES, audit_deployment
 from igem_drylab.literature import answer_question, build_prompt, compact_evidence_sources, extract_records_chunked, extract_records_from_text, get_evidence_detail, load_schema
 from igem_drylab.literature.elsevier import extract_text_from_xml, fetch_article_xml, search_scopus
 from igem_drylab.literature.icl import load_icl_examples
@@ -117,7 +117,8 @@ def _secret_from_env(arguments: JsonObject, env_key: str, default_env_name: str)
         raise ValueError(f"Argument '{env_key}' must be a non-empty environment variable name")
     value = os.getenv(env_name)
     if not value:
-        raise ValueError(f"Environment variable '{env_name}' is not set")
+        from igem_drylab.workflow.tools import ToolFailure
+        raise ToolFailure("missing_api_credential", f"Environment variable '{env_name}' is not set")
     return value
 
 
@@ -208,7 +209,7 @@ def compute_check_tool(arguments: JsonObject) -> McpToolResult:
 
 def compute_audit_deployment(arguments: JsonObject) -> McpToolResult:
     config = load_config(Path(_require_str(arguments, "config_path")))
-    budget_bytes = _optional_int(arguments, "budget_bytes", TEN_GIB, minimum=1)
+    budget_bytes = _optional_int(arguments, "budget_bytes", DEPLOYMENT_BUDGET_BYTES, minimum=1)
     paths = [path for tool in config.tools.values() for path in tool.deployment_paths]
     result = audit_deployment(paths, budget_bytes=budget_bytes)
     return McpToolResult.ok({"ok": result.within_budget, "deployment": result.model_dump(mode="json")})
@@ -956,11 +957,11 @@ COMPUTE_CHECK_TOOL = McpTool(
 COMPUTE_AUDIT_DEPLOYMENT_TOOL = McpTool(
     name="igem.compute.audit_deployment",
     title="Audit external-tool disk budget",
-    description="Measure unique configured deployment roots and enforce the default 10 GiB tool budget.",
+    description="Measure unique configured deployment roots and enforce the default 15 GB (decimal) tool budget.",
     input_schema=_schema(
         {
             "config_path": {"type": "string"},
-            "budget_bytes": {"type": "integer", "minimum": 1, "default": TEN_GIB},
+            "budget_bytes": {"type": "integer", "minimum": 1, "default": DEPLOYMENT_BUDGET_BYTES},
         },
         ["config_path"],
     ),

@@ -16,6 +16,7 @@ dependencies = [
   "requests>=2.31",
   "mcp>=2,<3",
   "biopython>=1.83",
+  "jsonschema>=4.20",
 ]
 
 [project.optional-dependencies]

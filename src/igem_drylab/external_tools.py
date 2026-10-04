@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-TEN_GIB = 10 * 1024**3
+DEPLOYMENT_BUDGET_BYTES = 15_000_000_000
 
 
 class ExternalToolSpec(BaseModel):
@@ -255,21 +255,21 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             capability="optional structure-prediction cross-validation",
             route="optional_local",
             official_url="https://github.com/jwohlwend/boltz",
-            notes="Optional cross-validation, not installed in the 10 GiB lean environment.",
+            notes="Optional cross-validation, not installed in the lean environment; current combined budget is 15 GB.",
         ),
         ExternalToolSpec(
             name="chai",
             capability="optional structure-prediction cross-validation",
             route="optional_local",
             official_url="https://github.com/chaidiscovery/chai-lab",
-            notes="Optional cross-validation, not installed in the 10 GiB lean environment.",
+            notes="Optional cross-validation, not installed in the lean environment; current combined budget is 15 GB.",
         ),
     )
 }
 
 
 class DeploymentUsage(BaseModel):
-    budget_bytes: int = Field(default=TEN_GIB, gt=0)
+    budget_bytes: int = Field(default=DEPLOYMENT_BUDGET_BYTES, gt=0)
     used_bytes: int = Field(ge=0)
     within_budget: bool
     paths: dict[str, int]
@@ -279,9 +279,12 @@ def tool_spec(name: str) -> ExternalToolSpec | None:
     return TOOL_CATALOG.get(name)
 
 
-def audit_deployment(paths: list[Path], *, budget_bytes: int = TEN_GIB) -> DeploymentUsage:
+def audit_deployment(paths: list[Path], *, budget_bytes: int = DEPLOYMENT_BUDGET_BYTES) -> DeploymentUsage:
     """Measure unique deployment roots without double-counting nested paths."""
 
+    missing = [str(path) for path in paths if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"declared_deployment_root_missing:{','.join(missing)}")
     roots = _independent_existing_roots(paths)
     measured = {str(path): _tree_size(path) for path in roots}
     used = sum(measured.values())

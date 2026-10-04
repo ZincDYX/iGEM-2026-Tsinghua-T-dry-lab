@@ -1,0 +1,16 @@
+{
+  "id": "example-A-to-B",
+  "rate_law": "two_phase_competitive_mm_v1",
+  "concentration_unit": "uM",
+  "time_unit": "h",
+  "secretion_definition": "unweighted_dilute_concentration",
+  "species": ["A", "B"],
+  "reactions": [{"id": "A_to_B", "enzyme": "E", "substrate": "A", "stoichiometry": {"A": -1, "B": 1}, "kcat_per_h": 10, "km_um": 1, "parameter_source": "synthetic demonstration; replace with reviewed evidence"}],
+  "enzymes": {"E": {"dense_um": 1, "dilute_um": 1, "source": "synthetic demonstration; not a measured protein abundance"}},
+  "phi": 0.1,
+  "partition_coefficients": {"A": 1, "B": 1},
+  "input_flux_um_per_h": {"A": 0.5, "B": 0},
+  "secretion_rate_per_h": {"A": 0.1, "B": 0.2},
+  "initial_guess_um": {"A": 0.1, "B": 1},
+  "residual_tolerance": 1e-8
+}

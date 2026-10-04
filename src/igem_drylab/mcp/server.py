@@ -390,7 +390,7 @@ def check_external_tool(config_path: str, tool_name: str) -> dict[str, Any]:
     description="Measure unique deployment roots and report whether they fit within the declared byte budget.",
     structured_output=True,
 )
-def audit_external_tool_deployment(config_path: str, budget_bytes: int = 10 * 1024**3) -> dict[str, Any]:
+def audit_external_tool_deployment(config_path: str, budget_bytes: int = 15_000_000_000) -> dict[str, Any]:
     return _call_local(
         "igem.compute.audit_deployment",
         {"config_path": config_path, "budget_bytes": budget_bytes},
