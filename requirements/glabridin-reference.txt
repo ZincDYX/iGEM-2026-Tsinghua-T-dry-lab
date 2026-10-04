@@ -1,0 +1,6 @@
+# Dedicated CPU reference environment; do not install into the ColabFold env.
+numpy==1.24.4
+scipy==1.10.1
+matplotlib==3.7.5
+openpyxl==3.1.5
+requests>=2.31,<3
