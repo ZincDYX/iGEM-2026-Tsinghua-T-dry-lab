@@ -68,7 +68,7 @@ def main():
             'formal_transport_evidence_adapter','ER_stability_multiple_roots_and_non_equilibrium_extensions'],
         'verified_files':len(checked)}
     (args.results/'validation_summary.json').write_text(json.dumps(summary,indent=2))
-    files = [p for p in sorted(args.results.rglob('*')) if p.is_file() and p.suffix in {'.xml','.log','.json','.txt','.md'} and p.name!='EVIDENCE_MANIFEST.json']
+    files = [p for p in sorted(args.results.rglob('*')) if p.is_file() and p.suffix in {'.xml','.log','.json','.txt','.md','.csv'} and p.name!='EVIDENCE_MANIFEST.json']
     records = [{'path':str(p.relative_to(args.results)),'bytes':p.stat().st_size,'sha256':sha256(p.read_bytes()).hexdigest()} for p in files]
     manifest = {'commit':args.commit,'scope':summary['scope'],'files':records}
     manifest_file = args.results/'EVIDENCE_MANIFEST.json'
