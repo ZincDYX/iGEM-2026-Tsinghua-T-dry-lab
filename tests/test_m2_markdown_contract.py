@@ -141,6 +141,9 @@ def test_single_rigid_clash_is_review_but_persistent_direct_occlusion_can_reject
             severe_clash_conformation_count=3,
             persistent_severe_clash=True,
             direct_pocket_occlusion=True,
+            mean_interdomain_pae=5.0,
+            crossdomain_geometry_reviewed=True,
+            crossdomain_geometry_source_ref="synthetic-independent-conformations",
         )
     )
 

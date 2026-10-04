@@ -45,3 +45,11 @@ def test_m2_sequence_and_all_resource_hashes_are_verified(tmp_path):
     for name, label in (("reference", "reference"), ("geometry", "geometry input"), ("sasa", "SASA configuration")):
         Path(paths[name][0]).write_bytes(b"changed")
         assert f"M2 {label} artifact SHA-256 match" in _missing_m2_formal_evidence(row, None, require_m3_geometry=False, expected_sequence_sha256="old-sequence")
+
+
+def test_local_plddt_does_not_prove_crossdomain_occlusion():
+    from igem_drylab.scoring.m2_structure import score_m2_structure
+    row = M2StructureMetrics(candidate_id="c", core_ca_rmsd_angstrom=.1, sasa_retention=1,
+        pocket_rmsd_angstrom=.1, mean_plddt=95, clash_count=0, clash_cutoff_angstrom=2.5, ligand_buried=True)
+    scored = score_m2_structure(row)
+    assert scored.verdict == "review" and not scored.recommended_for_m3

@@ -14,7 +14,7 @@ UM_NM3_TO_MOLECULE_FRACTION = 1e-30 * AVOGADRO_PER_MOL
 
 
 class M3EquilibriumInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     candidate_id: str
     construct_id: str
     formula_version: Literal["m3-s1-e10-2026-09-27"] = M3_FORMULA_VERSION

@@ -86,6 +86,8 @@ class M2StructureMetrics(BaseModel):
     # Confidence/diagnostic fields; high inter-domain PAE is not a failure for
     # a flexible linker and ipTM is not an activity proxy.
     mean_interdomain_pae: float | None = Field(default=None, ge=0)
+    crossdomain_geometry_reviewed: bool = False
+    crossdomain_geometry_source_ref: str | None = None
     iptm: float | None = Field(default=None, ge=0, le=1)
     interface_contact_count: int | None = Field(default=None, ge=0)
     docking_delta_kcal_mol: float | None = None
@@ -216,16 +218,21 @@ def score_m2_structure(metrics: M2StructureMetrics) -> M2StructureScore:
         (reject if confidence_gate == "high" else review).append("pocket_sasa_retention_below_0_70")
     if metrics.core_ca_rmsd_angstrom is not None and metrics.core_ca_rmsd_angstrom > 4.0:
         (reject if confidence_gate == "high" else review).append("core_CA_RMSD_over_4_angstrom")
+    crossdomain_ready = (confidence_gate == "high" and metrics.mean_interdomain_pae is not None
+                        and metrics.crossdomain_geometry_reviewed and bool(metrics.crossdomain_geometry_source_ref)
+                        and metrics.independent_conformation_count is not None and metrics.independent_conformation_count >= 2)
     if metrics.ligand_buried is True:
-        (reject if confidence_gate == "high" else review).append("recruitment_ligand_buried")
+        (reject if crossdomain_ready else review).append("recruitment_ligand_buried")
     if metrics.recruitment_domain_buried is True:
-        (reject if confidence_gate == "high" else review).append("recruitment_domain_binding_site_buried")
+        (reject if crossdomain_ready else review).append("recruitment_domain_binding_site_buried")
     if metrics.scaffold_interface_disrupted is True:
-        (reject if confidence_gate == "high" else review).append("FTH1_oligomer_interface_disrupted")
+        (reject if crossdomain_ready else review).append("FTH1_oligomer_interface_disrupted")
+    if not crossdomain_ready and any((metrics.ligand_buried, metrics.recruitment_domain_buried, metrics.scaffold_interface_disrupted)):
+        review.append("crossdomain_layout_requires_PAE_and_reviewed_independent_conformations")
 
     if metrics.clash_count and metrics.clash_count > 0:
         if (
-            confidence_gate == "high"
+            crossdomain_ready
             and metrics.persistent_severe_clash is True
             and metrics.direct_pocket_occlusion is True
         ):
