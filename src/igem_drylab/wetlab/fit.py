@@ -128,7 +128,7 @@ def fit_mechanistic_parameter(*, parameter_name: str, initial_value: float, boun
     jacobian = (predict(bounds[0] + width * right) - predict(bounds[0] + width * left)) / (right - left)
     sensitivity = float(np.linalg.norm(jacobian))
     solution_objective = float(np.sum((residuals / scale)**2))
-    inferior = solution_objective > float(np.min(profile_scaled_objective)) + objective_floor
+    inferior = bool(solution_objective > float(np.min(profile_scaled_objective)) + objective_floor)
     status, warning = "estimated", None
     if not solved.success or inferior:
         status, warning = "solver_failed", "solution_inferior_to_evaluated_profile" if inferior else "optimizer_did_not_converge"

@@ -13,6 +13,7 @@ def test_common_observation_scale_preserves_optimum(scale):
     assert fit.status == 'estimated' and fit.best_fit == pytest.approx(2., abs=1e-8)
     assert fit.diagnostics['residual_scale'] > 0
     assert not fit.diagnostics['solution_inferior_to_profile']
+    assert fit.model_dump(mode='json')['diagnostics']['solution_inferior_to_profile'] is False
     assert fit.diagnostics['squared_error'] == pytest.approx(sum(v*v for v in fit.residuals))
 
 
