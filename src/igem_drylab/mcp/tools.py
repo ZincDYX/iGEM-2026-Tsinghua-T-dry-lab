@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from igem_drylab.resources import default_config_path
 
 from igem_drylab.external_tools import DEPLOYMENT_BUDGET_BYTES, audit_deployment
 from igem_drylab.literature import answer_question, build_prompt, compact_evidence_sources, extract_records_chunked, extract_records_from_text, get_evidence_detail, load_schema
@@ -236,7 +237,7 @@ def compute_run_tool(arguments: JsonObject) -> McpToolResult:
 def m1_compute_features(arguments: JsonObject) -> McpToolResult:
     definitions_path = Path(
         arguments.get("feature_definitions_file")
-        or Path(__file__).resolve().parents[3] / "configs" / "m1_feature_definitions.yaml"
+        or default_config_path("m1_feature_definitions.yaml")
     )
     definitions, digest = M1FeatureDefinitions.from_yaml(definitions_path)
     motifs = arguments.get("forbidden_amino_acid_motifs", [])
@@ -293,7 +294,7 @@ def m1_screen_sequence(arguments: JsonObject) -> McpToolResult:
     feature_result = m1_compute_features(arguments).structured_content["result"]
     rules_path = Path(
         arguments.get("rules_file")
-        or Path(__file__).resolve().parents[3] / "configs" / "m1_rules_v3.yaml"
+        or default_config_path("m1_rules_v3.yaml")
     )
     rules = M1V3Rules.model_validate(yaml.safe_load(rules_path.read_text(encoding="utf-8")))
     disorder_payload = arguments.get("disorder_evidence")

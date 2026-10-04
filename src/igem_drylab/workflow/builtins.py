@@ -11,6 +11,7 @@ from igem_drylab.constructs import linker_features
 
 from .models import AssemblyRecord, Contract, LiteralInput, MapSpec, NodeInput, Project, ProjectInput, SequenceRecord, Workflow, WorkflowNode
 from .pathway import Pathway, solve_pathway
+from igem_drylab.resources import default_config_path
 from .tools import NodeContext, ToolDefinition, WorkflowTools
 
 
@@ -83,7 +84,7 @@ def recommend(project: Project, goal: Goal) -> Workflow:
         return Workflow(id="custom-pathway", name="用户通路两相稳态分析", description="读取已确认通路，检查速率律、单位与化学计量，求解稳态残差。", nodes=[WorkflowNode(id="pathway", label="计算通路稳态", tool_id="pathway.steady_state", inputs={"pathway": ProjectInput(path=["pathway"])})])
     if not project.sequences:
         raise ValueError("upload_and_confirm_sequences_first")
-    definitions, _ = M1FeatureDefinitions.from_yaml(Path(__file__).resolve().parents[3] / "configs" / "m1_feature_definitions.yaml")
+    definitions, _ = M1FeatureDefinitions.from_yaml(default_config_path("m1_feature_definitions.yaml"))
     nodes = [
         WorkflowNode(id="sequences", label="逐条分析融合蛋白", tool_id="fusion.sequence_metrics", inputs={"feature_definitions": LiteralInput(value=definitions.model_dump(mode="json"))}, map=MapSpec(items=ProjectInput(path=["sequences"]))),
         WorkflowNode(id="summary", label="汇总并比较构建", tool_id="workflow.gather", inputs={"results": NodeInput(node_id="sequences", path=["items"])}),

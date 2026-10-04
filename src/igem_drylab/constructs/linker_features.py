@@ -15,6 +15,7 @@ from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from igem_drylab.resources import default_config_path
 
 STANDARD_AMINO_ACIDS = frozenset("ACDEFGHIKLMNPQRSTVWY")
 
@@ -557,4 +558,4 @@ def _longest_boolean_run(values: list[bool], target: bool) -> int:
 
 
 def _default_definitions_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "configs" / "m1_feature_definitions.yaml"
+    return default_config_path("m1_feature_definitions.yaml")

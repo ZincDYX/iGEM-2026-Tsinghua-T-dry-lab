@@ -13,7 +13,7 @@ import hashlib
 import json
 import shutil
 import subprocess
-from datetime import UTC, datetime
+from datetime import timezone, datetime
 from pathlib import Path
 from typing import Any
 
@@ -305,7 +305,7 @@ def main() -> None:
     (report_dir / "APAC_result_summary.md").write_text(markdown_summary(root, oc_rows, dmt_rows, tool), encoding="utf-8")
     (report_dir / "methods_and_provenance.md").write_text(methods(root, tool), encoding="utf-8")
     manifest = {
-        "generated_at_utc": datetime.now(UTC).isoformat(),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "scope": "M1/M2 only; M3/M4 deliberately not reported as scientific predictions",
         "input_sha256": {path.name: sha256(path) for path in sorted(package.iterdir()) if path.is_file()},
         "production_commands": [

@@ -1,12 +1,18 @@
 """Typed semantic boundary between an LLM and deterministic execution planning."""
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
+
+
+class StringEnum(str, Enum):
+    """String-valued enums with stable str() on the supported Python 3.10 floor."""
+    def __str__(self) -> str:
+        return self.value
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ChangeType(StrEnum):
+class ChangeType(StringEnum):
     parameter_update = "parameter_update"
     scaffold_capacity_update = "scaffold_capacity_update"
     construct_sequence_update = "construct_sequence_update"
@@ -18,27 +24,27 @@ class ChangeType(StrEnum):
     unknown = "unknown"
 
 
-class Stage(StrEnum):
+class Stage(StringEnum):
     m1 = "m1"; m2 = "m2"; m3 = "m3"; m4 = "m4"; m5 = "m5"
 
 
-class ArtifactAction(StrEnum):
+class ArtifactAction(StringEnum):
     reuse = "reuse"; validate = "validate"; invalidate = "invalidate"; recompute = "recompute"; none = "none"
 
 
-class EvidenceAction(StrEnum):
+class EvidenceAction(StringEnum):
     none = "none"; use_existing = "use_existing"; search_local_evidence = "search_local_evidence"; request_measurement = "request_measurement"; human_review = "human_review"
 
 
-class MeasurementSource(StrEnum):
+class MeasurementSource(StringEnum):
     wetlab = "wetlab"; literature = "literature"; existing_artifact = "existing_artifact"; user_declared = "user_declared"; unknown = "unknown"
 
 
-class RequestedOutcome(StrEnum):
+class RequestedOutcome(StringEnum):
     recompute = "recompute"; calibrate = "calibrate"; interpret = "interpret"; design = "design"; validate = "validate"; resolve_missing_input = "resolve_missing_input"
 
 
-class ScientificConstraint(StrEnum):
+class ScientificConstraint(StringEnum):
     do_not_rerun_unaffected_structural_stages = "do_not_rerun_unaffected_structural_stages"
     docking_not_kinetic_modifier = "docking_not_kinetic_modifier"
     capacity_not_measured_abundance = "capacity_not_measured_abundance"
