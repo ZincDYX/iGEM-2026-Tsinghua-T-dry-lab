@@ -1525,7 +1525,9 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
         # are not valid IID bootstrap units. A replicate-block bootstrap requires
         # retained individual replicate trajectories and is intentionally withheld.
         fit = fit_mechanistic_parameter(parameter_name=plan.parameter_name, initial_value=values[kernel_key], bounds=plan.bounds, observed=observed, predictor=predictor, bootstrap_samples=0)
-        fit = fit.model_copy(update={"confidence_interval": None, "identifiability_warning": "replicate_block_bootstrap_unavailable_from_aggregated_trajectory"})
+        if fit.status != "estimated" or fit.best_fit is None:
+            return {"fit": fit.model_dump(), "candidate": None, "warning": fit.identifiability_warning}
+        fit = fit.model_copy(update={"confidence_interval": None, "identifiability_warning": "replicate_block_bootstrap_not_run_on_aggregated_trajectory"})
     except ValueError as error:
         return {"fit": None, "candidate": None, "warning": str(error)}
     requirement = next((item for item in [*requirements_for_stage(config, "m4"), *m4_kinetic_requirements(include_degradation=True)] if item.name == plan.parameter_name), None)
