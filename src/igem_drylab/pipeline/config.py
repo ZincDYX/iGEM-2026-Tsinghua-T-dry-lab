@@ -268,6 +268,11 @@ class InductionGateConfig(StrictScientificConfig):
 
 class M4Config(StrictScientificConfig):
     analysis: M4AnalysisConfig | None = None
+    assay_mode: Literal["substrate_feeding_functional", "full_pathway_production"] | None = None
+    expression_mode: Literal["constitutive", "induced"] | None = None
+    feeding_time_h: float | None = Field(default=None, ge=0)
+    confirmed_absent_enzymes: dict[Literal["PTR", "PT", "OC", "DMT"], str] = Field(default_factory=dict)
+    steady_state_observation_reference: str | None = None
     target_product: str = "glabridin"
     feed_compound_id: str | None = None
     feed_mode: Literal["batch_initial_state", "continuous_feed"] | None = None
@@ -308,6 +313,18 @@ class M4Config(StrictScientificConfig):
 
     @model_validator(mode="after")
     def _scenario_contract(self) -> "M4Config":
+        if self.feeding_time_h is not None and (self.feeding_time_h != 0 or self.feed_mode != "batch_initial_state"):
+            raise ValueError("current_dynamic_version_supports_only_explicit_time_zero_batch_feeding")
+        if self.assay_mode == "full_pathway_production" and self.feed_compound_id not in {None, "8"}:
+            raise ValueError("full_pathway_production_requires_input_8")
+        if self.assay_mode == "substrate_feeding_functional" and (self.feed_mode != "batch_initial_state" or self.feed_compound_id == "8"):
+            raise ValueError("substrate_feeding_assay_requires_explicit_intermediate_batch_input")
+        if self.expression_mode == "constitutive" and any((self.pt_gate,self.oc_gate,self.dmt_gate)):
+            raise ValueError("constitutive_expression_cannot_use_induction_gates")
+        if self.expression_mode == "induced" and not any((self.pt_gate,self.oc_gate,self.dmt_gate)):
+            raise ValueError("induced_expression_requires_explicit_measured_gate")
+        if any(not reference.strip() for reference in self.confirmed_absent_enzymes.values()):
+            raise ValueError("genetic_absence_requires_confirmed_construct_reference")
         if self.feed_mode is not None or self.feed_compound_id is not None:
             if self.network_mode == "markdown_steady_state":
                 if (self.feed_mode, self.feed_compound_id) != ("continuous_feed", "8"):

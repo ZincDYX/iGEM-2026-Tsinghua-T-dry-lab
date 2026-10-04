@@ -821,6 +821,16 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
     records, output = _run_m4_base(config, run_dir, assessments)
+    settings = config.stages.m4_reaction
+    for record in records:
+        record.experimental_contract = {
+            "assay_mode":settings.assay_mode,"expression_mode":settings.expression_mode,
+            "input_boundary":{"feed_mode":settings.feed_mode,"feed_compound_id":settings.feed_compound_id,
+                              "feeding_time_h":settings.feeding_time_h},
+            "confirmed_absent_enzymes":settings.confirmed_absent_enzymes,
+            "steady_state_observation_reference":settings.steady_state_observation_reference,
+            "claim_scope":record.claim_scope,
+            "approximation_scope":"rapid_phase_partition_and_independent_site_binding_not_experimental_validation"}
     if config.stages.m4_reaction.analysis is not None:
         from igem_drylab.design_analysis import analyze_prediction
         for record in records:
@@ -838,12 +848,14 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             except (ValueError, RuntimeError, KeyError) as error:
                 record.analysis_result = {"status":"insufficient_data","error":str(error)}
         write_models(run_dir / "m4_analysis", "reaction_predictions_with_analysis", records)
-        write_models(output.directory, output.json_file.stem, records)
+    write_models(output.directory, output.json_file.stem, records)
     return records, output
 
 
 def _run_m4_base(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
     formal_missing = _formal_analysis_missing(config)
+    if config.stages.m4_reaction.confirmed_absent_enzymes:
+        formal_missing.append("declared genetic absence requires an explicit active-subnetwork version; missing kinetics cannot be set to zero")
     if _is_formal(config) and config.stages.m4_reaction.activity_mode == "unity_assumption":
         formal_missing.append("formal M4 requires reviewed phase activity; unity is sensitivity-only")
     if formal_missing:
@@ -1035,7 +1047,15 @@ def _run_markdown_steady_m4(
             trajectory_artifact=trajectory,
             steady_state_fluxes=result.reaction_flux_um_per_h,
             steady_state_residuals=result.steady_state_residual_um_per_h,
-            mechanistic_diagnostics={"mass_invariant_residual": result.mass_invariant_residual or 0.0},
+            mechanistic_diagnostics={"mass_invariant_residual": result.mass_invariant_residual,
+                "q_10_to_11": result.reaction_flux_um_per_h["R3"]/(result.reaction_flux_um_per_h["R3"]+result.reaction_flux_um_per_h["R6"])
+                    if result.reaction_flux_um_per_h["R3"]+result.reaction_flux_um_per_h["R6"]>0 else None,
+                "q_9_to_13": result.reaction_flux_um_per_h["R5"]/(result.reaction_flux_um_per_h["R2"]+result.reaction_flux_um_per_h["R5"])
+                    if result.reaction_flux_um_per_h["R2"]+result.reaction_flux_um_per_h["R5"]>0 else None},
+            transport_report={"secretion_flux_um_per_h":result.secretion_flux_um_per_h,
+                "product_recovery_15_um_per_h":result.secretion_flux_um_per_h["15"],
+                "intermediate_outflow_8_to_14_um_per_h":sum(result.secretion_flux_um_per_h[str(i)] for i in range(8,15)),
+                "13_role":"reactive_intermediate_not_dead_end","branch_scope":"steady_flux_fraction_not_single_molecule_channeling"},
             parameter_ids=result.input_parameter_ids,
             provenance_summary=_merge_provenance(context.provenance_summary, _provenance_summary(selected.values())),
             assumptions=result.warnings,
@@ -1139,6 +1159,10 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             candidate_context=context, simulation_inputs={"prediction_contract": contract, "parameters": {name: resolution.canonical_value for name, resolution in selected.items()}, "executed_config": settings.model_dump(mode="json")},
             bottleneck="full_network_comparative_screen", trajectory_artifact=trajectory,
             flux_integrals=({f"relative_{key}": value for key, value in result.flux_integrals.items()} if author_native else result.flux_integrals),
+            transport_report={"integrals":result.transport_integrals,"units":_full_network_units(settings),
+                "product_recovery_species":"15","intermediate_outflow_species":[str(i) for i in range(8,15)],
+                "13_role":"reactive_intermediate_not_dead_end",
+                "branch_scope":"processed_substrate_interval_fraction_not_single_molecule_channeling"},
             mechanistic_diagnostics=({key: result.diagnostics[key] for key in (
                 "target_yield_fraction", "branch_9_to_13_fraction", "dmt_late_selectivity",
                 "early_dmt_fraction", "oc_before_dmt_route_fraction", "side_product_fraction_13",
@@ -1393,6 +1417,13 @@ def _formal_analysis_missing(config: ProjectConfig) -> list[str]:
                if getattr(config.experimental_context, name) is None]
     if not config.stages.m4_reaction.condition_id:
         missing.append("formal explicit condition_id")
+    settings = config.stages.m4_reaction
+    if settings.assay_mode is None or settings.expression_mode is None:
+        missing.append("formal explicit assay_mode and expression_mode")
+    if settings.feed_mode == "batch_initial_state" and settings.feeding_time_h is None:
+        missing.append("formal explicit feeding_time_h")
+    if settings.network_mode == "markdown_steady_state" and not settings.steady_state_observation_reference:
+        missing.append("formal steady_state_observation_reference for steady prediction applicability")
     if config.stages.m4_reaction.feed_mode is None or config.stages.m4_reaction.feed_compound_id is None:
         missing.append("formal explicit feed identity and boundary condition")
     if not config.execution.require_provenance or config.execution.allow_assumptions:

@@ -163,6 +163,8 @@ class M4CandidateContext(BaseModel):
 
 
 class M4ReactionPrediction(ScientificResult):
+    experimental_contract: dict[str, Any] = Field(default_factory=dict)
+    transport_report: dict[str, Any] = Field(default_factory=dict)
     analysis_result: dict[str, Any] | None = None
     robustness: dict[str, Any] | None = None
     sensitivity: dict[str, Any] | None = None
