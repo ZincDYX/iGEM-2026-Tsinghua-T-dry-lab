@@ -43,6 +43,15 @@ def test_no_implicit_uniform_bounds_independence_or_sigma_convention():
             source_reference='fixture',parameter_ids=['fixture'],reviewed_by='fixture')
 
 
+def test_agent_local_registry_exposes_same_actual_capabilities():
+    from igem_drylab.mcp.registry import create_default_registry
+    registry = create_default_registry()
+    assert {'igem.m4.analyze_prediction','igem.design.scan_scaffolds',
+            'igem.research.freeze_prediction','igem.research.validate_holdout'} <= set(registry.names())
+    result = registry.call('igem.design.scan_scaffolds',{'design_plan':{},'output_dir':'unused'})
+    assert result.is_error  # Invalid plans do not execute or invent inputs.
+
+
 def test_same_version_physical_steady_solver_is_actually_called():
     from test_new_review_m4 import steady_fixture
     from igem_drylab.m4_steady_state import solve_m4_steady_state

@@ -810,8 +810,8 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
         record = selected[name].selected_parameter
         if record is not None and record.conditions.get("entity_basis") != site_count_basis:
             missing.append(f"{name} conditions.entity_basis matching M2 site_count_basis")
-        if record is not None and name != "c_dense_scaffold" and not record.construct_id:
-            missing.append(f"{name} explicit matching fusion construct identity")
+        if record is not None and (not record.construct_id or not record.condition_id):
+            missing.append(f"{name} explicit matching fusion construct and condition identity")
     for name in ("kd_sh3", "kd_pdz"):
         record = selected[name].selected_parameter
         if record is not None and not record.conditions.get("binding_pair"):
@@ -831,9 +831,13 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             "steady_state_observation_reference":settings.steady_state_observation_reference,
             "claim_scope":record.claim_scope,
             "approximation_scope":"rapid_phase_partition_and_independent_site_binding_not_experimental_validation"}
+        contract = record.simulation_inputs.get("prediction_contract")
+        if contract:
+            contract["experiment_context"] = record.experimental_contract
         if record.trajectory_artifact and record.trajectory_artifact.is_file():
             artifact = json.loads(record.trajectory_artifact.read_text(encoding="utf-8"))
             if "prediction_contract" in artifact:
+                artifact["prediction_contract"]["experiment_context"] = record.experimental_contract
                 artifact.update(experimental_contract=record.experimental_contract,
                                 construct_id=record.construct_id,condition_id=record.condition_id)
                 record.trajectory_artifact.write_text(json.dumps(artifact),encoding="utf-8")

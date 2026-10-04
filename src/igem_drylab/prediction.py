@@ -46,6 +46,7 @@ class PredictionContract(BaseModel):
     extracellular_volume_l: float | None = Field(default=None, gt=0)
     kernel_inputs: dict
     solver_settings: dict
+    experiment_context: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_series(self):
@@ -94,6 +95,10 @@ class PredictionContract(BaseModel):
 def observe_prediction(payload, result):
     """Return canonical observation-space series; volumes never inferred."""
     contract = PredictionContract.model_validate(payload)
+    for key in ("assay_mode", "expression_mode", "input_boundary"):
+        declared = getattr(result, key)
+        if declared and declared != contract.experiment_context.get(key):
+            raise ValueError("observation_experimental_mode_or_boundary_mismatch:" + key)
     if contract.concentration_unit != "uM" or contract.time_unit != "h":
         raise ValueError("author_native_prediction_cannot_compare_absolute_measurements")
     if contract.model_kind == "markdown_steady_state" and result.observation_kind != "steady_state":
@@ -157,7 +162,9 @@ def replay_prediction(payload, parameter_name, value):
         raise ValueError("fit_parameter_must_be_finite")
     if contract.solver_settings["scipy_version"] != scipy.__version__:
         raise ValueError("prediction_replay_requires_recorded_scipy_environment")
-    return _REPLAY_ADAPTERS[(contract.model_kind, contract.formula_version)](contract, parameter_name, value)
+    replayed = _REPLAY_ADAPTERS[(contract.model_kind, contract.formula_version)](contract, parameter_name, value)
+    replayed["experiment_context"] = contract.experiment_context
+    return replayed
 
 
 def _replay_steady(contract, parameter_name, value):

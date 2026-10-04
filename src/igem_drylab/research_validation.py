@@ -74,6 +74,11 @@ def validate_holdout(snapshot: dict, dataset_id: str, dataset_file: Path) -> dic
             raise ValueError("validation_record_overlaps_calibration_even_with_new_file_name")
         if (record.construct_id,record.condition_id)!=(snapshot["construct_id"],snapshot["condition_id"]):
             raise ValueError("holdout_identity_does_not_match_frozen_prediction")
+        if snapshot["claim_scope"]=="conditional_mechanism":
+            if record.assay_mode is None or record.expression_mode is None or not record.input_boundary:
+                raise ValueError("real_holdout_requires_declared_assay_expression_and_boundary")
+            if record.observation_kind=="steady_state" and not record.steady_state_confirmation_reference:
+                raise ValueError("steady_holdout_requires_observed_platform_evidence")
         time,predicted = observe_prediction(snapshot["prediction_contract"],record)
         observed_time = np.asarray(record.time_hours())
         if len(time)==0 or observed_time.size==0 or observed_time.min()<time.min() or observed_time.max()>time.max():

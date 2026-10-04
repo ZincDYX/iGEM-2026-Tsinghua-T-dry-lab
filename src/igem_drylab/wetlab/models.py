@@ -49,6 +49,10 @@ class WetLabResult(BaseModel):
     batch_id: str | None = None
     control_available: bool = False
     observation_kind: Literal["time_course", "steady_state"] = "time_course"
+    assay_mode: Literal["substrate_feeding_functional", "full_pathway_production"] | None = None
+    expression_mode: Literal["constitutive", "induced"] | None = None
+    input_boundary: dict[str, str | float | None] = Field(default_factory=dict)
+    steady_state_confirmation_reference: str | None = None
     measurement_compartment: Literal["intracellular", "extracellular", "total_extract"] | None = None
     concentration_basis: Literal["cell_volume", "medium_volume", "extraction_volume"] | None = None
     extraction_volume_l: float | None = Field(default=None, gt=0)

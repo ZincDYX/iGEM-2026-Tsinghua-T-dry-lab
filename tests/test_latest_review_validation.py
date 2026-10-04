@@ -64,3 +64,12 @@ def test_holdout_censor_and_units_are_not_ignored(tmp_path):
     result = validate_holdout(snapshot,'heldout',heldout)
     assert result['records'][0]['series']['13']['rmse_uM'] is None
     assert result['records'][0]['series']['13']['status']=='all_censored'
+
+
+def test_observation_assay_metadata_cannot_silently_change_frozen_boundary(tmp_path):
+    snapshot,training,heldout = fixture(tmp_path)
+    raw = json.loads(heldout.read_text())
+    raw[0]['assay_mode']='substrate_feeding_functional'
+    heldout.write_text(json.dumps(raw))
+    with pytest.raises(ValueError,match='experimental_mode_or_boundary'):
+        validate_holdout(snapshot,'heldout',heldout)

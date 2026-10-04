@@ -430,34 +430,28 @@ def run_external_tool(
 @server.tool(name="igem.m4.analyze_prediction", structured_output=True,
              description="Original finite differences and evidence-declared LHS/Spearman; no invented ranges.")
 def m4_analyze_prediction(prediction_contract: dict[str, Any], analysis_config: dict[str, Any]) -> dict[str, Any]:
-    from igem_drylab.design_analysis import M4AnalysisConfig, analyze_prediction
-    return analyze_prediction(prediction_contract, M4AnalysisConfig.model_validate(analysis_config))
+    return _call_local("igem.m4.analyze_prediction",{"prediction_contract":prediction_contract,"analysis_config":analysis_config})
 
 
 @server.tool(name="igem.design.scan_scaffolds", structured_output=True,
              description="Finite candidate scan reruns M1-M4 per explicit project; retains failed designs.")
 def design_scan_scaffolds(design_plan: dict[str, Any], output_dir: str) -> dict[str, Any]:
-    from pathlib import Path
-    from igem_drylab.design_analysis import FiniteDesignPlan, scan_scaffold_designs
-    return scan_scaffold_designs(FiniteDesignPlan.model_validate(design_plan), Path(output_dir))
+    return _call_local("igem.design.scan_scaffolds",{"design_plan":design_plan,"output_dir":output_dir})
 
 
 @server.tool(name="igem.research.freeze_prediction", structured_output=True,
              description="Freeze source, solver, parameter and calibration bytes; not a validation claim.")
 def research_freeze_prediction(prediction_file: str, parameter_file: str, calibration_datasets: dict[str,str],
                                freeze_id: str, construct_id: str, condition_id: str, claim_scope: str) -> dict[str,Any]:
-    from pathlib import Path
-    from igem_drylab.research_validation import freeze_prediction
-    return freeze_prediction(Path(prediction_file),Path(parameter_file),{k:Path(v) for k,v in calibration_datasets.items()},
-        freeze_id=freeze_id,construct_id=construct_id,condition_id=condition_id,claim_scope=claim_scope)
+    return _call_local("igem.research.freeze_prediction",{"prediction_file":prediction_file,"parameter_file":parameter_file,
+        "calibration_datasets":calibration_datasets,"freeze_id":freeze_id,"construct_id":construct_id,
+        "condition_id":condition_id,"claim_scope":claim_scope})
 
 
 @server.tool(name="igem.research.validate_holdout", structured_output=True,
              description="Evaluate only held-out data against frozen predictions, without fitting or changing parameters.")
 def research_validate_holdout(snapshot: dict[str,Any], dataset_id: str, dataset_file: str) -> dict[str,Any]:
-    from pathlib import Path
-    from igem_drylab.research_validation import validate_holdout
-    return validate_holdout(snapshot,dataset_id,Path(dataset_file))
+    return _call_local("igem.research.validate_holdout",{"snapshot":snapshot,"dataset_id":dataset_id,"dataset_file":dataset_file})
 
 
 def main() -> None:

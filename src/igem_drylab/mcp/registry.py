@@ -4,6 +4,7 @@ from collections.abc import Iterable
 import jsonschema
 
 from .tools import TOOL_BINDINGS
+from .research_tools import BINDINGS as RESEARCH_BINDINGS
 from .types import JsonObject, McpTool, McpToolResult, ToolHandler
 
 
@@ -35,6 +36,6 @@ class ToolRegistry:
 
 def create_default_registry() -> ToolRegistry:
     registry = ToolRegistry()
-    for tool, handler in TOOL_BINDINGS:
+    for tool, handler in [*TOOL_BINDINGS, *RESEARCH_BINDINGS]:
         registry.register(tool, handler)
     return registry

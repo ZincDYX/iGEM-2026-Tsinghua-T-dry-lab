@@ -50,3 +50,20 @@ def test_pipeline_s4_sources_and_target_are_passed(mode, tmp_path):
 def test_target_requires_declared_design_decision():
     with pytest.raises(ValueError, match='design_decision'):
         M3Config(target_enzyme_ratio_parameter='target')
+
+
+def test_formal_phase_diagram_does_not_accept_global_unfused_scaffold_evidence():
+    from igem_drylab.parameters import ParameterResolution
+    from igem_drylab.pipeline.stages import _m3_formal_source_violations
+    requirements = {r.name:r for r in requirements_for_stage(load_config(Path('configs/m1_m4_example.yaml')),'m3')}
+    selected = {}
+    for name,item in requirements.items():
+        record = ParameterRecord(parameter_id=name,name=name,value=.1 if name=='phi' else 1.,
+            unit=item.canonical_unit,parameter_type=item.parameter_type,enzyme_id=item.enzyme_id,
+            species_id=item.species_id,source_type='wetlab',source_reference='software-fixture',
+            construct_id='fusion',condition_id='condition',review_status='approved',
+            conditions={'entity_basis':'complete_assembly','binding_pair':'fixture'})
+        selected[name] = ParameterResolution(name=name,status='resolved',selected_parameter=record,canonical_value=record.value)
+    assert not _m3_formal_source_violations(selected,'complete_assembly')
+    selected['c_dense_scaffold'].selected_parameter.construct_id=None
+    assert any('fusion construct and condition' in item for item in _m3_formal_source_violations(selected,'complete_assembly'))
