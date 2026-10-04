@@ -4,7 +4,7 @@
 
 本报告对应 Zhang 等的 *Discover the maze-like network for glabridin biosynthesis*（Nature Communications 17, 2215；DOI 10.1038/s41467-026-68881-8）。已完成公开计算模型的轨迹/诱导扫描复现、12 组酶动力学重拟合及 Fig. 4d/e/f/i 已发表实测数据的重分析；**不是整篇论文的完整复现，也不是重新完成湿实验**。
 
-独立使用作者原始参数读取器后，其参数与项目解析器全部一致，作者 `one_step` 与项目适配器全部状态逐点差为 0，Fig. 4h 源表最大浓度差约 3.047e-13 M。现有证据不支持“我们把作者原始模型抄错/读错”的判断；也不能由此证明生产 M1–M4 模型的科学有效性。
+独立使用作者原始参数读取器后，其参数与项目解析器全部一致，作者 `one_step` 与项目适配器全部状态逐点差为 0。历史兼容环境的 Fig. 4h 源表最大浓度差约 3.047e-13 M；现代 SciPy 1.17.1 为 6.769e-7 M，单变量控制实验确认差异来自官方已修复的 LSODA 插值输出。现有证据不支持“我们把作者原始模型抄错/读错”的判断；也不能由此证明生产 M1–M4 模型的科学有效性。
 
 作者发布材料存在可确认的文字/代码/标注不一致；运输参数的编号映射高度可疑，但到底源表标签错还是模型参数错仍不确定。没有足够证据认定原始湿实验数据错误。本报告撤回旧版对 S5i 单位的误判，并明确动力学拟合误差的比较口径。
 
@@ -18,7 +18,7 @@
 - 旧入口 `/mnt/data/dyx/lkdagent/drylab` 指向新版；两个旧代码目录以时间戳归档至 `/mnt/data/dyx/drylab-code-archives/`。原有 Git 工作改动、`.env`、输入和约 8 GB 输出保留，不删除实验数据。
 - 原文文件与计算结果：`/mnt/data/dyx/glabridin-reproduction/`。
 - 隔离的原文数值环境：`/mnt/data/dyx/drylab-envs/glabridin-reference`。使用 Python 3.11、NumPy 1.24.4、SciPy 1.10.1、Matplotlib 3.7.5、OpenPyXL 3.1.5；实际传递依赖见服务器 `environment.lock.txt`。
-- 作者方法记录的是 Python 3.8.5；本次没有声称解释器版本或结果逐比特一致。
+- 作者方法记录的是 Python 3.8.5；SciPy 1.10.1 不能构成相同解释器组合，所以这只是历史输出兼容环境，不是已确认的作者原始环境。本次没有声称解释器版本或结果逐比特一致。
 - 正常项目环境仍是 `/mnt/data/dyx/miniconda3/envs/drylab-m1m2`，新版源码通过 editable 安装指向当前运行目录。
 
 第三方 Git 子模块的地址和提交保留在源码/部署清单中；未把所有可选第三方项目、数据库和模型重新下载为离线镜像。已有工具、ColabFold 权重和环境保留。Tauri 源码已部署，但本次没有编译服务器桌面壳、生成 Windows 安装包或执行浏览器端到端测试。
@@ -101,7 +101,7 @@
 
 对 Figshare 与出版社 Source Data 的 48 个工作表逐单元格核对：缓存值差异仅在 Supplementary Fig. 2d（出版社补充 63 个系统发育序列信息单元格），本次模拟和动力学数据没有缓存值差异。原始文件不修改。
 
-## 实际复现范围与结果
+## 历史兼容环境的实际复现范围与结果
 
 `scripts/reproduce_glabridin_paper.py` 直接导入作者 `reaction_kinetics`，不复制或重写反应方程。作者 `one_step` 与适配求解结果逐点一致（差异 0）。保留原始 E、Km、kcat/Km、运输参数、诱导门控和初始条件；不将负浓度裁剪为零。
 
@@ -155,6 +155,32 @@ Fig. 4g 匹配需要使用作者代码已有的负诱导时刻分支（`time_rat
 
 ## 原因定位：代码问题、发布材料问题与尚不确定之处
 
+### 新评审后的历史/现代环境对照及收敛诊断
+
+本轮在 air-lab 使用实际隔离环境 SciPy 1.10.1 与生产环境 SciPy 1.17.1 各完整运行一次最终复现脚本，均覆盖 1000 点曲线、500 点双容差扫描、12 组动力学及实测源表重分析。结果保存于 `results/new-review-20261004/final-historical/` 与 `final-modern/`，不覆盖此前证据。
+
+| 目标 | 历史环境最大浓度差 | 现代环境最大浓度差 | 结论边界 |
+| --- | ---: | ---: | --- |
+| Fig. 4h | 3.0468407e-13 M | 6.7693247e-7 M | 插值实现差异已单变量定位 |
+| Fig. 4g GgDMT1，既有负值无门控分支 | 1.4563111e-13 M | 1.2830433e-7 M | 插值差异已定位，作者实际出图配置未确认 |
+| Fig. 4g NhPDA1，既有负值无门控分支 | 2.4260680e-13 M | 1.6723737e-7 M | 同上；保持 R5–R7 的既有 0.1 倍场景，不改作者参数文件 |
+| S18b | 8.9716764e-10 mM | 6.7693247e-4 mM | 与插值差异一致；未对全部六个场景分别做单变量实验 |
+| S18c | 1.9969257e-8 mM | 1.9969257e-8 mM | 小差异仍在，原因未确定，不声称精确一致 |
+
+`scripts/diagnose_lsoda_interpolation.py` 在独立诊断进程中保持同一现代积分后端、原始 RHS、参数和容差，只切换官方旧 `_dense_output_impl`；三条受控曲线的中间误差恢复至历史量级，终点逐值不变。`finally` 恢复现代方法，不修改任何生产 SciPy 文件。实际原始 16 状态 NPZ、方法来源 SHA-256、官方完整许可证一并保存。
+
+官方说明：[SciPy issue #14480](https://github.com/scipy/scipy/issues/14480)、[1.12.0 发布说明](https://docs.scipy.org/doc/scipy-1.12.0/release/1.12.0-notes.html)、[1.10.1 原始源码](https://raw.githubusercontent.com/scipy/scipy/v1.10.1/scipy/integrate/_ivp/lsoda.py)、[1.17.0 源码](https://raw.githubusercontent.com/scipy/scipy/v1.17.0/scipy/integrate/_ivp/lsoda.py)。修复包括使用上一成功步阶数 `iwork[13]` 而非下一步拟用阶数 `iwork[14]`，及降阶历史系数缩放。生产依赖下限改为 SciPy 1.12，独立历史环境保留；历史逐点接近不能成为将旧插值缺陷带回生产的理由。
+
+另以未修改作者 RHS，按诱导起点/爬坡终点分段，交叉运行 LSODA/BDF/Radau × 三对容差：`(1e-8,1e-12)`、`(1e-10,1e-14)`、`(1e-12,1e-16)`。最后一对容差时，LSODA/BDF 与最紧 Radau 的全轨迹最大状态差分别为约 **1.29e-15 / 4.82e-15**（作者源表浓度口径）；终点产物约 **5.80341971474e-5**。LSODA 最紧设置仍有约 -2.00e-16 的原始微小负值，未裁剪。这补充了数值收敛证据，不证明原始物理参数或独立湿实验预测有效。
+
+### 逐目标机器裁决，不以退出码替代科学验收
+
+新增每个数值目标的 `target_id/source_file_sha256/sheet/cell_range/source_kind/scenario/scenario_parameters/author_parameters_sha256/rhs_sha256/solver_version/solver_settings/comparison_space/expected_discrepancies/verdict`；逐点 CSV 保留。`source_kind=published_simulation` 不冒充真实湿实验观测。源表重统计另保留实际重复、缺失值及原单元格，不将重统计冒充独立外推验证。
+
+严格比较采用原始文本单元格末位半单位加机器误差下限；数值 Excel 单元格没有声明十进制报告精度，仅按存储/算术精度检查；零值不允许半单位的巨大宽容。**该标准检验存储级数值一致，不是生物学可接受误差，也不是已经核定的论文科学报告精度。** 本轮历史结果虽极接近发布曲线，仍有目标不能通过此严格标准，S18 的小残差尤其保留为未闭合；没有增大容差来制造 pass。`time_ratio=0` 的文档/代码矛盾单独标记 `expected_documentation_code_contradiction`，仍显示不匹配和实际残差。
+
+默认退出码 0 仅表示执行完成；`--require-source-match` 可要求严格匹配，否则退出 2，并先保存全部裁决证据。两种环境结果及受控诊断被汇总到 `review_validation_summary.json`，复现接近、存储级一致、现代求解器收敛和生物学验证分别报告。
+
 ### 已独立排查的复现适配问题
 
 新增 `scripts/diagnose_glabridin_reference.py` 原样导入作者模块，使用其原始 `DataLoader`；仅在内存中将读取器期待的 `data.txt` 路径指向作者实际发布的 `simulation-data.txt`，不改写任何作者文件。随后独立调用作者 `one_step` 并捕获全部 16 个状态，与项目适配器和发布源表交叉比较。这避免仅以项目同一个参数解析器两次运行作为自证。
@@ -175,6 +201,12 @@ Fig. 4g 匹配需要使用作者代码已有的负诱导时刻分支（`time_rat
 组学、长时间 MD、湿实验没有完成是范围缺口，不是数据错误证据。生产凝聚体 M4 的运输证据、稳态稳定性与预测有效性仍需独立验证。
 
 ## 服务器验收
+
+本轮 N01–N06 修复：M1 显式定位/审核和原始工具证据绑定；M4 累计量 ODE、单向流出/回流、积分化学计量与尺度一致稳态资格；版本注册/实际求解设置回放；M5 不可辨识/边界拟合不产生候选。细节与模块测试见 `docs/new_review_repairs_20261004.md`。化学速率方程与不可变作者输入没有化简或改写；缺失科学证据仍阻断。
+
+本轮最终完整后端回归 **368 passed，无失败/错误/跳过，41.44 秒**，包括三项复现裁决测试、显式旧版输入升级阻断及 M4 原始/总运输量产物持久化核查。随包 `tests.xml` / `review_validation_summary.json` 保存实际结果。首轮另有 5 项工作流失败，原因是原部署搬迁遗留字节码仍记录旧测试源路径；更新源码时间戳使缓存失效后全套通过，首轮 XML 也保留，没有取消实施指纹核查。现代 Matplotlib 移除 `boxplot(labels=...)` 导致的一次诊断绘图失败已改为显式设置 x 轴标签，不改科学数值。
+
+下段 **316 项/前端/MCP** 为上一版的既有验收记录，不是本轮重新运行外部预测工具或 Windows 桌面构建的证据：
 
 后端全套 **316 项 pytest 通过，无跳过**，前端 TypeScript/Vite 构建与 **3 项 Vitest 通过**。作者文件接入后，之前在干净克隆中因缺文件而跳过的作者回归测试也实际运行通过；原始证据见 `server-verification/pytest.xml` / 日志。官方 SDK stdio 客户端发现 18 个 MCP 工具并真实调用 M1、部署审计和外部 FreeSASA，产生输出及作业清单，FreeSASA 退出码 0。
 
@@ -216,7 +248,9 @@ PYTHONDONTWRITEBYTECODE=1 /mnt/data/dyx/drylab-envs/glabridin-reference/bin/pyth
 | `execution_environment.json`；上级 `environment.lock.txt` | 原文复现环境记录；追加诊断 JSON 另含实际解释器/NumPy/SciPy版本 |
 | `reproduction_summary.json` | 既有复现摘要；本报告和新增诊断记录补充其统计/单位说明，未覆盖旧证据 |
 
-`server-verification/` 保存此前 pytest、前端构建、MCP/FreeSASA 与部署记录；本次仅增加诊断并更新报告，不冒充重新完成全部测试或真实外部工具验证。
+`server-verification/` 保存此前 pytest、前端构建、MCP/FreeSASA 与部署记录；本轮追加后端全套回归与原文数值诊断，不冒充重新完成前端/桌面打包或真实外部预测工具验证。
+
+本轮新增交付 `iGEM_new_review修复验证证据_20261004.zip`：包含历史/现代最终 JSON、逐点 CSV、500 点扫描、实际原始状态、两套环境锁、源码部署校验、完整/首轮测试 XML、独立插值/收敛诊断、此前引用的独立读取器诊断和按文件 SHA-256 的证据清单。打包脚本为 `scripts/package_new_review_evidence.py`。新 `new_review_deployment_manifest.json` 验证部署树与该次 Git release archive 的实际字节；旧部署清单仍是历史基准，不混作新版提交。
 
 ## 代码 bundle 与交付记录
 

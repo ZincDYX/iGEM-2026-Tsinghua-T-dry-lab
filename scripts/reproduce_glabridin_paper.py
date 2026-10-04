@@ -32,6 +32,7 @@ from scipy.stats import kruskal, norm, rankdata
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from igem_drylab.published_reference import load_author_native_parameters
+from igem_drylab.reference_validation import source_precision_verdict
 
 AUTHOR_MD5 = {
     "simulation-network-glabridin-final.py": "43195d5a0ffef38aef774be6e174aa22",
@@ -57,7 +58,7 @@ def figure(path, fig):
     plt.close(fig)
 
 
-def source_table(rows, start, stop):
+def source_table(rows, start, stop, *, preserve_text=False):
     """Read a numeric source table, retaining numeric strings and true zeros."""
     selected = []
     for row in rows:
@@ -66,14 +67,16 @@ def source_table(rows, start, stop):
                 raise ValueError("Source concentrations exist without a time coordinate")
             continue
         # float(None) must fail: a missing concentration is not a measured zero.
-        selected.append([float(value) for value in row[start:stop]])
-    return np.asarray(selected, dtype=float)
+        numeric=[float(value) for value in row[start:stop]]
+        selected.append(list(row[start:stop]) if preserve_text else numeric)
+    return np.asarray(selected, dtype=object if preserve_text else float)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sources", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--require-source-match", action="store_true", help="Exit 2 if a target misses strict source-storage identity (known documentation conflicts remain visible)")
     args = parser.parse_args()
     raw, out = args.sources.resolve(), args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -137,11 +140,37 @@ def main():
         return np.column_stack([solution.t, (solution.y[:8]+solution.y[8:]).T, solution.y[13]])
 
     metrics = []
-    def compare(name, calculated, source, units):
+    def compare(name, calculated, source, units, source_cells=None):
         if calculated.shape != source.shape:
             raise ValueError(f"{name}: shape mismatch {calculated.shape} != {source.shape}")
         difference = calculated-source
-        metrics.append(dict(target=name, shape=list(source.shape), units=units,
+        source_locations={
+            "author_one_step_adapter":("author one_step",None),
+            "Fig4h":("Fig.4h","B4:K1003"),
+            "Fig4g_GgDMT1_documented_zero":("Fig.4g","B4:K1003"),
+            "Fig4g_GgDMT1_undocumented_ungated":("Fig.4g","B4:K1003"),
+            "Fig4g_NhPDA1_documented_zero":("Fig.4g","M4:V1003"),
+            "Fig4g_NhPDA1_undocumented_ungated":("Fig.4g","M4:V1003"),
+            "SupplementaryFig18b":("SupplementaryFig.18b","B4:H1003"),
+            "SupplementaryFig18c":("SupplementaryFig.18c","B3:C502"),
+        }
+        expected=["Documented time_ratio=0 executes an induction ramp, not the author's existing ungated branch; actual figure configuration unconfirmed"] if name.endswith("documented_zero") else []
+        verdict=source_precision_verdict(calculated,source,source_cells=source_cells,expected_discrepancies=expected)
+        source_file=code if name=="author_one_step_adapter" else raw/"Source Data_V2.xlsx"
+        metrics.append(dict(target=name,target_id=name, shape=list(source.shape), units=units,
+                            source_file_sha256=hashlib.sha256(source_file.read_bytes()).hexdigest(),
+                            sheet=(source_locations[name][0] if name=='author_one_step_adapter' else
+                                   next(key for key in sheets if key.replace(' ','').replace('.','')==source_locations[name][0].replace(' ','').replace('.',''))),
+                            cell_range=source_locations[name][1],
+                            source_kind="author_code_crosscheck" if name=="author_one_step_adapter" else "published_simulation",
+                            scenario=name,
+                            scenario_parameters=({'time_ratio':0. if name.endswith('documented_zero') else -1.,'R5_R6_R7_kcat_scale':.1 if 'NhPDA1' in name else 1.} if name.startswith('Fig4g') else
+                                {'time_ratio_values':[0,.2,.4,.6,.8,.9]} if name=='SupplementaryFig18b' else
+                                {'induction_grid_days':source[:,0].tolist()} if name=='SupplementaryFig18c' else {'time_ratio':values['time_ratio']}),
+                            author_parameters_sha256=hashlib.sha256((raw/"simulation-data.txt").read_bytes()).hexdigest(),
+                            rhs_sha256=hashlib.sha256(code.read_bytes()).hexdigest(),
+                            solver_version=importlib.metadata.version("scipy"),solver_settings={"method":"LSODA","rtol":1e-3,"atol":1e-6},
+                            **verdict,
                             max_abs_difference=float(np.max(np.abs(difference))),
                             rmse=float(np.sqrt(np.mean(difference**2))),
                             max_abs_time_difference_days=float(np.abs(difference[:,0]).max()),
@@ -163,7 +192,7 @@ def main():
     plt.close("all")
     compare("author_one_step_adapter", table(base), author_output, "author-native, time days")
     h = source_table(find_sheet("Fig.4h")[3:], 1, 11)
-    compare("Fig4h", table(base), h, "source concentration M; time column days")
+    compare("Fig4h", table(base), h, "source concentration M; time column days",source_table(find_sheet("Fig.4h")[3:],1,11,preserve_text=True))
     g = find_sheet("Fig.4g")
     g_left = source_table(g[3:], 1, 11)
     g_right = source_table(g[3:], 12, 22)
@@ -174,13 +203,14 @@ def main():
         for ratio in [0.0, -1.0]:
             sol = run(ratio,scale)
             name = f"Fig4g_{label}_{'documented_zero' if ratio == 0 else 'undocumented_ungated'}"
-            compare(name, table(sol), source, "source concentration M; time days")
+            start,stop=(1,11) if label=="GgDMT1" else (12,22)
+            compare(name, table(sol), source, "source concentration M; time days",source_table(g[3:],start,stop,preserve_text=True))
             g_solutions[name] = sol
     b = find_sheet("SupplementaryFig.18b")
     b = source_table(b[3:], 1, 8)
     curves = [run(ratio) for ratio in [0,.2,.4,.6,.8,.9]]
     reproduced_b = np.column_stack([base.t, *[(s.y[7]+s.y[15])*1000 for s in curves]])
-    compare("SupplementaryFig18b", reproduced_b, b, "concentration mM; time days")
+    compare("SupplementaryFig18b", reproduced_b, b, "concentration mM; time days",source_table(find_sheet("SupplementaryFig.18b")[3:],1,8,preserve_text=True))
     c = find_sheet("SupplementaryFig.18c")
     c = source_table(c[2:], 1, 3)
     scan, tight_scan = [], []
@@ -195,7 +225,7 @@ def main():
     tight_scan = np.asarray(tight_scan)
     save_csv(out / "induction_tolerance_sensitivity.csv",["induction_days","author_default_final_mM","tighter_final_mM"],
              zip(scan[:,0],scan[:,1],tight_scan[:,1]))
-    compare("SupplementaryFig18c", scan, c, "concentration mM; induction days")
+    compare("SupplementaryFig18c", scan, c, "concentration mM; induction days",source_table(find_sheet("SupplementaryFig.18c")[2:],1,3,preserve_text=True))
     optimum = int(np.argmax(scan[:,1]))
     tight = run(values["time_ratio"], tight=True)
     diagnostic = dict(min_state_default=float(base.y.min()), min_state_tight=float(tight.y.min()),
@@ -330,7 +360,8 @@ def main():
                          p_bonferroni_sensitivity=min(1.0,raw_p*15)))
     save_json(out / "transport_measurements.json",dict(groups=transport,kruskal_H=float(stat),kruskal_p=float(p),
               dunn=dunn,adjustment_note="Paper names Dunn but does not specify correction; unadjusted and Bonferroni sensitivity are explicitly separate, not an assertion of identical figure p-values."))
-    fig,ax=plt.subplots(figsize=(7,4));ax.boxplot(groups,labels=[str(i) for i in compounds],whis=1.5)
+    fig,ax=plt.subplots(figsize=(7,4));ax.boxplot(groups,whis=1.5)
+    ax.set_xticks(range(1,len(compounds)+1),[str(i) for i in compounds])
     ax.set(title="Fig.4f source extracellular ratios",xlabel="Compound",ylabel="Extracellular (%)")
     figure(out / "fig4f_transport.png",fig)
     strain_rows=[]
@@ -353,6 +384,8 @@ def main():
                        "Wet-lab experiments", "Validation of condensate transport or production M4"]
     ))
     print(json.dumps(dict(diagnostics=diagnostic,numerical=metrics,missing=missing),indent=2),flush=True)
+    if args.require_source_match and any(not row['source_precision_match'] and not row['expected_discrepancies'] for row in metrics):
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
