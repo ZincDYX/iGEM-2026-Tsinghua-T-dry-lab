@@ -1,0 +1,145 @@
+{
+  "article_doi": "10.1038/s41467-026-68881-8",
+  "figshare_doi": "10.6084/m9.figshare.29221010.v1",
+  "figshare_version": 1,
+  "license": {
+    "value": 1,
+    "name": "CC BY 4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "files": [
+    {
+      "name": "simulation-data.txt",
+      "url": "https://ndownloader.figshare.com/files/55079456",
+      "bytes": 1549,
+      "md5": "66efd25bea2fe3c4e6d095c44fcb944e",
+      "sha256": "d5821b0d8d299f57b8a204b6986daf044599135c8a9a31371e41712fb4690c56",
+      "acquisition": "existing immutable copy reverified"
+    },
+    {
+      "name": "simulation-network-glabridin-final.py",
+      "url": "https://ndownloader.figshare.com/files/55079462",
+      "bytes": 9782,
+      "md5": "43195d5a0ffef38aef774be6e174aa22",
+      "sha256": "bbd12e1c631e4f68923ab202ba81393c6620dd163712360401894f5b14c8eaa1",
+      "acquisition": "existing immutable copy reverified"
+    },
+    {
+      "name": "Source Data_V2.xlsx",
+      "url": "https://ndownloader.figshare.com/files/60449912",
+      "bytes": 11693738,
+      "md5": "ca6192d3a4c11bc1af975ad24d4a0d37",
+      "sha256": "009d1dbcb6272930543f4776f9239b1ee0c8133eca039fc836b187a0ad4d722d",
+      "acquisition": "existing immutable copy reverified"
+    },
+    {
+      "name": "Fig. S14-GgOC1-G.tif",
+      "url": "https://ndownloader.figshare.com/files/60449915",
+      "bytes": 3207796,
+      "md5": "11825e778b9b66e0e924607642a3c64d",
+      "sha256": "06a4aebc57448eea113d6fe4ee34f400437f93f25d1ae09fb559dd4d5c1cdeda",
+      "acquisition": "archive member verified against live official MD5"
+    },
+    {
+      "name": "Fig. S14-GgOC1-M.tif",
+      "url": "https://ndownloader.figshare.com/files/60449918",
+      "bytes": 3145958,
+      "md5": "b9379b0dbecfdc9fa45b12f42d6c4884",
+      "sha256": "0190264af785b49352dfcffaabeee91ce108f32160db3ac4588723914ce8f771",
+      "acquisition": "archive member verified against live official MD5"
+    },
+    {
+      "name": "Fig. S14-GgOC1-R.tif",
+      "url": "https://ndownloader.figshare.com/files/60449921",
+      "bytes": 3207796,
+      "md5": "73b3508b6b559dac9ee1546001bf382d",
+      "sha256": "4ce8770c7345d31c8b5b75c6b9d86bee5d312e3eb16196e8a54db79a97a68458",
+      "acquisition": "archive member verified against live official MD5"
+    },
+    {
+      "name": "Fig. S14-GgPT1-G.tif",
+      "url": "https://ndownloader.figshare.com/files/60449924",
+      "bytes": 3207806,
+      "md5": "58c02d53dd3b383ea5185ade2ab7650d",
+      "sha256": "c34d770fd2d2aa770f2e21bc9162fbb1826af79fd4bb25b6beeaf9dd97a53d7c",
+      "acquisition": "archive member verified against live official MD5"
+    },
+    {
+      "name": "Fig. S14-GgPT1-M.tif",
+      "url": "https://ndownloader.figshare.com/files/60449927",
+      "bytes": 3145958,
+      "md5": "6a996f7c759e4dadb71d212bfa3473f3",
+      "sha256": "80dc212077992957a97579318eea56aacb8990a5a183a78ffa4b2d72bb0b4574",
+      "acquisition": "archive member verified against live official MD5"
+    },
+    {
+      "name": "Fig. S14-GgPT1-R.tif",
+      "url": "https://ndownloader.figshare.com/files/60449930",
+      "bytes": 3207806,
+      "md5": "cccabda7402bddf630aef70e768eb7e6",
+      "sha256": "20c8431f9d443100b0db7a7cc69fbbb48b52d06372135ee2ce0e751c3f10a235",
+      "acquisition": "archive member verified against live official MD5"
+    },
+    {
+      "name": "41467_2026_68881_MOESM1_ESM.pdf",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM1_ESM.pdf",
+      "bytes": 5601299,
+      "sha256": "3d19f9251b04f6b85912e871cfcdfe17b5cd891aacaeef9ed7654309d3d379d8"
+    },
+    {
+      "name": "41467_2026_68881_MOESM2_ESM.pdf",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM2_ESM.pdf",
+      "bytes": 24233782,
+      "sha256": "a27a157fcd185f71c09e0d4d771b5a61bc859083060e74326c523215efab758c"
+    },
+    {
+      "name": "41467_2026_68881_MOESM3_ESM.pdf",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM3_ESM.pdf",
+      "bytes": 108894,
+      "sha256": "16b349f2ed6d5b39eb60b7a33b1746f571b524f3b3cb3ff46b52e3b463b48f29"
+    },
+    {
+      "name": "41467_2026_68881_MOESM4_ESM.xlsx",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM4_ESM.xlsx",
+      "bytes": 10763,
+      "sha256": "76bf931d701d44524b675cdb65baec30e0eef080dae6fbf061995c9a74c9fcbf"
+    },
+    {
+      "name": "41467_2026_68881_MOESM5_ESM.xlsx",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM5_ESM.xlsx",
+      "bytes": 11468,
+      "sha256": "58bf156aeab7c4b71634816300b12ac328a7ddb89536ae1d689761bceb8801b9"
+    },
+    {
+      "name": "41467_2026_68881_MOESM6_ESM.xlsx",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM6_ESM.xlsx",
+      "bytes": 10527,
+      "sha256": "86db30eee9e288d36ffe2e4c66f417379ae53e6f1a8c60928fa01e7ccf3c6973"
+    },
+    {
+      "name": "41467_2026_68881_MOESM7_ESM.xlsx",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM7_ESM.xlsx",
+      "bytes": 15988,
+      "sha256": "e6abdb7d55b502c35eae4ade8e298dc600c4b43f2baa46e5a190b9b0bae8c832"
+    },
+    {
+      "name": "41467_2026_68881_MOESM8_ESM.pdf",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM8_ESM.pdf",
+      "bytes": 97350,
+      "sha256": "a70a9d1a6a315e8a1a6cfaf41954260cf112f81f5870bbb40b525a33b2e5c126"
+    },
+    {
+      "name": "41467_2026_68881_MOESM9_ESM.xlsx",
+      "url": "https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41467-026-68881-8/MediaObjects/41467_2026_68881_MOESM9_ESM.xlsx",
+      "bytes": 11695274,
+      "sha256": "a9e0ffe6eb870b7e993a5ad7aeca685629408ab7f921a2803191c62826caf68d"
+    },
+    {
+      "name": "s41467-026-68881-8.pdf",
+      "url": "https://www.nature.com/articles/s41467-026-68881-8.pdf",
+      "bytes": 2547989,
+      "sha256": "98354dc244eb02304311b98a4f9d9f0b67420fcba95da37db243a56b86977b70"
+    }
+  ]
+}
+
