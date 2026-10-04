@@ -66,6 +66,11 @@ class M3EquilibriumInput(BaseModel):
         lever_values = (self.c_scaffold_total_um, self.c_sat_um)
         if self.phi is None and any(value is None for value in lever_values):
             raise ValueError("phi_or_complete_S4_lever_rule_inputs_required")
+        if (self.c_scaffold_total_um is None) != (self.c_sat_um is None):
+            raise ValueError("S4_requires_both_total_and_saturation_concentrations")
+        if self.c_sat_um is not None and (self.c_dense_um <= self.c_sat_um or
+                not self.c_sat_um <= self.c_scaffold_total_um < self.c_dense_um):
+            raise ValueError("S4_requires_c_sat_le_total_lt_c_dense_and_positive_phase_gap")
         if (self.v_scaffold_nm3 is None) != (self.v_enzyme_nm3 is None):
             raise ValueError("S2_S3_capacity_requires_both_scaffold_and_enzyme_volumes")
         if self.v_scaffold_nm3 is not None and not self.volume_method:

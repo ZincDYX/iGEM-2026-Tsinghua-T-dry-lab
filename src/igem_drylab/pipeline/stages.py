@@ -473,7 +473,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
                 notes="M3 does not infer partitioning from M1/M2 scores."))
             continue
-        phi = selected["phi"].canonical_value
+        phi = selected["phi"].canonical_value if "phi" in selected else None
         if config.stages.m3_concentration.recruitment_mode == "effective_ratio":
             settings = config.stages.m3_concentration
             author_native = config.stages.m4_reaction.unit_mode == "author_native_sensitivity"
@@ -594,6 +594,10 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 m2_geometry_id=assessment.m2_geometry_id,
                 phi=phi,
                 c_dense_um=selected["c_dense_scaffold"].canonical_value,
+                c_scaffold_total_um=selected["c_total_scaffold"].canonical_value if "c_total_scaffold" in selected else None,
+                c_sat_um=selected["c_sat_scaffold"].canonical_value if "c_sat_scaffold" in selected else None,
+                r_target=selected[config.stages.m3_concentration.target_enzyme_ratio_parameter].canonical_value
+                    if config.stages.m3_concentration.target_enzyme_ratio_parameter else None,
                 kd_sh3_um=selected["kd_sh3"].canonical_value,
                 kd_pdz_um=selected["kd_pdz"].canonical_value,
                 k_oc=selected["partition_oc"].canonical_value,
@@ -628,6 +632,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                     notes="; ".join(exact.warnings),
                 ))
                 continue
+            phi = exact.phi
             background = {
                 enzyme: calculate_enrichment(EnrichmentInput(
                     species_id=enzyme,
@@ -663,6 +668,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 construct_id=construct_id,
                 condition_id=condition_id,
                 phi=phi,
+                phi_source=exact.phi_source,
                 enzyme_distribution=enzyme_distribution,
                 metabolite_partition_coefficients={compound: selected[f"partition_x{compound}"].canonical_value for compound in ("8", "9", "10", "11", "12", "13", "14", "15") if f"partition_x{compound}" in selected},
                 binding_recruited_fraction=bound_fractions,
@@ -702,11 +708,19 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 maximum_dense_enzyme_concentration_um=exact.maximum_dense_enzyme_concentration_um,
                 capacity_excess_um=exact.capacity_excess_um,
                 normalized_sensitivities_e10=exact.normalized_sensitivities_e10,
+                phi_source=exact.phi_source,
+                phi_s4_if_available=exact.phi_s4_if_available,
+                phi_measured_minus_s4=exact.phi-exact.phi_s4_if_available
+                    if exact.phi_source == "measured_input" and exact.phi_s4_if_available is not None else None,
+                design_decision_id=config.stages.m3_concentration.design_decision_id,
+                rho_star_candidates={key: value for key, value in {
+                    "E8_low_occupancy": exact.rho_star_low_occupancy_candidate,
+                    "E9_saturation": exact.rho_star_saturation_candidate}.items() if value is not None},
                 recommended_for_m4=True,
                 parameter_ids=parameter_ids,
                 provenance_summary=_provenance_summary(selected.values()),
                 m4_candidate_context=context,
-                notes="M3 used the documented conservative S1-S5/E1-E6 equations; E5 bound fractions remain distinct from whole-dense-phase fractions.",
+                notes="M3 conservative S1-S5/E1-E9; E8/E9 are regime-conditional design outputs, not global optima. " + "; ".join(exact.warnings),
             ))
             continue
         inputs = [EnrichmentInput(species_id=item, total_concentration=selected[f"{item.lower()}_total"].canonical_value,
@@ -773,19 +787,28 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
         "partition_oc": {"wetlab", "literature"},
         "partition_dmt": {"wetlab", "literature"},
         "c_dense_scaffold": {"wetlab", "literature"},
+        "c_total_scaffold": {"wetlab", "literature"},
+        "c_sat_scaffold": {"wetlab", "literature"},
         "kd_sh3": {"wetlab", "literature"},
         "kd_pdz": {"wetlab", "literature"},
     }
     allowed_sources.update({name: {"wetlab", "literature"} for name in selected if name.startswith("partition_x")})
     missing: list[str] = []
     for name, allowed in allowed_sources.items():
+        if name not in selected:
+            continue
         resolution = selected[name]
         record = resolution.selected_parameter
         if record is None or record.source_type not in allowed:
             missing.append(f"formal M3 source for {name}: {sorted(allowed)}")
-    c_dense_record = selected["c_dense_scaffold"].selected_parameter
-    if c_dense_record is not None and c_dense_record.conditions.get("entity_basis") != site_count_basis:
-        missing.append("c_dense_scaffold conditions.entity_basis matching M2 site_count_basis")
+    for name in ("c_dense_scaffold", "c_total_scaffold", "c_sat_scaffold"):
+        if name not in selected:
+            continue
+        record = selected[name].selected_parameter
+        if record is not None and record.conditions.get("entity_basis") != site_count_basis:
+            missing.append(f"{name} conditions.entity_basis matching M2 site_count_basis")
+        if record is not None and name != "c_dense_scaffold" and not record.construct_id:
+            missing.append(f"{name} explicit matching fusion construct identity")
     for name in ("kd_sh3", "kd_pdz"):
         record = selected[name].selected_parameter
         if record is not None and not record.conditions.get("binding_pair"):

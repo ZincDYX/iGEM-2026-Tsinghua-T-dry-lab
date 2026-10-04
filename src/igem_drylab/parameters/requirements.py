@@ -169,6 +169,15 @@ def _requirements_for_stage(project: object, stage: str, *, include_auxiliary: b
             return author_native_m3_effective_ratio_requirements() if author_native else m3_effective_ratio_requirements()
         mode = getattr(project.stages.m3_concentration, "recruitment_mode", "finite_site")
         core = legacy_m3_independent_partition_requirements() if mode == "legacy_independent_partition" else m3_requirements()
+        settings = project.stages.m3_concentration
+        if mode == "finite_site":
+            if settings.phi_source == "lever_rule":
+                core = [item for item in core if item.name != "phi"]
+            if settings.phi_source in {"lever_rule", "compare"}:
+                core += [_requirement("c_total_scaffold", "abundance"), _requirement("c_sat_scaffold", "abundance")]
+            if settings.target_enzyme_ratio_parameter:
+                core.append(ParameterRequirement(name=settings.target_enzyme_ratio_parameter, parameter_type="other",
+                                                dimension="dimensionless", minimum=0., minimum_inclusive=False))
         if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") in {"galatea_full_competitive", "markdown_steady_state"}:
             core = core + [_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")]
         auxiliary = [item for recruitment in getattr(project.stages.m3_concentration, "recruitment", []) for item in recruitment_requirements(recruitment, binding_model=project.stages.m3_concentration.binding_model)]

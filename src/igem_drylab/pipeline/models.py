@@ -109,6 +109,10 @@ class M2FusionAssessment(ScientificResult):
 
 
 class M3ConcentrationAssessment(ScientificResult):
+    phi_source: Literal["measured_input", "S4_lever_rule"] | None = None
+    phi_s4_if_available: float | None = None
+    phi_measured_minus_s4: float | None = None
+    design_decision_id: str | None = None
     candidate_id: str
     construct_id: str
     concentrations: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -142,6 +146,7 @@ class M4CandidateContext(BaseModel):
     construct_id: str
     condition_id: str
     phi: float = Field(ge=0, lt=1)
+    phi_source: str = "measured_input"
     enzyme_distribution: dict[str, dict[str, float]]
     enzyme_sequence_sha256: dict[str, str] = Field(default_factory=dict)
     metabolite_partition_coefficients: dict[str, float] = Field(default_factory=dict)

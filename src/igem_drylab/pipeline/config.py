@@ -185,6 +185,9 @@ class AuthorNativeEnzymeScales(StrictScientificConfig):
 
 
 class M3Config(StrictScientificConfig):
+    phi_source: Literal["measured", "lever_rule", "compare"] = "measured"
+    target_enzyme_ratio_parameter: str | None = None
+    design_decision_id: str | None = None
     binding_model: Literal["independent", "hill"] = "independent"
     hill_coefficient: float | None = Field(default=None, gt=0)
     recruitment: list["RecruitmentConfig"] = Field(default_factory=list)
@@ -197,6 +200,10 @@ class M3Config(StrictScientificConfig):
 
     @model_validator(mode="after")
     def _effective_ratio_contract(self) -> "M3Config":
+        if self.recruitment_mode != "finite_site" and (self.phi_source != "measured" or self.target_enzyme_ratio_parameter):
+            raise ValueError("S4_and_target_feedback_require_finite_site")
+        if self.target_enzyme_ratio_parameter and not self.design_decision_id:
+            raise ValueError("target_enzyme_ratio_requires_explicit_design_decision")
         if self.recruitment_mode == "effective_ratio" and (
             self.slot_ratio_sh3_to_pdz is None or self.total_recruited_fraction is None
         ):
