@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from dataclasses import replace
 from hashlib import sha256
 import numpy as np
 import json
@@ -25,7 +24,8 @@ from igem_drylab.kinetics import GlabridinKineticParameters, InductionGate, simu
 from igem_drylab.m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
 from igem_drylab.m4_steady_state import M4PhaseEnzymeInput, M4ReactionInput, M4SteadyStateInput, load_m4_reaction_identities, solve_m4_steady_state
 from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
-from igem_drylab.full_network import PhaseDistribution, TemporalGate, TransportParameters
+from igem_drylab.full_network import PhaseDistribution, ReactionKinetics, TemporalGate, TransportParameters, FullNetworkParameters, FULL_NETWORK_FORMULA_VERSION, simulate_full_network
+from igem_drylab.prediction import dynamic_contract, steady_contract, replay_prediction, observe_prediction
 from igem_drylab.published_reference import run_published_reference, write_published_reference_reproduction
 from igem_drylab.parameters import ParameterRecord, ParameterResolution, full_m4_kinetic_requirements, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.parameters.requirements import requirement_name_to_kernel_key, requirements_for_stage
@@ -269,6 +269,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
         scored = score_m2_structure(row)
         assessments.append(M2FusionAssessment(
             candidate_id=candidate.candidate_id, construct_id=candidate.construct_id, construct_definition=candidate.construct_definition, structure_model=row.source_model or row.source_tool,
+            enzyme_sequence_sha256={enzyme: candidate.full_sequence_sha256 for enzyme in candidate.construct_definition.get("enzyme_ids", []) if candidate.full_sequence_sha256},
             structure_source_tool=row.source_tool, structure_source_tool_version=row.source_tool_version,
             structure_artifact_path=row.artifact_path, structure_artifact_sha256=row.artifact_sha256,
             reference_structure_id=row.reference_structure_id, reference_artifact_sha256=row.reference_artifact_sha256,
@@ -412,6 +413,7 @@ def _append_design_assessments(config, candidates, metrics, assessments):
         scored = score_m2_structure(row)
         values = {key: value for key, value in row.model_dump().items() if key in M2FusionAssessment.model_fields}
         values.update(candidate_id=candidate_id, construct_id=design.id, construct_definition=design.model_dump(mode="json"),
+            enzyme_sequence_sha256={enzyme: digest for identifier in design.protein_construct_ids for enzyme, digest in assessment_by_id[identifier].enzyme_sequence_sha256.items()},
             status=scored.status, screen_verdict=scored.verdict, recommended_for_m3=scored.recommended_for_m3,
             evidence_ready=scored.recommended_for_m3, claim_scope="structure_negative_screen",
             notes="All necessary ORFs and assembly input bindings checked; design-level geometry remains predicted evidence.")
@@ -735,6 +737,10 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             provenance_summary=_provenance_summary(selected.values()),
             m4_candidate_context=context,
             notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
+    assessment_by_id = {item.candidate_id: item for item in assessments}
+    for record in records:
+        if record.m4_candidate_context is not None:
+            record.m4_candidate_context.enzyme_sequence_sha256 = assessment_by_id[record.candidate_id].enzyme_sequence_sha256
     _label_scientific_results(config, records)
     write_models(stage_dir, "concentration_assessments", records)
     return records, _stage_output("m3_enrichment", stage_dir, "concentration_assessments", len(records))
@@ -792,7 +798,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
     gate_missing = [name for name in ("pt_gate", "oc_gate", "dmt_gate") if getattr(gates, name) is None]
     records: list[M4ReactionPrediction] = []
     for item in assessments:
-        if item.status != "valid":
+        if not _m3_ready_for_m4(config, item):
             records.append(_m4_insufficient(item.candidate_id, config, ["validated M3 enrichment"], construct_id=item.construct_id))
             continue
         elif item.m4_candidate_context is None:
@@ -825,7 +831,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             delta_13, delta_15 = final_13 - initial.x13, final_15 - initial.x15
             side_product_fraction = delta_13 / (delta_13 + delta_15) if delta_13 + delta_15 > 0 else 0.0
             condition_fingerprint = sha256(condition_id.encode("utf-8")).hexdigest()[:10]
-            trajectory = stage_dir / f"{item.candidate_id}_{condition_fingerprint}_trajectory.json"
+            trajectory = stage_dir / f"{sha256(item.candidate_id.encode()).hexdigest()[:20]}_{condition_fingerprint}_trajectory.json"
             trajectory.parent.mkdir(parents=True, exist_ok=True)
             trajectory.write_text(json.dumps({"scientific_contract_version": "pre-real-data-frozen", "candidate_id": item.candidate_id, "construct_id": construct_id, "condition_id": condition_id, "parameter_ids": sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}), "time_unit": "h", "concentration_unit": "uM", "time": delayed.time.tolist(), "x9": delayed.x9.tolist(), "x10": delayed.x10.tolist(), "x11": delayed.x11.tolist(), "x13": delayed.x13.tolist(), "x15": delayed.x15.tolist()}), encoding="utf-8")
             recommendation, recommendation_evidence = _recommend_m4(side_product_fraction, delta_15 / gates.t_end, baseline_13 - initial.x13, delta_13, delta_15, baseline_15 - initial.x15, gates)
@@ -839,6 +845,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 parameter_ids=sorted({*item.m4_candidate_context.parameter_ids, *(result.selected_parameter.parameter_id for result in selected.values() if result.selected_parameter)}),
                 provenance_summary=combined_provenance,
                 notes=f"M4 consumed candidate-specific M3 enzyme distributions; {'modeled degradation loss=' + format(delayed.modeled_degradation_loss, '.3g') if gates.enable_degradation else 'mass-balance error=' + format(delayed.mass_balance_error, '.3g')}; compound 13 is a side-product proxy, not extracellular leakage; recruitment and docking were not converted into enzyme activity."))
+    _label_scientific_results(config, records)
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_kinetics", stage_dir, "reaction_predictions", len(records))
 
@@ -854,12 +861,12 @@ def _run_markdown_steady_m4(
     records: list[M4ReactionPrediction] = []
     for item in assessments:
         context = item.m4_candidate_context
-        if item.status != "valid" or context is None:
+        if not _m3_ready_for_m4(config, item):
             records.append(_m4_insufficient(item.candidate_id, config, ["valid conservative M3 context"], construct_id=item.construct_id))
             continue
         selected, missing = validate_parameters(
             config.parameters,
-            requirements=requirements,
+            requirements=_candidate_requirements(requirements, context),
             allow_assumptions=config.execution.allow_assumptions,
             host=config.experimental_context.host,
             strain=config.experimental_context.strain,
@@ -911,12 +918,14 @@ def _run_markdown_steady_m4(
             for resolution in selected.values()
             if resolution.selected_parameter
         )
-        result = solve_m4_steady_state(M4SteadyStateInput(
+        steady_inputs = M4SteadyStateInput(
             candidate_id=item.candidate_id,
             construct_id=context.construct_id,
             condition_id=context.condition_id,
             phi=context.phi,
-            enzymes={name: M4PhaseEnzymeInput(dense_um=value["dense"], dilute_um=value["dilute"], m3_source_id=item.candidate_id) for name, value in context.enzyme_distribution.items()},
+            enzymes={name: M4PhaseEnzymeInput(dense_um=value["dense"], dilute_um=value["dilute"], m3_source_id=item.candidate_id,
+                activity_dense_ratio=selected[f"activity_dense_{name.lower()}"].canonical_value if settings.activity_mode == "sensitivity_parameters" else 1.0,
+                activity_dilute_ratio=selected[f"activity_dilute_{name.lower()}"].canonical_value if settings.activity_mode == "sensitivity_parameters" else 1.0) for name, value in context.enzyme_distribution.items()},
             metabolite_kp=context.metabolite_partition_coefficients,
             reactions=reaction_inputs,
             input_flux_um_per_h=selected["input_flux_8"].canonical_value,
@@ -924,7 +933,8 @@ def _run_markdown_steady_m4(
             secretion_normalization="original_unweighted_dilute_concentration",
             initial_guess_um=settings.steady_state_initial_guess_um,
             input_parameter_ids=sorted({*context.parameter_ids, *parameter_ids}),
-        ))
+        )
+        result = solve_m4_steady_state(steady_inputs)
         if result.status != "valid":
             records.append(M4ReactionPrediction(
                 candidate_id=item.candidate_id,
@@ -940,6 +950,10 @@ def _run_markdown_steady_m4(
                 notes="M4 steady-state solution was not released.",
             ))
             continue
+        contract = steady_contract(steady_inputs, result)
+        trajectory = stage_dir / f"{sha256((item.candidate_id + '|' + context.condition_id).encode()).hexdigest()[:24]}_steady_prediction.json"
+        trajectory.parent.mkdir(parents=True, exist_ok=True)
+        trajectory.write_text(json.dumps({"prediction_contract": contract}), encoding="utf-8")
         records.append(M4ReactionPrediction(
             candidate_id=item.candidate_id,
             construct_id=context.construct_id,
@@ -953,7 +967,8 @@ def _run_markdown_steady_m4(
             secretion_loss=result.secretion_loss_8_to_14,
             recommendation=None,
             candidate_context=context,
-            simulation_inputs={"formula_version": result.formula_version, "secretion_normalization": "original_unweighted_dilute_concentration"},
+            simulation_inputs={"prediction_contract": contract, "parameters": {name: resolution.canonical_value for name, resolution in selected.items()}},
+            trajectory_artifact=trajectory,
             steady_state_fluxes=result.reaction_flux_um_per_h,
             steady_state_residuals=result.steady_state_residual_um_per_h,
             mechanistic_diagnostics={"mass_invariant_residual": result.mass_invariant_residual or 0.0},
@@ -962,6 +977,7 @@ def _run_markdown_steady_m4(
             assumptions=result.warnings,
             notes="Original M4 Step 0-8 steady-state output; no ranking, robustness, sensitivity, or scaffold scan was invented.",
         ))
+    _label_scientific_results(config, records)
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_markdown_steady_state", stage_dir, "reaction_predictions", len(records))
 
@@ -975,11 +991,11 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
     records: list[M4ReactionPrediction] = []
     for item in assessments:
         context = item.m4_candidate_context
-        if item.status != "valid" or context is None:
+        if not _m3_ready_for_m4(config, item):
             records.append(_m4_insufficient(item.candidate_id, config, ["valid effective-ratio or finite-site M3 context"], construct_id=item.construct_id))
             continue
         selected, missing = validate_parameters(
-            config.parameters, requirements=requirements, allow_assumptions=config.execution.allow_assumptions,
+            config.parameters, requirements=_candidate_requirements(requirements, context), allow_assumptions=config.execution.allow_assumptions,
             host=config.experimental_context.host, strain=config.experimental_context.strain,
             assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH,
             temperature_c=config.experimental_context.temperature_c, construct_id=context.construct_id,
@@ -988,6 +1004,11 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
         if missing or settings.full_network_initial_state is None or settings.reaction_network_file is None:
             records.append(_m4_insufficient(item.candidate_id, config, missing + (["full_network_initial_state"] if settings.full_network_initial_state is None else []) + (["reaction_network_file"] if settings.reaction_network_file is None else []), construct_id=context.construct_id))
             continue
+        if _is_formal(config):
+            state_missing = _formal_initial_state_missing(config, context)
+            if state_missing:
+                records.append(_m4_insufficient(item.candidate_id, config, state_missing, construct_id=context.construct_id))
+                continue
         reactions = _full_network_reactions(settings, selected)
         distributions = {enzyme: PhaseDistribution(values["dense"], values["dilute"]) for enzyme, values in context.enzyme_distribution.items()}
         kp = context.metabolite_partition_coefficients
@@ -1002,26 +1023,33 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             activity_dense = {enzyme: 1.0 for enzyme in ("PTR", "PT", "OC", "DMT")}
             activity_dilute = {enzyme: 1.0 for enzyme in ("PTR", "PT", "OC", "DMT")}
             activity_assumption = "assumption_sensitivity: unity activity"
-        gate = TemporalGate()
-        if settings.scenario_mode in {"homogeneous_published_like_temporal", "galatea_spatiotemporal_ablation"} and settings.dmt_gate is not None:
-            gate = TemporalGate(mode="published_delayed_ramp", disable_time=settings.dmt_gate.on_time)
+        def configured_gate(value):
+            return TemporalGate(mode="configured_induction", induction=InductionGate(**value.model_dump(exclude={"time_unit"}))) if value else TemporalGate()
+        gate = configured_gate(settings.dmt_gate)
         transport = TransportParameters(
             enabled=settings.transport_enabled, access=settings.transport_access,
-            rate=selected["transport_rate"].canonical_value if settings.transport_enabled else 0.0,
+            rate=selected[settings.transport_rate_parameter or "transport_rate"].canonical_value if settings.transport_enabled else 0.0,
             outside_over_inside=settings.transport_outside_over_inside,
+            intracellular_volume_l=settings.intracellular_volume_l,
+            extracellular_volume_l=settings.extracellular_volume_l,
         )
-        result = run_galatea_full_m4(
+        params = FullNetworkParameters(
             enzyme_distributions=distributions, phi=context.phi, metabolite_kp=kp,
-            reactions=reactions, initial_intracellular=settings.full_network_initial_state.intracellular,
-            initial_extracellular=settings.full_network_initial_state.extracellular, t_end=settings.t_end,
+            reactions=reactions,
             scenario=settings.scenario_mode, transport=transport, dmt_gate=gate,
+            pt_gate=configured_gate(settings.pt_gate), oc_gate=configured_gate(settings.oc_gate),
             activity_dense=activity_dense, activity_dilute=activity_dilute,
             unit_mode=settings.unit_mode,
         )
+        result = simulate_full_network(params, initial_intracellular=settings.full_network_initial_state.intracellular,
+            initial_extracellular=settings.full_network_initial_state.extracellular, t_end=settings.t_end, points=settings.solver_points)
+        contract = dynamic_contract(params, result, settings.full_network_initial_state.intracellular,
+            settings.full_network_initial_state.extracellular, settings.t_end, settings.solver_points)
         fingerprint = sha256(context.condition_id.encode("utf-8")).hexdigest()[:10]
-        trajectory = stage_dir / f"{item.candidate_id}_{fingerprint}_full_trajectory.json"
+        trajectory = stage_dir / f"{sha256(item.candidate_id.encode()).hexdigest()[:20]}_{fingerprint}_full_trajectory.json"
         trajectory.parent.mkdir(parents=True, exist_ok=True)
         trajectory.write_text(json.dumps({
+            "prediction_contract": contract,
             "candidate_id": item.candidate_id, "construct_id": context.construct_id, "condition_id": context.condition_id,
             "time": result.time.tolist(), "intracellular_cell_average": {str(index + 8): result.intracellular[index].tolist() for index in range(8)},
             "extracellular": {str(index + 8): result.extracellular[index].tolist() for index in range(8)},
@@ -1037,10 +1065,10 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             candidate_id=item.candidate_id, construct_id=context.construct_id, condition_id=context.condition_id,
             target_product=settings.target_product, status="valid", data_quality=_data_quality_from_summary(provenance),
             final_15=None if author_native else result.diagnostics["final_15_total"], final_13=None if author_native else result.diagnostics["final_13_total"],
-            side_product_fraction_13=result.diagnostics["final_13_total"] / (result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"]) if result.diagnostics["final_13_total"] + result.diagnostics["final_15_total"] else 0.0,
-            leakage_fraction=None, productivity=None if author_native else result.diagnostics["final_15_total"] / settings.t_end,
+            side_product_fraction_13=result.diagnostics["side_product_fraction_13"],
+            leakage_fraction=None, productivity=None if author_native else max(0.0, result.diagnostics["net_15_generated_cell_volume_equivalent"]) / settings.t_end,
             recommendation="iterate", recommendation_evidence=["comparative_negative_screen_requires_control_comparison"],
-            candidate_context=context, simulation_inputs={"scenario": settings.scenario_mode, "transport_access": settings.transport_access, "dmt_gate": gate.mode, "unit_mode": result.unit_mode},
+            candidate_context=context, simulation_inputs={"prediction_contract": contract, "parameters": {name: resolution.canonical_value for name, resolution in selected.items()}, "executed_config": settings.model_dump(mode="json")},
             bottleneck="full_network_comparative_screen", trajectory_artifact=trajectory,
             flux_integrals=({f"relative_{key}": value for key, value in result.flux_integrals.items()} if author_native else result.flux_integrals),
             mechanistic_diagnostics=({key: result.diagnostics[key] for key in (
@@ -1052,22 +1080,22 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             notes=("Full 8-compound / 10-reaction phase-specific competitive model. Values are not enzyme activity or yield predictions."
                    if result.unit_mode == "physical" else "Results are normalized mechanistic sensitivity outputs and must not be interpreted as absolute concentration, enzyme abundance, kinetic rate, productivity, or titer."),
         ))
+    _label_scientific_results(config, records)
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_glabridin_full_network", stage_dir, "reaction_predictions", len(records))
 
 
 def _full_network_reactions(settings: object, selected: dict[str, object]) -> tuple[object, ...]:
     """Keep physical and author-native kinetic acquisition paths disjoint."""
-    source_reactions = load_author_native_reactions(settings.reaction_network_file)  # type: ignore[attr-defined]
     if settings.unit_mode == "author_native_sensitivity":  # type: ignore[attr-defined]
-        return source_reactions
+        return load_author_native_reactions(settings.reaction_network_file)
     return tuple(
-        reaction.__class__(
-            reaction.reaction_id, reaction.enzyme, reaction.substrate, reaction.product,
-            selected[f"kcat_{reaction.reaction_id.lower()}"].canonical_value,  # type: ignore[index,union-attr]
-            selected[f"km_{reaction.reaction_id.lower()}"].canonical_value,  # type: ignore[index,union-attr]
+        ReactionKinetics(
+            reaction_id, enzyme, substrate, product,
+            selected[f"kcat_{reaction_id.lower()}"].canonical_value,
+            selected[f"km_{reaction_id.lower()}"].canonical_value,
         )
-        for reaction in source_reactions
+        for reaction_id, enzyme, substrate, product in load_m4_reaction_identities(settings.reaction_network_file)
     )
 
 
@@ -1115,6 +1143,8 @@ def _run_published_reference_m4(config: ProjectConfig, run_dir: Path) -> tuple[l
         assumptions=["author_native_sensitivity: no physical concentration, time, rate, or titer units are assigned"],
         notes="Independent Zhang author-code reproduction; it does not enter the Galatea full-network kernel.",
     )
+    record.numerically_solved = True
+    record.claim_scope = "author_code_reproduction"
     write_models(stage_dir, "reaction_predictions", [record])
     return [record], _stage_output("m4_published_reference", stage_dir, "reaction_predictions", 1)
 
@@ -1171,14 +1201,22 @@ def run_m5(config: ProjectConfig, run_dir: Path, predictions: list[M4ReactionPre
             systematic_error = significance.significant is True and any((result.construct_id, metabolite) in systematic for metabolite in comparisons)
             diagnosis = diagnose_discrepancy(qc_passed=report.passed, replicate_variation=variation, trend_agreement=trend, systematic_directional_error=systematic_error, significant_residual=significance.significant)
             joint_diagnosis = _joint_diagnosis_label(evidence, diagnosis.category)
-            group_key = (result.construct_id, result.condition_id)
+            group_key = _fit_group_key(result)
             if group_key not in fitted_by_group:
                 aggregate = fit_groups.get(group_key)
-                aggregate_prediction = prediction_by_context.get(group_key)
-                aggregate_comparisons = compare_prediction(aggregate_prediction.trajectory_artifact, aggregate) if aggregate and aggregate_prediction and aggregate_prediction.trajectory_artifact else {}
+                aggregate_prediction = prediction_by_context.get((result.construct_id, result.condition_id))
+                try:
+                    aggregate_comparisons = compare_prediction(aggregate_prediction.trajectory_artifact, aggregate) if aggregate and aggregate_prediction and aggregate_prediction.trajectory_artifact else {}
+                except ValueError as error:
+                    aggregate_comparisons = {}
+                    report.flags.append(f"comparison_contract_error:{error}")
                 fitted_by_group[group_key] = _fit_plan_candidate(config, aggregate_prediction, aggregate, aggregate_comparisons) if aggregate else None
             fitted = fitted_by_group[group_key]
+            if fitted and fitted.get("warning"):
+                report.flags.append(f"fit_contract_warning:{fitted['warning']}")
             records.append(M5FeedbackAssessment(experiment_id=result.experiment_id, construct_id=result.construct_id, condition_id=result.condition_id, replicate_id=result.replicate_id, status="valid" if report.passed and usable else "insufficient_data", data_quality="measured", qc_passed=report.passed, qc_flags=report.flags, diagnosis=joint_diagnosis, prediction_residual=residual, trend_agreement=trend, replicate_variation=variation, fit=fitted.get("fit") if fitted else None, metabolite_comparisons={key: value.model_dump() for key, value in comparisons.items()}, diagnosis_evidence=evidence, fitted_parameter_candidate=fitted.get("candidate") if fitted else None, next_measurement="measure OC/DMT abundance and metabolite time course" if joint_diagnosis not in {"INSUFFICIENT_INFORMATION", "NO_SIGNIFICANT_DISCREPANCY"} else None, notes=f"Raw outliers retained; comparison={comparison_status}; diagnosis_metabolites={','.join(item.metabolite_id for item in usable)}."))
+    for record in records:
+        record.fit_warnings = [flag.removeprefix("fit_contract_warning:") for flag in record.qc_flags if flag.startswith("fit_contract_warning:")]
     write_models(stage_dir, "feedback", records)
     return records, _stage_output("m5_wetlab_feedback", stage_dir, "feedback", len(records))
 
@@ -1245,6 +1283,41 @@ def _is_formal(config: ProjectConfig) -> bool:
             and config.stages.m4_reaction.network_mode != "published_reference")
 
 
+def _candidate_requirements(requirements, context):
+    return [item.model_copy(update={"enzyme_sequence_sha256": context.enzyme_sequence_sha256.get(item.enzyme_id)}) for item in requirements]
+
+
+def _m3_ready_for_m4(config, assessment):
+    context = assessment.m4_candidate_context
+    return (assessment.status == "valid" and context is not None and
+            (not _is_formal(config) or (assessment.recommended_for_m4 and context.evidence_ready)))
+
+
+def _formal_initial_state_missing(config, context):
+    from igem_drylab.parameters import ParameterRegistry
+    from igem_drylab.parameters.requirements import ParameterRequirement
+    registry = ParameterRegistry(config.parameters)
+    initial = config.stages.m4_reaction.full_network_initial_state
+    missing = []
+    for compartment, states in (("intracellular", initial.intracellular), ("extracellular", initial.extracellular)):
+        if compartment == "extracellular" and not config.stages.m4_reaction.transport_enabled and not any(states.values()):
+            continue
+        for compound, value in states.items():
+            key = f"{compartment}:{compound}"
+            record = registry.get(initial.parameter_ids.get(key, ""))
+            if record is None:
+                missing.append(f"reviewed initial state parameter: {key}")
+                continue
+            requirement = ParameterRequirement(name=record.name, parameter_type="abundance", dimension="concentration", canonical_unit="uM", species_id=compound, minimum=0)
+            resolved = registry.resolve(requirement, host=config.experimental_context.host,
+                strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system,
+                temperature_c=config.experimental_context.temperature_c, pH=config.experimental_context.pH,
+                construct_id=context.construct_id, condition_id=context.condition_id, require_provenance=True)
+            if resolved.status != "resolved" or resolved.selected_parameter.parameter_id != record.parameter_id or resolved.canonical_value != value or record.conditions.get("compartment") != compartment or record.conditions.get("measurement_time_h") != 0:
+                missing.append(f"initial state value/compartment/time applicability: {key}")
+    return missing
+
+
 def _formal_analysis_missing(config: ProjectConfig) -> list[str]:
     if not _is_formal(config):
         return []
@@ -1252,8 +1325,12 @@ def _formal_analysis_missing(config: ProjectConfig) -> list[str]:
                if getattr(config.experimental_context, name) is None]
     if not config.stages.m4_reaction.condition_id:
         missing.append("formal explicit condition_id")
+    if config.stages.m4_reaction.feed_mode is None or config.stages.m4_reaction.feed_compound_id is None:
+        missing.append("formal explicit feed identity and boundary condition")
     if not config.execution.require_provenance or config.execution.allow_assumptions:
         missing.append("formal requires provenance and prohibits assumptions")
+    if config.stages.m4_reaction.transport_enabled:
+        missing.append("formal transport compartment-volume/equilibrium applicability adapter not connected; sensitivity-only")
     return missing
 
 
@@ -1261,7 +1338,8 @@ def _label_scientific_results(config: ProjectConfig, records: list[object]) -> N
     for record in records:
         record.numerically_solved = record.status == "valid"
         record.evidence_ready = record.numerically_solved and _is_formal(config)
-        record.claim_scope = "conditional_mechanism" if record.numerically_solved else "not_established"
+        record.claim_scope = ("author_native_sensitivity" if config.stages.m4_reaction.unit_mode == "author_native_sensitivity" else
+                              "software_fixture_only" if config.execution.mode == "demo" else "conditional_mechanism") if record.numerically_solved else "not_established"
         context = getattr(record, "m4_candidate_context", None)
         if context is not None:
             context.evidence_ready = record.evidence_ready
@@ -1408,13 +1486,22 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
                 fit_points.append((observable, time_h))
     if len(observed) < 4 or len(fit_points) != len(observed):
         return {"fit": None, "candidate": None, "warning": "identifiability_warning:fewer_than_four_declared_observations"}
-    values = dict(prediction.simulation_inputs["parameters"])
+    values = dict(prediction.simulation_inputs.get("parameters", {}))
     kernel_key = requirement_name_to_kernel_key(plan.parameter_name)
     fixed_kernel_keys = {requirement_name_to_kernel_key(name) for name in plan.fixed_parameter_names}
     if kernel_key not in values or kernel_key in fixed_kernel_keys:
         return {"fit": None, "candidate": None, "warning": "FitPlan parameter absent_or_declared_fixed"}
     inputs = prediction.simulation_inputs
+    contract = inputs.get("prediction_contract")
+    if contract and contract["concentration_unit"] != "uM":
+        return {"fit": None, "candidate": None, "warning": "author_native_model_cannot_fit_absolute_measurements"}
+    if not contract and not all(name in inputs for name in ("pt_gate", "oc_gate", "dmt_gate", "initial", "t_end")):
+        return {"fit": None, "candidate": None, "warning": "insufficient_data:missing_model_fit_adapter"}
     def predictor(value: float) -> np.ndarray:
+        if contract:
+            changed_contract = replay_prediction(contract, plan.parameter_name, value)
+            time, series = observe_prediction(changed_contract, result)
+            return np.asarray([np.interp(time_h, time, series[observable]) for observable, time_h in fit_points])
         changed = dict(values); changed[kernel_key] = value
         simulation = simulate_glabridin(GlabridinKineticParameters(**changed), pt_gate=InductionGate(**{k: v for k, v in inputs["pt_gate"].items() if k != "time_unit"}), oc_gate=InductionGate(**{k: v for k, v in inputs["oc_gate"].items() if k != "time_unit"}), dmt_gate=InductionGate(**{k: v for k, v in inputs["dmt_gate"].items() if k != "time_unit"}), initial=tuple(inputs["initial"][f"x{key}"] for key in ("9", "10", "11", "13", "15")), t_end=inputs["t_end"])
         return np.asarray([np.interp(time_h, simulation.time, getattr(simulation, f"x{observable}")) for observable, time_h in fit_points])
@@ -1426,13 +1513,22 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
         fit = fit.model_copy(update={"confidence_interval": None, "identifiability_warning": "replicate_block_bootstrap_unavailable_from_aggregated_trajectory"})
     except ValueError as error:
         return {"fit": None, "candidate": None, "warning": str(error)}
-    requirement = next((item for item in m4_kinetic_requirements(include_degradation=True) if item.name == plan.parameter_name), None)
+    requirement = next((item for item in [*requirements_for_stage(config, "m4"), *m4_kinetic_requirements(include_degradation=True)] if item.name == plan.parameter_name), None)
     if requirement is None:
         return {"fit": None, "candidate": None, "warning": "FitPlan parameter is not an approved M4 requirement"}
     source_lineage = result.notes or result.experiment_id
-    fingerprint_input = {"construct": prediction.construct_id, "condition": prediction.condition_id, "requirement": requirement.name, "source_lineage": source_lineage, "fit_points": fit_points, "parameter_ids": sorted(prediction.parameter_ids), "bounds": plan.bounds, "observables": plan.observables, "contract": "pre-real-data-frozen"}
+    fingerprint_input = {"construct": prediction.construct_id, "condition": prediction.condition_id, "requirement": requirement.name,
+        "source_lineage": source_lineage, "fit_points": fit_points, "observed_uM": observed,
+        "canonical_observations": {species: canonicalize_metabolite(result, species).model_dump(mode="json") for species in sorted(result.metabolites)},
+        "source_replicate_data": result.source_replicate_data,
+        "compartment": result.measurement_compartment, "basis": result.concentration_basis,
+        "extraction_volume_l": result.extraction_volume_l, "observation_kind": result.observation_kind,
+        "parameter_ids": sorted(prediction.parameter_ids), "bounds": plan.bounds, "observables": plan.observables,
+        "model_inputs": contract or inputs, "contract": "m4-fit-observation-v2"}
     dataset_hash = sha256(json.dumps(fingerprint_input, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     candidate = ParameterRecord(parameter_id=f"fit:{dataset_hash}", name=requirement.name, value=fit.best_fit, unit=requirement.canonical_unit, parameter_type=requirement.parameter_type, enzyme_id=requirement.enzyme_id, substrate_id=requirement.substrate_id, product_id=requirement.product_id, species_id=requirement.species_id, source_type="wetlab", derivation_type="model_fit", source_reference=source_lineage, review_status="validated", construct_id=prediction.candidate_context.construct_id if prediction.candidate_context else None, condition_id=prediction.condition_id, conditions={"phase": requirement.phase} if requirement.phase else {}, derived_from=prediction.parameter_ids, notes=f"model_fit dataset_hash={dataset_hash}; target_requirement={requirement.name}; fit_bounds={plan.bounds}; observables={plan.observables}; source_lineage={source_lineage}; human approval is required before registry use.")
+    if result.raw_data_sha256:
+        candidate.notes += f"; raw_data_sha256={result.raw_data_sha256}"
     return {"fit": fit.model_dump(), "candidate": candidate.model_dump(mode="json")}
 
 
@@ -1445,7 +1541,7 @@ def _aggregate_fit_groups(results: list[object]) -> dict[tuple[str, str], object
     """
     groups: dict[tuple[str, str], list[object]] = {}
     for result in results:
-        groups.setdefault((result.construct_id, result.condition_id), []).append(result)
+        groups.setdefault(_fit_group_key(result), []).append(result)
     aggregated: dict[tuple[str, str], object] = {}
     for key, records in groups.items():
         reference = records[0]
@@ -1468,7 +1564,19 @@ def _aggregate_fit_groups(results: list[object]) -> dict[tuple[str, str], object
         if metabolites:
             lineage = sorted(f"{record.experiment_id}/{record.replicate_id}" for record in records)
             aggregated[key] = reference.model_copy(update={"experiment_id": f"fit_group:{key[0]}:{key[1]}", "replicate_id": "biological_mean", "metabolites": metabolites, "metabolite_concentration_unit": "uM", "metabolite_uncertainty": uncertainties, "metabolite_uncertainty_type": uncertainty_type, "metabolite_lod": {}, "metabolite_loq": {}, "biological_replicate_count": len(records), "notes": json.dumps({"source_replicates": lineage}, sort_keys=True)})
+            aggregated[key].source_replicate_data = sorted([
+                {"experiment_id": record.experiment_id, "replicate_id": record.replicate_id,
+                 "batch_id": record.batch_id, "biological_replicate_count": record.biological_replicate_count,
+                 "series": {species: canonicalize_metabolite(record, species).model_dump(mode="json") for species in sorted(record.metabolites)}}
+                for record in records], key=lambda row: (row["experiment_id"], row["replicate_id"]))
     return aggregated
+
+
+def _fit_group_key(result):
+    base = (result.construct_id, result.condition_id)
+    if result.measurement_compartment is None:
+        return base
+    return (*base, result.measurement_compartment, result.concentration_basis, result.observation_kind, result.extraction_volume_l)
 
 
 def _fit_eligible(result: object) -> bool:

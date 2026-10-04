@@ -22,10 +22,11 @@ from .full_network import (
 
 
 M4_FORMULA_VERSION = "m4-step0-step8-2026-09-27"
+M4_ACTIVITY_FORMULA_VERSION = "m4-step0-step8-phase-activity-v2-2026-10-04"
 
 
 class M4ReactionInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     reaction_id: str
     enzyme: Literal["PTR", "PT", "OC", "DMT"]
     substrate: str
@@ -36,18 +37,20 @@ class M4ReactionInput(BaseModel):
 
 
 class M4PhaseEnzymeInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     dense_um: float = Field(ge=0)
     dilute_um: float = Field(ge=0)
     m3_source_id: str
+    activity_dense_ratio: float = Field(default=1.0, ge=0)
+    activity_dilute_ratio: float = Field(default=1.0, ge=0)
 
 
 class M4SteadyStateInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     candidate_id: str
     construct_id: str
     condition_id: str
-    formula_version: Literal["m4-step0-step8-2026-09-27"] = M4_FORMULA_VERSION
+    formula_version: Literal["m4-step0-step8-2026-09-27", "m4-step0-step8-phase-activity-v2-2026-10-04"] = M4_FORMULA_VERSION
     phi: float = Field(ge=0, lt=1)
     enzymes: dict[str, M4PhaseEnzymeInput]
     metabolite_kp: dict[str, float]
@@ -61,6 +64,8 @@ class M4SteadyStateInput(BaseModel):
 
     @model_validator(mode="after")
     def _validate_complete_network(self) -> "M4SteadyStateInput":
+        if any(item.activity_dense_ratio != 1 or item.activity_dilute_ratio != 1 for item in self.enzymes.values()):
+            self.formula_version = M4_ACTIVITY_FORMULA_VERSION
         if set(self.enzymes) != set(ENZYME_SUBSTRATES):
             raise ValueError("M4_requires_PTR_PT_OC_DMT_phase_concentrations")
         if set(self.metabolite_kp) != set(COMPOUNDS) or any(value <= 0 for value in self.metabolite_kp.values()):
@@ -79,7 +84,7 @@ class M4SteadyStateResult(BaseModel):
     candidate_id: str
     construct_id: str
     condition_id: str
-    formula_version: Literal["m4-step0-step8-2026-09-27"] = M4_FORMULA_VERSION
+    formula_version: Literal["m4-step0-step8-2026-09-27", "m4-step0-step8-phase-activity-v2-2026-10-04"] = M4_FORMULA_VERSION
     status: Literal["valid", "blocked", "solver_failed"]
     concentrations_cell_average_um: dict[str, float] = Field(default_factory=dict)
     concentrations_dense_um: dict[str, float] = Field(default_factory=dict)
@@ -141,8 +146,8 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
         for index, compound in enumerate(COMPOUNDS):
             phases = phase_partition(float(cell_average[index]), payload.metabolite_kp[compound], payload.phi)
             dense[compound], dilute[compound] = phases.dense, phases.dilute
-        dense_rates = phase_competitive_rates(dense, {name: item.dense for name, item in enzymes.items()}, reactions, {name: 1.0 for name in ENZYME_SUBSTRATES}, 1.0)
-        dilute_rates = phase_competitive_rates(dilute, {name: item.dilute for name, item in enzymes.items()}, reactions, {name: 1.0 for name in ENZYME_SUBSTRATES}, 1.0)
+        dense_rates = phase_competitive_rates(dense, {name: item.dense for name, item in enzymes.items()}, reactions, {name: item.activity_dense_ratio for name, item in payload.enzymes.items()}, 1.0)
+        dilute_rates = phase_competitive_rates(dilute, {name: item.dilute for name, item in enzymes.items()}, reactions, {name: item.activity_dilute_ratio for name, item in payload.enzymes.items()}, 1.0)
         flux = {
             reaction_id: payload.phi * dense_rates[reaction_id] + (1.0 - payload.phi) * dilute_rates[reaction_id]
             for reaction_id, *_ in REACTIONS
@@ -179,6 +184,7 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
             construct_id=payload.construct_id,
             condition_id=payload.condition_id,
             status="solver_failed",
+            formula_version=payload.formula_version,
             concentrations_cell_average_um={compound: float(solved.x[index]) for index, compound in enumerate(COMPOUNDS)},
             steady_state_residual_um_per_h={compound: float(residual[index]) for index, compound in enumerate(COMPOUNDS)},
             input_parameter_ids=payload.input_parameter_ids,
@@ -193,6 +199,7 @@ def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
         construct_id=payload.construct_id,
         condition_id=payload.condition_id,
         status="valid",
+        formula_version=payload.formula_version,
         concentrations_cell_average_um={compound: float(solved.x[index]) for index, compound in enumerate(COMPOUNDS)},
         concentrations_dense_um=dense,
         concentrations_dilute_um=dilute,
@@ -217,6 +224,7 @@ def _blocked(payload: M4SteadyStateInput, reason: str) -> M4SteadyStateResult:
         construct_id=payload.construct_id,
         condition_id=payload.condition_id,
         status="blocked",
+        formula_version=payload.formula_version,
         input_parameter_ids=payload.input_parameter_ids,
         warnings=[reason],
     )

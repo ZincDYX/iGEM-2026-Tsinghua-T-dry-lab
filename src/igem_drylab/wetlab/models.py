@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from hashlib import sha256
 from datetime import datetime
 from pathlib import Path
 
@@ -31,6 +32,12 @@ class WetLabResult(BaseModel):
     technical_replicate_count: int = Field(default=1, ge=1)
     batch_id: str | None = None
     control_available: bool = False
+    observation_kind: Literal["time_course", "steady_state"] = "time_course"
+    measurement_compartment: Literal["intracellular", "extracellular", "total_extract"] | None = None
+    concentration_basis: Literal["cell_volume", "medium_volume", "extraction_volume"] | None = None
+    extraction_volume_l: float | None = Field(default=None, gt=0)
+    raw_data_sha256: str | None = None
+    source_replicate_data: list[dict] = Field(default_factory=list)
     notes: str = ""
 
     def time_hours(self) -> list[float]:
@@ -71,6 +78,9 @@ def load_wetlab_results(path: Path) -> list[WetLabResult]:
     if not isinstance(rows, list):
         raise ValueError("wet-lab JSON must be a list or {'records': [...]}")
     records = [WetLabResult.model_validate(row) for row in rows]
+    raw_hash = sha256(path.read_bytes()).hexdigest()
+    for record in records:
+        record.raw_data_sha256 = raw_hash
     if len({record.record_key for record in records}) != len(records):
         raise ValueError("duplicate_wetlab_record_identity")
     return records

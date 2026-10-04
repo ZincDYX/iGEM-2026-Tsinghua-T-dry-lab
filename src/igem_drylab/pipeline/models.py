@@ -68,6 +68,7 @@ class M2FusionAssessment(ScientificResult):
     candidate_id: str
     construct_id: str
     construct_definition: dict[str, Any]
+    enzyme_sequence_sha256: dict[str, str] = Field(default_factory=dict)
     structure_model: str | None = None
     structure_source_tool: str | None = None
     structure_source_tool_version: str | None = None
@@ -142,6 +143,7 @@ class M4CandidateContext(BaseModel):
     condition_id: str
     phi: float = Field(ge=0, lt=1)
     enzyme_distribution: dict[str, dict[str, float]]
+    enzyme_sequence_sha256: dict[str, str] = Field(default_factory=dict)
     metabolite_partition_coefficients: dict[str, float] = Field(default_factory=dict)
     binding_recruited_fraction: dict[str, float] = Field(default_factory=dict)
     site_occupancy: dict[str, float] = Field(default_factory=dict)
@@ -194,5 +196,6 @@ class M5FeedbackAssessment(ScientificResult):
     metabolite_comparisons: dict[str, Any] = Field(default_factory=dict)
     diagnosis_evidence: dict[str, Any] = Field(default_factory=dict)
     fitted_parameter_candidate: dict[str, Any] | None = None
+    fit_warnings: list[str] = Field(default_factory=list)
     next_measurement: str | None = None
     notes: str = ""

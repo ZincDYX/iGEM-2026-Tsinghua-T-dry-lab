@@ -176,19 +176,23 @@ def _requirements_for_stage(project: object, stage: str, *, include_auxiliary: b
     if stage == "m4":
         m4 = project.stages.m4_reaction
         if getattr(m4, "network_mode", "legacy_reduced") == "markdown_steady_state":
-            return m4_markdown_steady_requirements()
+            return [*m4_markdown_steady_requirements(), *(author_native_m4_sensitivity_requirements(include_activity=True) if m4.activity_mode == "sensitivity_parameters" else [])]
         if getattr(m4, "network_mode", "legacy_reduced") == "galatea_full_competitive":
             if m4.unit_mode == "author_native_sensitivity":
                 return author_native_m4_sensitivity_requirements(include_activity=m4.activity_mode == "sensitivity_parameters")
-            return full_m4_kinetic_requirements(
+            result = full_m4_kinetic_requirements(
                 include_transport=m4.transport_enabled,
                 include_activity=m4.activity_mode == "sensitivity_parameters",
             )
+            if m4.transport_enabled and m4.transport_rate_parameter:
+                result = [item.model_copy(update={"name": m4.transport_rate_parameter}) if item.name == "transport_rate" else item for item in result]
+            return result
         return m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation)
     return []
 
 
 def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
-    identities = {item.id: item.sequence_sha256 for item in project.inputs.enzymes}
+    inputs = getattr(project, "inputs", None)
+    identities = {item.id: item.sequence_sha256 for item in inputs.enzymes} if inputs is not None else {}
     return [item.model_copy(update={"enzyme_sequence_sha256": identities.get(item.enzyme_id)})
             for item in _requirements_for_stage(project, stage, include_auxiliary=include_auxiliary)]

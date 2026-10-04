@@ -36,7 +36,10 @@ def test_m3_uses_independent_oc_and_dmt_partition_inputs(tmp_path):
     requirements = {item.name: item for item in m3_requirements()}
     config.parameters = [ParameterRecord(parameter_id=name, name=name, value=value, unit=requirements[name].canonical_unit, parameter_type=requirements[name].parameter_type, enzyme_id=requirements[name].enzyme_id, source_type="assumption", source_reference="synthetic test", review_status="approved") for name, value in values.items()]
     candidates, _ = run_m1(config, tmp_path)
-    m2, _ = run_m2(config, tmp_path, candidates)
+    # The public demo FASTA does not contain scaffold ORFs. This M3 unit test
+    # supplies an explicit synthetic M2 pass instead of exploiting baseline.
+    from igem_drylab.pipeline.models import M2FusionAssessment
+    m2 = [M2FusionAssessment(candidate_id="synthetic", construct_id="synthetic", construct_definition={}, recommended_for_m3=True)]
     records, _ = run_m3(config, tmp_path, m2)
     assert records[0].status == "valid"
     assert records[0].concentrations["OC"]["partition_coefficient"] == 20.0

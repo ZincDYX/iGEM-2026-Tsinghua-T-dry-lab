@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Literal
+from types import SimpleNamespace
 
 import numpy as np
-from scipy.integrate import solve_ivp
+from scipy.integrate import solve_ivp, trapezoid
+from .kinetics import InductionGate, gate_value
 
 COMPOUNDS = ("8", "9", "10", "11", "12", "13", "14", "15")
 REACTIONS = (
@@ -23,6 +25,7 @@ REACTIONS = (
 ENZYME_SUBSTRATES = {"PTR": ("8", "12"), "PT": ("9", "13"), "OC": ("10", "14"), "DMT": ("8", "9", "10", "11")}
 _INDEX = {compound: index for index, compound in enumerate(COMPOUNDS)}
 NUMERICAL_NEGATIVE_TOLERANCE = -1e-8
+FULL_NETWORK_FORMULA_VERSION = "galatea-dynamic-volume-v2-2026-10-04"
 
 
 @dataclass(frozen=True)
@@ -47,7 +50,7 @@ class EffectiveRecruitment:
 
 def phase_partition(average: float, kp: float, phi: float) -> PhaseDistribution:
     """Partition a cell-average concentration without changing total mass."""
-    if average < 0 or kp <= 0 or not 0 <= phi <= 1:
+    if not all(np.isfinite(value) for value in (average, kp, phi)) or average < 0 or kp <= 0 or not 0 <= phi <= 1:
         raise ValueError("invalid_average_kp_or_phi")
     if phi == 0:
         return PhaseDistribution(dense=0.0, dilute=average)
@@ -68,7 +71,7 @@ def effective_ratio_recruitment(
     remains in either the dense or dilute phase.
     """
     values = (oc_total, dmt_total, slot_ratio_sh3_to_pdz, total_recruited_fraction, recruitment_bias_oc_vs_dmt)
-    if any(value < 0 for value in values) or not 0 <= phi < 1:
+    if any(not np.isfinite(value) or value < 0 for value in values) or not 0 <= phi < 1:
         raise ValueError("invalid_effective_ratio_recruitment_input")
     if total_recruited_fraction > 1:
         raise ValueError("total_recruited_fraction_must_not_exceed_one")
@@ -104,7 +107,7 @@ class ReactionKinetics:
     def validate(self) -> None:
         if self.reaction_id not in {item[0] for item in REACTIONS} or self.substrate not in _INDEX or self.product not in _INDEX:
             raise ValueError("invalid_reaction_identity")
-        if self.kcat < 0 or self.km <= 0:
+        if not np.isfinite(self.kcat) or not np.isfinite(self.km) or self.kcat < 0 or self.km <= 0:
             raise ValueError("kcat_must_be_nonnegative_and_km_positive")
 
 
@@ -114,28 +117,49 @@ class TransportParameters:
     access: Literal["dilute_phase", "cell_average"] = "dilute_phase"
     rate: float = 0.0
     outside_over_inside: dict[str, float] = field(default_factory=lambda: {compound: 0.0 for compound in COMPOUNDS})
+    intracellular_volume_l: float | None = None
+    extracellular_volume_l: float | None = None
 
     def validate(self) -> None:
-        if self.rate < 0 or set(self.outside_over_inside) != set(COMPOUNDS) or any(value < 0 for value in self.outside_over_inside.values()):
+        if not np.isfinite(self.rate) or self.rate < 0 or set(self.outside_over_inside) != set(COMPOUNDS) or any(not np.isfinite(value) or value < 0 for value in self.outside_over_inside.values()):
             raise ValueError("invalid_transport_parameters")
+        if self.access not in {"dilute_phase", "cell_average"}:
+            raise ValueError("invalid_transport_access")
+        volumes = (self.intracellular_volume_l, self.extracellular_volume_l)
+        if any(value is not None for value in volumes) or self.enabled:
+            if any(value is None or not np.isfinite(value) or value <= 0 for value in volumes):
+                raise ValueError("transport_requires_explicit_positive_compartment_volumes_l")
+
+    @property
+    def extracellular_to_intracellular_volume_ratio(self) -> float:
+        if self.intracellular_volume_l is None:
+            return 1.0  # only used when extracellular states are identically zero
+        return self.extracellular_volume_l / self.intracellular_volume_l
 
 
 @dataclass(frozen=True)
 class TemporalGate:
     """Constitutive by default; delayed ramp is an explicit ablation only."""
 
-    mode: Literal["constitutive", "published_delayed_ramp"] = "constitutive"
+    mode: Literal["constitutive", "published_delayed_ramp", "configured_induction"] = "constitutive"
     disable_time: float = 0.0
     ramp_ceiling: float = 0.8
     ramp_slope: float = 0.8
+    induction: InductionGate | None = None
 
     def validate(self) -> None:
-        if self.mode not in {"constitutive", "published_delayed_ramp"}:
+        if self.mode not in {"constitutive", "published_delayed_ramp", "configured_induction"}:
             raise ValueError("invalid_temporal_gate_mode")
+        if self.mode == "configured_induction":
+            if self.induction is None:
+                raise ValueError("configured_induction_requires_all_gate_fields")
+            self.induction.validate()
         if not all(np.isfinite(value) and value >= 0 for value in (self.disable_time, self.ramp_ceiling, self.ramp_slope)):
             raise ValueError("temporal_gate_parameters_must_be_finite_and_nonnegative")
 
     def value(self, time: float) -> float:
+        if self.mode == "configured_induction":
+            return gate_value(time, self.induction)
         if self.mode == "constitutive":
             return 1.0
         if time <= self.disable_time:
@@ -153,6 +177,8 @@ class FullNetworkParameters:
     activity_dilute: dict[str, float] = field(default_factory=lambda: {enzyme: 1.0 for enzyme in ENZYME_SUBSTRATES})
     transport: TransportParameters = field(default_factory=TransportParameters)
     dmt_gate: TemporalGate = field(default_factory=TemporalGate)
+    pt_gate: TemporalGate = field(default_factory=TemporalGate)
+    oc_gate: TemporalGate = field(default_factory=TemporalGate)
     scenario: Literal["homogeneous_constitutive", "homogeneous_published_like_temporal", "galatea_spatial", "galatea_spatiotemporal_ablation"] = "galatea_spatial"
     unit_mode: Literal["physical", "author_native_sensitivity"] = "physical"
 
@@ -175,11 +201,13 @@ class FullNetworkParameters:
             raise ValueError("activity_multipliers_must_be_nonnegative_and_finite")
         if self.scenario == "galatea_spatial" and self.dmt_gate.mode != "constitutive":
             raise ValueError("galatea_spatial_requires_constitutive_dmt_unless_using_ablation")
-        if self.scenario == "homogeneous_constitutive" and (self.phi != 0 or self.dmt_gate.mode != "constitutive"):
+        if self.scenario == "homogeneous_constitutive" and (self.phi != 0 or any(gate.mode != "constitutive" for gate in (self.pt_gate, self.oc_gate, self.dmt_gate))):
             raise ValueError("homogeneous_constitutive_requires_phi_zero_and_constitutive_dmt")
-        if self.scenario == "homogeneous_published_like_temporal" and (self.phi != 0 or self.dmt_gate.mode != "published_delayed_ramp"):
+        if self.scenario == "homogeneous_published_like_temporal" and (self.phi != 0 or self.dmt_gate.mode == "constitutive"):
             raise ValueError("homogeneous_published_like_temporal_requires_phi_zero_and_delayed_dmt")
         self.dmt_gate.validate()
+        self.pt_gate.validate()
+        self.oc_gate.validate()
         self.transport.validate()
         for reaction in self.reactions:
             reaction.validate()
@@ -192,7 +220,7 @@ class FullNetworkResult:
     extracellular: np.ndarray  # 8 x time
     fluxes: np.ndarray  # 10 x time; cell-average fluxes
     flux_integrals: dict[str, float]
-    diagnostics: dict[str, float]
+    diagnostics: dict[str, float | None]
     unit_mode: Literal["physical", "author_native_sensitivity"]
 
 
@@ -227,11 +255,14 @@ def _transport_flux(intracellular: np.ndarray, extracellular: np.ndarray, params
 def simulate_full_network(params: FullNetworkParameters, *, initial_intracellular: dict[str, float], initial_extracellular: dict[str, float] | None = None, t_end: float, points: int = 501) -> FullNetworkResult:
     """Run the full ten-reaction Galatea two-phase model with LSODA."""
     params.validate()
-    if t_end <= 0 or points < 2 or set(initial_intracellular) != set(COMPOUNDS):
+    if not np.isfinite(t_end) or t_end <= 0 or points < 2 or set(initial_intracellular) != set(COMPOUNDS):
         raise ValueError("complete_nonnegative_initial_state_and_horizon_required")
     initial_extracellular = initial_extracellular or {compound: 0.0 for compound in COMPOUNDS}
-    if set(initial_extracellular) != set(COMPOUNDS) or any(value < 0 for value in [*initial_intracellular.values(), *initial_extracellular.values()]):
+    if set(initial_extracellular) != set(COMPOUNDS) or any(not np.isfinite(value) or value < 0 for value in [*initial_intracellular.values(), *initial_extracellular.values()]):
         raise ValueError("initial_states_must_be_complete_and_nonnegative")
+    if any(initial_extracellular.values()) and params.transport.intracellular_volume_l is None:
+        raise ValueError("extracellular_initial_concentrations_require_compartment_volumes")
+    volume_ratio = params.transport.extracellular_to_intracellular_volume_ratio
     initial = np.asarray([*(initial_intracellular[compound] for compound in COMPOUNDS), *(initial_extracellular[compound] for compound in COMPOUNDS)], dtype=float)
 
     def rhs(time: float, state: np.ndarray) -> np.ndarray:
@@ -239,8 +270,9 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
         extracellular = np.maximum(state[8:], 0.0)
         dense = {compound: phase_partition(float(intracellular[index]), params.metabolite_kp[compound], params.phi).dense for index, compound in enumerate(COMPOUNDS)}
         dilute = {compound: phase_partition(float(intracellular[index]), params.metabolite_kp[compound], params.phi).dilute for index, compound in enumerate(COMPOUNDS)}
-        dense_enzymes = {enzyme: item.dense for enzyme, item in params.enzyme_distributions.items()}
-        dilute_enzymes = {enzyme: item.dilute for enzyme, item in params.enzyme_distributions.items()}
+        gates = {"PT": params.pt_gate.value(time), "OC": params.oc_gate.value(time)}
+        dense_enzymes = {enzyme: item.dense * gates.get(enzyme, 1.0) for enzyme, item in params.enzyme_distributions.items()}
+        dilute_enzymes = {enzyme: item.dilute * gates.get(enzyme, 1.0) for enzyme, item in params.enzyme_distributions.items()}
         gate = params.dmt_gate.value(time)
         dense_rates = phase_competitive_rates(dense, dense_enzymes, params.reactions, params.activity_dense, gate)
         dilute_rates = phase_competitive_rates(dilute, dilute_enzymes, params.reactions, params.activity_dilute, gate)
@@ -251,12 +283,31 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
             derivative[_INDEX[substrate]] -= flux
             derivative[_INDEX[product]] += flux
         transport = _transport_flux(intracellular, extracellular, params)
-        return np.concatenate((derivative - transport, transport))
+        # J is normalized by intracellular volume; both states are their own
+        # compartment concentrations. Vi*dCi + Ve*dCe therefore conserves amount.
+        return np.concatenate((derivative - transport, transport / volume_ratio))
 
-    evaluation = np.linspace(0.0, t_end, points)
-    solved = solve_ivp(rhs, (0.0, t_end), initial, t_eval=evaluation, method="LSODA", rtol=1e-8, atol=1e-12)
-    if not solved.success:
-        raise RuntimeError(solved.message)
+    boundaries = {0.0, t_end}
+    for gate in (params.pt_gate, params.oc_gate, params.dmt_gate):
+        if gate.induction is not None and gate.induction.mode == "step":
+            boundaries.update(value for value in (gate.induction.on_time, gate.induction.off_time)
+                              if value is not None and 0 < value < t_end)
+    evaluation = np.unique(np.concatenate((np.linspace(0.0, t_end, points), sorted(boundaries))))
+    segments, times = [], []
+    current = initial
+    intervals = sorted(boundaries)
+    for left, right in zip(intervals, intervals[1:]):
+        sampled = evaluation[(evaluation >= left) & (evaluation <= right)]
+        def segment_rhs(time, state):
+            return rhs(np.nextafter(right, left) if time >= right else time, state)
+        piece = solve_ivp(segment_rhs, (left, right), current, t_eval=sampled, method="LSODA", rtol=1e-8, atol=1e-12)
+        if not piece.success:
+            raise RuntimeError(piece.message)
+        current = piece.y[:, -1]
+        offset = 1 if segments else 0
+        segments.append(piece.y[:, offset:])
+        times.append(piece.t[offset:])
+    solved = SimpleNamespace(t=np.concatenate(times), y=np.concatenate(segments, axis=1))
     raw_states = solved.y
     if float(raw_states.min()) < NUMERICAL_NEGATIVE_TOLERANCE:
         raise RuntimeError(f"numerical_negative_concentration_exceeds_tolerance:{raw_states.min():.3e}")
@@ -266,26 +317,39 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
         intracellular = state[:8]
         dense = {compound: phase_partition(float(intracellular[index]), params.metabolite_kp[compound], params.phi).dense for index, compound in enumerate(COMPOUNDS)}
         dilute = {compound: phase_partition(float(intracellular[index]), params.metabolite_kp[compound], params.phi).dilute for index, compound in enumerate(COMPOUNDS)}
-        dense_rates = phase_competitive_rates(dense, {enzyme: item.dense for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dense, params.dmt_gate.value(float(time)))
-        dilute_rates = phase_competitive_rates(dilute, {enzyme: item.dilute for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dilute, params.dmt_gate.value(float(time)))
+        gates = {"PT": params.pt_gate.value(float(time)), "OC": params.oc_gate.value(float(time))}
+        dense_rates = phase_competitive_rates(dense, {enzyme: item.dense * gates.get(enzyme, 1.0) for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dense, params.dmt_gate.value(float(time)))
+        dilute_rates = phase_competitive_rates(dilute, {enzyme: item.dilute * gates.get(enzyme, 1.0) for enzyme, item in params.enzyme_distributions.items()}, params.reactions, params.activity_dilute, params.dmt_gate.value(float(time)))
         fluxes[:, column] = [params.phi * dense_rates[reaction_id] + (1 - params.phi) * dilute_rates[reaction_id] for reaction_id, *_ in REACTIONS]
-    integrals = {reaction_id: float(np.trapezoid(fluxes[index], solved.t)) for index, (reaction_id, *_rest) in enumerate(REACTIONS)}
-    initial_8 = initial_intracellular["8"]
+    integrals = {reaction_id: float(trapezoid(fluxes[index], solved.t)) for index, (reaction_id, *_rest) in enumerate(REACTIONS)}
     final_intracellular, final_extracellular = states[:8, -1], states[8:, -1]
-    final_15_total = float(final_intracellular[_INDEX["15"]] + final_extracellular[_INDEX["15"]])
-    final_13_total = float(final_intracellular[_INDEX["13"]] + final_extracellular[_INDEX["13"]])
+    equivalents = states[:8] + volume_ratio * states[8:]
+    final_15_total = float(equivalents[_INDEX["15"], -1])
+    final_13_total = float(equivalents[_INDEX["13"], -1])
+    net_15 = final_15_total - float(equivalents[_INDEX["15"], 0])
+    net_13 = final_13_total - float(equivalents[_INDEX["13"], 0])
+    initial_precursor = float(equivalents[:7, 0].sum())
     dmt_total = sum(integrals[f"R{index}"] for index in (4, 5, 6, 7))
-    eps = 1e-12
+    def fraction(numerator, denominator):
+        return numerator / denominator if denominator > 0 else None
+    net_pool = net_13 + net_15
     diagnostics = {
         "final_15_total": final_15_total,
         "final_13_total": final_13_total,
         "final_13_extracellular": float(final_extracellular[_INDEX["13"]]),
-        "target_yield_fraction": final_15_total / (initial_8 + eps),
-        "branch_9_to_13_fraction": integrals["R5"] / (integrals["R2"] + integrals["R5"] + eps),
-        "dmt_late_selectivity": integrals["R7"] / (dmt_total + eps),
-        "early_dmt_fraction": 1.0 - integrals["R7"] / (dmt_total + eps),
-        "oc_before_dmt_route_fraction": integrals["R7"] / (integrals["R7"] + integrals["R10"] + eps),
-        "side_product_fraction_13": final_13_total / (final_13_total + final_15_total + eps),
-        "mass_balance_error": abs(float(states[:, 0].sum() - states[:, -1].sum())),
+        "net_15_generated_cell_volume_equivalent": net_15,
+        "net_13_generated_cell_volume_equivalent": net_13,
+        "initial_convertible_backbone_cell_volume_equivalent": initial_precursor,
+        "target_yield_fraction": fraction(net_15, initial_precursor),
+        "branch_9_to_13_fraction": fraction(integrals["R5"], integrals["R2"] + integrals["R5"]),
+        "dmt_late_selectivity": fraction(integrals["R7"], dmt_total),
+        "early_dmt_fraction": fraction(sum(integrals[f"R{index}"] for index in (4, 5, 6)), dmt_total),
+        "oc_before_dmt_route_fraction": fraction(integrals["R7"], integrals["R7"] + integrals["R10"]),
+        "side_product_fraction_13": fraction(net_13, net_pool) if net_13 >= 0 and net_15 >= 0 else None,
+        "cumulative_R5_flux": integrals["R5"],
+        "net_13_extracellular_accumulation_cell_volume_equivalent": volume_ratio * (float(final_extracellular[_INDEX["13"]]) - initial_extracellular["13"]),
+        "mass_balance_error": float(np.max(np.abs(equivalents.sum(axis=0) - equivalents[:, 0].sum()))),
     }
+    if params.transport.intracellular_volume_l is not None:
+        diagnostics["backbone_amount_balance_error_umol"] = diagnostics["mass_balance_error"] * params.transport.intracellular_volume_l
     return FullNetworkResult(solved.t, states[:8], states[8:], fluxes, integrals, diagnostics, params.unit_mode)

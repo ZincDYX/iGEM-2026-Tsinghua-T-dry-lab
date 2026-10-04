@@ -116,7 +116,8 @@ def test_spatial_requires_constitutive_dmt_and_transport_phi_zero_is_homogeneous
         assert "constitutive" in str(error)
     else:
         raise AssertionError("spatial scenario must reject hidden temporal control")
-    params = FullNetworkParameters(**{**full_params(0).__dict__, "transport": TransportParameters(enabled=True, access="dilute_phase", rate=2, outside_over_inside={compound: 1 for compound in COMPOUNDS})})
+    # Explicit equal-volume software fixture, not a measured project volume.
+    params = FullNetworkParameters(**{**full_params(0).__dict__, "transport": TransportParameters(enabled=True, access="dilute_phase", rate=2, outside_over_inside={compound: 1 for compound in COMPOUNDS}, intracellular_volume_l=1, extracellular_volume_l=1)})
     result = simulate_full_network(params, initial_intracellular=initial(), t_end=.1)
     assert result.diagnostics["mass_balance_error"] < 1e-7
 

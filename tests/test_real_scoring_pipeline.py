@@ -12,10 +12,10 @@ def test_pipeline_uses_real_metrics_when_configured(tmp_path):
 
     manifest = run_pipeline(config)
     m2_text = (manifest.run_dir / "m2_structure_screen" / "fusion_assessments.json").read_text(encoding="utf-8")
-    m4_text = (manifest.run_dir / "m4_glabridin_kinetics" / "reaction_predictions.json").read_text(encoding="utf-8")
+    m4_text = manifest.stages[3].json_file.read_text(encoding="utf-8")
 
-    assert '"data_quality": "predicted"' in m2_text
     m2_records = json.loads(m2_text)
     assert all(record["screen_verdict"] == "blocked" for record in m2_records)
-    assert all(any("M2 provenance" in item for item in record["missing_inputs"]) for record in m2_records)
+    assert all(not record["recommended_for_m3"] for record in m2_records)
+    assert all("M1 construct screen must pass" in record["missing_inputs"] for record in m2_records)
     assert '"status": "insufficient_data"' in m4_text

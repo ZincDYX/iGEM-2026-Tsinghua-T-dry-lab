@@ -4,16 +4,18 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+import math
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.constructs import ConstructRecord
+from igem_drylab.resources import default_config_path
 
 
-DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[3] / "configs"
+DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
 
 
 class RunConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     id: str = Field(default="demo-run", pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     output_dir: Path = Path("outputs")
 
@@ -31,7 +33,7 @@ class ExecutionConfig(BaseModel):
 class StrictScientificConfig(BaseModel):
     """Reject misspelled or retired scientific settings rather than ignoring them."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class ExperimentalContext(StrictScientificConfig):
@@ -224,6 +226,7 @@ class FullNetworkInitialStateConfig(StrictScientificConfig):
 
     concentration_unit: Literal["uM", "author_native"] = "uM"
     intracellular: dict[str, float]
+    parameter_ids: dict[str, str] = Field(default_factory=dict)
     extracellular: dict[str, float] = Field(default_factory=lambda: {str(index): 0.0 for index in range(8, 16)})
 
     @model_validator(mode="after")
@@ -231,7 +234,7 @@ class FullNetworkInitialStateConfig(StrictScientificConfig):
         required = {str(index) for index in range(8, 16)}
         if set(self.intracellular) != required or set(self.extracellular) != required:
             raise ValueError("full_network_initial_state_requires_compounds_8_to_15")
-        if any(value < 0 for value in [*self.intracellular.values(), *self.extracellular.values()]):
+        if any(not math.isfinite(value) or value < 0 for value in [*self.intracellular.values(), *self.extracellular.values()]):
             raise ValueError("full_network_initial_state_must_be_nonnegative")
         return self
 
@@ -254,6 +257,8 @@ class InductionGateConfig(StrictScientificConfig):
 
 class M4Config(StrictScientificConfig):
     target_product: str = "glabridin"
+    feed_compound_id: str | None = None
+    feed_mode: Literal["batch_initial_state", "continuous_feed"] | None = None
     t_end: float = Field(default=24.0, gt=0)
     initial_state: InitialStateConfig | None = None
     full_network_initial_state: FullNetworkInitialStateConfig | None = None
@@ -282,10 +287,38 @@ class M4Config(StrictScientificConfig):
     transport_access: Literal["dilute_phase", "cell_average"] = "dilute_phase"
     transport_enabled: bool = False
     transport_rate_parameter: str | None = None
+    intracellular_volume_l: float | None = Field(default=None, gt=0)
+    extracellular_volume_l: float | None = Field(default=None, gt=0)
+    volume_source_reference: str | None = None
+    transport_ratio_source_reference: str | None = None
+    solver_points: int = Field(default=501, ge=2)
     transport_outside_over_inside: dict[str, float] = Field(default_factory=lambda: {str(index): 0.0 for index in range(8, 16)})
 
     @model_validator(mode="after")
     def _scenario_contract(self) -> "M4Config":
+        if self.feed_mode is not None or self.feed_compound_id is not None:
+            if self.network_mode == "markdown_steady_state":
+                if (self.feed_mode, self.feed_compound_id) != ("continuous_feed", "8"):
+                    raise ValueError("steady_state_supports_only_continuous_feed_of_8")
+            elif self.network_mode == "galatea_full_competitive":
+                if self.feed_mode != "batch_initial_state" or self.feed_compound_id not in {str(index) for index in range(8, 15)}:
+                    raise ValueError("full_dynamic_supports_only_explicit_batch_initial_state_feed")
+            elif self.network_mode == "legacy_reduced":
+                if self.feed_mode != "batch_initial_state" or self.feed_compound_id not in {"9", "10", "11", "13"}:
+                    raise ValueError("reduced_dynamic_supports_only_explicit_batch_initial_state_feed")
+            else:
+                raise ValueError("published_reference_boundary_is_immutable")
+        if self.network_mode != "legacy_reduced" and self.enable_degradation:
+            raise ValueError("enable_degradation_not_supported_by_selected_network")
+        if self.network_mode == "markdown_steady_state":
+            if any((self.pt_gate, self.oc_gate, self.dmt_gate, self.initial_state, self.full_network_initial_state, self.transport_enabled)):
+                raise ValueError("steady_state_does_not_support_dynamic_gates_initial_states_or_transport")
+        if self.network_mode == "legacy_reduced" and any((self.full_network_initial_state, self.transport_enabled, self.steady_state_initial_guess_um)):
+            raise ValueError("legacy_reduced_does_not_support_full_network_or_steady_fields")
+        if self.network_mode == "galatea_full_competitive" and any((self.initial_state, self.steady_state_initial_guess_um)):
+            raise ValueError("full_network_does_not_support_reduced_or_steady_initial_fields")
+        if self.network_mode == "galatea_full_competitive" and self.scenario_mode == "homogeneous_constitutive" and any((self.pt_gate, self.oc_gate, self.dmt_gate)):
+            raise ValueError("homogeneous_constitutive_does_not_support_induction_gates")
         if self.network_mode == "published_reference" and self.scenario_mode != "published_reference":
             raise ValueError("published_reference_network_requires_published_reference_scenario")
         if self.scenario_mode == "published_reference" and self.network_mode != "published_reference":
@@ -313,13 +346,20 @@ class M4Config(StrictScientificConfig):
             raise ValueError("author_native_sensitivity_requires_galatea_full_competitive_network")
         if self.unit_mode == "author_native_sensitivity" and self.transport_enabled:
             raise ValueError("author_native_transport_is_not_supported; disable_transport")
+        if self.transport_enabled and (self.intracellular_volume_l is None or self.extracellular_volume_l is None):
+            raise ValueError("transport_requires_explicit_compartment_volumes_l")
+        if self.network_mode != "galatea_full_competitive" and self.transport_rate_parameter is not None:
+            raise ValueError("transport_rate_parameter_not_supported_by_selected_network")
         if self.unit_mode == "author_native_sensitivity":
             for gate in (self.pt_gate, self.oc_gate, self.dmt_gate):
                 if gate is not None and gate.time_unit != "author_native_day_axis":
                     raise ValueError("author_native_sensitivity_gate_requires_author_native_day_axis")
+        else:
+            if any(gate is not None and gate.time_unit != "h" for gate in (self.pt_gate, self.oc_gate, self.dmt_gate)):
+                raise ValueError("physical_induction_gate_requires_hours")
         if self.scenario_mode == "homogeneous_published_like_temporal" and self.dmt_gate is None:
             raise ValueError("homogeneous_published_like_temporal_requires_dmt_gate")
-        if set(self.transport_outside_over_inside) != {str(index) for index in range(8, 16)} or any(value < 0 for value in self.transport_outside_over_inside.values()):
+        if set(self.transport_outside_over_inside) != {str(index) for index in range(8, 16)} or any(not math.isfinite(value) or value < 0 for value in self.transport_outside_over_inside.values()):
             raise ValueError("transport_outside_over_inside_requires_nonnegative_compounds_8_to_15")
         return self
 

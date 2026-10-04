@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from .fit import FitResult, fit_scale_parameter
 from .models import WetLabResult
 from .canonical import canonicalize_metabolite
+from igem_drylab.prediction import observe_prediction
 
 
 class MetaboliteComparison(BaseModel):
@@ -44,12 +45,21 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
     unit.  Production trajectories use uM; unsupported values fail fast.
     """
     data = json.loads(trajectory_path.read_text(encoding="utf-8"))
-    trajectory_unit = data.get("concentration_unit")
+    contract = data.get("prediction_contract")
+    trajectory_unit = contract.get("concentration_unit") if contract else data.get("concentration_unit")
     if trajectory_unit != "uM":
         raise ValueError(f"unsupported_trajectory_concentration_unit:{trajectory_unit}")
     if result.metabolite_concentration_unit is None:
         raise ValueError("missing_wetlab_concentration_unit")
-    time = np.asarray(data["time"], dtype=float)
+    if contract:
+        time, predicted_series = observe_prediction(contract, result)
+    else:
+        if result.measurement_compartment not in {None, "intracellular"}:
+            raise ValueError("legacy_prediction_has_no_requested_compartment_adapter")
+        if "time" not in data or not all(f"x{name}" in data for name in result.metabolites if name in {"13", "15"}):
+            raise ValueError("missing_trajectory_model_adapter")
+        time = np.asarray(data["time"], dtype=float)
+        predicted_series = {name: np.asarray(data[f"x{name}"], dtype=float) for name in ("13", "15") if f"x{name}" in data}
     observed_time = np.asarray(result.time_hours(), dtype=float)
     comparisons: dict[str, MetaboliteComparison] = {}
     for metabolite in ("13", "15"):
@@ -71,7 +81,10 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
         if observed_time.min() < time.min() or observed_time.max() > time.max():
             comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, comparison_status="measurement_outside_simulation_horizon")
             continue
-        predicted_all = np.interp(observed_time, time, np.asarray(data[f"x{metabolite}"], dtype=float))
+        if metabolite not in predicted_series:
+            comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, comparison_status="model_does_not_predict_observable")
+            continue
+        predicted_all = np.interp(observed_time, time, predicted_series[metabolite])
         mask = canonical.censor_mask
         selected = [index for index, flag in enumerate(mask) if flag == "quantified"]
         if not selected:

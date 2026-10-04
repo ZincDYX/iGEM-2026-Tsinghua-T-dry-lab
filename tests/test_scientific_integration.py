@@ -14,6 +14,10 @@ def test_synthetic_m1_to_m5_workflow_has_no_network(tmp_path):
     config.execution.require_provenance = False
     config.run.output_dir = tmp_path
     config.execution.allow_assumptions = True
+    # Complete synthetic scaffold sequences for this offline integration test;
+    # missing ORFs must not be waived by experimental_baseline.
+    config.inputs.constructs[0].sequences = {"FTH1": "MA"}
+    config.inputs.constructs[1].sequences = {"SpyTag_SpyCatcher": "MA"}
     config.stages.m3_concentration.recruitment_mode = "legacy_independent_partition"
     config.stages.m4_reaction.pt_gate = InductionGateConfig(on_time=0, basal=0, induced=1)
     config.stages.m4_reaction.oc_gate = InductionGateConfig(on_time=0, basal=0, induced=1)
