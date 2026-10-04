@@ -87,7 +87,7 @@ def condition_compatibility(
     if host and observed_host and observed_host != host:
         return Compatibility("incompatible", ("host_mismatch",))
     reasons: list[str] = []
-    for name, requested in (("strain", strain), ("assay_system", assay_system)):
+    for name, requested in (("host", host), ("strain", strain), ("assay_system", assay_system)):
         observed = record.conditions.get(name)
         if requested is not None and observed is not None and observed != requested:
             reasons.append(f"{name}_mismatch_requires_review")
@@ -98,8 +98,8 @@ def condition_compatibility(
         delta = abs(float(observed_temperature) - temperature_c)
         if delta > 5:
             return Compatibility("incompatible", ("temperature_difference_gt_5C",))
-        if delta > 2:
-            reasons.append("temperature_difference_gt_2C")
+        if delta > 0:
+            reasons.append("temperature_difference_requires_applicability_review")
     elif temperature_c is not None:
         reasons.append("temperature_not_reported")
     observed_ph = record.conditions.get("pH")
@@ -107,8 +107,8 @@ def condition_compatibility(
         delta = abs(float(observed_ph) - pH)
         if delta > 1.0:
             return Compatibility("incompatible", ("pH_difference_gt_1",))
-        if delta > 0.3:
-            reasons.append("pH_difference_gt_0.3_requires_review")
+        if delta > 0:
+            reasons.append("pH_difference_requires_applicability_review")
     elif pH is not None:
         reasons.append("pH_not_reported")
     return Compatibility("exact" if not reasons else "weak", tuple(reasons))

@@ -19,6 +19,9 @@ class ScientificResult(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     parameter_ids: list[str] = Field(default_factory=list)
     provenance_summary: dict[str, int] = Field(default_factory=dict)
+    numerically_solved: bool = False
+    evidence_ready: bool = False
+    claim_scope: str = "not_established"
 
 
 class StageOutput(BaseModel):
@@ -141,6 +144,8 @@ class M4CandidateContext(BaseModel):
     parameter_ids: list[str] = Field(default_factory=list)
     provenance_summary: dict[str, int] = Field(default_factory=dict)
     assumptions: list[str] = Field(default_factory=list)
+    evidence_ready: bool = False
+    claim_scope: str = "conditional_mechanism"
 
 
 class M4ReactionPrediction(ScientificResult):

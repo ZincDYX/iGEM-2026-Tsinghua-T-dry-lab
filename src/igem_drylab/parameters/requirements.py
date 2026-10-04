@@ -24,6 +24,7 @@ class ParameterRequirement(BaseModel):
     minimum_inclusive: bool = True
     maximum: float | None = None
     blocking: bool = True
+    enzyme_sequence_sha256: str | None = None
 
 
 def _requirement(name: str, parameter_type: str, **identity: str | None) -> ParameterRequirement:
@@ -160,7 +161,7 @@ def recruitment_requirements(recruitment: object, *, binding_model: str) -> list
     return requirements
 
 
-def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
+def _requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
     """Project-aware, single catalog used by every production entry point."""
     if stage == "m3":
         author_native = getattr(project.stages.m4_reaction, "unit_mode", "physical") == "author_native_sensitivity"
@@ -185,3 +186,9 @@ def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bo
             )
         return m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation)
     return []
+
+
+def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
+    identities = {item.id: item.sequence_sha256 for item in project.inputs.enzymes}
+    return [item.model_copy(update={"enzyme_sequence_sha256": identities.get(item.enzyme_id)})
+            for item in _requirements_for_stage(project, stage, include_auxiliary=include_auxiliary)]

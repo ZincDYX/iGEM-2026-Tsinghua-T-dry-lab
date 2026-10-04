@@ -25,6 +25,7 @@ class ExecutionConfig(BaseModel):
     mode: Literal["demo", "real"] = "demo"
     require_provenance: bool = True
     allow_assumptions: bool = False
+    analysis_grade: Literal["formal_measured", "mechanistic_sensitivity"] = "formal_measured"
 
 
 class StrictScientificConfig(BaseModel):
@@ -55,6 +56,7 @@ class EnzymeConfig(BaseModel):
     protein_id: str
     reaction_role: str
     structure_pdb: Path | None = None
+    sequence_sha256: str | None = None
 
 
 class ScaffoldConfig(BaseModel):
@@ -357,7 +359,7 @@ class ProjectConfig(StrictScientificConfig):
             if any(item not in linker_ids for item in construct.linker_ids): raise ValueError("construct_references_unknown_linker")
             if construct.scaffold_id and construct.scaffold_id not in scaffold_ids: raise ValueError("construct_references_unknown_scaffold")
             if any(item not in enzyme_ids for item in construct.enzyme_ids): raise ValueError("construct_references_unknown_enzyme")
-        if self.execution.mode == "real" and self.stages.m4_reaction.condition_id is None and any((self.stages.m4_reaction.initial_state, self.stages.m4_reaction.pt_gate, self.stages.m4_reaction.oc_gate, self.stages.m4_reaction.dmt_gate)):
+        if self.execution.mode == "real" and self.stages.m4_reaction.condition_id is None and any((self.stages.m4_reaction.initial_state, self.stages.m4_reaction.full_network_initial_state, self.stages.m4_reaction.steady_state_initial_guess_um, self.stages.m4_reaction.pt_gate, self.stages.m4_reaction.oc_gate, self.stages.m4_reaction.dmt_gate)):
             raise ValueError("real_mode_requires_explicit_condition_id")
         if self.stages.m4_reaction.unit_mode == "author_native_sensitivity":
             if self.stages.m3_concentration.recruitment_mode != "effective_ratio":
@@ -422,6 +424,13 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         if missing:
             raise ValueError(f"real_mode_references_missing_file:{','.join(missing)}")
     fasta_ids = _fasta_ids(config.inputs.protein_fasta)
+    if any(enzyme.sequence_sha256 for enzyme in config.inputs.enzymes):
+        from hashlib import sha256
+        from .stages import _read_fasta_sequences
+        sequences = _read_fasta_sequences(config.inputs.protein_fasta)
+        for enzyme in config.inputs.enzymes:
+            if enzyme.sequence_sha256 and sha256(sequences.get(enzyme.protein_id, "").encode("ascii")).hexdigest() != enzyme.sequence_sha256:
+                raise ValueError(f"enzyme_sequence_sha256_mismatch:{enzyme.id}")
     required_ids = {item.protein_id for item in config.inputs.enzymes}
     if config.inputs.idr_id is not None:
         required_ids.add(config.inputs.idr_id)

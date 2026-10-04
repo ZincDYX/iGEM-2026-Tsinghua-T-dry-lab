@@ -25,10 +25,15 @@ class M2StructureMetrics(BaseModel):
     source_model: str | None = None
     artifact_path: str | None = None
     artifact_sha256: str | None = None
+    prediction_input_sequence_sha256: str | None = None
+    chain_sequence_sha256: dict[str, str] = Field(default_factory=dict)
     reference_structure_id: str | None = None
+    reference_artifact_path: str | None = None
     reference_artifact_sha256: str | None = None
     geometry_input_sha256: str | None = None
+    geometry_input_path: str | None = None
     sasa_configuration_hash: str | None = None
+    sasa_configuration_path: str | None = None
     clash_rule_provenance: str | None = None
     pocket_definition_source_ref: str | None = None
     residue_mapping_source_ref: str | None = None

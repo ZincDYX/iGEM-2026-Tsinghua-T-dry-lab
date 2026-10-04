@@ -273,6 +273,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
                 row,
                 config.stages.m2_fusion.structure_metrics_file,
                 require_m3_geometry=config.stages.m3_concentration.recruitment_mode == "finite_site",
+                expected_sequence_sha256=candidate.full_sequence_sha256,
             )
             if provenance_missing:
                 assessments.append(M2FusionAssessment(
@@ -338,16 +339,22 @@ def _missing_m2_formal_evidence(
     metrics_file: Path | None,
     *,
     require_m3_geometry: bool,
+    expected_sequence_sha256: str | None = None,
 ) -> list[str]:
     required = {
         "source_tool": row.source_tool,
         "source_tool_version": row.source_tool_version,
         "artifact_path": row.artifact_path,
         "artifact_sha256": row.artifact_sha256,
+        "prediction_input_sequence_sha256": row.prediction_input_sequence_sha256,
+        "chain_sequence_sha256": row.chain_sequence_sha256,
         "reference_structure_id": row.reference_structure_id,
+        "reference_artifact_path": row.reference_artifact_path,
         "reference_artifact_sha256": row.reference_artifact_sha256,
         "geometry_input_sha256": row.geometry_input_sha256,
+        "geometry_input_path": row.geometry_input_path,
         "sasa_configuration_hash": row.sasa_configuration_hash,
+        "sasa_configuration_path": row.sasa_configuration_path,
         "clash_rule_provenance": row.clash_rule_provenance,
         "pocket_definition_source_ref": row.pocket_definition_source_ref,
         "residue_mapping_source_ref": row.residue_mapping_source_ref,
@@ -378,15 +385,26 @@ def _missing_m2_formal_evidence(
             "m2_geometry_id": row.m2_geometry_id,
         })
     missing = [f"M2 provenance: {name}" for name, value in required.items() if value in (None, "", [])]
-    if row.artifact_path and row.artifact_sha256:
-        artifact = Path(row.artifact_path)
+    if not expected_sequence_sha256 or row.prediction_input_sequence_sha256 != expected_sequence_sha256:
+        missing.append("M2 prediction input sequence SHA-256 matching M1")
+    if expected_sequence_sha256 and expected_sequence_sha256 not in row.chain_sequence_sha256.values():
+        missing.append("M2 chain mapping matching the current protein construct")
+    for label, path, digest in (
+        ("structure", row.artifact_path, row.artifact_sha256),
+        ("reference", row.reference_artifact_path, row.reference_artifact_sha256),
+        ("geometry input", row.geometry_input_path, row.geometry_input_sha256),
+        ("SASA configuration", row.sasa_configuration_path, row.sasa_configuration_hash),
+    ):
+        if not path or not digest:
+            continue
+        artifact = Path(path)
         if not artifact.is_absolute() and metrics_file is not None:
             artifact = metrics_file.parent / artifact
         if not artifact.is_file():
-            missing.append("M2 structure artifact file")
+            missing.append(f"M2 {label} artifact file")
         else:
             if sha256(artifact.read_bytes()).hexdigest() != row.artifact_sha256:
-                missing.append("M2 structure artifact SHA-256 match")
+                missing.append(f"M2 {label} artifact SHA-256 match")
     if row.clash_count is not None and row.clash_count > 0:
         collision_evidence = {
             "independent_conformation_count": row.independent_conformation_count,
@@ -421,6 +439,13 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             ))
             continue
         construct_id = assessment.construct_id
+        formal_missing = _formal_analysis_missing(config)
+        if _is_formal(config) and config.stages.m3_concentration.recruitment_mode != "finite_site":
+            formal_missing.append("formal M3 requires finite_site; effective ratios are sensitivity-only")
+        if formal_missing:
+            records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id,
+                status="insufficient_data", missing_inputs=formal_missing, notes="Formal evidence boundary is not satisfied."))
+            continue
         condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)
         selected, missing = validate_parameters(config.parameters, requirements=core_requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
         if missing:
@@ -707,6 +732,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
             provenance_summary=_provenance_summary(selected.values()),
             m4_candidate_context=context,
             notes="Rapid-equilibrium mass-conserving enrichment; Kp values are explicit inputs."))
+    _label_scientific_results(config, records)
     write_models(stage_dir, "concentration_assessments", records)
     return records, _stage_output("m3_enrichment", stage_dir, "concentration_assessments", len(records))
 
@@ -744,6 +770,14 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
 
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
+    formal_missing = _formal_analysis_missing(config)
+    if _is_formal(config) and config.stages.m4_reaction.activity_mode == "unity_assumption":
+        formal_missing.append("formal M4 requires reviewed phase activity; unity is sensitivity-only")
+    if formal_missing:
+        directory = run_dir / "m4_evidence_gate"
+        records = [_m4_insufficient(item.candidate_id, config, formal_missing, construct_id=item.construct_id) for item in assessments]
+        write_models(directory, "reaction_predictions", records)
+        return records, _stage_output("m4_evidence_gate", directory, "reaction_predictions", len(records))
     if config.stages.m4_reaction.network_mode == "markdown_steady_state":
         return _run_markdown_steady_m4(config, run_dir, assessments)
     if config.stages.m4_reaction.network_mode == "published_reference":
@@ -1200,6 +1234,35 @@ def _candidate_enzyme_values(context: M4CandidateContext) -> dict[str, float]:
 
 def _data_quality(records: object) -> str:
     return _data_quality_from_summary(_provenance_summary(records))
+
+
+def _is_formal(config: ProjectConfig) -> bool:
+    return (config.execution.mode == "real" and config.execution.analysis_grade == "formal_measured"
+            and config.stages.m4_reaction.unit_mode == "physical"
+            and config.stages.m4_reaction.network_mode != "published_reference")
+
+
+def _formal_analysis_missing(config: ProjectConfig) -> list[str]:
+    if not _is_formal(config):
+        return []
+    missing = [f"formal experimental_context.{name}" for name in ("host", "temperature_c", "pH", "assay_system")
+               if getattr(config.experimental_context, name) is None]
+    if not config.stages.m4_reaction.condition_id:
+        missing.append("formal explicit condition_id")
+    if not config.execution.require_provenance or config.execution.allow_assumptions:
+        missing.append("formal requires provenance and prohibits assumptions")
+    return missing
+
+
+def _label_scientific_results(config: ProjectConfig, records: list[object]) -> None:
+    for record in records:
+        record.numerically_solved = record.status == "valid"
+        record.evidence_ready = record.numerically_solved and _is_formal(config)
+        record.claim_scope = "conditional_mechanism" if record.numerically_solved else "not_established"
+        context = getattr(record, "m4_candidate_context", None)
+        if context is not None:
+            context.evidence_ready = record.evidence_ready
+            context.claim_scope = record.claim_scope
 
 
 def _data_quality_from_summary(summary: dict[str, int]) -> str:
