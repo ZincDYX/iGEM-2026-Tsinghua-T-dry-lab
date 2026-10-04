@@ -10,6 +10,21 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Literal
 
 
+class MetabolitePartitionMeasurement(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    dense_concentration_um: float = Field(gt=0)
+    dilute_concentration_um: float = Field(gt=0)
+    source_reference: str = Field(min_length=1)
+    raw_data_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    calibration_reference: str = Field(min_length=1)
+    recovery_reference: str = Field(min_length=1)
+    phase_volume_reference: str = Field(min_length=1)
+
+    @property
+    def kp(self) -> float:
+        return self.dense_concentration_um / self.dilute_concentration_um
+
+
 class WetLabResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     experiment_id: str
@@ -20,6 +35,7 @@ class WetLabResult(BaseModel):
     protein_abundance: dict[str, float] = Field(default_factory=dict)
     imaging: dict[str, float] = Field(default_factory=dict)
     enzyme_activity: dict[str, float] = Field(default_factory=dict)
+    partition_measurements: dict[Literal["8", "9", "10", "11", "12", "13", "14", "15"], MetabolitePartitionMeasurement] = Field(default_factory=dict)
     metabolite_time: list[float] = Field(default_factory=list)
     metabolite_time_unit: Literal["h", "min", "s"] = "h"
     metabolite_concentration_unit: str | None = None

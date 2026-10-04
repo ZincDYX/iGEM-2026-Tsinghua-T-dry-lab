@@ -52,6 +52,11 @@ def parameter_updates_from_measurements(
                 continue
             requirement = _requirement(project, mapping.target_stage, mapping.target_requirement_name)
             canonical = validate_requirement_value(value, mapping.unit, requirement)
+            measurement = result.partition_measurements.get(mapping.source_field.removeprefix("partition_measurements."))
+            if mapping.source_field.startswith("partition_measurements.") and (
+                    requirement.parameter_type != "kp" or mapping.unit != "1" or
+                    requirement.species_id != mapping.source_field.split(".", 1)[1]):
+                raise ValueError("partition_measurement_requires_matching_dimensionless_metabolite_Kp")
             updates.append(ParameterRecord(
                 parameter_id=f"{mapping.parameter_id_prefix}:{mapping.target_requirement_name}:{result.experiment_id}:{result.replicate_id}",
                 name=requirement.name, value=canonical, unit=requirement.canonical_unit,
@@ -62,7 +67,9 @@ def parameter_updates_from_measurements(
                 construct_id=result.construct_id, condition_id=result.condition_id,
                 supersedes=mapping.supersedes,
                 validation_flags=["requires_human_approval_before_model_use"],
-                notes=f"Requirement-aware mapping from wetlab field '{mapping.source_field}'.",
+                derived_from=[measurement.raw_data_sha256, measurement.source_reference] if measurement else [],
+                notes=f"Requirement-aware mapping from wetlab field '{mapping.source_field}'." +
+                    (f" Calibration: {measurement.calibration_reference}; recovery: {measurement.recovery_reference}; phase volumes: {measurement.phase_volume_reference}." if measurement else ""),
             ))
     return updates
 
@@ -70,6 +77,9 @@ def parameter_updates_from_measurements(
 def _scalar_field(result: WetLabResult, field: str) -> float | None:
     """Read a declared ``group.key`` scalar; arbitrary expressions are rejected."""
     group, separator, key = field.partition(".")
+    if separator and group == "partition_measurements":
+        measurement = result.partition_measurements.get(key)
+        return measurement.kp if measurement else None
     if not separator or group not in {"protein_abundance", "imaging", "enzyme_activity"}:
         raise ValueError("source_field must be protein_abundance.*, imaging.*, or enzyme_activity.*")
     value = getattr(result, group).get(key)

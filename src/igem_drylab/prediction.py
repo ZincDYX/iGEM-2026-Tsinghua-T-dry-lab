@@ -170,6 +170,10 @@ def _replay_steady(contract, parameter_name, value):
         reaction["kcat_per_h" if prefix == "kcat" else "km_um"] = value
     elif parameter_name == "input_flux_8":
         inputs["input_flux_um_per_h"] = value
+    elif parameter_name in {f"partition_x{compound}" for compound in COMPOUNDS}:
+        if value <= 0:
+            raise ValueError("metabolite_partition_coefficient_must_be_positive")
+        inputs["metabolite_kp"][parameter_name.removeprefix("partition_x")] = value
     elif parameter_name.startswith("ksec_") and parameter_name[5:] in COMPOUNDS:
         inputs["secretion_rate_per_h"][parameter_name[5:]] = value
     elif parameter_name.startswith("activity_"):
@@ -205,6 +209,10 @@ def _replay_dynamic(contract, parameter_name, value):
         raw[key][enzyme.upper()] = value
     elif parameter_name == "transport_rate":
         raw["transport"]["rate"] = value
+    elif parameter_name in {f"partition_x{compound}" for compound in COMPOUNDS}:
+        if value <= 0:
+            raise ValueError("metabolite_partition_coefficient_must_be_positive")
+        raw["metabolite_kp"][parameter_name.removeprefix("partition_x")] = value
     else:
         raise ValueError("fit_adapter_does_not_support_parameter")
     raw["enzyme_distributions"] = {name: PhaseDistribution(**row) for name, row in raw["enzyme_distributions"].items()}
