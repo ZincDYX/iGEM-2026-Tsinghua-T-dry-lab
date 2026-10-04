@@ -66,6 +66,8 @@ class M4SteadyStateInput(BaseModel):
     @model_validator(mode="after")
     def _validate_complete_network(self) -> "M4SteadyStateInput":
         if any(item.activity_dense_ratio != 1 or item.activity_dilute_ratio != 1 for item in self.enzymes.values()):
+            if "formula_version" in self.model_fields_set and self.formula_version != M4_ACTIVITY_FORMULA_VERSION:
+                raise ValueError("M4_phase_activity_requires_explicit_formula_version_migration")
             self.formula_version = M4_ACTIVITY_FORMULA_VERSION
         if set(self.enzymes) != set(ENZYME_SUBSTRATES):
             raise ValueError("M4_requires_PTR_PT_OC_DMT_phase_concentrations")

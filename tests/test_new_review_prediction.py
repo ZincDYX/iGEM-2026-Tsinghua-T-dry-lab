@@ -65,3 +65,13 @@ def test_steady_inner_version_settings_and_activity_migration_are_bound():
             PredictionContract.model_validate(changed)
     with pytest.raises(ValueError,match='explicit_formula_migration'):
         replay_prediction(payload,'activity_dilute_dmt',2)
+
+
+def test_explicit_old_steady_input_is_not_silently_upgraded():
+    from igem_drylab.m4_steady_state import M4_ACTIVITY_FORMULA_VERSION,M4SteadyStateInput
+    inputs=steady_fixture().model_dump()
+    inputs['enzymes']['DMT']['activity_dilute_ratio']=2
+    with pytest.raises(ValueError,match='explicit_formula_version_migration'):
+        M4SteadyStateInput.model_validate(inputs)
+    inputs['formula_version']=M4_ACTIVITY_FORMULA_VERSION
+    assert M4SteadyStateInput.model_validate(inputs).formula_version==M4_ACTIVITY_FORMULA_VERSION
