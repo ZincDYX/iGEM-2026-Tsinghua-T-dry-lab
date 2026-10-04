@@ -386,7 +386,7 @@ def _missing_m2_formal_evidence(
         if not artifact.is_file():
             missing.append(f"M2 {label} artifact file")
         else:
-            if sha256(artifact.read_bytes()).hexdigest() != row.artifact_sha256:
+            if sha256(artifact.read_bytes()).hexdigest() != digest:
                 missing.append(f"M2 {label} artifact SHA-256 match")
     if row.clash_count is not None and row.clash_count > 0:
         collision_evidence = {
