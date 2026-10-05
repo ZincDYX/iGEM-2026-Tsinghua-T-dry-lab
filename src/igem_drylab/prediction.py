@@ -11,6 +11,9 @@ from .full_network import COMPOUNDS, FULL_NETWORK_FORMULA_VERSION, ACTIVE_NETWOR
 from .kinetics import InductionGate
 from .m4_steady_state import M4_ACTIVITY_FORMULA_VERSION, M4_FORMULA_VERSION, M4SteadyStateInput, solve_m4_steady_state
 
+SCIENTIFIC_ASSAY_FIELDS = ("host", "strain", "temperature_c", "pH", "assay_system", "phase",
+    "enzyme_sequence_sha256", "enzyme_concentration_definition", "cofactor_conditions")
+
 
 class DynamicSolverSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
@@ -96,13 +99,41 @@ class PredictionContract(BaseModel):
         return self
 
 
-def observe_prediction(payload, result):
-    """Return canonical observation-space series; volumes never inferred."""
+def validate_observation_applicability(payload, result, *, require_assay_conditions=False):
+    """Check experiment facts, not the provenance identity of independent batches.
+
+    The existing formal applicability policy requires exact agreement (weak
+    matches require review). No new numerical tolerance is introduced here.
+    """
     contract = PredictionContract.model_validate(payload)
+    context = contract.experiment_context
     for key in ("assay_mode", "expression_mode", "input_boundary"):
         declared = getattr(result, key)
-        if declared and declared != contract.experiment_context.get(key):
+        if (declared or require_assay_conditions) and declared != context.get(key):
             raise ValueError("observation_experimental_mode_or_boundary_mismatch:" + key)
+    target = context.get("assay_conditions")
+    if not require_assay_conditions and context.get("execution_mode") == "demo" and isinstance(target, dict) and not any(
+            target.get(key) is not None for key in SCIENTIFIC_ASSAY_FIELDS):
+        return contract  # Explicit demo with no scientific condition assertion.
+    if not target and not require_assay_conditions:
+        return contract  # Legacy numerical/software fixtures, not conditional claims.
+    if not isinstance(target, dict) or any(target.get(key) is None for key in
+            ("host", "temperature_c", "pH", "assay_system")):
+        raise ValueError("prediction_missing_scientific_assay_conditions")
+    actual = result.conditions_for("metabolites")
+    if actual is None:
+        raise ValueError("observation_missing_assay_conditions")
+    for key in SCIENTIFIC_ASSAY_FIELDS:
+        expected = target.get(key)
+        if expected is not None and getattr(actual, key) != expected:
+            raise ValueError("observation_assay_condition_mismatch:" + key)
+    return contract
+
+
+def observe_prediction(payload, result, *, require_assay_conditions=False):
+    """Return canonical observation-space series; volumes never inferred."""
+    contract = validate_observation_applicability(payload, result,
+        require_assay_conditions=require_assay_conditions)
     if contract.concentration_unit != "uM" or contract.time_unit != "h":
         raise ValueError("author_native_prediction_cannot_compare_absolute_measurements")
     if contract.model_kind == "markdown_steady_state" and result.observation_kind != "steady_state":

@@ -25,7 +25,7 @@ from igem_drylab.m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
 from igem_drylab.m4_steady_state import M4PhaseEnzymeInput, M4ReactionInput, M4SteadyStateInput, load_m4_reaction_identities, solve_m4_steady_state
 from igem_drylab.galatea_m3_m4 import M3EffectiveRatioInputs, load_author_native_reactions, run_galatea_full_m4, run_m3_effective_ratio
 from igem_drylab.full_network import PhaseDistribution, ReactionKinetics, TemporalGate, TransportParameters, FullNetworkParameters, FULL_NETWORK_FORMULA_VERSION, simulate_full_network
-from igem_drylab.prediction import dynamic_contract, steady_contract, replay_prediction, observe_prediction
+from igem_drylab.prediction import dynamic_contract, steady_contract, replay_prediction, observe_prediction, validate_observation_applicability
 from igem_drylab.published_reference import run_published_reference, write_published_reference_reproduction
 from igem_drylab.parameters import ParameterRecord, ParameterResolution, full_m4_kinetic_requirements, m3_requirements, m4_kinetic_requirements, recruitment_requirements, validate_parameters
 from igem_drylab.parameters.requirements import requirement_name_to_kernel_key, requirements_for_stage
@@ -839,6 +839,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
     settings = config.stages.m4_reaction
     for record in records:
         record.experimental_contract = {
+            "execution_mode": config.execution.mode,
             "assay_mode":settings.assay_mode,"expression_mode":settings.expression_mode,
             "measurement_compartment":settings.measurement_compartment,
             "assay_conditions":config.experimental_context.model_dump(mode="json"),
@@ -1654,6 +1655,11 @@ def _fit_plan_candidate(config: ProjectConfig, prediction: M4ReactionPrediction 
     contract = inputs.get("prediction_contract")
     if contract and contract["concentration_unit"] != "uM":
         return {"fit": None, "candidate": None, "warning": "author_native_model_cannot_fit_absolute_measurements"}
+    if contract:
+        try:
+            validate_observation_applicability(contract, result, require_assay_conditions=config.execution.mode == "real")
+        except ValueError as error:
+            return {"fit": None, "candidate": None, "warning": str(error)}
     if not contract and not all(name in inputs for name in ("pt_gate", "oc_gate", "dmt_gate", "initial", "t_end")):
         return {"fit": None, "candidate": None, "warning": "insufficient_data:missing_model_fit_adapter"}
     def predictor(value: float) -> np.ndarray:

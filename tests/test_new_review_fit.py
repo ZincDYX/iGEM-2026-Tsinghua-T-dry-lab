@@ -71,9 +71,26 @@ def test_pipeline_does_not_publish_flat_fit_candidate(tmp_path):
     observation=WetLabResult(experiment_id='fixture',construct_id='c',condition_id='d',replicate_id='r',
         metabolite_time=payload['time'],metabolite_concentration_unit='uM',measurement_compartment='intracellular',
         concentration_basis='cell_volume',metabolites={'15':[0]*7})
+    # The identifiability oracle must remain reachable under the real condition
+    # gate. These explicitly labelled facts are software fixtures, not data.
+    from igem_drylab.wetlab.models import AssayConditions
+    facts = dict(host='software_fixture', strain='software_fixture', temperature_c=30., pH=7., assay_system='software_fixture')
+    payload['experiment_context'] = {'assay_conditions': facts, 'assay_mode': 'substrate_feeding_functional',
+        'expression_mode': 'constitutive', 'input_boundary': {'feed_mode': 'batch_t0'}}
+    observation.assay_mode = 'substrate_feeding_functional'
+    observation.expression_mode = 'constitutive'
+    observation.input_boundary = {'feed_mode': 'batch_t0'}
+    observation.assay_conditions = AssayConditions(condition_id='d', source_reference='software_fixture',
+        raw_data_sha256='a'*64, verified_by='software_fixture', **facts)
+    path.write_text(json.dumps({'prediction_contract':payload}),encoding='utf-8')
     config=load_config(Path('configs/m1_m4_real_scoring_example.yaml'))
     config.stages.m5_feedback.fit_plan=FitPlanConfig(parameter_name='kcat_r5',bounds=(1,2000),observables=['15'])
     prediction=M4ReactionPrediction(candidate_id='c',construct_id='c',condition_id='d',target_product='15',
         simulation_inputs={'prediction_contract':payload,'parameters':{'kcat_r5':1000}},parameter_ids=['fixture'])
-    fit=_fit_plan_candidate(config,prediction,observation,compare_prediction(path,observation))
+    comparisons = compare_prediction(path, observation)
+    fit=_fit_plan_candidate(config,prediction,observation,comparisons)
     assert fit['candidate'] is None and fit['fit']['status']=='unidentifiable' and fit['fit']['best_fit'] is None
+    observation.assay_conditions.pH = 5.
+    refused = _fit_plan_candidate(config, prediction, observation, comparisons)
+    assert refused['fit'] is None and refused['candidate'] is None
+    assert refused['warning'] == 'observation_assay_condition_mismatch:pH'

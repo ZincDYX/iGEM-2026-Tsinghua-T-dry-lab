@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .prediction import PredictionContract, observe_prediction
+from .prediction import PredictionContract, observe_prediction, SCIENTIFIC_ASSAY_FIELDS
 from .wetlab.canonical import canonicalize_metabolite
 from .wetlab.models import load_wetlab_results
 
@@ -28,8 +28,20 @@ def freeze_prediction(prediction_file: Path, parameter_file: Path, calibration_d
     if claim_scope not in {"software_fixture_only", "conditional_mechanism", "published_reference_reproduction"}:
         raise ValueError("freeze_cannot_declare_an_unvalidated_biological_claim")
     experimental = artifact.get("experimental_contract",{})
+    context = contract["experiment_context"]
+    for key in ("assay_mode", "expression_mode", "input_boundary", "assay_conditions"):
+        if key in experimental or key in context:
+            left, right = experimental.get(key), context.get(key)
+            if key == "assay_conditions" and isinstance(left, dict) and isinstance(right, dict):
+                left = {field: left.get(field) for field in SCIENTIFIC_ASSAY_FIELDS}
+                right = {field: right.get(field) for field in SCIENTIFIC_ASSAY_FIELDS}
+            if left != right:
+                raise ValueError("freeze_experimental_contract_conflict:" + key)
     if claim_scope=="conditional_mechanism" and (not experimental.get("assay_mode") or not experimental.get("expression_mode")):
         raise ValueError("freeze_requires_declared_experimental_mode_not_inferred_metadata")
+    if claim_scope == "conditional_mechanism" and any(context.get("assay_conditions", {}).get(key) is None
+            for key in ("host", "temperature_c", "pH", "assay_system")):
+        raise ValueError("freeze_requires_scientific_assay_conditions")
     for field,value in (("construct_id",construct_id),("condition_id",condition_id)):
         recorded = artifact.get(field,contract["kernel_inputs"].get(field))
         if recorded is not None and recorded!=value:
@@ -79,7 +91,8 @@ def validate_holdout(snapshot: dict, dataset_id: str, dataset_file: Path) -> dic
                 raise ValueError("real_holdout_requires_declared_assay_expression_and_boundary")
             if record.observation_kind=="steady_state" and not record.steady_state_confirmation_reference:
                 raise ValueError("steady_holdout_requires_observed_platform_evidence")
-        time,predicted = observe_prediction(snapshot["prediction_contract"],record)
+        time,predicted = observe_prediction(snapshot["prediction_contract"],record,
+            require_assay_conditions=snapshot["claim_scope"] == "conditional_mechanism")
         observed_time = np.asarray(record.time_hours())
         if len(time)==0 or observed_time.size==0 or observed_time.min()<time.min() or observed_time.max()>time.max():
             raise ValueError("holdout_outside_frozen_prediction_horizon")

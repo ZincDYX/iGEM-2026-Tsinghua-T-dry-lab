@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: OBSERVATION_SCIENTIFIC_CONDITIONS
+    group: data_contract
+    test_nodeids: ["tests/test_review_observation_conditions.py::test_matching_scientific_facts_allow_independent_provenance", "tests/test_review_observation_conditions.py::test_same_condition_id_does_not_override_actual_facts", "tests/test_review_observation_conditions.py::test_missing_and_measurement_override_fail_before_observation_or_fit", "tests/test_review_observation_conditions.py::test_freeze_rejects_conflicting_condition_copies", "tests/test_new_review_fit.py::test_pipeline_does_not_publish_flat_fit_candidate"]
+    requirement_or_formula_source: latest review 10.3A; existing exact formal applicability policy
+    oracle_type: exact_scientific_facts_independent_provenance_and_pre_fit_rejection
+    fixture_scope: typed_software_fixture_only_not_real_experimental_validation
+    formula_version: unchanged_original_M4_and_RMSE
+    units: degC; pH; uM
+    tolerance_basis: exact applicability facts; retained RMSE regression tolerance
+    expected_faults: [condition_id_substituted_for_actual_conditions, measurement_override_bypass, whole_provenance_hash_compared, contradictory_freeze_copies]
   - risk_id: STEADY_LOCAL_STABILITY
     group: scientific_algorithm
     test_nodeids: ["tests/test_steady_stability.py::test_exact_competitive_jacobian_matches_independent_central_differences", "tests/test_steady_stability.py::test_secretion_only_root_eigenvalues_match_original_unweighted_definition", "tests/test_steady_stability.py::test_linearization_classifier_does_not_claim_neutral_is_stable", "tests/test_steady_stability.py::test_multistart_records_neutral_root_family_and_blocked_attempts", "tests/test_steady_stability.py::test_official_stdio_mcp_executes_declared_multistart_analysis"]
