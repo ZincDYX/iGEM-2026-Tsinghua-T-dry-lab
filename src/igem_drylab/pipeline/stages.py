@@ -874,7 +874,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 record.robustness = record.analysis_result["robustness"]
                 record.sensitivity = record.analysis_result["sensitivity"]
             except (ValueError, RuntimeError, KeyError) as error:
-                record.analysis_result = {"status":"insufficient_data","error":str(error)}
+                record.analysis_result = {**(record.analysis_result or {}), "status":"insufficient_data","error":str(error)}
         write_models(run_dir / "m4_analysis", "reaction_predictions_with_analysis", records)
     write_models(output.directory, output.json_file.stem, records)
     return records, output

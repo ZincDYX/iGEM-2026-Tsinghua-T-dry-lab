@@ -176,6 +176,14 @@ def test_pipeline_routes_markdown_steady_state_without_decision_fields(tmp_path:
     assert records[0].recommendation is None
     assert records[0].yield_abs is not None
     assert max(abs(value) for value in records[0].steady_state_residuals.values()) < 1e-8
+    assert records[0].analysis_result["steady_state_local_stability"]["status"]=="locally_asymptotically_stable"
+    from igem_drylab.design_analysis import M4AnalysisConfig,RangeEvidence
+    config.stages.m4_reaction.analysis=M4AnalysisConfig(ranges=[RangeEvidence(parameter_name="ksec_8",distribution="uniform",
+        lower=.1,upper=.3,source_reference="software_fixture",parameter_ids=["missing-review-source"],reviewed_by="fixture")],
+        standard_deviation_ddof=0,independence_evidence_reference="software_fixture_only")
+    refused,_=run_m4(config,tmp_path/"invalid-analysis",[m3])
+    assert refused[0].analysis_result["status"]=="insufficient_data"
+    assert refused[0].analysis_result["steady_state_local_stability"]==records[0].analysis_result["steady_state_local_stability"]
 
 
 def test_stdio_mcp_server_calls_m4_steady_state() -> None:
