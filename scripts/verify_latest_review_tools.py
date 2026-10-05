@@ -52,7 +52,7 @@ async def main(run_name,root):
         'input_pdb_sha256':sha256(pdb.read_bytes()).hexdigest(),'output_sha256':sha256(raw).hexdigest(),
         'FreeSASA_python_version':version('freesasa'),'deployment_audit':audit.model_dump(),
         'production_parser_residue_count':len(areas),
-        'execution':result,'no_new_installs':True,
+        'execution':result,'this_smoke_installs_packages':False,
         'licensed_predictor_new_jobs':'not_executed_or_claimed'}
     (root/(run_name+'-evidence.json')).write_text(json.dumps(summary,indent=2,allow_nan=False))
     print(json.dumps({'actual_FreeSASA_MCP':'succeeded','used_bytes':audit.used_bytes,'within_15GB':audit.within_budget}))

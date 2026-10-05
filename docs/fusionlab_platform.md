@@ -52,7 +52,11 @@ Rust 只监督 Python 后端和提供连接信息，不承载科学公式。后�
 
 尚未完成的产品能力应单独实现和验收：LLM 自动规划、通用结构预测及 LLPS 证据整合、自动湿实验参数拟合/审批、SBOL/SBML、非可信插件 OS sandbox、跨机器任务恢复、完整无 Python 安装包。不能将组成或分子量核验称为自组装成功预测。
 
-新界面提供通用工作流基础与真实 M1/M2/M3/M4 MCP 工具，但尚未把 Galatea M0–M5 全链条重做成 Scientist Mode 的默认推荐流程。原有参考 pipeline/CLI 保留；MCP 中的 Galatea 特定科学契约也没有被改称为任意体系的通用模型。Developer 使用本地文件路径时，应把所有实际科学输入文件登记到项目 files/快照；尚不支持任意 PDB/预测器目录的自动导入与完整传递依赖追踪。
+新界面现有显式 typed 科学项目入口：在“项目数据”检查服务器已有 ProjectConfig YAML、预览配置/证据 SHA-256 并确认保存；在“分析流程”选择“M1–M5 原式科学项目管线”，审阅后运行。各模块作为持久化 DAG 节点复用原有 stage，展示缺失项与科学状态；不把未审批参数或裸 MCP 数字求解器升级为正式项目。MCP 科学工具仍通过真实 stdio 连接；原有 pipeline/CLI 保留。
+
+选择 WetLabResult JSON 类型可校验测量并显示 QC/条件/来源，再人工指定 M5 输入，不自动批准或拟合普通表格。配置路径及其依赖当前须在服务器存在；不是本机目录一键上传器。专用 F3 候选编辑器、冻结留出向导、完整 PDB/预测器原始文件导入和工具目录传递依赖追踪尚未全部实现。参见 review_abc_repairs_20261005.md。
+
+plans/custom plans 返回 project revision、规范化输入 hash 和 workflow hash；runs 必须携带 confirmation。在单个 SQLite 写事务中校验并创建快照；编辑草稿撤销旧方案，变化返回 409。结果按工具身份和 schema/公式版本渲染；未知版本保留原始 artifact，不能按节点名称猜类型。
 
 ## 工具许可证
 
