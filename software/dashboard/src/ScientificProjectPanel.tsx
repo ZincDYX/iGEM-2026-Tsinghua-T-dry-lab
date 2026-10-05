@@ -29,7 +29,7 @@ export function ScientificProjectPanel({project, busy, action, onChange}: {
       <details><summary>审阅配置、参数与来源</summary><pre>{JSON.stringify(preview, null, 2)}</pre></details>
       <button disabled={busy} onClick={() => { onChange({...project, scientific_project:preview}); setPreview(undefined); }}>确认科学配置（待保存）</button></div>}
     {scientific ? <><p>执行模式：{fact(object(execution) ? execution.mode : null)} · 网络：{fact(m4.network_variant)} · 单位模式：{fact(m4.unit_mode)}</p>
-      <dl>{["host","strain","temperature_c","pH","assay_system"].map((key) => <div key={key}><dt>{key}</dt><dd>{fact(object(context) ? context[key] : null)}</dd></div>)}</dl>
+      <dl className="science-facts">{["host","strain","temperature_c","pH","assay_system"].map((key) => <div key={key}><dt>{key}</dt><dd>{fact(object(context) ? context[key] : null)}</dd></div>)}</dl>
       <p>协议：{fact(m4.assay_mode)} · 表达：{fact(m4.expression_mode)} · 投喂：{fact(m4.feed_mode)} / {fact(m4.feed_compound_id)} · 观测区室：{fact(m4.measurement_compartment)}</p>
       <h3>酶序列身份（缺少 hash 不等于已核验）</h3><table><thead><tr><th>酶 / 蛋白 ID</th><th>sequence SHA-256</th></tr></thead><tbody>
         {object(inputs) && Array.isArray(inputs.enzymes) && inputs.enzymes.map((enzyme,i) => object(enzyme) ? <tr key={i}><td>{fact(enzyme.id)} / {fact(enzyme.protein_id)}</td><td>{fact(enzyme.sequence_sha256)}</td></tr> : null)}</tbody></table>

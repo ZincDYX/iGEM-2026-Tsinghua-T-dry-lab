@@ -74,7 +74,7 @@ function NodeResult({ run, node }: { run: Run; node: NodeRecord }) {
     {raw(output)}</section>;
 }
 
-function show(value: unknown) { return value === null || value === undefined ? "未提供 / 不适用" : typeof value === "object" ? JSON.stringify(value) : String(value); }
+function show(value: unknown) { return value === null || value === undefined ? "未提供 / 不适用" : object(value) && Object.keys(value).length === 0 ? "无记录（未计算，不是 0）" : typeof value === "object" ? JSON.stringify(value) : String(value); }
 function Trajectory({value}: {value:unknown}) {
   if (!object(value) || !object(value.prediction_contract)) return <p>无可识别轨迹；不生成曲线或补零。</p>;
   const contract = value.prediction_contract;
@@ -100,7 +100,7 @@ function StageResult({output}: {output:Record<string, unknown>}) {
       <p>科学状态：{show(record.status)} · numerically_solved：{show(record.numerically_solved)} · evidence_ready：{show(record.evidence_ready)} · claim_scope：{show(record.claim_scope)}</p>
       <p>缺失项：{(record.missing_inputs as unknown[]).length ? (record.missing_inputs as unknown[]).map(show).join("；") : "无自报缺项（不等于实验验证）"}</p>
       {module === "M3" && <><p>OC:DMT 浓相比：{show(record.dense_oc_dmt_ratio)} · 全细胞比：{show(record.whole_cell_oc_dmt_ratio)}</p>
-        <dl>{["free_dense_concentration","bound_dense_concentration","free_dilute_concentration","bound_fraction_of_whole_cell_total","fraction_in_dense","site_occupancy","capacity_status","capacity_excess_um","mass_balance_residual_um"].map((key) => <div key={key}><dt>{key === "fraction_in_dense" ? "dense_phase_fraction_of_whole_cell_total" : key}</dt><dd>{show(record[key])}</dd></div>)}</dl>
+        <dl className="science-facts">{["free_dense_concentration","bound_dense_concentration","free_dilute_concentration","bound_fraction_of_whole_cell_total","fraction_in_dense","site_occupancy","capacity_status","capacity_excess_um","mass_balance_residual_um"].map((key) => <div key={key}><dt>{key === "fraction_in_dense" ? "dense_phase_fraction_of_whole_cell_total" : key}</dt><dd>{show(record[key])}</dd></div>)}</dl>
         <p>位点计量基准：{show(object(record.m4_candidate_context) ? record.m4_candidate_context.site_count_basis : null)}；占位比例和浓相比例不是同一量。</p></>}
       {module === "M4" && <><p>产物 15：{show(record.final_15)} · 支产物 13：{show(record.final_13)} · yield_abs：{show(record.yield_abs)}（缺失值不记为 0）</p>
         {object(output.trajectories) && <Trajectory value={output.trajectories[String(record.candidate_id)]} />}

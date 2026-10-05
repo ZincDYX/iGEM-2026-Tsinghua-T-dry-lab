@@ -835,3 +835,11 @@ footer {
     display: none;
   }
 }
+:root .science-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+:root .science-facts > div { min-width: 0; }
+:root .science-facts dt { overflow-wrap: anywhere; }
+:root .science-facts dd { margin: 6px 0 0; overflow-wrap: anywhere; }
