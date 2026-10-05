@@ -375,6 +375,16 @@ def m4_solve_steady_state(inputs: dict[str, Any]) -> dict[str, Any]:
 
 
 @server.tool(
+    name="igem.m4.analyze_steady_state",
+    title="Analyze M4 local stability and declared multistart roots",
+    description="Original-RHS analytic Jacobian/eigenvalues and finite declared initial-guess search; no global uniqueness claim.",
+    structured_output=True,
+)
+def m4_analyze_steady_state(inputs: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m4.analyze_steady_state", inputs)
+
+
+@server.tool(
     name="igem.compute.check_tool",
     title="Check an explicitly configured scientific executable",
     description="Resolve the configured command and report whether its real executable is available.",

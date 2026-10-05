@@ -27,7 +27,7 @@ SCIENTIFIC_TOOLS = {
     "igem.m1.parse_seg", "igem.m1.parse_iupred2a", "igem.m1.parse_secondary_structure",
     "igem.m2.pocket_sasa", "igem.m2.calculate_geometry", "igem.m2.screen_structure",
     "igem.m2.site_cooccupancy", "igem.m2.parse_structure_prediction", "igem.m2.compare_docking",
-    "igem.m3.solve_equilibrium", "igem.m4.solve_steady_state",
+    "igem.m3.solve_equilibrium", "igem.m4.solve_steady_state", "igem.m4.analyze_steady_state",
 }
 
 
