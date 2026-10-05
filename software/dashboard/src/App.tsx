@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "./api";
 import type {
   Goal,
@@ -10,9 +10,11 @@ import type {
   RuntimeInfo,
   Tool,
   Workflow,
+  PlanBinding,
 } from "./types";
 import "./styles.css";
-import { ScientificResults, ResultComparison } from "./ScientificResults";
+import { ScientificResults, ResultComparison, nodeTool, sequenceOutput } from "./ScientificResults";
+import { ScientificProjectPanel } from "./ScientificProjectPanel";
 
 type Page =
   | "Dashboard"
@@ -35,7 +37,7 @@ const pages: { id: Page; label: string; icon: string }[] = [
 const labels: Record<string, string> = {
   queued: "准备中",
   running: "运行中",
-  succeeded: "完成",
+  succeeded: "作业完成",
   failed: "需要处理",
   paused: "已暂停",
   interrupted: "已中断",
@@ -47,6 +49,7 @@ const goalLabels: Record<Goal, string> = {
   fusion_screen: "分析融合蛋白序列",
   assembly_review: "核验自组装组成",
   pathway_simulation: "模拟上传的反应通路",
+  scientific_pipeline: "M1–M5 原式科学项目管线",
 };
 const terminal = new Set(["succeeded", "failed", "paused", "cancelled"]);
 const newProject = (): Project => ({
@@ -68,20 +71,34 @@ export default function App() {
     localStorage.getItem("fusionlab.mode") === "developer",
   );
   const [projects, setProjects] = useState<Project[]>([]);
-  const [project, setProject] = useState<Project>();
+  const [project, setProjectState] = useState<Project>();
+  const projectRef = useRef<Project | undefined>(undefined);
+  const editGeneration = useRef(0);
   const [tools, setTools] = useState<Tool[]>([]);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [run, setRun] = useState<Run>();
   const [info, setInfo] = useState<RuntimeInfo>();
   const [workflow, setWorkflow] = useState<Workflow>();
+  const [confirmation, setConfirmation] = useState<PlanBinding>();
   const [objective, setObjective] = useState("");
   const [goal, setGoal] = useState<Goal>("fusion_screen");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<ImportPreview>();
+  const [inputKind, setInputKind] = useState("auto");
   const [compare, setCompare] = useState<Run[]>([]);
+  const savedProject = projects.find((item) => item.id === project?.id);
+  const dirty = !!project && JSON.stringify(project) !== JSON.stringify(savedProject);
 
-  async function action(job: () => Promise<void>) {
+  function setProject(value: Project | undefined) {
+    editGeneration.current += 1;
+    projectRef.current = value;
+    setProjectState(value);
+    setWorkflow(undefined);
+    setConfirmation(undefined);
+  }
+
+  async function action(job: () => Promise<unknown>) {
     setError("");
     setBusy(true);
     try {
@@ -95,23 +112,24 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
+    const generation = editGeneration.current;
     Promise.all([api.getProjects(), api.getTools(), api.getInfo()])
       .then(([items, installed, runtime]) => {
         if (!alive) return;
-        setProjects(items);
         setTools(installed);
         setInfo(runtime);
-        setProject(
-          items.find(
-            (item) => item.id === localStorage.getItem("fusionlab.project"),
-          ) ?? items[0],
-        );
+        if (generation === editGeneration.current) {
+          setProjects(items);
+          setProject(items.find((item) => item.id === localStorage.getItem("fusionlab.project")) ?? items[0]);
+        } else {
+          setProjects((current) => [...current, ...items.filter((item) => !current.some((known) => known.id === item.id))]);
+        }
         const savedRun = localStorage.getItem("fusionlab.run");
         if (savedRun)
           api
             .getRun(savedRun)
             .then((value) => {
-              if (alive) setRun(value);
+              if (alive && projectRef.current?.id === value.project_id) setRun(value);
             })
             .catch(() => localStorage.removeItem("fusionlab.run"));
       })
@@ -164,22 +182,29 @@ export default function App() {
   }, [run?.id, run?.status]);
 
   async function persist(updated: Project) {
+    const generation = editGeneration.current;
     const known = projects.find((item) => item.id === updated.id);
     const saved = await api.saveProject(updated, known?.revision);
-    setProject(saved);
     setProjects((items) => [
       saved,
       ...items.filter((item) => item.id !== saved.id),
     ]);
-    setWorkflow(undefined);
+    if (editGeneration.current !== generation) return;
+    setProject(saved);
+    return saved;
   }
 
   async function plan() {
     if (!project) return;
     await action(async () => {
-      await persist(project);
-      const result = await api.createPlan(project.id, goal, objective);
+      const saved = await persist(project);
+      if (!saved) return;
+      const generation = editGeneration.current;
+      const result = await api.createPlan(saved.id, goal, objective);
+      if (generation !== editGeneration.current || projectRef.current?.id !== result.confirmation.project_id ||
+          projectRef.current?.revision !== result.confirmation.project_revision) return;
       setWorkflow(result.workflow);
+      setConfirmation(result.confirmation);
       setPage("Analysis");
     });
   }
@@ -463,6 +488,10 @@ export default function App() {
               <section className="card">
                 <div className="card-title">
                   <h2>序列与实验数据</h2>
+                  <label>导入类型<select aria-label="导入类型" value={inputKind} onChange={(event) => setInputKind(event.target.value)}>
+                    <option value="auto">序列 / 普通表格 / 通路 JSON</option>
+                    <option value="wetlab">WetLabResult 科学测量 JSON</option>
+                  </select></label>
                   <label className="upload-button">
                     ＋ 导入文件
                     <input
@@ -474,7 +503,7 @@ export default function App() {
                         const file = event.target.files?.[0];
                         if (file)
                           action(async () =>
-                            setPreview(await api.previewImport(file)),
+                            setPreview(await api.previewImport(file, inputKind)),
                           );
                         event.target.value = "";
                       }}
@@ -508,9 +537,8 @@ export default function App() {
                     )}
                     {preview.patch.datasets && (
                       <p>
-                        实验数据表：
-                        {(preview.patch.datasets[0].rows as unknown[]).length}{" "}
-                        行；确认后保存原始数据，不自动拟合参数。
+                        {preview.kind === "wetlab" ? "已校验 WetLabResult；条件/QC/删失及来源保留，不自动批准参数。" :
+                          `普通数据表 ${(preview.patch.datasets[0].rows as unknown[]).length} 行；不是科学测量注册。`}
                       </p>
                     )}
                     {developer && (
@@ -585,6 +613,8 @@ export default function App() {
                 </div>
               </section>
               <AssemblyEditor project={project} onChange={setProject} />
+              <ScientificProjectPanel key={project.id} project={project} busy={busy} action={action}
+                onChange={(value) => { if (projectRef.current?.id === project.id) setProject(value); }} />
               <section className="card">
                 <h2>反应通路与实验条件</h2>
                 <p>
@@ -622,6 +652,7 @@ export default function App() {
                   ))}
                 </div>
                 <p className="muted">
+                  {dirty ? "有未保存修改；旧方案已失效，保存后重新生成并审阅。" : `已保存 revision ${project.revision}。`}
                   条件用于记录实验背景；只有工作流显式绑定的参数才参与计算。
                 </p>
                 {developer && (
@@ -693,10 +724,13 @@ export default function App() {
                   </div>
                   <button
                     className="primary"
-                    disabled={busy}
+                    disabled={busy || dirty || !confirmation || confirmation.project_revision !== project?.revision}
                     onClick={() =>
                       action(async () => {
-                        setRun(await api.startRun(project!.id, workflow));
+                        if (dirty || !confirmation) throw new Error("请保存当前输入并重新审阅方案");
+                        const generation = editGeneration.current;
+                        const result = await api.startRun(project!.id, workflow, confirmation);
+                        if (generation === editGeneration.current) setRun(result);
                       })
                     }
                   >
@@ -725,7 +759,14 @@ export default function App() {
                 {developer && (
                   <WorkflowEditor
                     workflow={workflow}
-                    onChange={setWorkflow}
+                    onChange={(value) => action(async () => {
+                      if (dirty || !project) throw new Error("自定义工作流也需绑定已保存的项目版本");
+                      const generation = editGeneration.current;
+                      const reviewed = await api.reviewCustomPlan(project.id, value);
+                      if (generation !== editGeneration.current || reviewed.confirmation.project_revision !== projectRef.current?.revision) return;
+                      setWorkflow(reviewed.workflow);
+                      setConfirmation(reviewed.confirmation);
+                    })}
                     onError={setError}
                   />
                 )}
@@ -1192,7 +1233,7 @@ function Results({ run, developer }: { run?: Run; developer: boolean }) {
       />
     );
   const sequenceResults = run.nodes.filter(
-    (node) => node.parent_id === "sequences" && node.status === "succeeded",
+    (node) => nodeTool(run, node) === "fusion.sequence_metrics" && node.status === "succeeded" && sequenceOutput(node.output),
   );
   return (
     <>

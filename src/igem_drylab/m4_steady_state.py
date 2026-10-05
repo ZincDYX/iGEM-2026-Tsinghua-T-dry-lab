@@ -84,6 +84,8 @@ class M4SteadyStateInput(BaseModel):
 
 
 class M4SteadyStateResult(BaseModel):
+    schema_version: Literal["m4-steady-state-v1"] = "m4-steady-state-v1"
+    model_kind: Literal["markdown_steady_state"] = "markdown_steady_state"
     candidate_id: str
     construct_id: str
     condition_id: str

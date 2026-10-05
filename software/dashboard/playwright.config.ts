@@ -5,7 +5,7 @@ const repository = path.resolve(import.meta.dirname, "../..");
 const testData =
   process.env.FUSIONLAB_TEST_DATA ??
   path.join(repository, "outputs/platform-e2e");
-const python = path.join(
+const python = process.env.FUSIONLAB_PYTHON ?? path.join(
   repository,
   process.platform === "win32"
     ? ".venv/Scripts/python.exe"
@@ -17,7 +17,7 @@ export default defineConfig({
   timeout: 30000,
   use: {
     baseURL: "http://127.0.0.1:5189",
-    channel: process.env.FUSIONLAB_BROWSER_CHANNEL ?? "msedge",
+    channel: process.env.FUSIONLAB_BROWSER_CHANNEL || (process.platform === "win32" ? "msedge" : undefined),
     headless: true,
     locale: "zh-CN",
     timezoneId: "Asia/Shanghai",

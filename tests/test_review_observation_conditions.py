@@ -72,3 +72,16 @@ def test_freeze_rejects_conflicting_condition_copies(tmp_path):
     with pytest.raises(ValueError, match="freeze_experimental_contract_conflict:assay_conditions"):
         freeze_prediction(prediction, tmp_path / "parameters.json", {"training": training},
             freeze_id="scientific-conditions", construct_id="c", condition_id="d", claim_scope="conditional_mechanism")
+
+
+@pytest.mark.parametrize("field,value", [("phase", "dense"), ("enzyme_sequence_sha256", "e"*64),
+    ("cofactor_conditions", "software_fixture_cofactors"), ("enzyme_concentration_definition", "software_fixture_active_uM")])
+def test_declared_phase_sequence_and_cofactor_limits_are_not_lost(tmp_path, field, value):
+    snapshot, _, _, raw = conditional_fixture(tmp_path)
+    contract = snapshot['prediction_contract']
+    contract['experiment_context']['assay_conditions'][field] = value
+    raw['assay_conditions'][field] = value
+    assert len(observe_prediction(contract, WetLabResult.model_validate(raw))[0]) == 5
+    raw['assay_conditions'][field] = None
+    with pytest.raises(ValueError, match='assay_condition_mismatch:' + field):
+        observe_prediction(contract, WetLabResult.model_validate(raw))

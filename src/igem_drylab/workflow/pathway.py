@@ -112,6 +112,7 @@ def solve_pathway(model: Pathway) -> dict[str, object]:
     residual, flux, dense, dilute = evaluate(solution.x)
     valid = bool(solution.success and np.max(np.abs(residual)) <= model.residual_tolerance)
     return {
+        "schema_version": "pathway-steady-state-v1", "model_kind": "generic_two_phase_steady_state",
         "status": "valid" if valid else "solver_failed", "pathway_id": model.id,
         "numerically_solved": valid,
         "evidence_ready": False,

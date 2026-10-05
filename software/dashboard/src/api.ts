@@ -8,6 +8,9 @@ import type {
   RuntimeInfo,
   Tool,
   Workflow,
+  PlanBinding,
+  ReviewedPlan,
+  ScientificProject,
 } from "./types";
 
 export let baseUrl =
@@ -52,23 +55,24 @@ export const saveProject = (project: Project, expectedRevision?: number) =>
     project,
     expected_revision: expectedRevision,
   });
-export const previewImport = (file: File) =>
+export const previewImport = (file: File, inputKind = "auto") =>
   file.text().then((content) =>
     request<ImportPreview>("/imports/preview", {
       filename: file.name,
       content,
+      input_kind: inputKind,
     }),
   );
+export const previewScientificProject = (configPath: string) =>
+  request<{scientific_project: ScientificProject; requires_confirmation: boolean}>("/scientific-projects/preview", {config_path:configPath});
 export const createPlan = (projectId: string, goal: Goal, objective: string) =>
-  request<{
-    workflow: Workflow;
-    source: string;
-    requires_confirmation: boolean;
-  }>("/plans", { project_id: projectId, goal, objective });
+  request<ReviewedPlan>("/plans", { project_id: projectId, goal, objective });
+export const reviewCustomPlan = (projectId: string, workflow: Workflow) =>
+  request<ReviewedPlan>("/plans/custom", { project_id: projectId, workflow });
 export const validateWorkflow = (workflow: unknown) =>
   request<Workflow>("/workflows/validate", workflow);
-export const startRun = (projectId: string, workflow: Workflow) =>
-  request<Run>("/runs", { project_id: projectId, workflow });
+export const startRun = (projectId: string, workflow: Workflow, confirmation: PlanBinding) =>
+  request<Run>("/runs", { project_id: projectId, workflow, confirmation });
 export const getRun = (id: string) =>
   request<Run>(`/runs/${encodeURIComponent(id)}`);
 export const getRuns = (projectId?: string) =>

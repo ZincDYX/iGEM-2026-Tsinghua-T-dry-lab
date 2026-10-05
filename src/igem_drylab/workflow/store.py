@@ -9,7 +9,7 @@ import sqlite3
 from typing import Any, Iterator
 from uuid import uuid4
 
-from .models import NodeStatus, Project, RunStatus, WorkflowError
+from .models import NodeStatus, PlanBinding, Project, RunStatus, Workflow, WorkflowError
 
 
 def now() -> str:
@@ -18,6 +18,12 @@ def now() -> str:
 
 def canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+
+def plan_binding(project: Project, workflow: Workflow) -> PlanBinding:
+    return PlanBinding(project_id=project.id, project_revision=project.revision,
+        project_input_sha256=sha256(canonical(project.model_dump(mode="json")).encode()).hexdigest(),
+        workflow_sha256=sha256(canonical(workflow.model_dump(mode="json")).encode()).hexdigest())
 
 
 class WorkflowStore:
@@ -81,18 +87,35 @@ class WorkflowStore:
             raise KeyError(project_id)
         return Project.model_validate_json(row["payload"])
 
+    def create_confirmed_run(self, binding: PlanBinding, workflow: Workflow, build_snapshot) -> str:
+        # The same writer lock excludes saves between approval checking and
+        # recording the immutable snapshot (including custom workflows).
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT payload FROM projects WHERE id=?", (binding.project_id,)).fetchone()
+            if row is None:
+                raise KeyError(binding.project_id)
+            project = Project.model_validate_json(row["payload"])
+            if plan_binding(project, workflow) != binding:
+                raise WorkflowError("plan_input_or_workflow_changed_regenerate_and_review", status_code=409)
+            return self._insert_run(db, build_snapshot(project))
+
     def create_run(self, snapshot: dict[str, Any]) -> str:
+        with self.connection() as db:
+            return self._insert_run(db, snapshot)
+
+    def _insert_run(self, db, snapshot: dict[str, Any]) -> str:
         run_id = str(uuid4())
         encoded = canonical(snapshot)
-        with self.connection() as db:
-            db.execute("INSERT INTO runs VALUES(?,?,?,?,?,NULL,NULL,NULL,?,?)", (
-                run_id, snapshot["project"]["id"], RunStatus.queued.value, encoded,
-                sha256(encoded.encode()).hexdigest(), now(), now(),
-            ))
-            db.executemany("INSERT INTO nodes(run_id,id,status) VALUES(?,?,?)", [
-                (run_id, node["id"], NodeStatus.pending.value) for node in snapshot["workflow"]["nodes"]
-            ])
-        self.event(run_id, "run_created", {})
+        db.execute("INSERT INTO runs VALUES(?,?,?,?,?,NULL,NULL,NULL,?,?)", (
+            run_id, snapshot["project"]["id"], RunStatus.queued.value, encoded,
+            sha256(encoded.encode()).hexdigest(), now(), now(),
+        ))
+        db.executemany("INSERT INTO nodes(run_id,id,status) VALUES(?,?,?)", [
+            (run_id, node["id"], NodeStatus.pending.value) for node in snapshot["workflow"]["nodes"]
+        ])
+        db.execute("INSERT INTO events(run_id,event,payload,timestamp) VALUES(?,?,?,?)",
+            (run_id, "run_created", "{}", now()))
         return run_id
 
     def run(self, run_id: str) -> dict[str, Any]:

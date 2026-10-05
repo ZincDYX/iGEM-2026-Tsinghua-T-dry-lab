@@ -1,9 +1,40 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: USER_CONFIRMATION_VERSION_BINDING
+    group: integration
+    test_nodeids: ["tests/test_review_confirmation.py::test_normal_plan_executes_and_changed_project_refuses_old_confirmation", "tests/test_review_confirmation.py::test_workflow_edit_or_missing_confirmation_is_not_silently_approved", "tests/test_review_confirmation.py::test_concurrent_save_and_confirmation_never_approves_old_executes_new"]
+    requirement_or_formula_source: latest review 10.3B
+    oracle_type: real_HTTP_status_snapshot_bytes_and_SQLite_concurrent_writer_order
+    fixture_scope: software_contract_no_experimental_claim
+    formula_version: immutable_plan_binding_v1
+    units: revision; SHA256
+    tolerance_basis: exact 202 or 409; snapshot equals approved input
+    expected_faults: [old_plan_executes_new_project, edited_workflow_accepted, client_only_revision_check]
+  - risk_id: SCIENTIFIC_TYPED_PROJECT_ENTRY
+    group: integration
+    test_nodeids: ["tests/test_scientific_project_entry.py::test_typed_project_executes_original_stages_and_preserves_missing_evidence", "tests/test_scientific_project_entry.py::test_scientific_files_are_bound_and_tamper_or_missing_binding_refused", "tests/test_scientific_project_entry.py::test_wetlab_import_is_explicit_typed_qc_not_parameter_approval"]
+    requirement_or_formula_source: latest review 10.4
+    oracle_type: actual_HTTP_deterministic_M1_M5_outputs_and_dependency_hashes
+    fixture_scope: software_fixture_incomplete_scientific_inputs_not_biological_validation
+    formula_version: original_stage_models_unchanged
+    units: declared_by_config_and_result
+    tolerance_basis: exact missing-input state; null not zero; five persisted stage artifacts
+    expected_faults: [missing_evidence_promoted_to_prediction, unbound_data_consumed, arbitrary_JSON_treated_as_wetlab, import_auto_approves_parameters]
+  - risk_id: SCIENTIFIC_RESULT_SCHEMA_RENDERING
+    group: ui
+    test_nodeids: []
+    frontend_tests: ["software/dashboard/src/ScientificResults.test.tsx", "software/dashboard/src/App.test.tsx", "software/dashboard/e2e/scientific-results.spec.ts"]
+    requirement_or_formula_source: latest review 10.3B-C and 10.4
+    oracle_type: runtime_schema_contract_plus_real_API_stdio_MCP_to_browser
+    fixture_scope: typed_software_fixtures_not_biological_validation
+    formula_version: m4-steady-state-v1; pathway-steady-state-v1
+    units: uM; h; uM/h
+    tolerance_basis: no pageerror; tool_identity_not_node_name; blocked_or_unknown_has_no_valid_numeric_table
+    expected_faults: [node_name_guesses_schema, MCP_envelope_not_unwrapped, blocked_success_shown_valid, dirty_project_confirms_old_plan, stale_async_response_replaces_new_project]
   - risk_id: OBSERVATION_SCIENTIFIC_CONDITIONS
     group: data_contract
-    test_nodeids: ["tests/test_review_observation_conditions.py::test_matching_scientific_facts_allow_independent_provenance", "tests/test_review_observation_conditions.py::test_same_condition_id_does_not_override_actual_facts", "tests/test_review_observation_conditions.py::test_missing_and_measurement_override_fail_before_observation_or_fit", "tests/test_review_observation_conditions.py::test_freeze_rejects_conflicting_condition_copies", "tests/test_new_review_fit.py::test_pipeline_does_not_publish_flat_fit_candidate"]
+    test_nodeids: ["tests/test_review_observation_conditions.py::test_matching_scientific_facts_allow_independent_provenance", "tests/test_review_observation_conditions.py::test_same_condition_id_does_not_override_actual_facts", "tests/test_review_observation_conditions.py::test_missing_and_measurement_override_fail_before_observation_or_fit", "tests/test_review_observation_conditions.py::test_freeze_rejects_conflicting_condition_copies", "tests/test_review_observation_conditions.py::test_declared_phase_sequence_and_cofactor_limits_are_not_lost", "tests/test_new_review_fit.py::test_pipeline_does_not_publish_flat_fit_candidate"]
     requirement_or_formula_source: latest review 10.3A; existing exact formal applicability policy
     oracle_type: exact_scientific_facts_independent_provenance_and_pre_fit_rejection
     fixture_scope: typed_software_fixture_only_not_real_experimental_validation

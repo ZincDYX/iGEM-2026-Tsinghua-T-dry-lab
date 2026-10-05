@@ -17,8 +17,8 @@ def test_import_confirm_execute_and_reopen_local_database(tmp_path: Path) -> Non
     project["files"] = [preview["file"]]
     response = client.post("/api/platform/projects", json={"project": project, "expected_revision": 1})
     assert response.status_code == 200
-    plan = client.post("/api/platform/plans", json={"project_id": "p", "goal": "fusion_screen"}).json()["workflow"]
-    response = client.post("/api/platform/runs", json={"project_id": "p", "workflow": plan})
+    plan = client.post("/api/platform/plans", json={"project_id": "p", "goal": "fusion_screen"}).json()
+    response = client.post("/api/platform/runs", json={"project_id": "p", "workflow": plan["workflow"], "confirmation": plan["confirmation"]})
     assert response.status_code == 202
     run_id = response.json()["id"]
     for _ in range(100):

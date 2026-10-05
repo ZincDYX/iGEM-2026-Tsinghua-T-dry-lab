@@ -18,10 +18,10 @@ from pydantic import Field
 from igem_drylab.workflow.builtins import Goal, builtin_tools, recommend
 from igem_drylab.workflow.engine import WorkflowEngine
 from igem_drylab.workflow.mcp_bridge import register_scientific_mcp
-from igem_drylab.workflow.models import Contract, Project, SequenceRecord, Workflow, WorkflowError
+from igem_drylab.workflow.models import Contract, PlanBinding, Project, SequenceRecord, Workflow, WorkflowError
 from igem_drylab.workflow.pathway import Pathway
 from igem_drylab.workflow.plugins import PluginManager
-from igem_drylab.workflow.store import WorkflowStore
+from igem_drylab.workflow.store import WorkflowStore, plan_binding
 
 
 class SaveProject(Contract):
@@ -32,6 +32,11 @@ class SaveProject(Contract):
 class ImportRequest(Contract):
     filename: str
     content: str = Field(max_length=10_000_000)
+    input_kind: Literal["auto", "pathway", "wetlab"] = "auto"
+
+
+class ScientificImportRequest(Contract):
+    config_path: Path
 
 
 class PlanRequest(Contract):
@@ -41,6 +46,12 @@ class PlanRequest(Contract):
 
 
 class RunRequest(Contract):
+    project_id: str
+    workflow: Workflow
+    confirmation: PlanBinding
+
+
+class CustomPlanRequest(Contract):
     project_id: str
     workflow: Workflow
 
@@ -88,6 +99,9 @@ def platform_router(data_dir: Path) -> APIRouter:
 
     @router.post("/projects")
     def save_project(request: SaveProject) -> Project:
+        if request.project.scientific_project is not None:
+            from igem_drylab.workflow.scientific_project import ScientificProject
+            ScientificProject.model_validate(request.project.scientific_project).verify()
         if request.project.pathway is not None:
             Pathway.model_validate(request.project.pathway)
         for sequence in request.project.sequences:
@@ -98,6 +112,13 @@ def platform_router(data_dir: Path) -> APIRouter:
             if not path.is_relative_to(data_dir / "imports") or not path.is_file() or sha256(path.read_bytes()).hexdigest() != file["sha256"]:
                 raise ValueError("invalid_import_artifact")
         return store.save_project(request.project, request.expected_revision)
+
+    @router.post("/scientific-projects/preview")
+    def scientific_preview(request: ScientificImportRequest) -> dict[str, Any]:
+        from igem_drylab.workflow.scientific_project import load_scientific_project
+        project = load_scientific_project(request.config_path)
+        return {"scientific_project": project.model_dump(mode="json"), "requires_confirmation": True,
+            "dependency_scope": project.dependency_scope}
 
     @router.post("/imports/preview")
     def import_preview(request: ImportRequest) -> dict[str, Any]:
@@ -126,6 +147,17 @@ def platform_router(data_dir: Path) -> APIRouter:
             Project(id="preview", name="preview", sequences=sequences)
             patch: dict[str, Any] = {"sequences": sequences}
             kind = "sequences"
+        elif extension == ".json" and request.input_kind == "wetlab":
+            from igem_drylab.wetlab.models import WetLabResult
+            raw = json.loads(request.content)
+            rows = raw.get("records") if isinstance(raw, dict) else raw
+            if not isinstance(rows, list) or not rows:
+                raise ValueError("wetlab_requires_nonempty_typed_records")
+            records = [WetLabResult.model_validate(row).model_dump(mode="json") for row in rows]
+            from igem_drylab.wetlab import quality_control
+            qc = quality_control([WetLabResult.model_validate(row) for row in records])
+            patch, kind = {"datasets": [{"id": digest, "name": request.filename, "kind": "wetlab",
+                "records": records, "qc": [item.model_dump(mode="json") for item in qc]}]}, "wetlab"
         elif extension == ".json":
             pathway = Pathway.model_validate_json(request.content)
             patch, kind = {"pathway": pathway.model_dump(mode="json")}, "pathway"
@@ -141,10 +173,18 @@ def platform_router(data_dir: Path) -> APIRouter:
 
     @router.post("/plans")
     def plan(request: PlanRequest) -> dict[str, Any]:
-        workflow = recommend(store.project(request.project_id), request.goal)
+        project = store.project(request.project_id)
+        workflow = recommend(project, request.goal)
         if request.objective:
             workflow.description += f" 用户任务说明：{request.objective}"
-        return {"workflow": workflow.model_dump(mode="json"), "source": "validated_template", "requires_confirmation": True}
+        return {"workflow": workflow.model_dump(mode="json"), "source": "validated_template", "requires_confirmation": True,
+            "confirmation": plan_binding(project, workflow).model_dump(mode="json")}
+
+    @router.post("/plans/custom")
+    def custom_plan(request: CustomPlanRequest) -> dict[str, Any]:
+        validate_workflow(request.workflow)
+        return {"workflow": request.workflow.model_dump(mode="json"), "source": "user_reviewed_workflow", "requires_confirmation": True,
+            "confirmation": plan_binding(store.project(request.project_id), request.workflow).model_dump(mode="json")}
 
     @router.post("/workflows/validate")
     def validate_workflow(workflow: Workflow) -> Workflow:
@@ -154,7 +194,9 @@ def platform_router(data_dir: Path) -> APIRouter:
 
     @router.post("/runs", status_code=202)
     def run(request: RunRequest) -> dict[str, Any]:
-        run_id = engine.create(store.project(request.project_id), request.workflow)
+        if request.project_id != request.confirmation.project_id:
+            raise WorkflowError("plan_project_mismatch", status_code=409)
+        run_id = engine.create_confirmed(request.confirmation, request.workflow)
         result = store.run(run_id)
         launch(run_id)
         return result
@@ -223,7 +265,10 @@ def platform_router(data_dir: Path) -> APIRouter:
     @router.get("/schemas")
     def schemas() -> dict[str, Any]:
         from igem_drylab.workflow.plugins import PluginManifest
-        return {"Project": Project.model_json_schema(), "Workflow": Workflow.model_json_schema(), "Pathway": Pathway.model_json_schema(), "PluginManifest": PluginManifest.model_json_schema()}
+        from igem_drylab.workflow.scientific_project import ScientificProject
+        from igem_drylab.wetlab.models import WetLabResult
+        return {"Project": Project.model_json_schema(), "Workflow": Workflow.model_json_schema(), "Pathway": Pathway.model_json_schema(), "PluginManifest": PluginManifest.model_json_schema(),
+            "ScientificProject": ScientificProject.model_json_schema(), "WetLabResult": WetLabResult.model_json_schema()}
 
     @router.post("/plugins/install")
     def install_plugin(request: PluginRequest) -> dict[str, Any]:

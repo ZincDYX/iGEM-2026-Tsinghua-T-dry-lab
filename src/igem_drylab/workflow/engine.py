@@ -33,7 +33,7 @@ class WorkflowEngine:
         self.max_workers = max_workers
         self._gpu_lock = Lock()
 
-    def create(self, project: Project, workflow: Workflow) -> str:
+    def snapshot(self, project: Project, workflow: Workflow) -> dict[str, Any]:
         tools: dict[str, Any] = {}
         for node in workflow.nodes:
             definition = self.tools.get(node.tool_id)
@@ -45,7 +45,14 @@ class WorkflowEngine:
             "tools": tools, "environment": self._environment(),
         }
         self._verify_files(snapshot["project"]["files"])
-        return self.store.create_run(snapshot)
+        self._verify_scientific_project(snapshot["project"])
+        return snapshot
+
+    def create(self, project: Project, workflow: Workflow) -> str:
+        return self.store.create_run(self.snapshot(project, workflow))
+
+    def create_confirmed(self, binding, workflow: Workflow) -> str:
+        return self.store.create_confirmed_run(binding, workflow, lambda project: self.snapshot(project, workflow))
 
     def run(self, run_id: str, *, retry_failed: bool = False) -> dict[str, Any]:
         owner = str(uuid4())
@@ -107,6 +114,7 @@ class WorkflowEngine:
         if sha256(canonical(run["snapshot"]).encode()).hexdigest() != run["snapshot_hash"]:
             raise ValueError("run_snapshot_hash_mismatch")
         self._verify_files(run["snapshot"]["project"]["files"])
+        self._verify_scientific_project(run["snapshot"]["project"])
         if run["snapshot"]["environment"] != self._environment():
             raise ValueError("environment_changed_since_snapshot; clone the run")
         for artifact in run["artifacts"]:
@@ -118,6 +126,12 @@ class WorkflowEngine:
             digest = self._implementation_hash(current)
             if current.version != expected["version"] or current.plugin_hash != expected["plugin_hash"] or digest != expected["implementation_sha256"]:
                 raise ValueError(f"tool_changed_since_snapshot:{tool_id}; clone the run with the new tool version")
+
+    @staticmethod
+    def _verify_scientific_project(project):
+        if project.get("scientific_project") is not None:
+            from .scientific_project import ScientificProject
+            ScientificProject.model_validate(project["scientific_project"]).verify()
 
     def _execute(self, run_id: str, workflow: Workflow, project: dict[str, Any]) -> RunStatus:
         active: dict[Future[None], tuple[str, str]] = {}

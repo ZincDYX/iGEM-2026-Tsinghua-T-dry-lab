@@ -12,6 +12,7 @@ vi.mock("./api", () => ({
   getRun: vi.fn(),
   saveProject: vi.fn(),
   createPlan: vi.fn(),
+  startRun: vi.fn(),
 }));
 const project: Project = {
   id: "test",
@@ -53,6 +54,7 @@ describe("FusionLab", () => {
       },
       source: "validated_template",
       requires_confirmation: true,
+      confirmation: { project_id: "test", project_revision: 2, project_input_sha256: "a".repeat(64), workflow_sha256: "b".repeat(64) },
     });
   });
   afterEach(cleanup);
@@ -84,5 +86,33 @@ describe("FusionLab", () => {
     expect(
       screen.getByRole("button", { name: /生成可审阅流程/ }),
     ).toHaveProperty("disabled", true);
+  });
+  it("editing draft facts invalidates the reviewed plan and blocks its confirmation", async () => {
+    render(<App />);
+    await screen.findByText("1 条蛋白序列");
+    fireEvent.click(screen.getByRole("button", {name:/生成可审阅流程/}));
+    await screen.findByText("可审阅分析");
+    expect(screen.getByRole("button", {name:"确认并运行"})).toHaveProperty("disabled", false);
+    fireEvent.click(screen.getByRole("button", {name:/项目数据/}));
+    fireEvent.change(screen.getByLabelText("pH"), {target:{value:"5"}});
+    expect(screen.getByText(/有未保存修改/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", {name:/分析流程/}));
+    expect(screen.queryByRole("button", {name:"确认并运行"})).toBeNull();
+    expect(api.startRun).not.toHaveBeenCalled();
+  });
+  it("a plan response for the previous project cannot replace the current project", async () => {
+    vi.mocked(api.getProjects).mockResolvedValue([project, {...project,id:"other",name:"另一个项目"}]);
+    let resolve!: (value: Awaited<ReturnType<typeof api.createPlan>>) => void;
+    vi.mocked(api.createPlan).mockImplementation(() => new Promise((done) => { resolve = done; }));
+    render(<App />);
+    await screen.findByText("1 条蛋白序列");
+    fireEvent.click(screen.getByRole("button", {name:/生成可审阅流程/}));
+    await vi.waitFor(() => expect(api.createPlan).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("当前项目"), {target:{value:"other"}});
+    resolve({workflow:{id:"obsolete",name:"过期方案",version:"1",description:"",nodes:[]},
+      confirmation:{project_id:"test",project_revision:2,project_input_sha256:"a".repeat(64),workflow_sha256:"b".repeat(64)},
+      source:"validated_template",requires_confirmation:true});
+    await vi.waitFor(() => expect(screen.getByLabelText("当前项目")).toHaveProperty("value","other"));
+    expect(screen.queryByText("过期方案")).toBeNull();
   });
 });

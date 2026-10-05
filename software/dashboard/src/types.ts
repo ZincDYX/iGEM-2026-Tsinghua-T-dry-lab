@@ -27,6 +27,12 @@ export interface Project {
   pathway: Record<string, Json> | null;
   files: ImportedFile[];
   datasets: Record<string, Json>[];
+  scientific_project?: ScientificProject | null;
+}
+export interface ScientificProject {
+  config: Record<string, Json>;
+  evidence_files: { path: string; sha256: string }[];
+  dependency_scope: string;
 }
 export type Input =
   | { kind: "literal"; value: Json }
@@ -46,6 +52,18 @@ export interface Workflow {
   description: string;
   version: string;
   nodes: WorkflowNode[];
+}
+export interface PlanBinding {
+  project_id: string;
+  project_revision: number;
+  project_input_sha256: string;
+  workflow_sha256: string;
+}
+export interface ReviewedPlan {
+  workflow: Workflow;
+  confirmation: PlanBinding;
+  source: string;
+  requires_confirmation: boolean;
 }
 export type RunStatus =
   | "queued"
@@ -145,4 +163,4 @@ export interface RuntimeInfo {
   agent_backend: string;
   supported_rate_laws: string[];
 }
-export type Goal = "fusion_screen" | "assembly_review" | "pathway_simulation";
+export type Goal = "fusion_screen" | "assembly_review" | "pathway_simulation" | "scientific_pipeline";

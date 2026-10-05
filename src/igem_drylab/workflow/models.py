@@ -18,6 +18,13 @@ class WorkflowError(ValueError):
         self.code, self.status_code = code, status_code
 
 
+class PlanBinding(Contract):
+    project_id: str
+    project_revision: int = Field(ge=1)
+    project_input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    workflow_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class RunStatus(str, Enum):
     queued = "queued"
     running = "running"
@@ -128,6 +135,9 @@ class Project(Contract):
     pathway: dict[str, Any] | None = None
     files: list[dict[str, str]] = Field(default_factory=list)
     datasets: list[dict[str, Any]] = Field(default_factory=list)
+    # Validated as ScientificProject at API/execution boundaries, avoiding a
+    # dependency cycle between the generic ledger and scientific stage adapter.
+    scientific_project: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def unique_sequences(self) -> "Project":
