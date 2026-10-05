@@ -63,9 +63,10 @@ def main():
         'test_groups':groups,'tracked_risk_ids':sorted(risk_ids),
         'directed_numeric_fault_audit':mutations,
         'paper_reproduction':'prior_c1da257_evidence_retained_not_rerun_in_this_release',
-        'pending':['real_fusion_phase_and_activity_inputs_and_independent_holdout','genetic_absence_active_subnetwork',
+        'pending':['real_fusion_phase_and_activity_inputs_and_independent_holdout','actual_project_genetic_and_background_absence_evidence',
             'correlated_parameter_sampling_and_verified_IDR_mapping','new_licensed_predictor_jobs_and_version_specific_parsers',
-            'formal_transport_evidence_adapter','ER_stability_multiple_roots_and_non_equilibrium_extensions'],
+            'actual_project_transport_calibration_and_applicability_evidence','ER_and_non_equilibrium_model_specification_and_data',
+            'global_stability_and_exhaustive_root_completeness_not_proven'],
         'verified_files':len(checked)}
     (args.results/'validation_summary.json').write_text(json.dumps(summary,indent=2))
     files = [p for p in sorted(args.results.rglob('*')) if p.is_file() and p.suffix in {'.xml','.log','.json','.txt','.md','.csv'} and p.name!='EVIDENCE_MANIFEST.json']

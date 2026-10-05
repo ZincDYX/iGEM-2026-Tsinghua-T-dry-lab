@@ -198,6 +198,18 @@ def _requirements_for_stage(project: object, stage: str, *, include_auxiliary: b
             )
             if m4.transport_enabled and m4.transport_rate_parameter:
                 result = [item.model_copy(update={"name": m4.transport_rate_parameter}) if item.name == "transport_rate" else item for item in result]
+            if m4.transport_enabled and m4.transport_evidence:
+                binding=m4.transport_evidence
+                records={r.parameter_id:r for r in project.parameters}
+                for identifier,dimension,unit,species in [
+                    (binding.intracellular_volume_parameter_id,"volume","L",None),
+                    (binding.extracellular_volume_parameter_id,"volume","L",None),
+                    *[(binding.outside_over_inside_parameter_ids[c],"dimensionless","1",c) for c in ("8","9","10","11","12","13","14","15")],
+                ]:
+                    record=records.get(identifier)
+                    result.append(ParameterRequirement(name=record.name if record else identifier,parameter_type="other",
+                        dimension=dimension,canonical_unit=unit,species_id=species,minimum=0,
+                        minimum_inclusive=dimension!="volume"))
             if m4.network_variant == "oc_dmt_verified_absence":
                 result = [r for r in result if r.enzyme_id not in {"PTR","PT"}]
             return result

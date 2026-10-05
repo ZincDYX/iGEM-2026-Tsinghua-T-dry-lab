@@ -107,7 +107,7 @@ def test_formal_pipeline_consumes_transport_evidence_and_keeps_invalid_binding_b
             intracellular=initial,parameter_ids={f"{compartment}:{c}":f"initial-{compartment}-{c}" for compartment in ("intracellular","extracellular") for c in COMPOUNDS}))
     common=records[0].conditions
     for req in requirements_for_stage(config,"m4"):
-        if req.name=="rate":continue
+        if any(r.name==req.name for r in records):continue
         records.append(ParameterRecord(parameter_id=req.name,name=req.name,value=1.,unit=req.canonical_unit,
             parameter_type=req.parameter_type,enzyme_id=req.enzyme_id,substrate_id=req.substrate_id,product_id=req.product_id,
             species_id=req.species_id,construct_id="fixture-c",condition_id="fixture-d",source_type="wetlab",
@@ -122,6 +122,9 @@ def test_formal_pipeline_consumes_transport_evidence_and_keeps_invalid_binding_b
                 source_type="wetlab",source_reference="software_fixture_only",review_status="approved",approved_by="fixture-reviewer",
                 conditions={**common,"compartment":compartment,"measurement_time_h":0}))
     config.parameters=records
+    catalog={r.name:r for r in requirements_for_stage(config,"m4")}
+    assert catalog["vi"].dimension=="volume" and catalog["vi"].canonical_unit=="L"
+    assert catalog["ratio-13"].species_id=="13" and catalog["ratio-13"].dimension=="dimensionless"
     context=M4CandidateContext(candidate_id="fixture",construct_id="fixture-c",condition_id="fixture-d",phi=.2,
         enzyme_distribution={e:dict(dense=0.,dilute=0.) for e in ("PTR","PT","OC","DMT")},
         enzyme_sequence_sha256={e:"b"*64 for e in ("PTR","PT","OC","DMT")},

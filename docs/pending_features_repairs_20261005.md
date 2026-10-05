@@ -20,6 +20,8 @@
 
 M4 正式 pipeline 已接入，旧字符串 source_reference 不替代证据。配置数字与已审核记录不一致时阻断；成功输出保留全部绑定记录和 parameter_id。air-lab `transport-pipeline-03.xml`：16 passed，包含真正正式路径消费、非零运输初速、不同 access、不等体积守恒及缺来源/错单位/错方向/错区室/错条件负例。所有输入仍为标记的软件夹具，没有冒充项目运输实测。
 
+体积/各物种比值也已进入统一 M4 requirement catalog，可通过同一正式审批路径按 volume/dimensionless 与物种检查；不只在求解器前临时放行。正向实际 pipeline 另核对这一目录，重复来源计数未增加。
+
 稳态 pipeline 输出也接入局部稳定性，F2 分析不会覆盖这一记录。
 
 ## 经核验缺席的活动子网络
@@ -35,3 +37,22 @@ air-lab `active-contracts-02.xml`：33 passed（含数据契约/稳定性/运输
 ## 科学边界（项目数据和模型假设）
 
 ER 腔/膜/胞质的完整机制未有本项目确定方程和交换/活性证据，不能自动编造“完整 ER 模型”。未获得真实独立数据，不宣称项目标定或验证完成。工具许可证、下载凭证与真实 ORF 仍须对应具体工具核验。
+
+## 外部工具核查（本轮没有成功的新许可预测作业）
+
+- [SignalP 6.0i fast 的官方学术下载](https://services.healthtech.dtu.dk/cgi-bin/sw_request?packageversion=6.0i&platform=fast&software=signalp&version=6.0) 要求机构邮箱/信息和接受学术许可；没有代机构填写、签署或下载安装，也未将许可程序打入公开 bundle。
+- [DeepTMHMM 官方许可说明](https://services.healthtech.dtu.dk/services/DeepTMHMM-1.0/) 区分线上服务与自建部署，不能一律说需要付费。[BioLib 官方 Python 文档](https://biolib.com/docs/using-applications/python/) 提供登录和 API token 路线；服务器 pybiolib 已安装，未配置 BIOLIB_TOKEN（不等于已证明所有身份入口都不可用）。官方 CLI 帮助可用；对 DTU/DeepTMHMM 的帮助请求直连 40 秒、按用户 proxy 路线 45 秒均超时，没有成功预测或版本专用原始输出。原因尚不能确定，不能误称已经证实是许可证错误。
+- [TANGO 官方入口](https://tango.crg.eu/) 提供学术/商业许可，需用户已有的合法包/授权；没有接受机构条款或下载非官方二进制。[PASTA 2 原站](https://protein.bio.unipd.it/pasta2/) 本轮访问超时，不能确认当前部署/API可用。
+
+不以公共夹具、旧 smoke 或手工虚构格式声称上述新作业成功；现有按实际字节人工审核路径和未解析阻断保留。本轮无需新增安装。
+
+## 还需提供的真实输入
+
+1. 对应当前构建和宿主背景的 PTR/PT 缺席审核记录及原始依据；10 喂料剂量、时刻、测量区室、培养/胞内有效体积和协议。
+2. 对应构建/条件的招募、Kp、酶量/活性、运输及时间序列原始来源，以及未用于标定的独立批次。
+3. 若要量化 ER：确认区室/膜侧、相应方程和需要估计的交换/定位/活性参数，再提供其来源。仅有 ER 定位意图不能产生定量模型。
+4. 已获得的 SignalP/TANGO 等许可包及服务器路径，或通过服务器安全配置 BioLib 身份；不要在聊天发送密钥。
+
+## 提交与验证定位
+
+`a19ecf4`：原式局部稳定性与多起点 MCP；`977b19f`：正式运输证据及实际 pipeline；`5890f91`：核验缺席活动子网络。均分别 commit/push，后续目录接线与发布证据提交在最终交付 JSON 记录。最终 air-lab 全套结果、源码/bundle 逐字节一致性、故障审核和部署大小以同轮交付 JSON/证据包为准，旧评审记录保持历史版本，不覆盖原论文输入。

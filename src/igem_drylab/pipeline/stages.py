@@ -1203,8 +1203,7 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             "assumptions": ["rapid_partition_equilibrium", "phase-specific competing enzyme pools",
                 "transport access and normalization are bound to reviewed records" if transport_evidence_report else "transport access is configured, not measured", activity_assumption],
         }), encoding="utf-8")
-        provenance = _merge_provenance(context.provenance_summary, _provenance_summary(selected.values()),
-            _provenance_summary(ParameterRecord.model_validate(r) for r in transport_evidence_report["records"]) if transport_evidence_report else {})
+        provenance = _merge_provenance(context.provenance_summary, _provenance_summary(selected.values()))
         records.append(M4ReactionPrediction(
             candidate_id=item.candidate_id, construct_id=context.construct_id, condition_id=context.condition_id,
             target_product=settings.target_product, status="valid", data_quality=_data_quality_from_summary(provenance),
