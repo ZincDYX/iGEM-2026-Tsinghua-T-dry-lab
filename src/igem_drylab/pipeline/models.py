@@ -160,6 +160,8 @@ class M4CandidateContext(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     evidence_ready: bool = False
     claim_scope: str = "conditional_mechanism"
+    network_variant: str = "full_ten"
+    absence_evidence: dict[str,Any] = Field(default_factory=dict)
 
 
 class M4ReactionPrediction(ScientificResult):

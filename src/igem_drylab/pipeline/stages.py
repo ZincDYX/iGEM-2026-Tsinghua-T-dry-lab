@@ -467,6 +467,18 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 status="insufficient_data", missing_inputs=formal_missing, notes="Formal evidence boundary is not satisfied."))
             continue
         condition_id = config.stages.m4_reaction.condition_id or _condition_id_if_defined(config.stages.m4_reaction)
+        absence_evidence = {}
+        if config.stages.m4_reaction.network_variant == "oc_dmt_verified_absence":
+            from igem_drylab.active_network import verify_absence_evidence
+            try:
+                if config.stages.m3_concentration.recruitment_mode != "finite_site":
+                    raise ValueError("active_subnetwork_M3_requires_finite_site_OC_DMT_binding")
+                absence_evidence = verify_absence_evidence(config.stages.m4_reaction.absence_evidence,
+                    construct_id=construct_id,condition_id=condition_id,host=config.experimental_context.host,strain=config.experimental_context.strain)
+            except (ValueError,OSError) as error:
+                records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id,construct_id=construct_id,
+                    status="insufficient_data",missing_inputs=[str(error)]))
+                continue
         selected, missing = validate_parameters(config.parameters, requirements=core_requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
         if missing:
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic",
@@ -641,7 +653,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                     partition_source=selected[f"partition_{enzyme.lower()}"].selected_parameter.source_reference,
                     partition_uncertainty=selected[f"partition_{enzyme.lower()}"].selected_parameter.uncertainty,
                 ), phi=phi)
-                for enzyme in ("PTR", "PT")
+                for enzyme in ("PTR", "PT") if not absence_evidence
             }
             enzyme_distribution = {
                 **{enzyme: {"dense": item.dense_concentration, "dilute": item.dilute_concentration, "partition_coefficient": item.partition_coefficient} for enzyme, item in background.items()},
@@ -673,6 +685,8 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 m2_geometry_id=assessment.m2_geometry_id,
                 site_count_basis=assessment.site_count_basis,
                 enzyme_distribution=enzyme_distribution,
+                network_variant=config.stages.m4_reaction.network_variant,
+                absence_evidence=absence_evidence,
                 metabolite_partition_coefficients={compound: selected[f"partition_x{compound}"].canonical_value for compound in ("8", "9", "10", "11", "12", "13", "14", "15") if f"partition_x{compound}" in selected},
                 binding_recruited_fraction=bound_fractions,
                 site_occupancy=site_occupancy,
@@ -681,6 +695,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 assumptions=[
                     "M3 S1-S5/E1-E6 rapid-equilibrium cytosolic two-phase model",
                     "M2 confirmed independent treatment of joint site occupancy",
+                    "PTR/PT structurally absent per reviewed genetic/background record" if absence_evidence else
                     "PTR/PT use independent two-phase partition because S1-E6 only specify OC/DMT binding",
                 ],
             )
@@ -830,6 +845,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             "input_boundary":{"feed_mode":settings.feed_mode,"feed_compound_id":settings.feed_compound_id,
                               "feeding_time_h":settings.feeding_time_h},
             "confirmed_absent_enzymes":settings.confirmed_absent_enzymes,
+            "network_variant":settings.network_variant,
             "steady_state_observation_reference":settings.steady_state_observation_reference,
             "claim_scope":record.claim_scope,
             "approximation_scope":"rapid_phase_partition_and_independent_site_binding_not_experimental_validation"}
@@ -866,7 +882,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
 
 def _run_m4_base(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
     formal_missing = _formal_analysis_missing(config)
-    if config.stages.m4_reaction.confirmed_absent_enzymes:
+    if config.stages.m4_reaction.confirmed_absent_enzymes and config.stages.m4_reaction.network_variant == "full_ten":
         formal_missing.append("declared genetic absence requires an explicit active-subnetwork version; missing kinetics cannot be set to zero")
     if _is_formal(config) and config.stages.m4_reaction.activity_mode == "unity_assumption":
         formal_missing.append("formal M4 requires reviewed phase activity; unity is sensitivity-only")
@@ -1106,6 +1122,19 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             if state_missing:
                 records.append(_m4_insufficient(item.candidate_id, config, state_missing, construct_id=context.construct_id))
                 continue
+        absence_evidence = {}
+        if settings.network_variant == "oc_dmt_verified_absence":
+            from igem_drylab.active_network import verify_absence_evidence
+            try:
+                absence_evidence = verify_absence_evidence(settings.absence_evidence,construct_id=context.construct_id,
+                    condition_id=context.condition_id,host=config.experimental_context.host,strain=config.experimental_context.strain)
+                if context.network_variant != settings.network_variant or context.absence_evidence != absence_evidence:
+                    raise ValueError("active_subnetwork_M3_absence_evidence_or_variant_mismatch")
+                if set(context.enzyme_distribution)!={"OC","DMT"}:
+                    raise ValueError("active_subnetwork_cannot_consume_PTR_PT_distributions")
+            except (ValueError,OSError) as error:
+                records.append(_m4_insufficient(item.candidate_id,config,[str(error)],construct_id=context.construct_id))
+                continue
         reactions = _full_network_reactions(settings, selected)
         distributions = {enzyme: PhaseDistribution(values["dense"], values["dilute"]) for enzyme, values in context.enzyme_distribution.items()}
         kp = context.metabolite_partition_coefficients
@@ -1113,12 +1142,12 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             records.append(_m4_insufficient(item.candidate_id, config, ["M3 metabolite Kp8-Kp15 context"], construct_id=context.construct_id))
             continue
         if settings.activity_mode == "sensitivity_parameters":
-            activity_dense = {enzyme: selected[f"activity_dense_{enzyme.lower()}"].canonical_value for enzyme in ("PTR", "PT", "OC", "DMT")}
-            activity_dilute = {enzyme: selected[f"activity_dilute_{enzyme.lower()}"].canonical_value for enzyme in ("PTR", "PT", "OC", "DMT")}
+            activity_dense = {enzyme: selected[f"activity_dense_{enzyme.lower()}"].canonical_value for enzyme in distributions}
+            activity_dilute = {enzyme: selected[f"activity_dilute_{enzyme.lower()}"].canonical_value for enzyme in distributions}
             activity_assumption = "activity-sensitivity parameters resolved from registry"
         else:
-            activity_dense = {enzyme: 1.0 for enzyme in ("PTR", "PT", "OC", "DMT")}
-            activity_dilute = {enzyme: 1.0 for enzyme in ("PTR", "PT", "OC", "DMT")}
+            activity_dense = {enzyme: 1.0 for enzyme in distributions}
+            activity_dilute = {enzyme: 1.0 for enzyme in distributions}
             activity_assumption = "assumption_sensitivity: unity activity"
         def configured_gate(value):
             return TemporalGate(mode="configured_induction", induction=InductionGate(**value.model_dump(exclude={"time_unit"}))) if value else TemporalGate()
@@ -1148,6 +1177,7 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             pt_gate=configured_gate(settings.pt_gate), oc_gate=configured_gate(settings.oc_gate),
             activity_dense=activity_dense, activity_dilute=activity_dilute,
             unit_mode=settings.unit_mode,
+            network_variant=settings.network_variant,absence_evidence=absence_evidence,
         )
         result = simulate_full_network(params, initial_intracellular=settings.full_network_initial_state.intracellular,
             initial_extracellular=settings.full_network_initial_state.extracellular, t_end=settings.t_end, points=settings.solver_points)
@@ -1173,7 +1203,8 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             "assumptions": ["rapid_partition_equilibrium", "phase-specific competing enzyme pools",
                 "transport access and normalization are bound to reviewed records" if transport_evidence_report else "transport access is configured, not measured", activity_assumption],
         }), encoding="utf-8")
-        provenance = _merge_provenance(context.provenance_summary, _provenance_summary(selected.values()))
+        provenance = _merge_provenance(context.provenance_summary, _provenance_summary(selected.values()),
+            _provenance_summary(ParameterRecord.model_validate(r) for r in transport_evidence_report["records"]) if transport_evidence_report else {})
         records.append(M4ReactionPrediction(
             candidate_id=item.candidate_id, construct_id=context.construct_id, condition_id=context.condition_id,
             target_product=settings.target_product, status="valid", data_quality=_data_quality_from_summary(provenance),
@@ -1187,7 +1218,7 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             transport_report={"integrals":result.transport_integrals,"units":_full_network_units(settings),
                 "evidence":transport_evidence_report,
                 "product_recovery_species":"15","intermediate_outflow_species":[str(i) for i in range(8,15)],
-                "13_role":"reactive_intermediate_not_dead_end",
+                "13_role":"no_active_13_to_14_reaction_under_verified_PT_absence" if absence_evidence else "reactive_intermediate_not_dead_end",
                 "branch_scope":"processed_substrate_interval_fraction_not_single_molecule_channeling"},
             mechanistic_diagnostics=({key: result.diagnostics[key] for key in (
                 "target_yield_fraction", "branch_9_to_13_fraction", "dmt_late_selectivity",
@@ -1197,7 +1228,8 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
                 *(transport_evidence_report["parameter_ids"] if transport_evidence_report else []),
                 *(entry.selected_parameter.parameter_id for entry in selected.values() if entry.selected_parameter)}),
             provenance_summary=provenance, assumptions=["M1/M2 structural and docking scores are not kinetic inputs", "M4 is a mechanistic sensitivity model", activity_assumption],
-            notes=("Full 8-compound / 10-reaction phase-specific competitive model. Values are not enzyme activity or yield predictions."
+            notes=(("Verified-absence OC/DMT-only 8-compound / 6-reaction phase-specific competitive extension." if absence_evidence else
+                    "Full 8-compound / 10-reaction phase-specific competitive model.") + " Conditional numerical outputs, not experimental validation."
                    if result.unit_mode == "physical" else "Results are normalized mechanistic sensitivity outputs and must not be interpreted as absolute concentration, enzyme abundance, kinetic rate, productivity, or titer."),
         ))
     _label_scientific_results(config, records)
@@ -1216,6 +1248,7 @@ def _full_network_reactions(settings: object, selected: dict[str, object]) -> tu
             selected[f"km_{reaction_id.lower()}"].canonical_value,
         )
         for reaction_id, enzyme, substrate, product in load_m4_reaction_identities(settings.reaction_network_file)
+        if settings.network_variant == "full_ten" or enzyme in {"OC","DMT"}
     )
 
 

@@ -26,6 +26,7 @@ ENZYME_SUBSTRATES = {"PTR": ("8", "12"), "PT": ("9", "13"), "OC": ("10", "14"), 
 _INDEX = {compound: index for index, compound in enumerate(COMPOUNDS)}
 NUMERICAL_NEGATIVE_TOLERANCE = -1e-8
 FULL_NETWORK_FORMULA_VERSION = "galatea-dynamic-volume-v2-2026-10-04"
+ACTIVE_NETWORK_FORMULA_VERSION = "galatea-oc-dmt-verified-absence-v1-2026-10-05"
 
 
 @dataclass(frozen=True)
@@ -181,21 +182,32 @@ class FullNetworkParameters:
     oc_gate: TemporalGate = field(default_factory=TemporalGate)
     scenario: Literal["homogeneous_constitutive", "homogeneous_published_like_temporal", "galatea_spatial", "galatea_spatiotemporal_ablation"] = "galatea_spatial"
     unit_mode: Literal["physical", "author_native_sensitivity"] = "physical"
+    network_variant: Literal["full_ten", "oc_dmt_verified_absence"] = "full_ten"
+    absence_evidence: dict = field(default_factory=dict)
 
     def validate(self) -> None:
         if not 0 <= self.phi < 1:
             raise ValueError("phi_must_be_between_zero_and_one_exclusive")
-        if set(self.enzyme_distributions) != set(ENZYME_SUBSTRATES) or set(self.metabolite_kp) != set(COMPOUNDS):
+        active = self.network_variant == "oc_dmt_verified_absence"
+        if self.network_variant not in {"full_ten","oc_dmt_verified_absence"}:
+            raise ValueError("unknown_active_network_variant")
+        expected_enzymes = {"OC","DMT"} if active else set(ENZYME_SUBSTRATES)
+        if active and (self.unit_mode != "physical" or self.absence_evidence.get("confirmed_absent_enzymes") !=
+                      {"PTR":"genetic_and_background_activity_absent","PT":"genetic_and_background_activity_absent"} or
+                      not all(self.absence_evidence.get(k) for k in ("construct_id","condition_id","host","strain","source_reference","verification_method","reviewed_by","artifact_sha256"))):
+            raise ValueError("active_network_requires_bound_verified_absence_evidence_and_physical_units")
+        if set(self.enzyme_distributions) != expected_enzymes or set(self.metabolite_kp) != set(COMPOUNDS):
             raise ValueError("complete_enzyme_and_metabolite_parameterization_required")
         canonical = tuple((item.reaction_id, item.enzyme, item.substrate, item.product) for item in self.reactions)
-        if canonical != REACTIONS:
+        expected_reactions = tuple(r for r in REACTIONS if r[1] in expected_enzymes)
+        if canonical != expected_reactions:
             raise ValueError("full_ten_reaction_network_required")
         if any(value <= 0 or not np.isfinite(value) for value in self.metabolite_kp.values()):
             raise ValueError("metabolite_partition_coefficients_must_be_positive_and_finite")
         for distribution in self.enzyme_distributions.values():
             if any(value < 0 or not np.isfinite(value) for value in (distribution.dense, distribution.dilute)):
                 raise ValueError("enzyme_phase_concentrations_must_be_nonnegative_and_finite")
-        if set(self.activity_dense) != set(ENZYME_SUBSTRATES) or set(self.activity_dilute) != set(ENZYME_SUBSTRATES):
+        if set(self.activity_dense) != expected_enzymes or set(self.activity_dilute) != expected_enzymes:
             raise ValueError("activity_dictionaries_must_cover_exactly_all_enzymes")
         if any(value < 0 or not np.isfinite(value) for value in [*self.activity_dense.values(), *self.activity_dilute.values()]):
             raise ValueError("activity_multipliers_must_be_nonnegative_and_finite")
@@ -234,6 +246,8 @@ def phase_competitive_rates(phase_substrates: dict[str, float], enzymes: dict[st
     for reaction in reactions:
         by_enzyme[reaction.enzyme].append(reaction)
     for enzyme, entries in by_enzyme.items():
+        if not entries:
+            continue
         enzyme_amount = enzymes[enzyme] * activities[enzyme] * (dmt_gate if enzyme == "DMT" else 1.0)
         denominator = 1.0 + sum(max(phase_substrates[item.substrate], 0.0) / item.km for item in entries)
         for item in entries:
@@ -282,7 +296,7 @@ def simulate_full_network(params: FullNetworkParameters, *, initial_intracellula
         gate = params.dmt_gate.value(time)
         dense_rates = phase_competitive_rates(dense, dense_enzymes, params.reactions, params.activity_dense, gate)
         dilute_rates = phase_competitive_rates(dilute, dilute_enzymes, params.reactions, params.activity_dilute, gate)
-        rates = {reaction_id: params.phi * dense_rates[reaction_id] + (1.0 - params.phi) * dilute_rates[reaction_id] for reaction_id, *_ in REACTIONS}
+        rates = {reaction_id: params.phi * dense_rates.get(reaction_id,0.) + (1.0 - params.phi) * dilute_rates.get(reaction_id,0.) for reaction_id, *_ in REACTIONS}
         forward, reverse = _transport_rates(intracellular, extracellular, params)
         return rates, forward, reverse
 

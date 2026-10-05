@@ -11,6 +11,7 @@ from igem_drylab.constructs import ConstructRecord
 from igem_drylab.resources import default_config_path
 from igem_drylab.design_analysis import M4AnalysisConfig
 from igem_drylab.transport_evidence import TransportEvidenceBinding
+from igem_drylab.active_network import AbsenceEvidenceBinding
 
 
 DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
@@ -274,6 +275,8 @@ class M4Config(StrictScientificConfig):
     expression_mode: Literal["constitutive", "induced"] | None = None
     feeding_time_h: float | None = Field(default=None, ge=0)
     confirmed_absent_enzymes: dict[Literal["PTR", "PT", "OC", "DMT"], str] = Field(default_factory=dict)
+    network_variant: Literal["full_ten", "oc_dmt_verified_absence"] = "full_ten"
+    absence_evidence: AbsenceEvidenceBinding | None = None
     steady_state_observation_reference: str | None = None
     target_product: str = "glabridin"
     feed_compound_id: str | None = None
@@ -316,6 +319,17 @@ class M4Config(StrictScientificConfig):
 
     @model_validator(mode="after")
     def _scenario_contract(self) -> "M4Config":
+        if self.network_variant == "oc_dmt_verified_absence":
+            if self.network_mode != "galatea_full_competitive" or self.unit_mode != "physical":
+                raise ValueError("active_subnetwork_requires_physical_dynamic_mode")
+            if set(self.confirmed_absent_enzymes)!={"PTR","PT"} or self.absence_evidence is None:
+                raise ValueError("active_subnetwork_requires_explicit_PTR_PT_absence_evidence")
+            if (self.assay_mode,self.feed_mode,self.feed_compound_id)!=("substrate_feeding_functional","batch_initial_state","10"):
+                raise ValueError("active_subnetwork_v1_supports_OC_DMT_only_batch_10_functional_assay")
+            if any((self.pt_gate,self.enable_degradation)):
+                raise ValueError("active_subnetwork_has_no_PT_gate_or_degradation_extension")
+        elif self.absence_evidence is not None:
+            raise ValueError("absence_evidence_requires_explicit_active_subnetwork_variant")
         if self.transport_evidence and not self.transport_enabled:
             raise ValueError("transport_evidence_requires_enabled_transport")
         if self.feeding_time_h is not None and (self.feeding_time_h != 0 or self.feed_mode != "batch_initial_state"):
@@ -530,6 +544,8 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         base_dir,
     )  # type: ignore[assignment]
     config.stages.m4_reaction.reaction_network_file = _resolve_path(config.stages.m4_reaction.reaction_network_file, base_dir)  # type: ignore[assignment]
+    if config.stages.m4_reaction.absence_evidence:
+        config.stages.m4_reaction.absence_evidence.artifact = _resolve_path(config.stages.m4_reaction.absence_evidence.artifact,base_dir)
     config.stages.m5_feedback.wetlab_results_file = _resolve_path(config.stages.m5_feedback.wetlab_results_file, base_dir)  # type: ignore[assignment]
     if config.execution.mode == "real":
         required_files = [

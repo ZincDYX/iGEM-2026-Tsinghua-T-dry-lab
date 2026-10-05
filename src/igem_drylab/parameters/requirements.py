@@ -181,6 +181,9 @@ def _requirements_for_stage(project: object, stage: str, *, include_auxiliary: b
         if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") in {"galatea_full_competitive", "markdown_steady_state"}:
             core = core + [_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")]
         auxiliary = [item for recruitment in getattr(project.stages.m3_concentration, "recruitment", []) for item in recruitment_requirements(recruitment, binding_model=project.stages.m3_concentration.binding_model)]
+        if project.stages.m4_reaction.network_variant == "oc_dmt_verified_absence":
+            core = [r for r in core if r.name not in {"ptr_total","pt_total","partition_ptr","partition_pt"}]
+            auxiliary = [r for r in auxiliary if r.enzyme_id not in {"PTR","PT"}]
         return core + auxiliary if include_auxiliary else core
     if stage == "m4":
         m4 = project.stages.m4_reaction
@@ -195,6 +198,8 @@ def _requirements_for_stage(project: object, stage: str, *, include_auxiliary: b
             )
             if m4.transport_enabled and m4.transport_rate_parameter:
                 result = [item.model_copy(update={"name": m4.transport_rate_parameter}) if item.name == "transport_rate" else item for item in result]
+            if m4.network_variant == "oc_dmt_verified_absence":
+                result = [r for r in result if r.enzyme_id not in {"PTR","PT"}]
             return result
         return m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation)
     return []

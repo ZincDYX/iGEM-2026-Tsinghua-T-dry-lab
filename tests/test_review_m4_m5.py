@@ -127,7 +127,7 @@ def test_physical_identity_table_needs_no_author_numeric_columns(tmp_path):
     path.write_text("reaction_id,enzyme,substrate,product\n" + "".join(",".join(row) + "\n" for row in REACTIONS), encoding="utf-8")
     from types import SimpleNamespace
     selected = {f"{prefix}_{reaction[0].lower()}": SimpleNamespace(canonical_value=1) for reaction in REACTIONS for prefix in ("kcat", "km")}
-    reactions = _full_network_reactions(SimpleNamespace(unit_mode="physical", reaction_network_file=path), selected)
+    reactions = _full_network_reactions(SimpleNamespace(unit_mode="physical", reaction_network_file=path, network_variant="full_ten"), selected)
     assert len(reactions) == 10
 
 

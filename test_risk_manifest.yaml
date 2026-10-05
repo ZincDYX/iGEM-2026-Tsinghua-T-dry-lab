@@ -1,6 +1,36 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: STEADY_LOCAL_STABILITY
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_steady_stability.py::test_exact_competitive_jacobian_matches_independent_central_differences", "tests/test_steady_stability.py::test_secretion_only_root_eigenvalues_match_original_unweighted_definition", "tests/test_steady_stability.py::test_linearization_classifier_does_not_claim_neutral_is_stable", "tests/test_steady_stability.py::test_multistart_records_neutral_root_family_and_blocked_attempts", "tests/test_steady_stability.py::test_official_stdio_mcp_executes_declared_multistart_analysis"]
+    requirement_or_formula_source: original M4 two-phase competitive RHS and unweighted Vsec; analytic derivative
+    oracle_type: independent_central_differences_diagonal_spectra_and_free_pool_roots
+    fixture_scope: software_fixture_only_with_actual_stdio_MCP_not_biological_validation
+    formula_version: original_rhs_analytic_jacobian_v1
+    units: 1/h; uM
+    tolerance_basis: derivative absolute 1e-8 per h; diagonal spectrum 1e-14 per h; root 1e-8 uM; explicit neutral threshold
+    expected_faults: [missing_competitor_derivative, omitted_partition_weight, neutral_claimed_stable, search_claimed_globally_unique]
+  - risk_id: TRANSPORT_FORMAL_BINDING
+    group: data_contract
+    test_nodeids: ["tests/test_transport_evidence.py::test_verified_units_and_definitions_reach_actual_unequal_volume_transport", "tests/test_transport_evidence.py::test_wrong_provenance_compartment_direction_or_conditions_are_rejected", "tests/test_transport_evidence.py::test_formal_transport_cannot_use_unreviewed_or_incompatible_records", "tests/test_transport_evidence.py::test_numeric_config_does_not_override_verified_volumes_or_ratios", "tests/test_transport_evidence.py::test_formal_pipeline_consumes_transport_evidence_and_keeps_invalid_binding_blocked"]
+    requirement_or_formula_source: existing reversible first order transport and Vi*dCi+Ve*dCe amount balance
+    oracle_type: hand_initial_flux_exact_evidence_identity_and_actual_formal_pipeline
+    fixture_scope: software_fixture_only_not_project_transport_calibration
+    formula_version: volume-aware-reversible-first-order-v1
+    units: L; 1/h; uM/h
+    tolerance_basis: initial derivative absolute 3e-6 uM/h short-time budget; amount absolute 1e-10 umol; config canonical match relative 1e-12
+    expected_faults: [wrong_volume_or_ratio_direction, generic_export_constant_as_total_rate, unreviewed_record_used, config_override_of_evidence]
+  - risk_id: ACTIVE_VERIFIED_TOPOLOGY
+    group: integration
+    test_nodeids: ["tests/test_active_subnetwork.py::test_active_topology_matches_full_network_structural_zero_control_without_fake_kinetics", "tests/test_active_subnetwork.py::test_absence_and_topology_must_be_explicit_verified_and_complete", "tests/test_active_subnetwork.py::test_actual_finite_M3_and_M4_exclude_absent_parameters_not_zero_fill"]
+    requirement_or_formula_source: reviewed genetic/background absence selects original OC/DMT competitive reactions
+    oracle_type: independent_initial_flux_raw_conservation_explicit_structural_control_actual_M3_M4
+    fixture_scope: software_fixture_only_not_actual_genetic_absence_evidence
+    formula_version: galatea-oc-dmt-verified-absence-v1-2026-10-05
+    units: uM; uM/h
+    tolerance_basis: hand initial flux 1e-12 uM/h; source-array amount and control 1e-10 uM; exact identities
+    expected_faults: [absence_inferred_from_missing_kinetics, removed_DMT_competitors, changed_source_without_hash_rejection, wrong_network_version_replay]
   - risk_id: MU01
     group: scientific_algorithm
     test_nodeids: ["tests/test_independent_numeric_oracles.py::test_MU01_active_kp_replay_matches_two_phase_initial_rate", "tests/test_independent_numeric_oracles.py::test_supported_replay_parameter_families_change_active_product_initial_rate"]

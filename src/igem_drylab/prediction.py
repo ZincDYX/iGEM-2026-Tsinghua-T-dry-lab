@@ -7,7 +7,7 @@ import numpy as np
 import scipy
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .full_network import COMPOUNDS, FULL_NETWORK_FORMULA_VERSION, FullNetworkParameters, PhaseDistribution, ReactionKinetics, TemporalGate, TransportParameters, simulate_full_network
+from .full_network import COMPOUNDS, FULL_NETWORK_FORMULA_VERSION, ACTIVE_NETWORK_FORMULA_VERSION, FullNetworkParameters, PhaseDistribution, ReactionKinetics, TemporalGate, TransportParameters, simulate_full_network
 from .kinetics import InductionGate
 from .m4_steady_state import M4_ACTIVITY_FORMULA_VERSION, M4_FORMULA_VERSION, M4SteadyStateInput, solve_m4_steady_state
 
@@ -63,6 +63,10 @@ class PredictionContract(BaseModel):
         settings_type = DynamicSolverSettings if dynamic else SteadySolverSettings
         self.solver_settings = settings_type.model_validate(self.solver_settings).model_dump()
         if dynamic:
+            variant = self.kernel_inputs.get("parameters",{}).get("network_variant","full_ten")
+            expected_version = ACTIVE_NETWORK_FORMULA_VERSION if variant == "oc_dmt_verified_absence" else FULL_NETWORK_FORMULA_VERSION
+            if self.formula_version != expected_version:
+                raise ValueError("prediction_kernel_network_variant_formula_mismatch")
             mode = self.kernel_inputs.get("parameters", {}).get("unit_mode")
             if (mode == "physical") != (self.concentration_unit == "uM") or mode not in {"physical", "author_native_sensitivity"}:
                 raise ValueError("prediction_kernel_unit_mode_mismatch")
@@ -132,7 +136,7 @@ def observe_prediction(payload, result):
 def dynamic_contract(params, result, initial_intracellular, initial_extracellular, t_end, points):
     from .full_network import FULL_NETWORK_FORMULA_VERSION
     author = params.unit_mode == "author_native_sensitivity"
-    return PredictionContract(model_kind="full_network_dynamic", formula_version=FULL_NETWORK_FORMULA_VERSION,
+    return PredictionContract(model_kind="full_network_dynamic", formula_version=ACTIVE_NETWORK_FORMULA_VERSION if params.network_variant == "oc_dmt_verified_absence" else FULL_NETWORK_FORMULA_VERSION,
         time_unit="author_native_day_axis" if author else "h", concentration_unit="author_native" if author else "uM",
         time=result.time.tolist(), concentrations={
             "intracellular": {name: result.intracellular[index].tolist() for index, name in enumerate(COMPOUNDS)},
@@ -239,6 +243,7 @@ def _replay_dynamic(contract, parameter_name, value):
 
 _REPLAY_ADAPTERS = {
     ("full_network_dynamic", FULL_NETWORK_FORMULA_VERSION): _replay_dynamic,
+    ("full_network_dynamic", ACTIVE_NETWORK_FORMULA_VERSION): _replay_dynamic,
     ("markdown_steady_state", M4_FORMULA_VERSION): _replay_steady,
     ("markdown_steady_state", M4_ACTIVITY_FORMULA_VERSION): _replay_steady,
 }
