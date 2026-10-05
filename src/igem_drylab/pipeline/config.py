@@ -10,6 +10,7 @@ from igem_drylab.parameters import ParameterRecord
 from igem_drylab.constructs import ConstructRecord
 from igem_drylab.resources import default_config_path
 from igem_drylab.design_analysis import M4AnalysisConfig
+from igem_drylab.transport_evidence import TransportEvidenceBinding
 
 
 DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
@@ -309,11 +310,14 @@ class M4Config(StrictScientificConfig):
     extracellular_volume_l: float | None = Field(default=None, gt=0)
     volume_source_reference: str | None = None
     transport_ratio_source_reference: str | None = None
+    transport_evidence: TransportEvidenceBinding | None = None
     solver_points: int = Field(default=501, ge=2)
     transport_outside_over_inside: dict[str, float] = Field(default_factory=lambda: {str(index): 0.0 for index in range(8, 16)})
 
     @model_validator(mode="after")
     def _scenario_contract(self) -> "M4Config":
+        if self.transport_evidence and not self.transport_enabled:
+            raise ValueError("transport_evidence_requires_enabled_transport")
         if self.feeding_time_h is not None and (self.feeding_time_h != 0 or self.feed_mode != "batch_initial_state"):
             raise ValueError("current_dynamic_version_supports_only_explicit_time_zero_batch_feeding")
         if self.assay_mode == "full_pathway_production" and self.feed_compound_id not in {None, "8"}:

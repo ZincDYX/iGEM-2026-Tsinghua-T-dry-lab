@@ -854,7 +854,7 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                     if len(sources)!=len(evidence.parameter_ids) or any(r.name!=evidence.parameter_name or r.review_status!="approved"
                             or r.parameter_id not in record.parameter_ids for r in sources):
                         raise ValueError("analysis_range_requires_matching_approved_candidate_parameter_sources")
-                record.analysis_result = analyze_prediction(record.simulation_inputs["prediction_contract"], config.stages.m4_reaction.analysis)
+                record.analysis_result = {**(record.analysis_result or {}), **analyze_prediction(record.simulation_inputs["prediction_contract"], config.stages.m4_reaction.analysis)}
                 record.robustness = record.analysis_result["robustness"]
                 record.sensitivity = record.analysis_result["sensitivity"]
             except (ValueError, RuntimeError, KeyError) as error:
@@ -1064,6 +1064,7 @@ def _run_markdown_steady_m4(
                     if result.reaction_flux_um_per_h["R3"]+result.reaction_flux_um_per_h["R6"]>0 else None,
                 "q_9_to_13": result.reaction_flux_um_per_h["R5"]/(result.reaction_flux_um_per_h["R2"]+result.reaction_flux_um_per_h["R5"])
                     if result.reaction_flux_um_per_h["R2"]+result.reaction_flux_um_per_h["R5"]>0 else None},
+            analysis_result={"steady_state_local_stability": result.local_stability},
             transport_report={"secretion_flux_um_per_h":result.secretion_flux_um_per_h,
                 "product_recovery_15_um_per_h":result.secretion_flux_um_per_h["15"],
                 "intermediate_outflow_8_to_14_um_per_h":sum(result.secretion_flux_um_per_h[str(i)] for i in range(8,15)),
@@ -1129,6 +1130,17 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             intracellular_volume_l=settings.intracellular_volume_l,
             extracellular_volume_l=settings.extracellular_volume_l,
         )
+        transport_evidence_report = None
+        if settings.transport_enabled and settings.transport_evidence:
+            from igem_drylab.transport_evidence import resolve_transport_evidence, match_configured_transport
+            try:
+                transport, transport_evidence_report = resolve_transport_evidence(config.parameters,settings.transport_evidence,
+                    config.experimental_context,construct_id=context.construct_id,condition_id=context.condition_id,
+                    access=settings.transport_access)
+                match_configured_transport(transport,settings,selected[settings.transport_rate_parameter or "transport_rate"].canonical_value)
+            except ValueError as error:
+                records.append(_m4_insufficient(item.candidate_id,config,[str(error)],construct_id=context.construct_id))
+                continue
         params = FullNetworkParameters(
             enzyme_distributions=distributions, phi=context.phi, metabolite_kp=kp,
             reactions=reactions,
@@ -1158,7 +1170,8 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             "unit_mode": result.unit_mode,
             "units": _full_network_units(settings),
             "provenance": _full_network_provenance(author_native),
-            "assumptions": ["rapid_partition_equilibrium", "phase-specific competing enzyme pools", "transport access is configured, not measured", activity_assumption],
+            "assumptions": ["rapid_partition_equilibrium", "phase-specific competing enzyme pools",
+                "transport access and normalization are bound to reviewed records" if transport_evidence_report else "transport access is configured, not measured", activity_assumption],
         }), encoding="utf-8")
         provenance = _merge_provenance(context.provenance_summary, _provenance_summary(selected.values()))
         records.append(M4ReactionPrediction(
@@ -1172,6 +1185,7 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             bottleneck="full_network_comparative_screen", trajectory_artifact=trajectory,
             flux_integrals=({f"relative_{key}": value for key, value in result.flux_integrals.items()} if author_native else result.flux_integrals),
             transport_report={"integrals":result.transport_integrals,"units":_full_network_units(settings),
+                "evidence":transport_evidence_report,
                 "product_recovery_species":"15","intermediate_outflow_species":[str(i) for i in range(8,15)],
                 "13_role":"reactive_intermediate_not_dead_end",
                 "branch_scope":"processed_substrate_interval_fraction_not_single_molecule_channeling"},
@@ -1179,7 +1193,9 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
                 "target_yield_fraction", "branch_9_to_13_fraction", "dmt_late_selectivity",
                 "early_dmt_fraction", "oc_before_dmt_route_fraction", "side_product_fraction_13",
                 "mass_balance_error",
-            )} if author_native else result.diagnostics), parameter_ids=sorted({*context.parameter_ids, *(entry.selected_parameter.parameter_id for entry in selected.values() if entry.selected_parameter)}),
+            )} if author_native else result.diagnostics), parameter_ids=sorted({*context.parameter_ids,
+                *(transport_evidence_report["parameter_ids"] if transport_evidence_report else []),
+                *(entry.selected_parameter.parameter_id for entry in selected.values() if entry.selected_parameter)}),
             provenance_summary=provenance, assumptions=["M1/M2 structural and docking scores are not kinetic inputs", "M4 is a mechanistic sensitivity model", activity_assumption],
             notes=("Full 8-compound / 10-reaction phase-specific competitive model. Values are not enzyme activity or yield predictions."
                    if result.unit_mode == "physical" else "Results are normalized mechanistic sensitivity outputs and must not be interpreted as absolute concentration, enzyme abundance, kinetic rate, productivity, or titer."),
@@ -1440,8 +1456,8 @@ def _formal_analysis_missing(config: ProjectConfig) -> list[str]:
         missing.append("formal explicit feed identity and boundary condition")
     if not config.execution.require_provenance or config.execution.allow_assumptions:
         missing.append("formal requires provenance and prohibits assumptions")
-    if config.stages.m4_reaction.transport_enabled:
-        missing.append("formal transport compartment-volume/equilibrium applicability adapter not connected; sensitivity-only")
+    if settings.transport_enabled and settings.transport_evidence is None:
+        missing.append("formal transport requires explicit reviewed rate/volume/equilibrium evidence IDs")
     return missing
 
 

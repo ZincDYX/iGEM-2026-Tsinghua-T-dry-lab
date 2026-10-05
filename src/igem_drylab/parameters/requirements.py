@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-Dimension = Literal["dimensionless", "concentration", "rate", "concentration_rate"]
+Dimension = Literal["dimensionless", "concentration", "rate", "concentration_rate", "volume"]
 
 
 class ParameterRequirement(BaseModel):
