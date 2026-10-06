@@ -12,6 +12,8 @@ from igem_drylab.workflow.views import ProjectSummaryView, RunSummaryView
 from igem_drylab.workflow.planning import ProposalView
 from igem_drylab.workflow.public_errors import PublicError
 from igem_drylab.workflow.precheck import ScientificPrecheckView
+from igem_drylab.workflow.sequence_index import SequenceIndexView
+from igem_drylab.workflow.sequence_results import SequenceMapView
 
 
 class AssetIdentity(Contract):
@@ -35,6 +37,7 @@ class ScientificInputsView(Contract):
     config: ScientificConfig
     evidence_files: list[AssetIdentity]
     dependency_scope: str
+    sequence_index: SequenceIndexView
 
 
 ProjectView = create_model("ProjectView",__base__=Contract,
@@ -77,6 +80,7 @@ class NodePage(Contract):
     limit: int
     total_records: int
     artifact: dict[str,str] | None
+    sequence_map: SequenceMapView | None
 
 
 class PlanView(Contract):

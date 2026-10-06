@@ -286,6 +286,11 @@ export type Sha2561 = string;
 export type Name2 = string;
 export type EvidenceFiles = AssetIdentity[];
 export type DependencyScope = string;
+export type Status = "indexed" | "not_indexed";
+export type FileId1 = string;
+export type SourceSha256 = string;
+export type Count = number | null;
+export type ReasonCode = string | null;
 export type RequiresConfirmation = boolean;
 export type DependencyScope1 = string;
 
@@ -298,6 +303,7 @@ export interface ScientificInputsView {
   config: ScientificConfig;
   evidence_files: EvidenceFiles;
   dependency_scope: DependencyScope;
+  sequence_index: SequenceIndexView;
 }
 export interface ScientificConfig {
   execution: ExecutionConfig;
@@ -710,4 +716,11 @@ export interface AssetIdentity {
   path: Path;
   sha256: Sha2561;
   name: Name2;
+}
+export interface SequenceIndexView {
+  status: Status;
+  file_id: FileId1;
+  source_sha256: SourceSha256;
+  count: Count;
+  reason_code: ReasonCode;
 }

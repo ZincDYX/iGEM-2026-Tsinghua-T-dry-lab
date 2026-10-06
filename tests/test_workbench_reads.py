@@ -20,7 +20,8 @@ def test_status_and_project_lists_are_bounded_and_events_are_incremental(tmp_pat
         run_id = store.create_run({"project":store.project("p").model_dump(mode="json"),"workflow":workflow.model_dump(mode="json"),"tools":{},"environment":{}})
         store.set_node(run_id,"n",NodeStatus.succeeded,output={"schema_version":"scientific-stage-v2","module":"m1","records":[{"kind":"software_fixture","ordinal":i} for i in range(1000)]})
         summaries = client.get("/api/platform/project-summaries").json()
-        assert summaries == [{"id":"p","name":"software_fixture","revision":1,"scientific":False,"sequence_count":0}]
+        assert summaries == [{"id":"p","name":"software_fixture","revision":1,"scientific":False,"sequence_count":0,
+                              "scientific_sequence_count":None,"scientific_sequence_index_status":"not_attached"}]
         summary = client.get(f"/api/platform/runs/{run_id}/summary")
         assert summary.status_code == 200 and len(summary.content) < 3000
         assert "unused_payload" not in summary.text and '"records"' not in summary.text

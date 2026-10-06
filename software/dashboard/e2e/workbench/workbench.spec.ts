@@ -33,7 +33,7 @@ test("authenticated real HTTP compiler/ledger/handlers, staged control, provenan
   await expect(page.locator(".document-status")).toContainText("已暂停");
   const runs=await(await request.get(`${backend}/runs?project_id=software-fixture`,{headers:{"X-FusionLab-Token":token}})).json();expect(runs).toHaveLength(1);const runId=runs[0].id;
   const initial=await(await request.get(`${backend}/runs/${runId}/summary`,{headers:{"X-FusionLab-Token":token}})).json();
-  for(let stage=1;stage<4;stage++){await page.getByRole("button",{name:"运行下一阶段",exact:true}).click();await expect(rows.nth(stage)).toContainText("作业完成");if(stage<3){await expect(page.locator(".document-status")).toContainText("已暂停");await expect(rows.nth(stage+1)).toContainText("待执行");}}
+  for(let stage=1;stage<4;stage++){await page.getByRole("button",{name:"继续已授权范围",exact:true}).click();await expect(rows.nth(stage)).toContainText("作业完成");if(stage<3){await expect(page.locator(".document-status")).toContainText("已暂停");await expect(rows.nth(stage+1)).toContainText("待执行");}}
   await expect(page.locator(".document-status")).toContainText("作业完成");
   await page.getByRole("button",{name:"M4 原式管线与证据门控",exact:true}).click();
   await page.getByRole("tablist",{name:"中央工作区"}).getByRole("tab",{name:"阶段结果"}).click();

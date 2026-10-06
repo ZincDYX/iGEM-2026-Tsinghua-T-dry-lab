@@ -12,7 +12,7 @@ function run(id="run-a",attempt=1,hash="artifact-a",projectId="project-a"):RunSu
     artifacts:["m1","m4"].map(node_id=>({id:node_id+hash,run_id:id,node_id,hash,name:"result.json",upstream:[],metadata:{}}))};
 }
 function page(node:string,attempt=1,hash="artifact-a"):NodePage {
-  return {node:{id:node,parent_id:null,status:"succeeded",attempts:attempt,output:{module:node,fixture:"software only"},error:null,inputs:null},offset:0,limit:20,total_records:1,artifact:{id:"fixture",hash}};
+  return {node:{id:node,parent_id:null,status:"succeeded",attempts:attempt,output:{module:node,fixture:"software only"},error:null,inputs:null},offset:0,limit:20,total_records:1,artifact:{id:"fixture",hash},sequence_map:null};
 }
 it("drops old projection synchronously and ignores a late response after rapid node/project/run switches",async()=>{
   let finishOld!:(value:NodePage)=>void;

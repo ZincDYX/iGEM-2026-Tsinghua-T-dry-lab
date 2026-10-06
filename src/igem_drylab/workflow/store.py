@@ -55,6 +55,7 @@ class WorkflowStore:
                 CREATE TABLE IF NOT EXISTS private_diagnostics(id TEXT PRIMARY KEY, error_type TEXT NOT NULL, message TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS file_assets(id TEXT PRIMARY KEY, project_id TEXT, path TEXT NOT NULL, hash TEXT NOT NULL, name TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS scientific_bundles(id TEXT PRIMARY KEY, root TEXT NOT NULL UNIQUE);
+                CREATE TABLE IF NOT EXISTS sequence_indexes(hash TEXT PRIMARY KEY, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS plugin_grants(hash TEXT NOT NULL, capability TEXT NOT NULL, PRIMARY KEY(hash,capability));
                 CREATE TABLE IF NOT EXISTS run_requests(id TEXT PRIMARY KEY, binding_hash TEXT NOT NULL, run_id TEXT NOT NULL REFERENCES runs(id));
                 CREATE TABLE IF NOT EXISTS checkpoints(run_id TEXT NOT NULL, node_id TEXT NOT NULL, position TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(run_id,node_id,position));
@@ -87,17 +88,19 @@ class WorkflowStore:
         finally:
             db.close()
 
-    def save_project(self, project: Project, expected_revision: int | None = None) -> Project:
-        with self.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT revision FROM projects WHERE id=?", (project.id,)).fetchone()
-            if row and expected_revision != row["revision"]:
-                raise WorkflowError("project_revision_conflict", status_code=409)
-            if not row and expected_revision is not None:
-                raise ValueError("project_not_found")
-            updated = project.model_copy(update={"revision": row["revision"] + 1 if row else 1})
-            db.execute("INSERT OR REPLACE INTO projects VALUES(?,?,?)", (updated.id, updated.revision, updated.model_dump_json()))
-            return updated
+    def save_project(self, project: Project, expected_revision: int | None = None, *, db=None) -> Project:
+        if db is None:
+            with self.connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                return self.save_project(project, expected_revision, db=connection)
+        row = db.execute("SELECT revision FROM projects WHERE id=?", (project.id,)).fetchone()
+        if row and expected_revision != row["revision"]:
+            raise WorkflowError("project_revision_conflict", status_code=409)
+        if not row and expected_revision is not None:
+            raise ValueError("project_not_found")
+        updated = project.model_copy(update={"revision": row["revision"] + 1 if row else 1})
+        db.execute("INSERT OR REPLACE INTO projects VALUES(?,?,?)", (updated.id, updated.revision, updated.model_dump_json()))
+        return updated
 
     def projects(self) -> list[dict[str, Any]]:
         with self.connection() as db:

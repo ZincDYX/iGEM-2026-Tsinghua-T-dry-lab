@@ -147,11 +147,19 @@ class WorkflowEngine:
             if not path.is_file() or sha256(path.read_bytes()).hexdigest() != file["sha256"]:
                 raise ValueError(f"input_artifact_hash_mismatch:{file['name']}")
 
-    def verify_snapshot(self, run: dict[str, Any]) -> None:
+    def verify_snapshot(self, run: dict[str, Any], *, execution_identity: bool = True) -> None:
         if sha256(canonical(run["snapshot"]).encode()).hexdigest() != run["snapshot_hash"]:
             raise ValueError("run_snapshot_hash_mismatch")
         self._verify_files(run["snapshot"]["project"]["files"])
         self._verify_scientific_project(run["snapshot"]["project"])
+        for artifact in run["artifacts"]:
+            path = Path(artifact["path"])
+            if not path.is_file() or sha256(path.read_bytes()).hexdigest() != artifact["hash"]:
+                raise ValueError("output_artifact_hash_mismatch")
+        if not execution_identity:
+            # Input-only iteration does not execute/reuse the old tools. A new
+            # plan must bind the current environment and tool identities.
+            return
         if run["snapshot"].get("runtime_profile"):
             from .runtime_profiles import RuntimeProfiles
             identity, _ = RuntimeProfiles(self.store).get(run["snapshot"]["runtime_profile"]["id"])
@@ -159,10 +167,6 @@ class WorkflowEngine:
                 raise ValueError("runtime_profile_changed_clone_required")
         if run["snapshot"]["environment"] != self._environment():
             raise ValueError("environment_changed_since_snapshot; clone the run")
-        for artifact in run["artifacts"]:
-            path = Path(artifact["path"])
-            if not path.is_file() or sha256(path.read_bytes()).hexdigest() != artifact["hash"]:
-                raise ValueError("output_artifact_hash_mismatch")
         source_bytes: dict[Path, bytes] = {}
         for tool_id, expected in run["snapshot"]["tools"].items():
             current = self.tools.get(tool_id)

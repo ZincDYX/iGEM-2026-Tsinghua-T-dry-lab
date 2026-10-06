@@ -3068,14 +3068,70 @@
           "dependency_scope": {
             "title": "Dependency Scope",
             "type": "string"
+          },
+          "sequence_index": {
+            "$ref": "#/$defs/SequenceIndexView"
           }
         },
         "required": [
           "config",
           "evidence_files",
-          "dependency_scope"
+          "dependency_scope",
+          "sequence_index"
         ],
         "title": "ScientificInputsView",
+        "type": "object"
+      },
+      "SequenceIndexView": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "indexed",
+              "not_indexed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "required": [
+          "status",
+          "file_id",
+          "source_sha256",
+          "count",
+          "reason_code"
+        ],
+        "title": "SequenceIndexView",
         "type": "object"
       },
       "SequenceRecord": {
@@ -3369,6 +3425,21 @@
       "sequence_count": {
         "title": "Sequence Count",
         "type": "integer"
+      },
+      "scientific_sequence_count": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Scientific Sequence Count"
+      },
+      "scientific_sequence_index_status": {
+        "title": "Scientific Sequence Index Status",
+        "type": "string"
       }
     },
     "required": [
@@ -3376,7 +3447,9 @@
       "name",
       "revision",
       "scientific",
-      "sequence_count"
+      "sequence_count",
+      "scientific_sequence_count",
+      "scientific_sequence_index_status"
     ],
     "title": "ProjectSummaryView",
     "type": "object"
@@ -4150,6 +4223,351 @@
         ],
         "title": "NodeResultView",
         "type": "object"
+      },
+      "ProtParamEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "tool_name": {
+            "const": "Biopython ProtParam",
+            "default": "Biopython ProtParam",
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "tool_version": {
+            "title": "Tool Version",
+            "type": "string"
+          },
+          "input_sha256": {
+            "title": "Input Sha256",
+            "type": "string"
+          },
+          "molecular_weight_da": {
+            "exclusiveMinimum": 0,
+            "title": "Molecular Weight Da",
+            "type": "number"
+          },
+          "theoretical_pi": {
+            "maximum": 14,
+            "minimum": 0,
+            "title": "Theoretical Pi",
+            "type": "number"
+          },
+          "amino_acid_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Amino Acid Counts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "tool_name",
+          "tool_version",
+          "input_sha256",
+          "molecular_weight_da",
+          "theoretical_pi",
+          "amino_acid_counts"
+        ],
+        "title": "ProtParamEvidence",
+        "type": "object"
+      },
+      "SequenceFeatures": {
+        "additionalProperties": false,
+        "properties": {
+          "formula_version": {
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "feature_definitions_sha256": {
+            "title": "Feature Definitions Sha256",
+            "type": "string"
+          },
+          "sequence_sha256": {
+            "title": "Sequence Sha256",
+            "type": "string"
+          },
+          "length": {
+            "title": "Length",
+            "type": "integer"
+          },
+          "gs_fraction": {
+            "title": "Gs Fraction",
+            "type": "number"
+          },
+          "pro_fraction": {
+            "title": "Pro Fraction",
+            "type": "number"
+          },
+          "aromatic_fraction": {
+            "title": "Aromatic Fraction",
+            "type": "number"
+          },
+          "hydrophobic_fraction": {
+            "title": "Hydrophobic Fraction",
+            "type": "number"
+          },
+          "charged_fraction": {
+            "title": "Charged Fraction",
+            "type": "number"
+          },
+          "polar_fraction": {
+            "title": "Polar Fraction",
+            "type": "number"
+          },
+          "net_charge_proxy": {
+            "title": "Net Charge Proxy",
+            "type": "number"
+          },
+          "shannon_entropy": {
+            "title": "Shannon Entropy",
+            "type": "number"
+          },
+          "top2_fraction": {
+            "title": "Top2 Fraction",
+            "type": "number"
+          },
+          "max_hydrophobic_run": {
+            "title": "Max Hydrophobic Run",
+            "type": "integer"
+          },
+          "mean_hydropathy": {
+            "title": "Mean Hydropathy",
+            "type": "number"
+          },
+          "forbidden_motifs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Forbidden Motifs",
+            "type": "array"
+          },
+          "charge_blockiness": {
+            "default": null,
+            "title": "Charge Blockiness",
+            "type": "null"
+          },
+          "multivalency_density": {
+            "default": null,
+            "title": "Multivalency Density",
+            "type": "null"
+          }
+        },
+        "required": [
+          "formula_version",
+          "feature_definitions_sha256",
+          "sequence_sha256",
+          "length",
+          "gs_fraction",
+          "pro_fraction",
+          "aromatic_fraction",
+          "hydrophobic_fraction",
+          "charged_fraction",
+          "polar_fraction",
+          "net_charge_proxy",
+          "shannon_entropy",
+          "top2_fraction",
+          "max_hydrophobic_run",
+          "mean_hydropathy",
+          "forbidden_motifs",
+          "charge_blockiness",
+          "multivalency_density"
+        ],
+        "title": "SequenceFeatures",
+        "type": "object"
+      },
+      "SequenceMapView": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "sequence-metrics-map-view-v1",
+            "default": "sequence-metrics-map-view-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "snapshot_hash": {
+            "title": "Snapshot Hash",
+            "type": "string"
+          },
+          "parent_node_id": {
+            "title": "Parent Node Id",
+            "type": "string"
+          },
+          "tool_identity": {
+            "additionalProperties": true,
+            "title": "Tool Identity",
+            "type": "object"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/$defs/SequenceMetricRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "project_id",
+          "snapshot_hash",
+          "parent_node_id",
+          "tool_identity",
+          "total_count",
+          "offset",
+          "rows"
+        ],
+        "title": "SequenceMapView",
+        "type": "object"
+      },
+      "SequenceMetricRow": {
+        "additionalProperties": false,
+        "properties": {
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "sequence_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence Id"
+          },
+          "sequence_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence Sha256"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Id"
+          },
+          "artifact_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Sha256"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SequenceMetricsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue"
+          }
+        },
+        "required": [
+          "node_id",
+          "sequence_id",
+          "sequence_sha256",
+          "attempt",
+          "status",
+          "artifact_id",
+          "artifact_sha256",
+          "metrics",
+          "issue"
+        ],
+        "title": "SequenceMetricRow",
+        "type": "object"
+      },
+      "SequenceMetricsView": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "sequence-metrics-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "features": {
+            "$ref": "#/$defs/SequenceFeatures"
+          },
+          "protparam": {
+            "$ref": "#/$defs/ProtParamEvidence"
+          },
+          "interpretation": {
+            "title": "Interpretation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "id",
+          "role",
+          "features",
+          "protparam",
+          "interpretation"
+        ],
+        "title": "SequenceMetricsView",
+        "type": "object"
       }
     },
     "additionalProperties": false,
@@ -4182,6 +4600,16 @@
           }
         ],
         "title": "Artifact"
+      },
+      "sequence_map": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/SequenceMapView"
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
@@ -4189,7 +4617,8 @@
       "offset",
       "limit",
       "total_records",
-      "artifact"
+      "artifact",
+      "sequence_map"
     ],
     "title": "NodePage",
     "type": "object"
@@ -8000,14 +8429,70 @@
           "dependency_scope": {
             "title": "Dependency Scope",
             "type": "string"
+          },
+          "sequence_index": {
+            "$ref": "#/$defs/SequenceIndexView"
           }
         },
         "required": [
           "config",
           "evidence_files",
-          "dependency_scope"
+          "dependency_scope",
+          "sequence_index"
         ],
         "title": "ScientificInputsView",
+        "type": "object"
+      },
+      "SequenceIndexView": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "indexed",
+              "not_indexed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "required": [
+          "status",
+          "file_id",
+          "source_sha256",
+          "count",
+          "reason_code"
+        ],
+        "title": "SequenceIndexView",
         "type": "object"
       },
       "StagesConfig": {
@@ -11176,14 +11661,70 @@
           "dependency_scope": {
             "title": "Dependency Scope",
             "type": "string"
+          },
+          "sequence_index": {
+            "$ref": "#/$defs/SequenceIndexView"
           }
         },
         "required": [
           "config",
           "evidence_files",
-          "dependency_scope"
+          "dependency_scope",
+          "sequence_index"
         ],
         "title": "ScientificInputsView",
+        "type": "object"
+      },
+      "SequenceIndexView": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "indexed",
+              "not_indexed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "required": [
+          "status",
+          "file_id",
+          "source_sha256",
+          "count",
+          "reason_code"
+        ],
+        "title": "SequenceIndexView",
         "type": "object"
       },
       "SequenceRecord": {
@@ -14378,14 +14919,70 @@
           "dependency_scope": {
             "title": "Dependency Scope",
             "type": "string"
+          },
+          "sequence_index": {
+            "$ref": "#/$defs/SequenceIndexView"
           }
         },
         "required": [
           "config",
           "evidence_files",
-          "dependency_scope"
+          "dependency_scope",
+          "sequence_index"
         ],
         "title": "ScientificInputsView",
+        "type": "object"
+      },
+      "SequenceIndexView": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "indexed",
+              "not_indexed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "required": [
+          "status",
+          "file_id",
+          "source_sha256",
+          "count",
+          "reason_code"
+        ],
+        "title": "SequenceIndexView",
         "type": "object"
       },
       "SequenceRecord": {

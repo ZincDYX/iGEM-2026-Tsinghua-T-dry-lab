@@ -37,7 +37,7 @@ def sequence_analysis(payload: SequenceInput, context: NodeContext) -> dict[str,
     definition_hash = sha256(payload.feature_definitions.model_dump_json().encode()).hexdigest()
     features = compute_sequence_features(payload.item.sequence, definitions=payload.feature_definitions, definitions_sha256=definition_hash)
     properties = compute_protparam_evidence(payload.item.sequence, input_sha256=features.sequence_sha256)
-    return {"id": payload.item.id, "role": payload.item.role, "features": features.model_dump(mode="json"), "protparam": properties.model_dump(mode="json"), "interpretation": "Sequence composition and physicochemical calculation; LLPS and assembly are not established by these metrics."}
+    return {"schema_version": "sequence-metrics-v1", "id": payload.item.id, "role": payload.item.role, "features": features.model_dump(mode="json"), "protparam": properties.model_dump(mode="json"), "interpretation": "Sequence composition and physicochemical calculation; LLPS and assembly are not established by these metrics."}
 
 
 def assembly_inventory(payload: AssemblyInput, context: NodeContext) -> dict[str, Any]:
@@ -64,7 +64,7 @@ def pathway_analysis(payload: PathwayInput, context: NodeContext) -> dict[str, A
 def builtin_tools() -> WorkflowTools:
     tools = WorkflowTools()
     for tool in (
-        ToolDefinition("fusion.sequence_metrics", "融合蛋白序列与理化性质", "计算逐条序列的组成、精确特征和 ProtParam。", "1", SequenceInput, sequence_analysis, "sequence_analysis", implementation_files=(Path(linker_features.__file__),)),
+        ToolDefinition("fusion.sequence_metrics", "融合蛋白序列与理化性质", "计算逐条序列的组成、精确特征和 ProtParam。", "2", SequenceInput, sequence_analysis, "sequence_analysis", implementation_files=(Path(linker_features.__file__),)),
         ToolDefinition("assembly.inventory", "自组装组成核验", "按用户声明的亚基数汇总分子量，检查亚基引用。", "1", AssemblyInput, assembly_inventory, "assembly_inventory"),
         ToolDefinition("workflow.gather", "汇总批处理结果", "保留输入顺序并汇总多个构建的结果。", "1", GatherInput, gather, "gather"),
         ToolDefinition("pathway.steady_state", "自定义通路两相稳态", "显式化学计量与两相竞争 MM；用户提供全部动力学参数。", "1", PathwayInput, pathway_analysis, "pathway_simulation", implementation_files=(Path(__file__).with_name("pathway.py"),)),

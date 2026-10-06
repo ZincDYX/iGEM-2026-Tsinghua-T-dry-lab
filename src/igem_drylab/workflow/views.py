@@ -14,6 +14,8 @@ class ProjectSummaryView(Contract):
     revision: int
     scientific: bool
     sequence_count: int
+    scientific_sequence_count: int | None
+    scientific_sequence_index_status: str
 
 
 class NodeStateView(Contract):
@@ -48,9 +50,17 @@ class PublicReads:
         self.store, self.boundary = store, boundary
 
     def projects(self, offset: int, limit: int):
+        from .sequence_index import stored_scientific_count
         with self.store.connection() as db:
-            rows = db.execute("SELECT id,revision,json_extract(payload,'$.name') AS name,json_type(payload,'$.scientific_project') AS scientific,json_array_length(payload,'$.sequences') AS sequence_count FROM projects ORDER BY rowid DESC LIMIT ? OFFSET ?", (limit,offset))
-            result = [ProjectSummaryView(**{**dict(row),"scientific":row["scientific"] == "object"}).model_dump(mode="json") for row in rows]
+            rows = db.execute("SELECT id,revision,json_extract(payload,'$.name') AS name,json_array_length(payload,'$.sequences') AS sequence_count,json_extract(payload,'$.scientific_project.config.inputs.protein_fasta') AS fasta,json_extract(payload,'$.scientific_project.evidence_files') AS evidence FROM projects ORDER BY rowid DESC LIMIT ? OFFSET ?", (limit,offset)).fetchall()
+            result = []
+            for row in rows:
+                science = {"config": {"inputs": {"protein_fasta": row["fasta"]}}, "evidence_files": json.loads(row["evidence"])} if row["fasta"] else None
+                project = {"scientific_project": science}
+                count, status = stored_scientific_count(project, db)
+                result.append(ProjectSummaryView(id=row["id"], name=row["name"], revision=row["revision"],
+                    scientific=science is not None, sequence_count=row["sequence_count"] or 0,
+                    scientific_sequence_count=count, scientific_sequence_index_status=status).model_dump(mode="json"))
         self.boundary.check(result)
         return result
 
@@ -88,13 +98,18 @@ class PublicReads:
         return {"items":items,"cursor":items[-1]["seq"] if items else after,"has_more":len(rows)>limit}
 
     def node(self, run_id: str, node_id: str, offset: int, limit: int):
+        from .sequence_results import sequence_map
         with self.store.connection() as db:
             db.execute("BEGIN")
             run = db.execute("SELECT project_id FROM runs WHERE id=?",(run_id,)).fetchone()
             if run is None: raise KeyError(run_id)
             node = db.execute("SELECT id,parent_id,status,attempts,error,json_extract(output,'$.schema_version') AS schema_version FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()
             if node is None: raise KeyError(node_id)
-            if node["schema_version"] in {"scientific-stage-v1","scientific-stage-v2"}:
+            sequences = sequence_map(db, run_id, node_id, offset, limit)
+            if sequences is not None:
+                output = None  # The bounded versioned view is separate from the immutable raw aggregate.
+                count = sequences["total_count"]
+            elif node["schema_version"] in {"scientific-stage-v1","scientific-stage-v2"}:
                 # SQLite selects just the requested records, not other stages or
                 # every candidate/trajectory into a Python/public response.
                 meta = db.execute("SELECT json_remove(output,'$.records','$.trajectories') FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()[0]
@@ -106,6 +121,7 @@ class PublicReads:
                 output = db.execute("SELECT output FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()[0]
                 output = json.loads(output) if output else None
                 count = 0
-            artifact = db.execute("SELECT id,hash FROM artifacts WHERE run_id=? AND node_id=?",(run_id,node_id)).fetchone()
+            artifact = db.execute("SELECT id,hash FROM artifacts WHERE run_id=? AND node_id=? AND json_extract(metadata,'$.attempt')=?",(run_id,node_id,node["attempts"])).fetchone()
         result = self.boundary.node({**dict(node),"output":output,"error":json.loads(node["error"]) if node["error"] else None},run["project_id"])
-        return {"node":result,"offset":offset,"limit":limit,"total_records":count,"artifact":dict(artifact) if artifact else None}
+        self.boundary.check(sequences)
+        return {"node":result,"offset":offset,"limit":limit,"total_records":count,"artifact":dict(artifact) if artifact else None,"sequence_map":sequences}

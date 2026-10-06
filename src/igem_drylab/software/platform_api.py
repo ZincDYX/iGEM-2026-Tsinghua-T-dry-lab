@@ -367,36 +367,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.post("/runs/{run_id}/iteration")
     def iteration(run_id: str):
-        frozen = store.run(run_id)
-        project = Project.model_validate(frozen["snapshot"]["project"])
-        engine.verify_snapshot(frozen)
-        identity = str(uuid4())
-        # Rebind byte-identical inputs into the new project's owned workspace.
-        # No reference belonging to another project is silently claimed.
-        inputs = {Path(item["path"]).resolve() for item in project.files}
-        if project.scientific_project:
-            from igem_drylab.workflow.scientific_project import ScientificProject
-            science = ScientificProject.model_validate(project.scientific_project)
-            inputs.update(item.path.resolve() for item in science.evidence_files)
-        root = data_dir / "imports" / identity
-        replacements = {}
-        for source in inputs:
-            raw = source.read_bytes()
-            target = root / (sha256(str(source).encode()).hexdigest()[:12]+"-"+source.name)
-            target.parent.mkdir(parents=True,exist_ok=True)
-            target.write_bytes(raw)
-            replacements[str(source)] = str(target)
-        def rebind(value):
-            if isinstance(value,str): return replacements.get(str(Path(value).resolve()),value) if (Path(value).is_absolute()) else value
-            if isinstance(value,dict): return {key:rebind(item) for key,item in value.items()}
-            if isinstance(value,list): return [rebind(item) for item in value]
-            return value
-        payload = rebind(project.model_dump(mode="json"))
-        payload.update(id=identity,name=project.name+" · 迭代",revision=1,parent_run_id=run_id,parent_snapshot_sha256=frozen["snapshot_hash"])
-        updated = store.save_project(Project.model_validate(payload))
-        public = boundary.project(updated)
-        return {"project":public,"parent_run_id":run_id,"parent_snapshot_sha256":frozen["snapshot_hash"],
-            "reuse_supported":False,"explanation":"从冻结快照创建独立项目；原运行不改写。尚未核验跨运行可复用身份，重新审阅的计划必须显式包含依赖。"}
+        from igem_drylab.workflow.iteration import create_iteration
+        return create_iteration(store, boundary, engine, run_id, data_dir)
 
     @router.get("/runs")
     def runs(project_id: str | None = None, offset: int = Query(0,ge=0), limit: int = Query(100,ge=1,le=200)) -> list[dict[str, Any]]:

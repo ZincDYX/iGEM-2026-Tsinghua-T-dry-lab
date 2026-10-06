@@ -12,6 +12,11 @@ class PublicError(Contract):
 
 
 ERROR_GUIDANCE = {
+    "iteration_dependency_graph_invalid": (
+        "The iteration dependency graph could not be verified. No new project was published.",
+        ["scientific_project.evidence_files"],
+        ["Check the listed package files and their hashes", "Reimport the complete original directory tree"],
+    ),
     "scientific_project_missing_local_dependencies": ("科学包缺少依赖文件，请按原相对目录补齐后重新检查。", ["scientific_project.evidence_files"], ["补齐列出的文件", "重新上传科学包"]),
     "scientific_file_outside_authorized_workspace": ("依赖文件越出已上传科学包；请移入包内并使用相对路径。", ["scientific_project.config"], ["检查依赖相对路径", "重新上传科学包"]),
     "invalid_upload_identity": ("上传文件路径重复或不安全。", [], ["保留唯一的包内相对路径"]),

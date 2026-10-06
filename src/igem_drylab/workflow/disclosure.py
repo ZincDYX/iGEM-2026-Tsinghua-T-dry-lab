@@ -13,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 
 from .models import Contract, Project, WorkflowError
+from .sequence_index import SequenceIndexView, sequence_index
 
 
 class ArtifactView(Contract):
@@ -39,6 +40,7 @@ class ScientificProjectView(Contract):
     config: dict[str, Any]
     evidence_files: list[dict[str, str]]
     dependency_scope: str
+    sequence_index: SequenceIndexView
 
 
 class DisclosureBoundary:
@@ -104,21 +106,23 @@ class DisclosureBoundary:
             files.append(name)
         return PublicError(code=code,message=message,diagnostic_id=diagnostic_id,field_paths=fields,logical_files=files,actions=actions).model_dump(mode="json")
 
-    def asset(self, path: str | Path, *, project_id: str | None = None, fresh: bool = False) -> dict[str, str]:
+    def asset(self, path: str | Path, *, project_id: str | None = None, fresh: bool = False, db=None) -> dict[str, str]:
+        if db is None:
+            with self.store.connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                return self.asset(path, project_id=project_id, fresh=fresh, db=connection)
         source = Path(path).resolve()
-        with self.store.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            row = None if fresh else db.execute(
-                "SELECT * FROM file_assets WHERE path=? AND (project_id IS ? OR project_id IS NULL) ORDER BY project_id IS NULL LIMIT 1",
-                (str(source), project_id)).fetchone()
-            if row is None:
-                file_id = str(uuid4())
-                digest = sha256(source.read_bytes()).hexdigest() if source.is_file() else ""
-                db.execute("INSERT INTO file_assets VALUES(?,?,?,?,?)", (file_id, project_id, str(source), digest, source.name))
-            else:
-                file_id, digest = row["id"], row["hash"]
-                if project_id and row["project_id"] is None:
-                    db.execute("UPDATE file_assets SET project_id=? WHERE id=?", (project_id,file_id))
+        row = None if fresh else db.execute(
+            "SELECT * FROM file_assets WHERE path=? AND (project_id IS ? OR project_id IS NULL) ORDER BY project_id IS NULL LIMIT 1",
+            (str(source), project_id)).fetchone()
+        if row is None:
+            file_id = str(uuid4())
+            digest = sha256(source.read_bytes()).hexdigest() if source.is_file() else ""
+            db.execute("INSERT INTO file_assets VALUES(?,?,?,?,?)", (file_id, project_id, str(source), digest, source.name))
+        else:
+            file_id, digest = row["id"], row["hash"]
+            if project_id and row["project_id"] is None:
+                db.execute("UPDATE file_assets SET project_id=? WHERE id=?", (project_id,file_id))
         return {"id": file_id, "file_id": file_id, "path": "asset:" + file_id, "sha256": digest, "name": source.name}
 
     def resolve_asset(self, file_id: str, project_id: str | None = None) -> str:
@@ -137,15 +141,15 @@ class DisclosureBoundary:
             raise WorkflowError("file_identity_changed", status_code=409)
         return str(path)
 
-    def tree(self, value: Any, *, project_id: str | None = None) -> Any:
+    def tree(self, value: Any, *, project_id: str | None = None, db=None) -> Any:
         """Project filesystem identities, not arbitrary substring redaction."""
         if isinstance(value, Path): value = str(value)
         if isinstance(value, str) and (PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()):
-            return self.asset(value, project_id=project_id)["path"]
+            return self.asset(value, project_id=project_id, db=db)["path"]
         if isinstance(value, dict):
-            return {key: self.tree(item, project_id=project_id) for key, item in value.items()}
+            return {key: self.tree(item, project_id=project_id, db=db) for key, item in value.items()}
         if isinstance(value, list):
-            return [self.tree(item, project_id=project_id) for item in value]
+            return [self.tree(item, project_id=project_id, db=db) for item in value]
         return value
 
     def materialize(self, value: Any, project_id: str) -> Any:
@@ -157,25 +161,30 @@ class DisclosureBoundary:
             return [self.materialize(item, project_id) for item in value]
         return value
 
-    def scientific(self, raw: dict[str, Any], project_id: str | None = None) -> dict[str, Any]:
+    def scientific(self, raw: dict[str, Any], project_id: str | None = None, *, db=None) -> dict[str, Any]:
+        if db is None:
+            with self.store.connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                return self.scientific(raw, project_id, db=connection)
         from .scientific_project import ScientificProject
         parsed = ScientificProject.model_validate(raw)
         self.register_runtime({key: item.model_dump(mode="json") for key, item in parsed.config.tools.items()})
         config = parsed.config.model_dump(mode="json", exclude={"tools", "run"})
         # Run IDs are metadata, output directories are private placement.
         config["run"] = {"id": parsed.config.run.id}
-        result = ScientificProjectView(config=self.tree(config, project_id=project_id),
-            evidence_files=[{**self.asset(item.path, project_id=project_id), "sha256": item.sha256} for item in parsed.evidence_files],
-            dependency_scope=parsed.dependency_scope).model_dump(mode="json")
+        result = ScientificProjectView(config=self.tree(config, project_id=project_id, db=db),
+            evidence_files=[{**self.asset(item.path, project_id=project_id, db=db), "sha256": item.sha256} for item in parsed.evidence_files],
+            dependency_scope=parsed.dependency_scope,
+            sequence_index=sequence_index(parsed, self.asset(parsed.config.inputs.protein_fasta, project_id=project_id, db=db), db)).model_dump(mode="json")
         self.check(result)
         return result
 
-    def project(self, project: Project) -> dict[str, Any]:
+    def project(self, project: Project, *, db=None) -> dict[str, Any]:
         result = project.model_dump(mode="json", exclude={"scientific_project"})
         result["runtime_profile_ref"] = None
-        result["files"] = [self.asset(item["path"], project_id=project.id) for item in project.files]
-        result["scientific_project"] = self.scientific(project.scientific_project, project.id) if project.scientific_project else None
-        result = self.tree(result, project_id=project.id)
+        result["files"] = [self.asset(item["path"], project_id=project.id, db=db) for item in project.files]
+        result["scientific_project"] = self.scientific(project.scientific_project, project.id, db=db) if project.scientific_project else None
+        result = self.tree(result, project_id=project.id, db=db)
         self.check(result)
         return result
 
@@ -193,6 +202,7 @@ class DisclosureBoundary:
                 raise WorkflowError("iteration_identity_is_server_owned",status_code=403)
         if raw["scientific_project"]:
             science = raw["scientific_project"]
+            science.pop("sequence_index", None)  # Derived, never an editable scientific input.
             if science["config"].get("tools"):
                 raise WorkflowError("runtime_settings_not_scientific_input")
             science["evidence_files"] = [{"path": item["path"], "sha256": item["sha256"]} for item in science["evidence_files"]]

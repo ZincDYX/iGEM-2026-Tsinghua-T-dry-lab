@@ -307,6 +307,11 @@ export type Observables = ["13" | "15", ...("13" | "15")[]];
 export type Id11 = string;
 export type EvidenceFiles = AssetIdentity[];
 export type DependencyScope = string;
+export type Status = "indexed" | "not_indexed";
+export type FileId1 = string;
+export type SourceSha256 = string;
+export type Count = number | null;
+export type ReasonCode = string | null;
 export type ParentRunId1 = string;
 export type ParentSnapshotSha2561 = string;
 export type ReuseSupported = boolean;
@@ -362,6 +367,7 @@ export interface ScientificInputsView {
   config: ScientificConfig;
   evidence_files: EvidenceFiles;
   dependency_scope: DependencyScope;
+  sequence_index: SequenceIndexView;
 }
 export interface ScientificConfig {
   execution: ExecutionConfig;
@@ -767,4 +773,11 @@ export interface FitPlanConfig {
 }
 export interface PublicRunInput {
   id: Id11;
+}
+export interface SequenceIndexView {
+  status: Status;
+  file_id: FileId1;
+  source_sha256: SourceSha256;
+  count: Count;
+  reason_code: ReasonCode;
 }

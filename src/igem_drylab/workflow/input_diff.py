@@ -10,6 +10,10 @@ def input_diff(store,boundary,project:Project,run_id:str):
         raise WorkflowError("diff_project_mismatch",status_code=403)
     before=boundary.project(Project.model_validate(run["snapshot"]["project"]))
     after=boundary.project(project)
+    # Derived display index/grant identity is not a scientific input binding.
+    for public in (before, after):
+        if public.get("scientific_project"):
+            public["scientific_project"].pop("sequence_index", None)
     with store.connection() as db:
         hashes={"asset:"+row["id"]:row["hash"] for row in db.execute("SELECT id,hash FROM file_assets")}
     def semantic(value):
