@@ -23,9 +23,9 @@ def sequence_index(science, asset, db):
     if expected != sha256(raw).hexdigest():
         from .models import WorkflowError
         raise WorkflowError("file_identity_changed", status_code=409)
-    row = db.execute("SELECT payload FROM sequence_indexes WHERE hash=?", (expected,)).fetchone()
+    row = db.execute("SELECT json_extract(payload,'$.status') AS status,json_extract(payload,'$.count') AS count,json_extract(payload,'$.reason_code') AS reason_code FROM sequence_indexes WHERE hash=?", (expected,)).fetchone()
     if row:
-        metadata = json.loads(row[0])
+        metadata = dict(row)
     else:
         try:
             text = raw.decode("utf-8-sig")
@@ -51,8 +51,7 @@ def stored_scientific_count(project, db):
         return None, "not_attached"
     source = Path(science["config"]["inputs"]["protein_fasta"]).resolve()
     expected = next((item["sha256"] for item in science["evidence_files"] if Path(item["path"]).resolve() == source), None)
-    row = db.execute("SELECT payload FROM sequence_indexes WHERE hash=?", (expected,)).fetchone()
+    row = db.execute("SELECT json_extract(payload,'$.count') AS count,json_extract(payload,'$.status') AS status FROM sequence_indexes WHERE hash=?", (expected,)).fetchone()
     if not row:
         return None, "not_indexed"
-    metadata = json.loads(row[0])
-    return metadata["count"], metadata["status"]
+    return row["count"], row["status"]

@@ -4401,6 +4401,32 @@
             "title": "Parent Node Id",
             "type": "string"
           },
+          "parent_attempt": {
+            "title": "Parent Attempt",
+            "type": "integer"
+          },
+          "parent_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Artifact Id"
+          },
+          "parent_artifact_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Artifact Sha256"
+          },
           "tool_identity": {
             "additionalProperties": true,
             "title": "Tool Identity",
@@ -4428,6 +4454,9 @@
           "project_id",
           "snapshot_hash",
           "parent_node_id",
+          "parent_attempt",
+          "parent_artifact_id",
+          "parent_artifact_sha256",
           "tool_identity",
           "total_count",
           "offset",

@@ -15302,7 +15302,7 @@ function validate166(data, { instancePath = "", parentData, parentDataProperty, 
   return errors === 0;
 }
 validate166.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema79 = { "additionalProperties": false, "properties": { "schema_version": { "const": "sequence-metrics-map-view-v1", "default": "sequence-metrics-map-view-v1", "title": "Schema Version", "type": "string" }, "run_id": { "title": "Run Id", "type": "string" }, "project_id": { "title": "Project Id", "type": "string" }, "snapshot_hash": { "title": "Snapshot Hash", "type": "string" }, "parent_node_id": { "title": "Parent Node Id", "type": "string" }, "tool_identity": { "additionalProperties": true, "title": "Tool Identity", "type": "object" }, "total_count": { "title": "Total Count", "type": "integer" }, "offset": { "title": "Offset", "type": "integer" }, "rows": { "items": { "$ref": "urn:fusionlab:shared#/$defs/SequenceMetricRow" }, "title": "Rows", "type": "array" } }, "required": ["schema_version", "run_id", "project_id", "snapshot_hash", "parent_node_id", "tool_identity", "total_count", "offset", "rows"], "title": "SequenceMapView", "type": "object" };
+var schema79 = { "additionalProperties": false, "properties": { "schema_version": { "const": "sequence-metrics-map-view-v1", "default": "sequence-metrics-map-view-v1", "title": "Schema Version", "type": "string" }, "run_id": { "title": "Run Id", "type": "string" }, "project_id": { "title": "Project Id", "type": "string" }, "snapshot_hash": { "title": "Snapshot Hash", "type": "string" }, "parent_node_id": { "title": "Parent Node Id", "type": "string" }, "parent_attempt": { "title": "Parent Attempt", "type": "integer" }, "parent_artifact_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Parent Artifact Id" }, "parent_artifact_sha256": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Parent Artifact Sha256" }, "tool_identity": { "additionalProperties": true, "title": "Tool Identity", "type": "object" }, "total_count": { "title": "Total Count", "type": "integer" }, "offset": { "title": "Offset", "type": "integer" }, "rows": { "items": { "$ref": "urn:fusionlab:shared#/$defs/SequenceMetricRow" }, "title": "Rows", "type": "array" } }, "required": ["schema_version", "run_id", "project_id", "snapshot_hash", "parent_node_id", "parent_attempt", "parent_artifact_id", "parent_artifact_sha256", "tool_identity", "total_count", "offset", "rows"], "title": "SequenceMapView", "type": "object" };
 var schema80 = { "additionalProperties": false, "properties": { "node_id": { "title": "Node Id", "type": "string" }, "sequence_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Sequence Id" }, "sequence_sha256": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Sequence Sha256" }, "attempt": { "title": "Attempt", "type": "integer" }, "status": { "title": "Status", "type": "string" }, "artifact_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Artifact Id" }, "artifact_sha256": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Artifact Sha256" }, "metrics": { "anyOf": [{ "$ref": "urn:fusionlab:shared#/$defs/SequenceMetricsView" }, { "type": "null" }] }, "issue": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Issue" } }, "required": ["node_id", "sequence_id", "sequence_sha256", "attempt", "status", "artifact_id", "artifact_sha256", "metrics", "issue"], "title": "SequenceMetricRow", "type": "object" };
 var schema82 = { "additionalProperties": false, "properties": { "formula_version": { "title": "Formula Version", "type": "string" }, "feature_definitions_sha256": { "title": "Feature Definitions Sha256", "type": "string" }, "sequence_sha256": { "title": "Sequence Sha256", "type": "string" }, "length": { "title": "Length", "type": "integer" }, "gs_fraction": { "title": "Gs Fraction", "type": "number" }, "pro_fraction": { "title": "Pro Fraction", "type": "number" }, "aromatic_fraction": { "title": "Aromatic Fraction", "type": "number" }, "hydrophobic_fraction": { "title": "Hydrophobic Fraction", "type": "number" }, "charged_fraction": { "title": "Charged Fraction", "type": "number" }, "polar_fraction": { "title": "Polar Fraction", "type": "number" }, "net_charge_proxy": { "title": "Net Charge Proxy", "type": "number" }, "shannon_entropy": { "title": "Shannon Entropy", "type": "number" }, "top2_fraction": { "title": "Top2 Fraction", "type": "number" }, "max_hydrophobic_run": { "title": "Max Hydrophobic Run", "type": "integer" }, "mean_hydropathy": { "title": "Mean Hydropathy", "type": "number" }, "forbidden_motifs": { "default": [], "items": { "type": "string" }, "title": "Forbidden Motifs", "type": "array" }, "charge_blockiness": { "default": null, "title": "Charge Blockiness", "type": "null" }, "multivalency_density": { "default": null, "title": "Multivalency Density", "type": "null" } }, "required": ["formula_version", "feature_definitions_sha256", "sequence_sha256", "length", "gs_fraction", "pro_fraction", "aromatic_fraction", "hydrophobic_fraction", "charged_fraction", "polar_fraction", "net_charge_proxy", "shannon_entropy", "top2_fraction", "max_hydrophobic_run", "mean_hydropathy", "forbidden_motifs", "charge_blockiness", "multivalency_density"], "title": "SequenceFeatures", "type": "object" };
 function validate171(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
@@ -16246,7 +16246,7 @@ function validate168(data, { instancePath = "", parentData, parentDataProperty, 
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.schema_version === void 0 && (missing0 = "schema_version") || data.run_id === void 0 && (missing0 = "run_id") || data.project_id === void 0 && (missing0 = "project_id") || data.snapshot_hash === void 0 && (missing0 = "snapshot_hash") || data.parent_node_id === void 0 && (missing0 = "parent_node_id") || data.tool_identity === void 0 && (missing0 = "tool_identity") || data.total_count === void 0 && (missing0 = "total_count") || data.offset === void 0 && (missing0 = "offset") || data.rows === void 0 && (missing0 = "rows")) {
+      if (data.schema_version === void 0 && (missing0 = "schema_version") || data.run_id === void 0 && (missing0 = "run_id") || data.project_id === void 0 && (missing0 = "project_id") || data.snapshot_hash === void 0 && (missing0 = "snapshot_hash") || data.parent_node_id === void 0 && (missing0 = "parent_node_id") || data.parent_attempt === void 0 && (missing0 = "parent_attempt") || data.parent_artifact_id === void 0 && (missing0 = "parent_artifact_id") || data.parent_artifact_sha256 === void 0 && (missing0 = "parent_artifact_sha256") || data.tool_identity === void 0 && (missing0 = "tool_identity") || data.total_count === void 0 && (missing0 = "total_count") || data.offset === void 0 && (missing0 = "offset") || data.rows === void 0 && (missing0 = "rows")) {
         validate168.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
@@ -16319,71 +16319,194 @@ function validate168(data, { instancePath = "", parentData, parentDataProperty, 
                     var valid0 = true;
                   }
                   if (valid0) {
-                    if (data.tool_identity !== void 0) {
-                      let data5 = data.tool_identity;
+                    if (data.parent_attempt !== void 0) {
+                      let data5 = data.parent_attempt;
                       const _errs12 = errors;
-                      if (errors === _errs12) {
-                        if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
-                        } else {
-                          validate168.errors = [{ instancePath: instancePath + "/tool_identity", schemaPath: "#/properties/tool_identity/type", keyword: "type", params: { type: "object" }, message: "must be object" }];
-                          return false;
-                        }
+                      if (!(typeof data5 == "number" && (!(data5 % 1) && !isNaN(data5)))) {
+                        validate168.errors = [{ instancePath: instancePath + "/parent_attempt", schemaPath: "#/properties/parent_attempt/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                        return false;
                       }
                       var valid0 = _errs12 === errors;
                     } else {
                       var valid0 = true;
                     }
                     if (valid0) {
-                      if (data.total_count !== void 0) {
-                        let data6 = data.total_count;
+                      if (data.parent_artifact_id !== void 0) {
+                        let data6 = data.parent_artifact_id;
+                        const _errs14 = errors;
                         const _errs15 = errors;
-                        if (!(typeof data6 == "number" && (!(data6 % 1) && !isNaN(data6)))) {
-                          validate168.errors = [{ instancePath: instancePath + "/total_count", schemaPath: "#/properties/total_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
-                          return false;
+                        let valid1 = false;
+                        const _errs16 = errors;
+                        if (typeof data6 !== "string") {
+                          const err0 = { instancePath: instancePath + "/parent_artifact_id", schemaPath: "#/properties/parent_artifact_id/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                          if (vErrors === null) {
+                            vErrors = [err0];
+                          } else {
+                            vErrors.push(err0);
+                          }
+                          errors++;
                         }
-                        var valid0 = _errs15 === errors;
+                        var _valid0 = _errs16 === errors;
+                        valid1 = valid1 || _valid0;
+                        const _errs18 = errors;
+                        if (data6 !== null) {
+                          const err1 = { instancePath: instancePath + "/parent_artifact_id", schemaPath: "#/properties/parent_artifact_id/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                          if (vErrors === null) {
+                            vErrors = [err1];
+                          } else {
+                            vErrors.push(err1);
+                          }
+                          errors++;
+                        }
+                        var _valid0 = _errs18 === errors;
+                        valid1 = valid1 || _valid0;
+                        if (!valid1) {
+                          const err2 = { instancePath: instancePath + "/parent_artifact_id", schemaPath: "#/properties/parent_artifact_id/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                          if (vErrors === null) {
+                            vErrors = [err2];
+                          } else {
+                            vErrors.push(err2);
+                          }
+                          errors++;
+                          validate168.errors = vErrors;
+                          return false;
+                        } else {
+                          errors = _errs15;
+                          if (vErrors !== null) {
+                            if (_errs15) {
+                              vErrors.length = _errs15;
+                            } else {
+                              vErrors = null;
+                            }
+                          }
+                        }
+                        var valid0 = _errs14 === errors;
                       } else {
                         var valid0 = true;
                       }
                       if (valid0) {
-                        if (data.offset !== void 0) {
-                          let data7 = data.offset;
-                          const _errs17 = errors;
-                          if (!(typeof data7 == "number" && (!(data7 % 1) && !isNaN(data7)))) {
-                            validate168.errors = [{ instancePath: instancePath + "/offset", schemaPath: "#/properties/offset/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
-                            return false;
+                        if (data.parent_artifact_sha256 !== void 0) {
+                          let data7 = data.parent_artifact_sha256;
+                          const _errs20 = errors;
+                          const _errs21 = errors;
+                          let valid2 = false;
+                          const _errs22 = errors;
+                          if (typeof data7 !== "string") {
+                            const err3 = { instancePath: instancePath + "/parent_artifact_sha256", schemaPath: "#/properties/parent_artifact_sha256/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                            if (vErrors === null) {
+                              vErrors = [err3];
+                            } else {
+                              vErrors.push(err3);
+                            }
+                            errors++;
                           }
-                          var valid0 = _errs17 === errors;
+                          var _valid1 = _errs22 === errors;
+                          valid2 = valid2 || _valid1;
+                          const _errs24 = errors;
+                          if (data7 !== null) {
+                            const err4 = { instancePath: instancePath + "/parent_artifact_sha256", schemaPath: "#/properties/parent_artifact_sha256/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                            if (vErrors === null) {
+                              vErrors = [err4];
+                            } else {
+                              vErrors.push(err4);
+                            }
+                            errors++;
+                          }
+                          var _valid1 = _errs24 === errors;
+                          valid2 = valid2 || _valid1;
+                          if (!valid2) {
+                            const err5 = { instancePath: instancePath + "/parent_artifact_sha256", schemaPath: "#/properties/parent_artifact_sha256/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                            if (vErrors === null) {
+                              vErrors = [err5];
+                            } else {
+                              vErrors.push(err5);
+                            }
+                            errors++;
+                            validate168.errors = vErrors;
+                            return false;
+                          } else {
+                            errors = _errs21;
+                            if (vErrors !== null) {
+                              if (_errs21) {
+                                vErrors.length = _errs21;
+                              } else {
+                                vErrors = null;
+                              }
+                            }
+                          }
+                          var valid0 = _errs20 === errors;
                         } else {
                           var valid0 = true;
                         }
                         if (valid0) {
-                          if (data.rows !== void 0) {
-                            let data8 = data.rows;
-                            const _errs19 = errors;
-                            if (errors === _errs19) {
-                              if (Array.isArray(data8)) {
-                                var valid1 = true;
-                                const len0 = data8.length;
-                                for (let i0 = 0; i0 < len0; i0++) {
-                                  const _errs21 = errors;
-                                  if (!validate169(data8[i0], { instancePath: instancePath + "/rows/" + i0, parentData: data8, parentDataProperty: i0, rootData, dynamicAnchors })) {
-                                    vErrors = vErrors === null ? validate169.errors : vErrors.concat(validate169.errors);
-                                    errors = vErrors.length;
-                                  }
-                                  var valid1 = _errs21 === errors;
-                                  if (!valid1) {
-                                    break;
-                                  }
-                                }
+                          if (data.tool_identity !== void 0) {
+                            let data8 = data.tool_identity;
+                            const _errs26 = errors;
+                            if (errors === _errs26) {
+                              if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
                               } else {
-                                validate168.errors = [{ instancePath: instancePath + "/rows", schemaPath: "#/properties/rows/type", keyword: "type", params: { type: "array" }, message: "must be array" }];
+                                validate168.errors = [{ instancePath: instancePath + "/tool_identity", schemaPath: "#/properties/tool_identity/type", keyword: "type", params: { type: "object" }, message: "must be object" }];
                                 return false;
                               }
                             }
-                            var valid0 = _errs19 === errors;
+                            var valid0 = _errs26 === errors;
                           } else {
                             var valid0 = true;
+                          }
+                          if (valid0) {
+                            if (data.total_count !== void 0) {
+                              let data9 = data.total_count;
+                              const _errs29 = errors;
+                              if (!(typeof data9 == "number" && (!(data9 % 1) && !isNaN(data9)))) {
+                                validate168.errors = [{ instancePath: instancePath + "/total_count", schemaPath: "#/properties/total_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                                return false;
+                              }
+                              var valid0 = _errs29 === errors;
+                            } else {
+                              var valid0 = true;
+                            }
+                            if (valid0) {
+                              if (data.offset !== void 0) {
+                                let data10 = data.offset;
+                                const _errs31 = errors;
+                                if (!(typeof data10 == "number" && (!(data10 % 1) && !isNaN(data10)))) {
+                                  validate168.errors = [{ instancePath: instancePath + "/offset", schemaPath: "#/properties/offset/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                                  return false;
+                                }
+                                var valid0 = _errs31 === errors;
+                              } else {
+                                var valid0 = true;
+                              }
+                              if (valid0) {
+                                if (data.rows !== void 0) {
+                                  let data11 = data.rows;
+                                  const _errs33 = errors;
+                                  if (errors === _errs33) {
+                                    if (Array.isArray(data11)) {
+                                      var valid3 = true;
+                                      const len0 = data11.length;
+                                      for (let i0 = 0; i0 < len0; i0++) {
+                                        const _errs35 = errors;
+                                        if (!validate169(data11[i0], { instancePath: instancePath + "/rows/" + i0, parentData: data11, parentDataProperty: i0, rootData, dynamicAnchors })) {
+                                          vErrors = vErrors === null ? validate169.errors : vErrors.concat(validate169.errors);
+                                          errors = vErrors.length;
+                                        }
+                                        var valid3 = _errs35 === errors;
+                                        if (!valid3) {
+                                          break;
+                                        }
+                                      }
+                                    } else {
+                                      validate168.errors = [{ instancePath: instancePath + "/rows", schemaPath: "#/properties/rows/type", keyword: "type", params: { type: "array" }, message: "must be array" }];
+                                      return false;
+                                    }
+                                  }
+                                  var valid0 = _errs33 === errors;
+                                } else {
+                                  var valid0 = true;
+                                }
+                              }
+                            }
                           }
                         }
                       }

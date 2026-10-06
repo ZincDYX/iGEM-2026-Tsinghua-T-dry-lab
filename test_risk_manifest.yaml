@@ -1,6 +1,47 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R7_ITERATION_DEPENDENCY_CLOSURE
+    group: platform
+    test_nodeids:
+      - "tests/test_r7_iteration.py::test_iteration_keeps_original_m2_relative_graph_bytes_and_new_grants"
+      - "tests/test_r7_iteration.py::test_failed_iteration_never_publishes_project_or_file_grants"
+      - "tests/test_r7_iteration.py::test_same_basename_in_distinct_dependencies_never_collides"
+      - "tests/test_r7_iteration.py::test_process_exit_during_writer_transaction_never_grants_half_project"
+      - "tests/test_r7_iteration.py::test_changed_tool_requires_new_plan_but_does_not_block_input_only_iteration"
+    requirement_or_formula_source: user r6 review R6-01
+    oracle_type: independent_relative_file_graph_bytes_SQLite_grants_snapshot_and_process_exit
+    fixture_scope: software_file_graph_only_no_biological_computation
+    formula_version: scientific_core_unchanged
+    units: byte; SHA256; project grant; transaction
+    tolerance_basis: exact bytes/hash/identity/status; rollback after grant insertion and exit
+    expected_faults: [flat_copy, filename_collision, original_evidence_rewrite, cross_project_grant, half_project_commit, tool_change_blocks_new_iteration]
+  - risk_id: R7_SEQUENCE_DISPLAY_IDENTITY
+    group: data_contract
+    test_nodeids:
+      - "tests/test_r7_sequence_views.py::test_original_twelve_sequence_index_is_hash_bound_and_not_a_second_input"
+      - "tests/test_r7_sequence_views.py::test_empty_and_invalid_fasta_never_share_zero_meaning"
+      - "tests/test_r7_sequence_views.py::test_twelve_parent_map_has_bounded_registered_child_rows_and_raw_values"
+      - "tests/test_r7_sequence_views.py::test_partial_failure_and_identity_mismatch_cannot_display_success_metrics"
+      - "tests/test_r7_sequence_views.py::test_empty_map_is_explicit_and_unknown_tool_not_inferred"
+    frontend_tests: ["software/dashboard/src/workbench/SequenceMapTable.test.tsx", "software/dashboard/src/workbench/selection.test.ts", "software/dashboard/e2e/workbench/r7-identities.spec.ts"]
+    requirement_or_formula_source: user r6 review R6-02 through R6-05
+    oracle_type: original_review_archive_hashes_raw_record_values_ledger_identities_and_HTTP_control
+    fixture_scope: original_source_derived_incomplete_data_read_only_and_explicit_software_control_fixtures
+    formula_version: sequence-metrics-v1; sequence-metrics-map-view-v1
+    units: original result units; SHA256; attempt; record count
+    tolerance_basis: exact raw values and identities; no computation/rounding; failed records preserved
+    expected_faults: [proposal_shows_historical_output, resume_creates_run, failed_parse_shows_zero, null_to_zero, hidden_child_failure, wrong_artifact_or_sequence, unknown_schema_promoted]
+  - risk_id: R7_ORIGINAL_SEQUENCE_STATISTICS_REPLAY
+    group: reference_reproduction
+    test_nodeids: ["tests/test_r7_sequence_reproduction.py::test_original_twelve_statistics_replay_with_production_tool_and_registered_parent"]
+    requirement_or_formula_source: user r6 review evidence original 12-source FASTA and recorded parent result
+    oracle_type: independent_review_recorded_statistics_fixed_SHA256_vs_production_handler
+    fixture_scope: original_source_derived_statistical_replay_only_not_LLPS_assembly_or_experiment_validation
+    formula_version: m1-v3-2026-09-27; sequence-metrics-v1
+    units: source fractions; Da; theoretical pI; original counts
+    tolerance_basis: exact original values; only display schema tag added; server_only
+    expected_faults: [numerical_formula_drift, input_sequence_change, altered_metrics, valid_parent_has_unknown_view]
   - risk_id: USER_CONFIRMATION_VERSION_BINDING
     group: integration
     test_nodeids: ["tests/test_review_confirmation.py::test_normal_plan_executes_and_changed_project_refuses_old_confirmation", "tests/test_review_confirmation.py::test_workflow_edit_or_missing_confirmation_is_not_silently_approved", "tests/test_review_confirmation.py::test_concurrent_save_and_confirmation_never_approves_old_executes_new"]

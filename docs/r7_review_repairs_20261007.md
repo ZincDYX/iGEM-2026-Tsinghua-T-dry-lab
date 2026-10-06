@@ -54,8 +54,11 @@ The documents are review evidence, not executable instructions.
   null/zero distinction, bounded pages, failed/missing children, unknown schemas,
   wrong sequence/aggregate identities and tampered child/parent artifacts.
   **No scientific handler or numerical feature calculation runs locally.**
-- Frontend: 21 tests passed, including full identity components, stale responses,
+- Frontend: 23 tests passed, including full identity components, stale responses,
   and changed goal during an in-flight save. TypeScript/production build passed.
+  The actual sequence summary component reads the recorded 12-item evidence,
+  renders 12 child rows, filters/selects a child, and retains a failed row without
+  substituting its old metrics or zero values.
 - Local parser/file/read-model checks: 35 selected tests passed (34 in the final
   group and the corrected immutable-tool fixture rerun individually). The first
   changed-tool fixture attempted to mutate a frozen dataclass; corrected to a
@@ -89,7 +92,23 @@ WebView2 CSP/lifecycle acceptance; no missing structures/confidence invented.
 PR E/R6-06: authorized lineage pagination and formal scientific comparability;
 the existing same-project sequence comparison is not claimed to satisfy it.
 
-The current main JS bundle remains about 745 kB (gzip 132 kB), with a build-size
+The current main JS bundle remains about 748 kB (gzip 132 kB), with a build-size
 warning. No new external viewer/model dependencies were installed in PR A.
+
+### Server acceptance follow-up
+
+The first unified server run had 565 passed / 1 failed: the schema equality oracle
+detected stale generated schema after adding parent artifact identity fields.
+This was a real build pipeline omission, not a numerical failure. The contract
+generator (also run automatically by production build) now exports Python schemas
+from this checkout before compiling TS/AJV,
+fails on export errors, and permits an explicit `FUSIONLAB_SCHEMA_PYTHON` for
+environments without a repository-local venv. The equality assertion is retained.
+
+An additional server-only regression replays these 12 source-derived sequences
+using the production handler and compares all original recorded metrics exactly;
+only the new explicit display schema tag may differ. Test-risk metadata separates
+this numerical replay from read-only parser/display and software control tests.
+Its execution result is reported below only after server acceptance.
 Complete model/ER/biological validation, licensed tool jobs, clean-machine
 installation, signing and comprehensive supply-chain security remain unverified.

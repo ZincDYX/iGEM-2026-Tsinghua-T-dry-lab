@@ -5,6 +5,21 @@ import addFormats from "ajv-formats";
 import standaloneCode from "ajv/dist/standalone/index.js";
 import {build} from "esbuild";
 import {fileURLToPath} from "node:url";
+import {existsSync} from "node:fs";
+import {join} from "node:path";
+import {spawnSync} from "node:child_process";
+
+// Regenerate the Python source schema before consuming it. Otherwise this
+// command can silently produce validators for an obsolete checked-in schema.
+const repository = fileURLToPath(new URL("../../..", import.meta.url));
+const localPython = join(repository, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+const python = process.env.FUSIONLAB_SCHEMA_PYTHON ?? (existsSync(localPython) ? localPython : "python");
+const exported = spawnSync(python, ["-B", "scripts/generate_workbench_schema.py", "--output", "software/dashboard/src/contracts/public.schemas.json"], {
+  cwd: repository,
+  env: {...process.env, PYTHONPATH: join(repository, "src")},
+  stdio: "inherit",
+});
+if (exported.error || exported.status !== 0) throw new Error("Public schema export failed; configure FUSIONLAB_SCHEMA_PYTHON with the project environment.");
 
 const source = new URL("../src/contracts/public.schemas.json",import.meta.url);
 const schemas = JSON.parse(await readFile(source,"utf8"));
