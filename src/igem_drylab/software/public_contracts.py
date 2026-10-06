@@ -10,6 +10,7 @@ from igem_drylab.workflow.models import Contract, Project, Workflow, PlanBinding
 from igem_drylab.workflow.disclosure import NodeResultView
 from igem_drylab.workflow.views import ProjectSummaryView, RunSummaryView
 from igem_drylab.workflow.planning import ProposalView
+from igem_drylab.workflow.public_errors import PublicError
 
 
 class AssetIdentity(Contract):
@@ -163,7 +164,7 @@ class PluginInspectionView(Contract):
     capability_requests: list[str]
 
 
-PUBLIC_MODELS = {model.__name__:model for model in (ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
+PUBLIC_MODELS = {model.__name__:model for model in (PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
     NodePage,PlanView,ProposalView,ScientificPreviewView,BindingPreviewView,IterationView,ImportView,ActionView,RunListView,InputDiffView,PluginInspectionView,Workflow)}
 
 

@@ -137,8 +137,10 @@ def test_plugin_runs_in_real_separate_environment(tmp_path: Path) -> None:
     assert result["status"] == "succeeded"
     output = result["nodes"][0]["output"]
     assert output["length"] == 6 and output["counts"]["G"] == 2
-    assert Path(output["python_prefix"]).resolve() != Path(sys.prefix).resolve()
-    assert record["hash"] in output["python_prefix"]
+    assert output["python_version"] == sys.version.split()[0]
+    prefix = subprocess.check_output([record["python"], "-I", "-c", "import sys; print(sys.prefix)"], text=True).strip()
+    assert Path(prefix).resolve() != Path(sys.prefix).resolve()
+    assert record["hash"] in prefix
 
 
 def pathway_payload() -> dict[str, object]:

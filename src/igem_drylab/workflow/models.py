@@ -13,9 +13,10 @@ class Contract(BaseModel):
 class WorkflowError(ValueError):
     """Machine-readable failure at an API/persistence boundary."""
 
-    def __init__(self, code: str, *, status_code: int = 422) -> None:
+    def __init__(self, code: str, *, status_code: int = 422, logical_files: tuple[str, ...] = (), private_detail: str | None = None) -> None:
         super().__init__(code)
         self.code, self.status_code = code, status_code
+        self.logical_files, self.private_detail = logical_files, private_detail
 
 
 class PlanBinding(Contract):

@@ -13,4 +13,4 @@ payload = json.loads(args.input.read_text(encoding="utf-8"))
 sequence = "".join(payload["sequence"].split()).upper()
 if not sequence or set(sequence) - set("ACDEFGHIKLMNPQRSTVWY"):
     raise ValueError("only standard amino acids are supported")
-args.output.write_text(json.dumps({"length": len(sequence), "counts": dict(Counter(sequence)), "python_prefix": sys.prefix}), encoding="utf-8")
+args.output.write_text(json.dumps({"length": len(sequence), "counts": dict(Counter(sequence)), "python_version": sys.version.split()[0]}), encoding="utf-8")

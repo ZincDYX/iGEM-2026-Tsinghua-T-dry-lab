@@ -4,6 +4,6 @@
   "version": "1.0.0", "capability": "sequence_composition", "license": "MIT",
   "entrypoint": "composition.py", "runtime": "python_venv",
   "input_schema": {"type":"object","properties":{"sequence":{"type":"string","minLength":1}},"required":["sequence"],"additionalProperties":false},
-  "output_schema": {"type":"object","properties":{"length":{"type":"integer"},"counts":{"type":"object"},"python_prefix":{"type":"string"}},"required":["length","counts","python_prefix"],"additionalProperties":false},
+  "output_schema": {"type":"object","properties":{"length":{"type":"integer"},"counts":{"type":"object"},"python_version":{"type":"string"}},"required":["length","counts","python_version"],"additionalProperties":false},
   "permissions": [], "timeout_seconds": 30, "idempotent": true
 }

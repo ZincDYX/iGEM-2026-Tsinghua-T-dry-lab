@@ -1,4 +1,52 @@
 {
+  "PublicError": {
+    "additionalProperties": false,
+    "properties": {
+      "code": {
+        "title": "Code",
+        "type": "string"
+      },
+      "message": {
+        "title": "Message",
+        "type": "string"
+      },
+      "diagnostic_id": {
+        "title": "Diagnostic Id",
+        "type": "string"
+      },
+      "field_paths": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Field Paths",
+        "type": "array"
+      },
+      "logical_files": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Logical Files",
+        "type": "array"
+      },
+      "actions": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Actions",
+        "type": "array"
+      }
+    },
+    "required": [
+      "code",
+      "message",
+      "diagnostic_id",
+      "field_paths",
+      "logical_files",
+      "actions"
+    ],
+    "title": "PublicError",
+    "type": "object"
+  },
   "ProjectView": {
     "$defs": {
       "AbsenceEvidenceBinding": {

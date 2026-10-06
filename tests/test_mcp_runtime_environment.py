@@ -11,7 +11,7 @@ def test_explicit_runtime_controls_are_kept_but_tokens_are_not(monkeypatch):
     monkeypatch.setenv('UNRELATED_API_KEY','software_fixture_not_a_secret')
     parameters = server_parameters(Path('/software_fixture/src/igem_drylab'))
     assert parameters.command == sys.executable
-    assert parameters.args == ['-m','igem_drylab.mcp.server']
+    assert parameters.args == ['-B','-m','igem_drylab.mcp.server']
     assert parameters.env['OPENBLAS_NUM_THREADS'] == '1'
     assert parameters.env['OMP_NUM_THREADS'] == '2'
     assert 'FUSIONLAB_SESSION_TOKEN' not in parameters.env

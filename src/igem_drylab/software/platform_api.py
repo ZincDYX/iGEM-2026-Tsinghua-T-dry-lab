@@ -217,8 +217,13 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         path = request.config_path.resolve()
         if not path.is_relative_to(data_dir / "imports"):
             raise WorkflowError("upload_scientific_inputs_instead_of_server_path", status_code=403)
+        with store.connection() as db:
+            bundles = [Path(row[0]) for row in db.execute("SELECT root FROM scientific_bundles")]
+        root = next((root for root in bundles if path.is_relative_to(root)), None)
+        if root is None:
+            raise WorkflowError("unknown_scientific_bundle", status_code=403)
         from igem_drylab.resources import default_config_path
-        project = load_scientific_project(path, allowed_roots=(path.parent, default_config_path("m1_feature_definitions.yaml").parent))
+        project = load_scientific_project(path, allowed_roots=(root, default_config_path("m1_feature_definitions.yaml"), default_config_path("m1_rules_v3.yaml")))
         if project.config.tools:
             raise WorkflowError("runtime_settings_not_scientific_input")
         return {"scientific_project": boundary.scientific(project.model_dump(mode="json")), "requires_confirmation": True,
@@ -247,6 +252,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         for target, content in contents.items():
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
+        with store.connection() as db:
+            db.execute("INSERT INTO scientific_bundles VALUES(?,?)", (root.name,str(root)))
         return scientific_preview(ScientificImportRequest(config_path=source))
 
     @router.post("/imports/preview")
@@ -298,7 +305,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         else:
             raise ValueError("supported_imports: FASTA, annotated GenBank, pathway JSON, CSV, TSV")
         source.write_bytes(request.content.encode("utf-8"))
-        file = boundary.asset(source)
+        file = boundary.asset(source, fresh=True)
         for dataset in patch.get("datasets", []):
             dataset["file_id"] = file["id"]
         result = {"kind": kind, "patch": patch, "file": file}

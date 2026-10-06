@@ -92,26 +92,39 @@ class DisclosureBoundary:
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,95}", code) or any(value in code for value in self._private_values):
             code = "operation_failed"
         with self.store.connection() as db:
-            db.execute("INSERT INTO private_diagnostics VALUES(?,?,?)", (diagnostic_id, type(error).__name__, str(error)))
-        return {"code": code, "message": "操作未完成；请核对输入、证据或工具能力。", "diagnostic_id": diagnostic_id}
+            db.execute("INSERT INTO private_diagnostics VALUES(?,?,?)", (diagnostic_id, type(error).__name__, getattr(error,"private_detail",None) or str(error)))
+        from .public_errors import ERROR_GUIDANCE, PublicError
+        message, fields, actions = ERROR_GUIDANCE.get(code, ("操作未完成；请核对输入、证据或工具能力。", [], ["凭诊断 ID 查看私有诊断"]))
+        files = []
+        for name in getattr(error,"logical_files",()):
+            if not isinstance(name,str) or PurePosixPath(name).is_absolute() or PureWindowsPath(name).is_absolute() or ".." in Path(name).parts:
+                continue
+            try: self.check(name)
+            except WorkflowError: continue
+            files.append(name)
+        return PublicError(code=code,message=message,diagnostic_id=diagnostic_id,field_paths=fields,logical_files=files,actions=actions).model_dump(mode="json")
 
-    def asset(self, path: str | Path, *, project_id: str | None = None) -> dict[str, str]:
+    def asset(self, path: str | Path, *, project_id: str | None = None, fresh: bool = False) -> dict[str, str]:
         source = Path(path).resolve()
         with self.store.connection() as db:
-            row = db.execute("SELECT * FROM file_assets WHERE path=?", (str(source),)).fetchone()
+            db.execute("BEGIN IMMEDIATE")
+            row = None if fresh else db.execute(
+                "SELECT * FROM file_assets WHERE path=? AND (project_id IS ? OR project_id IS NULL) ORDER BY project_id IS NULL LIMIT 1",
+                (str(source), project_id)).fetchone()
             if row is None:
                 file_id = str(uuid4())
                 digest = sha256(source.read_bytes()).hexdigest() if source.is_file() else ""
                 db.execute("INSERT INTO file_assets VALUES(?,?,?,?,?)", (file_id, project_id, str(source), digest, source.name))
             else:
-                if project_id and row["project_id"] and project_id != row["project_id"]:
-                    raise WorkflowError("file_project_mismatch", status_code=403)
                 file_id, digest = row["id"], row["hash"]
+                if project_id and row["project_id"] is None:
+                    db.execute("UPDATE file_assets SET project_id=? WHERE id=?", (project_id,file_id))
         return {"id": file_id, "file_id": file_id, "path": "asset:" + file_id, "sha256": digest, "name": source.name}
 
     def resolve_asset(self, file_id: str, project_id: str | None = None) -> str:
         file_id = file_id.removeprefix("asset:")
         with self.store.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM file_assets WHERE id=?", (file_id,)).fetchone()
             if row is None:
                 raise WorkflowError("unknown_file_identity", status_code=404)

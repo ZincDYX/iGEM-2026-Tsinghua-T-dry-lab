@@ -1,6 +1,7 @@
 from hashlib import sha256
 from io import BytesIO
 import json
+import subprocess
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -30,15 +31,16 @@ def test_two_plugins_really_use_incompatible_dependency_versions(tmp_path, monke
             archive.writestr(f"shared_dependency-{version}.dist-info/WHEEL", "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
             archive.writestr(f"shared_dependency-{version}.dist-info/RECORD", "")
         (source / "requirements.lock").write_text(f"shared-dependency @ {wheel.as_uri()} --hash=sha256:{sha256(wheel.read_bytes()).hexdigest()}\n", encoding="utf-8")
-        (source / "plugin.json").write_text(json.dumps({"id": "dependency_test", "name": "dependency test", "description": "test", "version": version, "capability": "test", "license": "MIT", "entrypoint": "entry.py", "requirements_lock": "requirements.lock", "input_schema": {"type": "object"}, "output_schema": {"type": "object", "required": ["version", "prefix"]}}))
-        (source / "entry.py").write_text("import argparse,json,sys\nfrom pathlib import Path\nimport shared_dependency\np=argparse.ArgumentParser(); p.add_argument('--input'); p.add_argument('--output'); args=p.parse_args()\nPath(args.output).write_text(json.dumps({'version':shared_dependency.VERSION,'prefix':sys.prefix}))\n")
+        (source / "plugin.json").write_text(json.dumps({"id": "dependency_test", "name": "dependency test", "description": "test", "version": version, "capability": "test", "license": "MIT", "entrypoint": "entry.py", "requirements_lock": "requirements.lock", "input_schema": {"type": "object"}, "output_schema": {"type": "object", "required": ["version"]}}))
+        (source / "entry.py").write_text("import argparse,json\nfrom pathlib import Path\nimport shared_dependency\np=argparse.ArgumentParser(); p.add_argument('--input'); p.add_argument('--output'); args=p.parse_args()\nPath(args.output).write_text(json.dumps({'version':shared_dependency.VERSION}))\n")
         record = plugins.install(source, trusted=True)
         tool = plugins.tools.get(f"plugin.dependency_test.{record['hash'][:12]}")
         context = NodeContext("test", version, tmp_path / f"work-{version}")
         context.work_dir.mkdir()
         result = tool.handler(tool.input_model.model_validate({}), context)
         assert result["version"] == version
-        prefixes.append(result["prefix"])
+        # Private independent oracle, not a path published by the plugin.
+        prefixes.append(subprocess.check_output([record['python'], '-I', '-c', 'import sys; print(sys.prefix)'], text=True).strip())
     assert prefixes[0] != prefixes[1]
 
 

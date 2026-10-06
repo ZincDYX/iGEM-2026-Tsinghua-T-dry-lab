@@ -15,13 +15,22 @@ export interface DesktopSettings{mode:"local"|"ssh";ssh_host:string;remote_port:
 export const isDesktop=()=>Boolean(window.__TAURI__);
 export const getDesktopSettings=()=>window.__TAURI__!.core.invoke<DesktopSettings>("desktop_settings");
 export const saveDesktopSettings=(settings:DesktopSettings)=>window.__TAURI__!.core.invoke<void>("save_desktop_settings",{settings});
+export class PublicApiError extends Error {
+  constructor(public readonly detail:{code:string;message:string;diagnostic_id:string;field_paths:string[];logical_files:string[];actions:string[]}) {
+    super([detail.message,...detail.field_paths.map(value=>`字段：${value}`),...detail.logical_files.map(value=>`文件：${value}`),...detail.actions,`诊断 ID：${detail.diagnostic_id}`].join("\n"));
+  }
+}
 export async function requestJson(path:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
   await connection;
   const response=await fetch(`${baseUrl}/api/platform${path}`,{
     method:body===undefined?"GET":"POST",headers:{"Content-Type":"application/json",...(sessionToken?{"X-FusionLab-Token":sessionToken}:{})},
     body:body===undefined?undefined:JSON.stringify(body),signal,cache:"no-store",
   });
-  if(!response.ok){const error=await response.json().catch(()=>null);throw new Error(typeof error?.detail?.message==="string"?error.detail.message:`请求失败 (${response.status})；请查看安全诊断。`);}
+  if(!response.ok){
+    const error=await response.json().catch(()=>null), detail=error?.detail;
+    if(detail&&typeof detail.code==="string"&&typeof detail.message==="string"&&typeof detail.diagnostic_id==="string"&&[detail.field_paths,detail.logical_files,detail.actions].every(value=>Array.isArray(value)&&value.every(item=>typeof item==="string")))throw new PublicApiError(detail);
+    throw new Error(`请求失败 (${response.status})；请查看安全诊断。`);
+  }
   return response.json();
 }
 export const downloadArtifact=(id:string,projectId:string)=>downloadResource(`/artifacts/${encodeURIComponent(id)}/science-export?project_id=${encodeURIComponent(projectId)}`,"scientific-public-export.json");

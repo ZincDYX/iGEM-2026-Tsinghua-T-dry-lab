@@ -53,7 +53,8 @@ class WorkflowStore:
                 CREATE TABLE IF NOT EXISTS plugins(hash TEXT PRIMARY KEY, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS runtime_profiles(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, hash TEXT NOT NULL, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS private_diagnostics(id TEXT PRIMARY KEY, error_type TEXT NOT NULL, message TEXT NOT NULL);
-                CREATE TABLE IF NOT EXISTS file_assets(id TEXT PRIMARY KEY, project_id TEXT, path TEXT NOT NULL UNIQUE, hash TEXT NOT NULL, name TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS file_assets(id TEXT PRIMARY KEY, project_id TEXT, path TEXT NOT NULL, hash TEXT NOT NULL, name TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS scientific_bundles(id TEXT PRIMARY KEY, root TEXT NOT NULL UNIQUE);
                 CREATE TABLE IF NOT EXISTS plugin_grants(hash TEXT NOT NULL, capability TEXT NOT NULL, PRIMARY KEY(hash,capability));
                 CREATE TABLE IF NOT EXISTS run_requests(id TEXT PRIMARY KEY, binding_hash TEXT NOT NULL, run_id TEXT NOT NULL REFERENCES runs(id));
                 CREATE TABLE IF NOT EXISTS checkpoints(run_id TEXT NOT NULL, node_id TEXT NOT NULL, position TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(run_id,node_id,position));
@@ -61,6 +62,19 @@ class WorkflowStore:
                 CREATE INDEX IF NOT EXISTS artifacts_run ON artifacts(run_id);
                 CREATE INDEX IF NOT EXISTS runs_project_time ON runs(project_id,created_at DESC);
             """)
+            # Existing IDs/snapshots remain valid; content paths no longer imply
+            # exclusive project ownership. Explicit imports get separate IDs.
+            definition = db.execute("SELECT sql FROM sqlite_master WHERE name='file_assets'").fetchone()[0]
+            if "UNIQUE" in definition.upper():
+                db.executescript("""
+                    BEGIN IMMEDIATE;
+                    CREATE TABLE file_assets_v2(id TEXT PRIMARY KEY, project_id TEXT, path TEXT NOT NULL, hash TEXT NOT NULL, name TEXT NOT NULL);
+                    INSERT INTO file_assets_v2 SELECT * FROM file_assets;
+                    DROP TABLE file_assets;
+                    ALTER TABLE file_assets_v2 RENAME TO file_assets;
+                    COMMIT;
+                """)
+            db.execute("CREATE INDEX IF NOT EXISTS assets_path_project ON file_assets(path,project_id)")
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:

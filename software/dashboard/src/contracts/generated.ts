@@ -1,3 +1,4 @@
+export type { PublicError } from "./PublicError.generated";
 export type { ProjectView } from "./ProjectView.generated";
 export type { ProjectSummaryView } from "./ProjectSummaryView.generated";
 export type { RunSummaryView } from "./RunSummaryView.generated";

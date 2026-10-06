@@ -49,7 +49,7 @@ def input_paths(config: ProjectConfig, allowed_roots: tuple[Path, ...] | None = 
     walk(config.stages)
     def authorize(path):
         if allowed_roots is not None and not any(path.resolve().is_relative_to(root.resolve()) for root in allowed_roots):
-            raise ValueError("scientific_file_outside_authorized_workspace")
+            raise WorkflowError("scientific_file_outside_authorized_workspace")
     for path in paths:
         authorize(path)
     metrics_file = config.stages.m2_fusion.structure_metrics_file
@@ -84,7 +84,10 @@ def load_scientific_project(path: Path, *, allowed_roots: tuple[Path, ...] | Non
     files = input_paths(config, allowed_roots) | {source}
     missing = [str(path) for path in files if not path.is_file()]
     if missing:
-        raise ValueError("scientific_project_missing_local_dependencies:" + ",".join(sorted(missing)))
+        logical = tuple(sorted(Path(item).relative_to(allowed_roots[0]).as_posix() for item in missing
+            if allowed_roots and Path(item).is_relative_to(allowed_roots[0])))
+        raise WorkflowError("scientific_project_missing_local_dependencies", logical_files=logical,
+            private_detail="Missing scientific dependencies: " + ",".join(sorted(missing)))
     return ScientificProject(config=config, evidence_files=[EvidenceFile(path=path, sha256=sha256(path.read_bytes()).hexdigest())
         for path in sorted(files)])
 
