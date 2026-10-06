@@ -1,0 +1,3 @@
+# Review evidence is a byte/hash oracle, not platform-normalized source text.
+tests/fixtures/r7_sequence_display/source.fasta -text
+tests/fixtures/r7_sequence_display/parent_result.json -text
