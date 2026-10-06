@@ -13,11 +13,9 @@ describe("desktop connection choice", () => {
     expect((mode as HTMLSelectElement).value).toBe("local");
     expect(screen.queryByLabelText("用户 SSH 别名")).toBeNull();
     expect(api.saveDesktopSettings).not.toHaveBeenCalled();
-    fireEvent.change(mode,{target:{value:"ssh"}});
-    expect((screen.getByLabelText("用户 SSH 别名") as HTMLInputElement).value).toBe("");
-    fireEvent.change(screen.getByLabelText("用户 SSH 别名"),{target:{value:"my-research-host"}});
+    expect((screen.getByText("远程（缺少受控认证会话，暂不支持）") as HTMLOptionElement).disabled).toBe(true);
     fireEvent.click(screen.getByText("保存连接设置"));
-    await waitFor(() => expect(api.saveDesktopSettings).toHaveBeenCalledWith({mode:"ssh",ssh_host:"my-research-host",remote_port:8780}));
+    await waitFor(() => expect(api.saveDesktopSettings).toHaveBeenCalledWith({mode:"local",ssh_host:"",remote_port:8780}));
     expect(await screen.findByText(/当前连接没有改变/)).toBeTruthy();
   });
   it("retains a useful rejection message rather than claiming connection changed", async () => {

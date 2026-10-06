@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+from threading import RLock
 
 from pydantic import BaseModel
 
@@ -12,6 +13,8 @@ class NodeContext:
     run_id: str
     node_id: str
     work_dir: Path
+    runtime_tools: dict[str, Any] = field(default_factory=dict)
+    upstream_results: tuple[dict[str, Any], ...] = ()
     # Inputs are resolved before dispatch; no live project state is provided.
 
 
@@ -52,17 +55,22 @@ class ToolDefinition:
 class WorkflowTools:
     def __init__(self) -> None:
         self._tools: dict[str, ToolDefinition] = {}
+        self._lock = RLock()
 
     def register(self, tool: ToolDefinition) -> None:
-        if tool.id in self._tools:
-            raise ValueError(f"duplicate_tool:{tool.id}")
-        self._tools[tool.id] = tool
+        with self._lock:
+            if tool.id in self._tools:
+                raise ValueError(f"duplicate_tool:{tool.id}")
+            self._tools[tool.id] = tool
 
     def get(self, tool_id: str) -> ToolDefinition:
         try:
-            return self._tools[tool_id]
+            with self._lock:
+                return self._tools[tool_id]
         except KeyError as exc:
             raise ToolFailure("unknown_tool", tool_id) from exc
 
     def list(self) -> list[dict[str, Any]]:
-        return [tool.metadata() for tool in self._tools.values()]
+        with self._lock:
+            definitions = list(self._tools.values())
+        return [tool.metadata() for tool in definitions]

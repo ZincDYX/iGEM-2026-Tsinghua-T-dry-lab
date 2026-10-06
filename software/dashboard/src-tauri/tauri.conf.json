@@ -22,6 +22,7 @@
       }
     ],
     "security": {
+      "capabilities": ["main-workbench"],
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost http://127.0.0.1:*"
     }
   },

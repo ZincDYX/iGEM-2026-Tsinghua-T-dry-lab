@@ -963,7 +963,7 @@ export default function App() {
             </label>
             <dl>
               <dt>项目与运行数据库</dt>
-              <dd>{info?.data_dir ?? "连接后显示"}</dd>
+              <dd>{info?.workspace_id ?? "连接后显示逻辑工作区身份"}</dd>
               <dt>计算位置</dt>
               <dd>{api.backendMode === "ssh" ? "用户配置的远程服务器；本机仅显示桌面前端和建立 SSH 隧道" : "当前连接的本地 Python 后台"}</dd>
               <dt>执行状态保存</dt>
@@ -1333,14 +1333,12 @@ function Results({ run, developer }: { run?: Run; developer: boolean }) {
                         .join("，") || "项目快照"}
                 </small>
               </div>
-              <a
+              <button
                 className="button-link"
-                href={api.artifactUrl(artifact.id)}
-                target="_blank"
-                rel="noreferrer"
+                onClick={() => { void api.downloadArtifact(artifact.id, run.project_id); }}
               >
                 打开结果 JSON ↗
-              </a>
+              </button>
               {developer && <small className="hash">{artifact.hash}</small>}
             </article>
           ))}

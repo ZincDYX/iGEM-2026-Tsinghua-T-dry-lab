@@ -33,6 +33,9 @@ def main():
     resources = root/'resources'; resources.mkdir()
     with tarfile.open(args.source_tar) as archive:
         for member in archive.getmembers():
+            # Runtime allowlist. Full source/tests/operations stay in the bundle.
+            if not (member.name.startswith("src/") or member.name in {"configs/m1_feature_definitions.yaml", "configs/m1_rules_v3.yaml", "LICENSE", "pyproject.toml"}):
+                continue
             target = (resources/member.name).resolve()
             if not target.is_relative_to(resources) or not member.isfile():
                 raise ValueError('unsafe_or_nonfile_source_member')
@@ -56,7 +59,7 @@ def main():
         'Lib/site-packages/win32/lib','Lib/site-packages/Pythonwin','../resources/src','import site','']),encoding='utf-8')
     checked = subprocess.run([str(python/'python.exe'),'-c',
         'import json,sqlite3,importlib.metadata; import fastapi,uvicorn,numpy,scipy,mcp,igem_drylab.software.desktop_backend; print(json.dumps({d.metadata["Name"]:d.version for d in importlib.metadata.distributions()}))'],
-        cwd=root,capture_output=True,text=True,env={**os.environ,'OPENBLAS_NUM_THREADS':'1','OMP_NUM_THREADS':'1','MKL_NUM_THREADS':'1'})
+        cwd=root,capture_output=True,text=True,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','OPENBLAS_NUM_THREADS':'1','OMP_NUM_THREADS':'1','MKL_NUM_THREADS':'1'})
     (root/'runtime-import-check.log').write_text(checked.stdout+'\n'+checked.stderr,encoding='utf-8')
     if checked.returncode: raise RuntimeError('runtime import check failed; see '+str(root/'runtime-import-check.log'))
     (root/'runtime-dependencies.json').write_text(checked.stdout,encoding='utf-8')
@@ -69,12 +72,13 @@ def main():
         '关闭窗口结束本地后台/插件子进程或本窗口 SSH 隧道；不关闭远程后台。\n'
         '需要 Microsoft WebView2 Runtime。该便携版未做商业代码签名。\n'
         '许可预测器、GPU 模型权重、作者私有数据不随包提供；相关作业缺工具或数据时必须明确阻断。\n'
+        '受控远程 API 会话尚未配置；SSH 桌面模式明确阻断，不会尝试匿名连接。\n'
         '默认本地可启动不代表全部外部工具已安装或真实项目已实验验证。\n',encoding='utf-8')
     files = [p for p in sorted(root.rglob('*')) if p.is_file()]
     records = [{'path':p.relative_to(root).as_posix(),'bytes':p.stat().st_size,'sha256':sha256(p.read_bytes()).hexdigest()} for p in files]
     manifest = dict(commit=args.commit,platform='windows-x86_64',default_mode='local',bundled_frontend=True,
         python_archive_sha256=args.python_archive_sha256,source_archive_sha256=sha256(args.source_tar.read_bytes()).hexdigest(),
-        scope='portable_software_package_not_scientific_validation',files=records,total_bytes=sum(p['bytes'] for p in records))
+        scope='portable_software_package_not_scientific_validation',runtime_allowlist=['src/','configs/m1_feature_definitions.yaml','configs/m1_rules_v3.yaml','LICENSE','pyproject.toml'], files=records,total_bytes=sum(p['bytes'] for p in records))
     (root/'PACKAGE_MANIFEST.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
     with zipfile.ZipFile(root.with_suffix('.zip'),'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(root.rglob('*')):

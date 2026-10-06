@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 use tauri::Manager;
+#[cfg(test)]
 mod remote;
 mod settings;
 use settings::{DesktopSettings, Mode};
@@ -102,14 +103,24 @@ fn backend_info(connection: tauri::State<'_, Connection>) -> Result<BackendInfo,
 
 #[tauri::command]
 fn desktop_settings(connection: tauri::State<'_, Connection>) -> Result<DesktopSettings, String> {
-    DesktopSettings::load(&connection.settings_path)
+    DesktopSettings::load(&connection.settings_path).map(|mut settings| {
+        settings.ssh_host.clear();
+        settings.remote_port = 8780;
+        settings
+    }).map_err(|_| "desktop_settings_unavailable".to_string())
 }
 #[tauri::command]
 fn save_desktop_settings(
     connection: tauri::State<'_, Connection>,
     settings: DesktopSettings,
 ) -> Result<(), String> {
-    settings.save(&connection.settings_path)
+    if settings.mode == Mode::Ssh {
+        return Err("remote_authenticated_session_unavailable".into());
+    }
+    let mut private = DesktopSettings::load(&connection.settings_path)
+        .map_err(|_| "desktop_settings_unavailable")?;
+    private.mode = Mode::Local;
+    private.save(&connection.settings_path).map_err(|_| "desktop_settings_save_failed".into())
 }
 
 fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
@@ -222,32 +233,9 @@ fn launch(
     if settings.mode == Mode::Local {
         return launch_local(app);
     }
-    let data = std::env::var_os("FUSIONLAB_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or(app.path().app_local_data_dir()?);
-    fs::create_dir_all(&data)?;
-    let (mut child, config, url) = remote::launch(&data, &settings.ssh_host, settings.remote_port)?;
-    #[cfg(windows)]
-    let job = match WindowsJob::attach(&child) {
-        Ok(job) => job,
-        Err(error) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = fs::remove_file(config);
-            return Err(error.into());
-        }
-    };
-    Ok(Backend {
-        child: Mutex::new(child),
-        info: BackendInfo {
-            url,
-            token: String::new(),
-            mode: "ssh".into(),
-        },
-        cleanup_file: Some(config),
-        #[cfg(windows)]
-        _job: job,
-    })
+    // SSH transport alone is not API identity. Fail before creating any tunnel
+    // until a maintained, restricted remote-session provider is configured.
+    Err("remote_authenticated_session_unavailable".into())
 }
 
 fn main() {
@@ -260,7 +248,12 @@ fn main() {
             fs::create_dir_all(&directory)?;
             let settings_path = directory.join("desktop-settings.json");
             let backend = DesktopSettings::load(&settings_path)
-                .and_then(|settings| launch(app, &settings).map_err(|error| error.to_string()));
+                .and_then(|settings| launch(app, &settings).map_err(|error| error.to_string()))
+                .map_err(|error| {
+                    let id = uuid::Uuid::new_v4();
+                    let _ = fs::write(directory.join(format!("private-diagnostic-{id}.log")), error);
+                    format!("desktop_backend_startup_failed:{id}")
+                });
             app.manage(Connection {
                 backend,
                 settings_path,

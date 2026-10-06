@@ -110,5 +110,15 @@ export const installPlugin = (
     trusted,
     expected_hash: expectedHash,
   });
-export const artifactUrl = (id: string) =>
-  `${baseUrl}/api/platform/artifacts/${encodeURIComponent(id)}${sessionToken ? `?token=${encodeURIComponent(sessionToken)}` : ""}`;
+export async function downloadArtifact(id: string, projectId: string) {
+  await connection;
+  const response = await fetch(`${baseUrl}/api/platform/artifacts/${encodeURIComponent(id)}?project_id=${encodeURIComponent(projectId)}`, {
+    headers: sessionToken ? {"X-FusionLab-Token": sessionToken} : {},
+  });
+  if (!response.ok) throw new Error(`下载被拒绝 (${response.status})；请核对授权或安全诊断。`);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = "scientific-result.json"; link.click();
+  URL.revokeObjectURL(url);
+}

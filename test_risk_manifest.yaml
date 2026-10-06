@@ -212,3 +212,13 @@ risks:
     units: thread_count
     tolerance_basis: exact configured values; no unrelated tokens; empty when unspecified
     expected_faults: [numeric_runtime_controls_dropped, desktop_token_forwarded, invented_server_thread_count]
+  - risk_id: WORKBENCH_PRIVATE_BOUNDARY
+    group: integration
+    test_nodeids: ["tests/test_workbench_security.py::test_production_authentication_is_required_and_query_tokens_do_not_authenticate", "tests/test_workbench_security.py::test_http_error_and_import_views_do_not_contain_private_paths_or_validation_input", "tests/test_workbench_security.py::test_logical_file_identity_cannot_be_rebound_to_other_project_or_mutated", "tests/test_workbench_security.py::test_sensitive_handler_output_is_not_published_as_success_or_downloadable_artifact", "tests/test_workbench_security.py::test_private_runtime_profile_has_separate_identity_and_is_not_a_project_payload", "tests/test_plugin_disclosure.py::test_real_plugin_secret_requires_hash_grant_and_cannot_leave_public_boundary"]
+    requirement_or_formula_source: 20261006 security review SEC-01 through SEC-04
+    oracle_type: actual_HTTP_SQLite_and_stdlib_plugin_with_independent_fake_secret_and_private_path_markers
+    fixture_scope: software_only_no_real_credentials_no_scientific_or_server_reproduction
+    formula_version: not_applicable
+    units: not_applicable
+    tolerance_basis: exact unauthorized_status_no_marker_in_public_payload_and_no_registered_sensitive_artifact
+    expected_faults: [anonymous_production_access, query_token_authentication, cross_project_file_binding, secret_in_public_error_or_result, automatic_plugin_secret_grant]

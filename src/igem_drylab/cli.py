@@ -87,11 +87,13 @@ def serve_software_dashboard(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8780, "--port", min=1, max=65535),
     data_dir: Path = typer.Option(Path("outputs/platform"), "--data-dir"),
+    development: bool = typer.Option(False, "--dev-anonymous", help="Explicit loopback-only software development mode."),
+    token_env: str = typer.Option("FUSIONLAB_API_TOKEN", "--api-token-env"),
 ) -> None:
     """Serve the local Dashboard API; start the React dev server separately."""
     from igem_drylab.software.dashboard import serve as serve_dashboard
 
-    serve_dashboard(host=host, port=port, data_dir=data_dir)
+    serve_dashboard(host=host, port=port, data_dir=data_dir, development=development, token_env=token_env)
 
 
 @pipeline_app.command("validate")

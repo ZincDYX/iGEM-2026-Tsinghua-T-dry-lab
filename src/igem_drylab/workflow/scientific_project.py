@@ -26,7 +26,7 @@ class EvidenceFile(Contract):
             raise ValueError("scientific_input_artifact_hash_mismatch:" + str(self.path))
 
 
-def input_paths(config: ProjectConfig) -> set[Path]:
+def input_paths(config: ProjectConfig, allowed_roots: tuple[Path, ...] | None = None) -> set[Path]:
     """Configured data/rule files plus typed M2 artifact dependencies.
 
     Executable deployment directories are tool infrastructure, not scientific
@@ -45,6 +45,11 @@ def input_paths(config: ProjectConfig) -> set[Path]:
             for item in value: walk(item)
     walk(config.inputs)
     walk(config.stages)
+    def authorize(path):
+        if allowed_roots is not None and not any(path.resolve().is_relative_to(root.resolve()) for root in allowed_roots):
+            raise ValueError("scientific_file_outside_authorized_workspace")
+    for path in paths:
+        authorize(path)
     metrics_file = config.stages.m2_fusion.structure_metrics_file
     if metrics_file and metrics_file.is_file():
         for row in load_m2_structure_metrics(metrics_file).values():
@@ -52,7 +57,9 @@ def input_paths(config: ProjectConfig) -> set[Path]:
                 raw = getattr(row, field)
                 if raw:
                     path = Path(raw)
-                    paths.add((path if path.is_absolute() else metrics_file.parent / path).resolve())
+                    path = (path if path.is_absolute() else metrics_file.parent / path).resolve()
+                    authorize(path)
+                    paths.add(path)
     return paths
 
 
@@ -69,10 +76,10 @@ class ScientificProject(Contract):
             item.verify()
 
 
-def load_scientific_project(path: Path) -> ScientificProject:
+def load_scientific_project(path: Path, *, allowed_roots: tuple[Path, ...] | None = None) -> ScientificProject:
     source = path.resolve()
     config = load_config(source)
-    files = input_paths(config) | {source}
+    files = input_paths(config, allowed_roots) | {source}
     missing = [str(path) for path in files if not path.is_file()]
     if missing:
         raise ValueError("scientific_project_missing_local_dependencies:" + ",".join(sorted(missing)))
@@ -97,6 +104,9 @@ def stage_tools():
             for item in payload.upstream_artifacts:
                 item.verify()
             config = payload.project.config.model_copy(deep=True)
+            if context.runtime_tools:
+                from igem_drylab.pipeline.config import ToolConfig
+                config.tools = {key: ToolConfig.model_validate(item) for key, item in context.runtime_tools.items()}
             # Output placement is orchestration only; no scientific inputs changed.
             config.run.id, config.run.output_dir = context.run_id, context.work_dir
             runner = getattr(stages, "run_" + stage)

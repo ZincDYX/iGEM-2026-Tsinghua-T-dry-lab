@@ -32,6 +32,8 @@ class WorkflowEngine:
         self.artifact_root = artifact_root.resolve()
         self.max_workers = max_workers
         self._gpu_lock = Lock()
+        from .disclosure import DisclosureBoundary
+        self.disclosure = DisclosureBoundary(store)
 
     def snapshot(self, project: Project, workflow: Workflow) -> dict[str, Any]:
         tools: dict[str, Any] = {}
@@ -44,6 +46,11 @@ class WorkflowEngine:
             "project": project.model_dump(mode="json"), "workflow": workflow.model_dump(mode="json"),
             "tools": tools, "environment": self._environment(),
         }
+        if project.runtime_profile_ref:
+            from .runtime_profiles import RuntimeProfiles
+            identity, runtime_tools = RuntimeProfiles(self.store).get(project.runtime_profile_ref)
+            snapshot["runtime_profile"] = identity
+            self.disclosure.register_runtime(runtime_tools)
         self._verify_files(snapshot["project"]["files"])
         self._verify_scientific_project(snapshot["project"])
         return snapshot
@@ -78,7 +85,7 @@ class WorkflowEngine:
 
             final = self._execute(run_id, workflow, run["snapshot"]["project"])
         except Exception as exc:
-            self.store.event(run_id, "executor_error", {"type": type(exc).__name__, "message": str(exc)})
+            self.store.event(run_id, "executor_error", self.disclosure.diagnostic(exc))
             raise
         finally:
             stop.set()
@@ -115,6 +122,11 @@ class WorkflowEngine:
             raise ValueError("run_snapshot_hash_mismatch")
         self._verify_files(run["snapshot"]["project"]["files"])
         self._verify_scientific_project(run["snapshot"]["project"])
+        if run["snapshot"].get("runtime_profile"):
+            from .runtime_profiles import RuntimeProfiles
+            identity, _ = RuntimeProfiles(self.store).get(run["snapshot"]["runtime_profile"]["id"])
+            if identity != run["snapshot"]["runtime_profile"]:
+                raise ValueError("runtime_profile_changed_clone_required")
         if run["snapshot"]["environment"] != self._environment():
             raise ValueError("environment_changed_since_snapshot; clone the run")
         for artifact in run["artifacts"]:
@@ -182,7 +194,7 @@ class WorkflowEngine:
                                 future = pool.submit(self._invoke, run_id, node_id, node.tool_id, arguments, sorted(node.dependencies()))
                                 active[future] = (node_id, tool.resource)
                         except (KeyError, IndexError, TypeError, ValidationError, ToolFailure) as exc:
-                            self.store.set_node(run_id, node.id, NodeStatus.failed, error={"code": getattr(exc, "code", "invalid_binding"), "message": str(exc)})
+                            self.store.set_node(run_id, node.id, NodeStatus.failed, error=self.disclosure.diagnostic(exc, code=getattr(exc, "code", "invalid_binding")))
                 if active:
                     done, _ = wait(active, timeout=0.25, return_when=FIRST_COMPLETED)
                     for future in done:
@@ -218,16 +230,23 @@ class WorkflowEngine:
             work_dir = self.artifact_root / run_id / sha256(node_id.encode()).hexdigest()[:16] / f"attempt-{attempt}"
             work_dir.mkdir(parents=True, exist_ok=True)
             payload = definition.input_model.model_validate(arguments)
+            snapshot = self.store.run(run_id)["snapshot"]
+            runtime_tools = {}
+            if snapshot.get("runtime_profile"):
+                from .runtime_profiles import RuntimeProfiles
+                _, runtime_tools = RuntimeProfiles(self.store).get(snapshot["runtime_profile"]["id"])
             with self._gpu_lock if definition.resource == "gpu" else nullcontext():
-                result = definition.handler(payload, NodeContext(run_id, node_id, work_dir))
+                result = definition.handler(payload, NodeContext(run_id, node_id, work_dir, runtime_tools))
             if not isinstance(result, dict):
                 raise ToolFailure("invalid_tool_output", "Tool output must be a JSON object")
             jsonschema.Draft202012Validator(definition.output_schema).validate(result)
+            public_result = self.disclosure.tree(result, project_id=snapshot["project"]["id"]) if definition.capability == "scientific_project" else result
+            self.disclosure.check(public_result)
             self._complete(run_id, node_id, result, upstream)
         except ToolFailure as exc:
-            self.store.set_node(run_id, node_id, NodeStatus.failed, error={"code": exc.code, "message": str(exc), "retryable": exc.retryable})
+            self.store.set_node(run_id, node_id, NodeStatus.failed, error={**self.disclosure.diagnostic(exc, code=exc.code), "retryable": exc.retryable})
         except Exception as exc:
-            self.store.set_node(run_id, node_id, NodeStatus.failed, error={"code": type(exc).__name__, "message": str(exc), "retryable": False})
+            self.store.set_node(run_id, node_id, NodeStatus.failed, error={**self.disclosure.diagnostic(exc, code=getattr(exc, "code", "tool_execution_failed")), "retryable": False})
 
     def _complete(self, run_id: str, node_id: str, output: dict[str, Any], upstream: list[str]) -> None:
         attempt = next(node["attempts"] for node in self.store.run(run_id)["nodes"] if node["id"] == node_id)

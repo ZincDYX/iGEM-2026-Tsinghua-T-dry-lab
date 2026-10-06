@@ -85,10 +85,25 @@ class PluginManager:
     still access the host. No environment secret is inherited implicitly.
     """
 
-    def __init__(self, root: Path, store: WorkflowStore, tools: WorkflowTools, *, budget_bytes: int = 15_000_000_000) -> None:
+    def __init__(self, root: Path, store: WorkflowStore, tools: WorkflowTools, *, budget_bytes: int = 15_000_000_000, disclosure=None) -> None:
         self.root, self.store, self.tools = root.resolve(), store, tools
         self.budget_bytes = budget_bytes
         self.root.mkdir(parents=True, exist_ok=True)
+        from .disclosure import DisclosureBoundary
+        self.disclosure = disclosure or DisclosureBoundary(store)
+
+    @staticmethod
+    def process_environment() -> dict[str, str]:
+        return {key: value for key, value in os.environ.items() if key in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP"}} | {"PYTHONNOUSERSITE": "1"}
+
+    def authorize(self, source_hash: str, capabilities: list[str]) -> None:
+        """Private maintainer operation, deliberately not an HTTP command."""
+        with self.store.connection() as db:
+            db.executemany("INSERT OR IGNORE INTO plugin_grants VALUES(?,?)", [(source_hash, capability) for capability in capabilities])
+
+    def grants(self, source_hash: str) -> set[str]:
+        with self.store.connection() as db:
+            return {row[0] for row in db.execute("SELECT capability FROM plugin_grants WHERE hash=?", (source_hash,))}
 
     def inspect(self, source: Path) -> dict[str, Any]:
         source = source.resolve()
@@ -152,15 +167,17 @@ class PluginManager:
                 shutil.copytree(source, code, ignore=shutil.ignore_patterns(".git", ".venv", "__pycache__", "node_modules"))
             if tree_hash(code) != digest:
                 raise ValueError("plugin_source_changed_during_install")
-            venv.EnvBuilder(with_pip=manifest.requirements_lock is not None).create(environment)
+            venv.EnvBuilder(with_pip=False).create(environment)
             if manifest.requirements_lock:
                 lock = contained(code, manifest.requirements_lock)
                 # Hashed lock files prevent a resolver from silently installing
                 # different transitive package versions at a later date.
                 try:
-                    subprocess.run([str(python), "-m", "pip", "install", "--require-hashes", "-r", str(lock)], check=True, timeout=600, capture_output=True, text=True)
+                    subprocess.run([str(python), "-I", "-m", "ensurepip"], env=self.process_environment(), check=True, timeout=120, capture_output=True, text=True)
+                    subprocess.run([str(python), "-m", "pip", "install", "--require-hashes", "-r", str(lock)], env=self.process_environment(), check=True, timeout=600, capture_output=True, text=True)
                 except subprocess.CalledProcessError as exc:
-                    raise ToolFailure("plugin_dependency_install_failed", exc.stderr[-2000:]) from exc
+                    self.disclosure.diagnostic(exc, code="plugin_dependency_install_failed")
+                    raise ToolFailure("plugin_dependency_install_failed", "Private installation diagnostic recorded") from exc
             ready.write_text(canonical({"source_hash": digest}), encoding="utf-8")
         if not python.exists() or tree_hash(code) != digest:
             raise ValueError("plugin_installation_changed")
@@ -197,8 +214,15 @@ class PluginManager:
             jsonschema.Draft202012Validator(manifest.input_schema).validate(arguments)
             input_file, output_file = context.work_dir / "plugin_input.json", context.work_dir / "plugin_output.json"
             input_file.write_text(canonical(arguments), encoding="utf-8")
-            env = {key: value for key, value in os.environ.items() if key in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP"} or key in manifest.secret_env}
-            env["PYTHONNOUSERSITE"] = "1"
+            grants = self.grants(record["hash"])
+            requested = {"secret_env:" + key for key in manifest.secret_env} | {"permission:" + key for key in manifest.permissions}
+            if not requested <= grants:
+                raise ToolFailure("plugin_capability_not_authorized", "Maintainer capability grant required for this source hash")
+            env = self.process_environment()
+            for key in manifest.secret_env:
+                if key in os.environ:
+                    env[key] = os.environ[key]
+                    self.disclosure.register_private(env[key])
             try:
                 process = subprocess.run([record["python"], "-I", str(contained(source, manifest.entrypoint)), "--input", str(input_file), "--output", str(output_file)], cwd=context.work_dir, env=env, timeout=manifest.timeout_seconds, capture_output=True, text=True, check=False)
             except subprocess.TimeoutExpired as exc:
@@ -206,9 +230,10 @@ class PluginManager:
             (context.work_dir / "plugin_stdout.log").write_text(process.stdout, encoding="utf-8")
             (context.work_dir / "plugin_stderr.log").write_text(process.stderr, encoding="utf-8")
             if process.returncode:
-                raise ToolFailure("plugin_process_failed", process.stderr[-2000:])
+                raise ToolFailure("plugin_process_failed", "Private process logs recorded; no stderr is published")
             output = json.loads(output_file.read_text(encoding="utf-8"))
             jsonschema.Draft202012Validator(manifest.output_schema).validate(output)
+            self.disclosure.check(output)
             return output
 
         self.tools.register(ToolDefinition(tool_id, manifest.name, manifest.description, manifest.version, PluginArguments, invoke, manifest.capability, output_schema=manifest.output_schema, runtime=manifest.runtime, plugin_hash=record["hash"], idempotent=manifest.idempotent, resource=manifest.resource, input_schema=manifest.input_schema))

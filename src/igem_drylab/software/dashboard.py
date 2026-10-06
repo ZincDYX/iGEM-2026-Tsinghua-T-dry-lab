@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 
 from igem_drylab.mcp import ToolRegistry, create_default_registry
@@ -107,26 +108,35 @@ class DashboardRuns:
                 update(self._runs[run_id])
 
 
-def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = None, session_token: str | None = None) -> FastAPI:
+def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = None, session_token: str | None = None,
+               deployment_mode: Literal["authenticated", "development"] = "authenticated", discover_tools: bool = True) -> FastAPI:
     """Build the durable platform API and retain deprecated legacy routes."""
+    if deployment_mode == "authenticated" and not session_token:
+        raise ValueError("authenticated_deployment_requires_private_session_token")
     tool_registry = registry or create_default_registry()
     runs = DashboardRuns()
     app = FastAPI(title="iGEM Dry-Lab Dashboard API", version="0.1.0")
     from .platform_api import platform_router
-    app.include_router(platform_router(data_dir or Path("outputs/platform")))
+    router = platform_router(data_dir or Path("outputs/platform"), discover_tools=discover_tools)
+    app.include_router(router)
+    app.state.platform_store, app.state.workflow_engine, app.state.disclosure = router.store, router.engine, router.disclosure
+    if session_token:
+        router.disclosure.register_private(session_token)
 
     if session_token:
         @app.middleware("http")
         async def authenticate(request: Request, call_next):
             if request.method != "OPTIONS":
                 supplied = request.headers.get("X-FusionLab-Token", "")
-                # Download links cannot set headers. Only artifact GET accepts
-                # the session token as a query parameter; access logging is off
-                # in the desktop launcher, and links use noreferrer.
-                if request.method == "GET" and request.url.path.startswith("/api/platform/artifacts/"):
-                    supplied = request.query_params.get("token", supplied)
                 if not compare_digest(supplied, session_token):
                     return JSONResponse(status_code=401, content={"detail": {"code": "unauthorized", "message": "Desktop session token required"}})
+            return await call_next(request)
+
+    if deployment_mode == "development" and not session_token:
+        @app.middleware("http")
+        async def local_development_only(request: Request, call_next):
+            if request.client and request.client.host not in {"127.0.0.1", "::1", "testclient"}:
+                return JSONResponse(status_code=403, content={"detail": {"code": "development_requires_loopback"}})
             return await call_next(request)
 
     from igem_drylab.workflow.models import WorkflowError
@@ -134,19 +144,23 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
 
     @app.exception_handler(WorkflowError)
     def workflow_failure(request: Request, exc: WorkflowError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": str(exc)}})
+        return JSONResponse(status_code=exc.status_code, content={"detail": router.disclosure.diagnostic(exc, code=exc.code)})
 
     @app.exception_handler(ToolFailure)
     def tool_failure(request: Request, exc: ToolFailure) -> JSONResponse:
-        return JSONResponse(status_code=422, content={"detail": {"code": exc.code, "message": str(exc)}})
+        return JSONResponse(status_code=422, content={"detail": router.disclosure.diagnostic(exc, code=exc.code)})
 
     @app.exception_handler(ValueError)
     def invalid_input(request: Request, exc: ValueError) -> JSONResponse:
-        return JSONResponse(status_code=422, content={"detail": {"code": "invalid_input", "message": str(exc)}})
+        return JSONResponse(status_code=422, content={"detail": router.disclosure.diagnostic(exc, code="invalid_input")})
 
     @app.exception_handler(KeyError)
     def missing_record(request: Request, exc: KeyError) -> JSONResponse:
-        return JSONResponse(status_code=404, content={"detail": {"code": "not_found", "message": str(exc)}})
+        return JSONResponse(status_code=404, content={"detail": router.disclosure.diagnostic(exc, code="not_found")})
+
+    @app.exception_handler(RequestValidationError)
+    def invalid_contract(request: Request, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": router.disclosure.diagnostic(exc, code="invalid_contract")})
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "tauri://localhost", "http://tauri.localhost"], allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-FusionLab-Token"])
 
     @app.get("/api/dashboard/dag", response_model=list[DashboardModule], deprecated=True)
@@ -155,6 +169,8 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
 
     @app.post("/api/dashboard/runs", response_model=DashboardRun, status_code=202, deprecated=True)
     def start_run(request: DashboardRunRequest) -> DashboardRun:
+        if deployment_mode != "development":
+            raise HTTPException(status_code=410, detail={"code": "legacy_execution_requires_durable_reviewed_plan"})
         module = _BY_ID.get(request.module_id)
         if module is None:
             raise HTTPException(status_code=404, detail={"code": "unknown_module", "message": f"Unknown module: {request.module_id}"})
@@ -198,9 +214,13 @@ def _tool_request(request: DashboardRunRequest) -> tuple[str, dict[str, object]]
     raise ValueError(f"Module {request.module_id} has no standalone runtime tool.")
 
 
-def serve(*, host: str, port: int, data_dir: Path | None = None) -> None:
+def serve(*, host: str, port: int, data_dir: Path | None = None, development: bool = False, token_env: str = "FUSIONLAB_API_TOKEN") -> None:
     try:
         import uvicorn
     except ImportError as exc:
         raise RuntimeError("Dashboard requires the optional dependency group: pip install -e '.[software]'") from exc
-    uvicorn.run(create_app(data_dir=data_dir), host=host, port=port)
+    import os
+    if development and host not in {"127.0.0.1", "::1"}:
+        raise ValueError("anonymous_development_must_bind_loopback")
+    token = None if development else os.environ.get(token_env)
+    uvicorn.run(create_app(data_dir=data_dir, session_token=token, deployment_mode="development" if development else "authenticated"), host=host, port=port)

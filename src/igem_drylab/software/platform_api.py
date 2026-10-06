@@ -17,6 +17,7 @@ from pydantic import Field
 
 from igem_drylab.workflow.builtins import Goal, builtin_tools, recommend
 from igem_drylab.workflow.engine import WorkflowEngine
+from igem_drylab.workflow.disclosure import DisclosureBoundary
 from igem_drylab.workflow.mcp_bridge import register_scientific_mcp
 from igem_drylab.workflow.models import Contract, PlanBinding, Project, SequenceRecord, Workflow, WorkflowError
 from igem_drylab.workflow.pathway import Pathway
@@ -37,6 +38,11 @@ class ImportRequest(Contract):
 
 class ScientificImportRequest(Contract):
     config_path: Path
+
+
+class ScientificBundleRequest(Contract):
+    config_filename: str
+    files: list[ImportRequest] = Field(min_length=1, max_length=256)
 
 
 class PlanRequest(Contract):
@@ -71,34 +77,54 @@ class GithubPluginRequest(Contract):
     commit: str
 
 
-def platform_router(data_dir: Path) -> APIRouter:
+def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter:
     data_dir = data_dir.resolve()
     store = WorkflowStore(data_dir / "platform.sqlite3")
     tools = builtin_tools()
-    register_scientific_mcp(tools)
-    plugins = PluginManager(data_dir / "plugins", store, tools)
-    plugins.load_installed()
     engine = WorkflowEngine(store, tools, data_dir / "artifacts")
+    boundary = engine.disclosure
+    boundary.register_private(str(data_dir))
+    plugins = PluginManager(data_dir / "plugins", store, tools, disclosure=boundary)
+    plugins.load_installed()
     router = APIRouter(prefix="/api/platform")
+    router.store, router.engine, router.disclosure = store, engine, boundary
+    capabilities = {"scientific_mcp": "checking" if discover_tools else "unavailable"}
+
+    def discover() -> None:
+        try:
+            register_scientific_mcp(tools)
+            capabilities["scientific_mcp"] = "ready"
+        except Exception as exc:
+            capabilities["scientific_mcp"] = "unavailable"
+            boundary.diagnostic(exc, code="mcp_discovery_failed")
+
+    if discover_tools:
+        Thread(target=discover, daemon=True).start()
 
     def launch(run_id: str, retry: bool = False) -> None:
         def execute() -> None:
             try:
                 engine.run(run_id, retry_failed=retry)
             except Exception as exc:
-                store.event(run_id, "dispatch_error", {"type": type(exc).__name__, "message": str(exc)})
+                store.event(run_id, "dispatch_error", boundary.diagnostic(exc))
         Thread(target=execute, daemon=True).start()
 
     @router.get("/info")
     def info() -> dict[str, Any]:
-        return {"name": "FusionLab", "data_dir": str(data_dir), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "validated_workflow_templates", "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
+        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "validated_workflow_templates", "capabilities": capabilities, "remote_desktop_authenticated_session": False, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
 
     @router.get("/projects")
     def projects() -> list[dict[str, Any]]:
-        return store.projects()
+        return [boundary.project(Project.model_validate(item)) for item in store.projects()]
+
+    @router.get("/projects/{project_id}")
+    def get_project(project_id: str) -> dict[str, Any]:
+        return boundary.project(store.project(project_id))
 
     @router.post("/projects")
-    def save_project(request: SaveProject) -> Project:
+    def save_project(request: SaveProject) -> dict[str, Any]:
+        boundary.check(request.project.model_dump(mode="json"))
+        request.project = boundary.private_project(request.project)
         if request.project.scientific_project is not None:
             from igem_drylab.workflow.scientific_project import ScientificProject
             ScientificProject.model_validate(request.project.scientific_project).verify()
@@ -111,14 +137,45 @@ def platform_router(data_dir: Path) -> APIRouter:
             path = Path(file["path"]).resolve()
             if not path.is_relative_to(data_dir / "imports") or not path.is_file() or sha256(path.read_bytes()).hexdigest() != file["sha256"]:
                 raise ValueError("invalid_import_artifact")
-        return store.save_project(request.project, request.expected_revision)
+        return boundary.project(store.save_project(request.project, request.expected_revision))
 
     @router.post("/scientific-projects/preview")
     def scientific_preview(request: ScientificImportRequest) -> dict[str, Any]:
         from igem_drylab.workflow.scientific_project import load_scientific_project
-        project = load_scientific_project(request.config_path)
-        return {"scientific_project": project.model_dump(mode="json"), "requires_confirmation": True,
+        path = request.config_path.resolve()
+        if not path.is_relative_to(data_dir / "imports"):
+            raise WorkflowError("upload_scientific_inputs_instead_of_server_path", status_code=403)
+        from igem_drylab.resources import default_config_path
+        project = load_scientific_project(path, allowed_roots=(path.parent, default_config_path("m1_feature_definitions.yaml").parent))
+        if project.config.tools:
+            raise WorkflowError("runtime_settings_not_scientific_input")
+        return {"scientific_project": boundary.scientific(project.model_dump(mode="json")), "requires_confirmation": True,
             "dependency_scope": project.dependency_scope}
+
+    @router.post("/scientific-projects/upload-preview")
+    def scientific_upload(request: ScientificBundleRequest) -> dict[str, Any]:
+        # Resolve and validate all relative names before writing the owned bundle.
+        root = data_dir / "imports" / str(uuid4())
+        contents: dict[Path, str] = {}
+        for item in request.files:
+            target = (root / item.filename).resolve()
+            if not target.is_relative_to(root) or ".." in Path(item.filename).parts or target in contents:
+                raise WorkflowError("invalid_upload_identity")
+            contents[target] = item.content
+        if sum(len(item.encode()) for item in contents.values()) > 20_000_000:
+            raise WorkflowError("scientific_upload_budget_exceeded")
+        source = (root / request.config_filename).resolve()
+        if source not in contents:
+            raise WorkflowError("missing_uploaded_scientific_config")
+        # Reject runtime settings before resolving or reading scientific files.
+        import yaml
+        raw = yaml.safe_load(contents[source])
+        if not isinstance(raw, dict) or raw.get("tools"):
+            raise WorkflowError("runtime_settings_not_scientific_input")
+        for target, content in contents.items():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+        return scientific_preview(ScientificImportRequest(config_path=source))
 
     @router.post("/imports/preview")
     def import_preview(request: ImportRequest) -> dict[str, Any]:
@@ -169,7 +226,12 @@ def platform_router(data_dir: Path) -> APIRouter:
         else:
             raise ValueError("supported_imports: FASTA, annotated GenBank, pathway JSON, CSV, TSV")
         source.write_bytes(request.content.encode("utf-8"))
-        return {"kind": kind, "patch": patch, "file": {"id": digest, "sha256": digest, "path": str(source), "name": Path(request.filename).name}}
+        file = boundary.asset(source)
+        for dataset in patch.get("datasets", []):
+            dataset["file_id"] = file["id"]
+        result = {"kind": kind, "patch": patch, "file": file}
+        boundary.check(result)
+        return result
 
     @router.post("/plans")
     def plan(request: PlanRequest) -> dict[str, Any]:
@@ -177,6 +239,7 @@ def platform_router(data_dir: Path) -> APIRouter:
         workflow = recommend(project, request.goal)
         if request.objective:
             workflow.description += f" 用户任务说明：{request.objective}"
+        boundary.check(workflow.model_dump(mode="json"))
         return {"workflow": workflow.model_dump(mode="json"), "source": "validated_template", "requires_confirmation": True,
             "confirmation": plan_binding(project, workflow).model_dump(mode="json")}
 
@@ -188,6 +251,7 @@ def platform_router(data_dir: Path) -> APIRouter:
 
     @router.post("/workflows/validate")
     def validate_workflow(workflow: Workflow) -> Workflow:
+        boundary.check(workflow.model_dump(mode="json"))
         for node in workflow.nodes:
             tools.get(node.tool_id)
         return workflow
@@ -199,7 +263,7 @@ def platform_router(data_dir: Path) -> APIRouter:
         run_id = engine.create_confirmed(request.confirmation, request.workflow)
         result = store.run(run_id)
         launch(run_id)
-        return result
+        return boundary.run(result)
 
     @router.get("/runs")
     def runs(project_id: str | None = None) -> list[dict[str, Any]]:
@@ -207,7 +271,7 @@ def platform_router(data_dir: Path) -> APIRouter:
 
     @router.get("/runs/{run_id}")
     def get_run(run_id: str) -> dict[str, Any]:
-        return store.run(run_id)
+        return boundary.run(store.run(run_id))
 
     @router.post("/runs/{run_id}/control")
     def control(run_id: str, request: ControlRequest) -> dict[str, Any]:
@@ -225,7 +289,7 @@ def platform_router(data_dir: Path) -> APIRouter:
                 if run["heartbeat"] > (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat():
                     raise WorkflowError("run_has_active_worker", status_code=409)
             launch(run_id, retry=request.action == "retry")
-        return store.run(run_id)
+        return boundary.run(store.run(run_id))
 
     @router.post("/runs/{run_id}/clone", status_code=202)
     def clone(run_id: str) -> dict[str, Any]:
@@ -233,18 +297,23 @@ def platform_router(data_dir: Path) -> APIRouter:
         new_id = engine.create(Project.model_validate(old["project"]), Workflow.model_validate(old["workflow"]))
         result = store.run(new_id)
         launch(new_id)
-        return result
+        return boundary.run(result)
 
     @router.get("/artifacts/{artifact_id}")
-    def artifact(artifact_id: str) -> FileResponse:
+    def artifact(artifact_id: str, project_id: str) -> FileResponse:
         with store.connection() as db:
-            row = db.execute("SELECT path,hash FROM artifacts WHERE id=?", (artifact_id,)).fetchone()
+            row = db.execute("SELECT artifacts.path,artifacts.hash,runs.project_id FROM artifacts JOIN runs ON runs.id=artifacts.run_id WHERE artifacts.id=?", (artifact_id,)).fetchone()
         if row is None:
             raise KeyError(artifact_id)
+        if row["project_id"] != project_id:
+            raise WorkflowError("artifact_project_mismatch", status_code=403)
         path = Path(row["path"])
+        if not path.resolve().is_relative_to(data_dir / "artifacts"):
+            raise WorkflowError("artifact_workspace_mismatch", status_code=403)
         if not path.is_file() or sha256(path.read_bytes()).hexdigest() != row["hash"]:
             raise ValueError("artifact_hash_mismatch")
-        return FileResponse(path, media_type="application/json", filename="result.json")
+        boundary.check(json.loads(path.read_text(encoding="utf-8")))
+        return FileResponse(path, media_type="application/json", filename="result.json", headers={"X-Content-SHA256": row["hash"]})
 
     @router.get("/tools")
     def tool_list() -> list[dict[str, Any]]:
@@ -252,15 +321,21 @@ def platform_router(data_dir: Path) -> APIRouter:
 
     @router.get("/plugins")
     def plugin_list() -> list[dict[str, Any]]:
-        return plugins.installed()
+        return [{key: item[key] for key in ("manifest", "hash", "sandboxed", "trust_required", "installed")} for item in plugins.installed()]
 
     @router.post("/plugins/inspect")
     def inspect_plugin(request: PluginRequest) -> dict[str, Any]:
+        if str(request.source_path).startswith("plugin-source:"):
+            request.source_path = data_dir / "plugins" / "sources" / str(request.source_path).removeprefix("plugin-source:")
+        if not request.source_path.resolve().is_relative_to(data_dir / "plugins" / "sources"):
+            raise WorkflowError("plugin_source_outside_owned_workspace", status_code=403)
         return plugins.inspect(request.source_path)
 
     @router.post("/plugins/github")
     def github_plugin(request: GithubPluginRequest) -> dict[str, Any]:
-        return plugins.fetch_github(request.repository_url, request.commit)
+        result = plugins.fetch_github(request.repository_url, request.commit)
+        result["source_path"] = "plugin-source:" + Path(result["source_path"]).name
+        return result
 
     @router.get("/schemas")
     def schemas() -> dict[str, Any]:
@@ -274,6 +349,11 @@ def platform_router(data_dir: Path) -> APIRouter:
     def install_plugin(request: PluginRequest) -> dict[str, Any]:
         if not request.expected_hash:
             raise WorkflowError("plugin_changed_since_inspection", status_code=409)
-        return plugins.install(request.source_path, trusted=request.trusted, expected_hash=request.expected_hash)
+        if str(request.source_path).startswith("plugin-source:"):
+            request.source_path = data_dir / "plugins" / "sources" / str(request.source_path).removeprefix("plugin-source:")
+        if not request.source_path.resolve().is_relative_to(data_dir / "plugins" / "sources"):
+            raise WorkflowError("plugin_source_outside_owned_workspace", status_code=403)
+        result = plugins.install(request.source_path, trusted=request.trusted, expected_hash=request.expected_hash)
+        return {key: result[key] for key in ("manifest", "hash", "sandboxed", "trust_required", "installed")}
 
     return router

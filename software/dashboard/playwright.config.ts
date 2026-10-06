@@ -25,7 +25,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `"${python}" -m igem_drylab.cli software serve --port 8789 --data-dir "${testData}"`,
+      command: `"${python}" -m igem_drylab.cli software serve --port 8789 --dev-anonymous --data-dir "${testData}"`,
       cwd: repository,
       url: "http://127.0.0.1:8789/api/platform/info",
       reuseExistingServer: false,

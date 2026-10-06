@@ -51,6 +51,13 @@ class WorkflowStore:
                     id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), node_id TEXT NOT NULL,
                     hash TEXT NOT NULL, path TEXT NOT NULL, upstream TEXT NOT NULL, metadata TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS plugins(hash TEXT PRIMARY KEY, payload TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS runtime_profiles(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, hash TEXT NOT NULL, payload TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS private_diagnostics(id TEXT PRIMARY KEY, error_type TEXT NOT NULL, message TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS file_assets(id TEXT PRIMARY KEY, project_id TEXT, path TEXT NOT NULL UNIQUE, hash TEXT NOT NULL, name TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS plugin_grants(hash TEXT NOT NULL, capability TEXT NOT NULL, PRIMARY KEY(hash,capability));
+                CREATE INDEX IF NOT EXISTS events_run_seq ON events(run_id,seq);
+                CREATE INDEX IF NOT EXISTS artifacts_run ON artifacts(run_id);
+                CREATE INDEX IF NOT EXISTS runs_project_time ON runs(project_id,created_at DESC);
             """)
 
     @contextmanager

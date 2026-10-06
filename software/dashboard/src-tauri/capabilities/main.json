@@ -1,0 +1,7 @@
+{
+  "identifier": "main-workbench",
+  "description": "Only the bundled main workbench may access desktop connection commands.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": ["allow-backend-info", "allow-desktop-settings", "allow-save-desktop-settings"]
+}

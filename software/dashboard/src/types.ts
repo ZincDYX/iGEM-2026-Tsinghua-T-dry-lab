@@ -156,7 +156,10 @@ export interface PluginInspection {
 }
 export interface RuntimeInfo {
   name: string;
-  data_dir: string;
+  workspace_id: string;
+  protocol_version: string;
+  authentication: string;
+  capabilities: Record<string, string>;
   storage: string;
   max_workers: number;
   plugin_sandbox: boolean;

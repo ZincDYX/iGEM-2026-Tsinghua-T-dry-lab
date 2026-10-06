@@ -15,7 +15,7 @@ from igem_drylab.workflow.store import WorkflowStore, plan_binding
 
 @pytest.fixture
 def api_project(tmp_path):
-    client = TestClient(create_app(data_dir=tmp_path))
+    client = TestClient(create_app(data_dir=tmp_path, deployment_mode="development"))
     project = client.post('/api/platform/projects', json={'project': {'id': 'p', 'name': 'software_fixture',
         'sequences': [{'id': 'same', 'sequence': 'MAGSGS'}]}}).json()
     plan = client.post('/api/platform/plans', json={'project_id': 'p', 'goal': 'fusion_screen'}).json()

@@ -11,9 +11,25 @@ from igem_drylab.workflow.scientific_project import load_scientific_project
 
 
 def test_typed_project_executes_original_stages_and_preserves_missing_evidence(tmp_path):
-    client = TestClient(create_app(data_dir=tmp_path))
+    app = create_app(data_dir=tmp_path, deployment_mode="development")
+    client = TestClient(app)
     source = Path('configs/m1_m4_real_scoring_example.yaml').resolve()
-    preview = client.post('/api/platform/scientific-projects/preview',json={'config_path':str(source)})
+    original = load_scientific_project(source)
+    private_config = original.config.model_dump(mode='json',exclude={'tools'})
+    files = []
+    replacements = {}
+    for item in original.evidence_files:
+        if item.path == source: continue
+        logical = item.sha256[:12] + '/' + item.path.name
+        replacements[str(item.path)] = logical
+        files.append({'filename':logical,'content':item.path.read_text(encoding='utf-8')})
+    def relative(value):
+        if isinstance(value,str): return replacements.get(value,value)
+        if isinstance(value,dict): return {key:relative(item) for key,item in value.items()}
+        if isinstance(value,list): return [relative(item) for item in value]
+        return value
+    files.append({'filename':'project.yaml','content':json.dumps(relative(private_config))})
+    preview = client.post('/api/platform/scientific-projects/upload-preview',json={'config_filename':'project.yaml','files':files})
     assert preview.status_code == 200, preview.text
     science = preview.json()['scientific_project']
     assert science['config']['execution']['mode'] == 'real'
@@ -51,7 +67,7 @@ def test_scientific_files_are_bound_and_tamper_or_missing_binding_refused(tmp_pa
 
 
 def test_wetlab_import_is_explicit_typed_qc_not_parameter_approval(tmp_path):
-    client = TestClient(create_app(data_dir=tmp_path))
+    client = TestClient(create_app(data_dir=tmp_path, deployment_mode="development"))
     record = {'experiment_id':'software_fixture','construct_id':'c','condition_id':'d','replicate_id':'r',
         'metabolite_time':[0,1], 'metabolite_concentration_unit':'uM','metabolites':{'15':[1,2]}}
     body = {'filename':'measurements.json','input_kind':'wetlab','content':json.dumps([record])}

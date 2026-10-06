@@ -29,7 +29,7 @@ def _eventually(client: TestClient, run_id: str) -> dict[str, object]:
 
 
 def test_dashboard_returns_real_m0_m5_dag_contract():
-    client = TestClient(create_app(StubRegistry(McpToolResult.ok({"ok": True}))))
+    client = TestClient(create_app(StubRegistry(McpToolResult.ok({"ok": True})), deployment_mode="development"))
     payload = client.get("/api/dashboard/dag").json()
     assert [item["id"] for item in payload] == ["m0", "m1", "m2", "m3", "m4", "m5"]
     assert payload[0]["run_available"] is True
@@ -39,7 +39,7 @@ def test_dashboard_returns_real_m0_m5_dag_contract():
 
 def test_dashboard_dispatches_m0_to_existing_registry_tool():
     registry = StubRegistry(McpToolResult.ok({"ok": True, "run_id": "demo"}))
-    client = TestClient(create_app(registry))
+    client = TestClient(create_app(registry, deployment_mode="development"))
     response = client.post("/api/dashboard/runs", json={"module_id": "m0", "config_path": "configs/m1_m4_example.yaml"})
     final = _eventually(client, response.json()["run_id"])
     assert final["status"] == "succeeded"
@@ -49,7 +49,7 @@ def test_dashboard_dispatches_m0_to_existing_registry_tool():
 
 
 def test_dashboard_m0_runs_actual_registry_validation():
-    client = TestClient(create_app())
+    client = TestClient(create_app(deployment_mode="development"))
     response = client.post("/api/dashboard/runs", json={"module_id": "m0", "config_path": "configs/m1_m4_example.yaml"})
     final = _eventually(client, response.json()["run_id"])
     assert final["status"] == "succeeded"
@@ -58,7 +58,7 @@ def test_dashboard_m0_runs_actual_registry_validation():
 
 def test_dashboard_returns_structured_runtime_failure():
     registry = StubRegistry(McpToolResult.error("missing reviewed parameters", error_type="insufficient_data"))
-    client = TestClient(create_app(registry))
+    client = TestClient(create_app(registry, deployment_mode="development"))
     response = client.post("/api/dashboard/runs", json={"module_id": "m4", "config_path": "configs/m1_m4_real_scoring_example.yaml"})
     final = _eventually(client, response.json()["run_id"])
     assert final["status"] == "failed"
@@ -67,7 +67,7 @@ def test_dashboard_returns_structured_runtime_failure():
 
 
 def test_dashboard_honestly_marks_unavailable_isolated_module():
-    client = TestClient(create_app(StubRegistry(McpToolResult.ok({"ok": True}))))
+    client = TestClient(create_app(StubRegistry(McpToolResult.ok({"ok": True})), deployment_mode="development"))
     response = client.post("/api/dashboard/runs", json={"module_id": "m2", "config_path": "configs/m1_m4_example.yaml"})
     assert response.status_code == 202
     payload = response.json()
