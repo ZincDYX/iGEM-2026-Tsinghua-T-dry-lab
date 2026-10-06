@@ -150,6 +150,10 @@ def test_generated_wire_schema_matches_python_and_validators_have_no_runtime_eva
     assert json.loads((contracts/"public.schemas.json").read_text(encoding="utf-8"))==public_schemas()
     validator=(contracts/"public.validators.generated.js").read_text(encoding="utf-8")
     assert "new Function(" not in validator and "eval(" not in validator
+    from igem_drylab.workflow.mcp_bridge import server_parameters
+    parameters=server_parameters(root/"src/igem_drylab")
+    assert parameters.args==["-B","-m","igem_drylab.mcp.server"]
+    assert "FUSIONLAB_SESSION_TOKEN" not in parameters.env
 
 
 def test_registered_m5_binding_is_preview_only_and_keeps_empty_measurements_empty(tmp_path):

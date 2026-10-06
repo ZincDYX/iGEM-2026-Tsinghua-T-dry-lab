@@ -169,7 +169,7 @@ fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>>
     let token = uuid::Uuid::new_v4().to_string();
     let mut command = Command::new(python);
     command
-        .args(["-m", "igem_drylab.software.desktop_backend", "--data-dir"])
+        .args(["-B", "-m", "igem_drylab.software.desktop_backend", "--data-dir"])
         .arg(&data)
         .env("FUSIONLAB_SESSION_TOKEN", &token)
         .current_dir(root)

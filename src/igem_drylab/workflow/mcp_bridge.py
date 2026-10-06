@@ -38,7 +38,7 @@ def server_parameters(package: Path) -> StdioServerParameters:
     runtime_env = {key: os.environ[key] for key in (
         "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS", "PYTHONUTF8"
     ) if key in os.environ}
-    return StdioServerParameters(command=sys.executable, args=["-m", "igem_drylab.mcp.server"],
+    return StdioServerParameters(command=sys.executable, args=["-B", "-m", "igem_drylab.mcp.server"],
         cwd=package.parents[1], env=runtime_env)
 
 
