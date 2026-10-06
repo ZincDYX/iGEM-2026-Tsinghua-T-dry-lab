@@ -1,10 +1,11 @@
-"""Package actual air-lab review runs and verify the deployed committed tree."""
+"""Package actual validation host review runs and verify the deployed committed tree."""
 import argparse
 from datetime import datetime,timezone
 import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tarfile
 import xml.etree.ElementTree as ET
 import zipfile
@@ -21,6 +22,7 @@ def main():
     parser.add_argument('--release-tar',type=Path,required=True)
     parser.add_argument('--commit',required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--historical-python',type=Path,required=True)
     args=parser.parse_args()
     results=args.results.resolve();repo=args.repository.resolve()
     checks=[]
@@ -38,8 +40,7 @@ def main():
         'verified_at_utc':datetime.now(timezone.utc).isoformat()}
     save(results/'deployment_source_checks.json',deployment)
     save(repo/'new_review_deployment_manifest.json',deployment)
-    for name,python in [('production','/mnt/data/dyx/miniconda3/envs/drylab-m1m2/bin/python'),
-                        ('historical','/mnt/data/dyx/drylab-envs/glabridin-reference/bin/python')]:
+    for name,python in [('production',sys.executable), ('historical',str(args.historical_python))]:
         freeze=subprocess.check_output([python,'-m','pip','freeze','--all'],text=True)
         (results/f'{name}_environment.lock.txt').write_text(freeze,encoding='utf-8')
     supplied=results/'input-review-evidence.zip'
@@ -88,7 +89,7 @@ def main():
     records=[{'path':path.relative_to(results).as_posix() if path.is_relative_to(results) else 'prior-evidence/'+path.name,
               'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()} for path in sorted(files)]
     save(results/'EVIDENCE_MANIFEST.json',{'commit':args.commit,'files':records,
-        'scope':'Actual air-lab software regression and numerical reproduction evidence, not new wet-lab measurements'})
+        'scope':'Actual validation host software regression and numerical reproduction evidence, not new wet-lab measurements'})
     with zipfile.ZipFile(args.output,'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for path,record in zip(sorted(files),records,strict=True):archive.write(path,record['path'])
         archive.write(results/'EVIDENCE_MANIFEST.json','EVIDENCE_MANIFEST.json')

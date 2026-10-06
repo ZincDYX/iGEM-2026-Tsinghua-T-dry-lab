@@ -1,6 +1,6 @@
 # 本轮输入和验证方式
 
-运行仅在 air-lab，生产 Python 为 `/mnt/data/dyx/miniconda3/envs/drylab-m1m2/bin/python`。项目 `/mnt/data/dyx/drylab-m1m4-runtime`；旧入口 symlink 不变。
+运行仅在 validation host，生产 Python 为 `${PRODUCTION_ENV}/bin/python`。项目 `${PROJECT_ROOT}`；旧入口 symlink 不变。
 
 ## 湿实验条件
 
@@ -20,13 +20,13 @@ M4Config 新字段 measurement_compartment 应由实际方案声明。实际 pre
 
 empirical 默认 discrete inverse ECDF，重复样本保留权重。确需连续插值时显式 distribution=interpolated_empirical 并提供 interpolation_reference、source_reference、reviewed_by。相关参数不能用独立边际 LHS 冒充联合分布。
 
-## air-lab 验收
+## validation host 验收
 
 ```bash
-export PATH=/mnt/data/dyx/drylab-tools/node-v24.21.0-linux-x64/bin:$PATH
-cd /mnt/data/dyx/drylab-m1m4-runtime
-/mnt/data/dyx/miniconda3/envs/drylab-m1m2/bin/python -m pytest -q --require-author-reference --junitxml=/absolute/new-results/full-tests.xml
-/mnt/data/dyx/miniconda3/envs/drylab-m1m2/bin/python scripts/audit_numeric_mutations.py --output /absolute/new-mutation-output
+export PATH=${DEPLOYMENT_ROOT}/drylab-tools/node-v24.21.0-linux-x64/bin:$PATH
+cd ${PROJECT_ROOT}
+${PRODUCTION_ENV}/bin/python -m pytest -q --require-author-reference --junitxml=/absolute/new-results/full-tests.xml
+${PRODUCTION_ENV}/bin/python scripts/audit_numeric_mutations.py --output /absolute/new-mutation-output
 ```
 
 故障输出目录必须是新目录；脚本只改临时副本，并检查生产源码哈希未变。缺 Node 时 UI JS 行为测试失败，不静默 skip；缺原作者输入时必跑 reference job 失败/blocked。XML 数量是软件用例数，核心风险和真实观测数另列。

@@ -12,14 +12,14 @@
 
 ## 计算位置与版本
 
-所有本次正式复现、拟合、后端测试、前端构建和 MCP 实际作业均在 **air-lab** 执行；本机仅编辑、传输和记录代码/报告。
+所有本次正式复现、拟合、后端测试、前端构建和 MCP 实际作业均在 **validation host** 执行；本机仅编辑、传输和记录代码/报告。
 
-- 新版完整项目源码：`/mnt/data/dyx/drylab-m1m4-runtime`，包括 M1–M5、工作流、MCP、插件运行时、React/TypeScript、Tauri 源码、测试、配置和示例。
-- 旧入口 `/mnt/data/dyx/lkdagent/drylab` 指向新版；两个旧代码目录以时间戳归档至 `/mnt/data/dyx/drylab-code-archives/`。原有 Git 工作改动、`.env`、输入和约 8 GB 输出保留，不删除实验数据。
-- 原文文件与计算结果：`/mnt/data/dyx/glabridin-reproduction/`。
-- 隔离的原文数值环境：`/mnt/data/dyx/drylab-envs/glabridin-reference`。使用 Python 3.11、NumPy 1.24.4、SciPy 1.10.1、Matplotlib 3.7.5、OpenPyXL 3.1.5；实际传递依赖见服务器 `environment.lock.txt`。
+- 新版完整项目源码：`${PROJECT_ROOT}`，包括 M1–M5、工作流、MCP、插件运行时、React/TypeScript、Tauri 源码、测试、配置和示例。
+- 旧入口 `${DEPLOYMENT_ROOT}/lkdagent/drylab` 指向新版；两个旧代码目录以时间戳归档至 `${DEPLOYMENT_ROOT}/drylab-code-archives/`。原有 Git 工作改动、`.env`、输入和约 8 GB 输出保留，不删除实验数据。
+- 原文文件与计算结果：`${DEPLOYMENT_ROOT}/glabridin-reproduction/`。
+- 隔离的原文数值环境：`${REFERENCE_ENV}`。使用 Python 3.11、NumPy 1.24.4、SciPy 1.10.1、Matplotlib 3.7.5、OpenPyXL 3.1.5；实际传递依赖见服务器 `environment.lock.txt`。
 - 作者方法记录的是 Python 3.8.5；SciPy 1.10.1 不能构成相同解释器组合，所以这只是历史输出兼容环境，不是已确认的作者原始环境。本次没有声称解释器版本或结果逐比特一致。
-- 正常项目环境仍是 `/mnt/data/dyx/miniconda3/envs/drylab-m1m2`，新版源码通过 editable 安装指向当前运行目录。
+- 正常项目环境仍是 `${PRODUCTION_ENV}`，新版源码通过 editable 安装指向当前运行目录。
 
 第三方 Git 子模块的地址和提交保留在源码/部署清单中；未把所有可选第三方项目、数据库和模型重新下载为离线镜像。已有工具、ColabFold 权重和环境保留。Tauri 源码已部署，但本次没有编译服务器桌面壳、生成 Windows 安装包或执行浏览器端到端测试。
 
@@ -157,7 +157,7 @@ Fig. 4g 匹配需要使用作者代码已有的负诱导时刻分支（`time_rat
 
 ### 新评审后的历史/现代环境对照及收敛诊断
 
-本轮在 air-lab 使用实际隔离环境 SciPy 1.10.1 与生产环境 SciPy 1.17.1 各完整运行一次最终复现脚本，均覆盖 1000 点曲线、500 点双容差扫描、12 组动力学及实测源表重分析。结果保存于 `results/new-review-20261004/final-historical/` 与 `final-modern/`，不覆盖此前证据。
+本轮在 validation host 使用实际隔离环境 SciPy 1.10.1 与生产环境 SciPy 1.17.1 各完整运行一次最终复现脚本，均覆盖 1000 点曲线、500 点双容差扫描、12 组动力学及实测源表重分析。结果保存于 `results/new-review-20261004/final-historical/` 与 `final-modern/`，不覆盖此前证据。
 
 | 目标 | 历史环境最大浓度差 | 现代环境最大浓度差 | 结论边界 |
 | --- | ---: | ---: | --- |
@@ -212,29 +212,29 @@ Fig. 4g 匹配需要使用作者代码已有的负诱导时刻分支（`time_rat
 
 新一轮合并逻辑文件大小审计包括项目 Python 环境、ColabFold 权重、独立复现环境、Node/pnpm、安装缓存、前端 node_modules 和已有工具：**11,212,705,318 字节**（约 11.21 GB）小于十进制 15,000,000,000 字节。该值是本次切换前的实测快照，不是磁盘硬配额；以后安装需重新审计。原始论文数据/旧实验输出不冒充外部工具大小。
 
-复现命令（只在 air-lab 运行）：
+复现命令（只在 validation host 运行）：
 
 ```bash
-/mnt/data/dyx/drylab-envs/glabridin-reference/bin/python \
-  /mnt/data/dyx/drylab-m1m4-runtime/scripts/reproduce_glabridin_paper.py \
-  --sources /mnt/data/dyx/glabridin-reproduction/raw \
-  --output /mnt/data/dyx/glabridin-reproduction/results
+${REFERENCE_ENV}/bin/python \
+  ${PROJECT_ROOT}/scripts/reproduce_glabridin_paper.py \
+  --sources ${DEPLOYMENT_ROOT}/glabridin-reproduction/raw \
+  --output ${DEPLOYMENT_ROOT}/glabridin-reproduction/results
 ```
 
 输出包括逐点 CSV 残差、JSON 指标、全部 500 点双容差结果、12 组拟合、湿实验原始重复统计、缺失值清单、6 张重新计算的 PNG 和服务器环境记录。
 
-追加诊断命令（同样仅在 air-lab，stdout 为 JSON）：
+追加诊断命令（同样仅在 validation host，stdout 为 JSON）：
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 /mnt/data/dyx/drylab-envs/glabridin-reference/bin/python \
-  /mnt/data/dyx/drylab-m1m4-runtime/scripts/diagnose_glabridin_reference.py \
-  --sources /mnt/data/dyx/glabridin-reproduction/raw \
-  --repository /mnt/data/dyx/drylab-m1m4-runtime
+PYTHONDONTWRITEBYTECODE=1 ${REFERENCE_ENV}/bin/python \
+  ${PROJECT_ROOT}/scripts/diagnose_glabridin_reference.py \
+  --sources ${DEPLOYMENT_ROOT}/glabridin-reproduction/raw \
+  --repository ${PROJECT_ROOT}
 ```
 
 ### 结果证据目录
 
-根目录 `/mnt/data/dyx/glabridin-reproduction/results/`；以下都是服务器计算/核对产物，不是作者原始数据链接。
+根目录 `${DEPLOYMENT_ROOT}/glabridin-reproduction/results/`；以下都是服务器计算/核对产物，不是作者原始数据链接。
 
 | 证据文件 | 内容 |
 | --- | --- |
@@ -256,9 +256,9 @@ PYTHONDONTWRITEBYTECODE=1 /mnt/data/dyx/drylab-envs/glabridin-reference/bin/pyth
 
 完整源码 bundle 为 `E:/Desktop/activity/iGEM/drylab-doc/iGEM-drylab-codebundle.md`；由提交后的完整 Git 树机械导出，每个文件包含路径、Git blob、字节数与 SHA-256，并进行逐文件解码回验。此次报告、数据来源清单和独立诊断脚本纳入快照；bundle 页首保存实际源提交与文件/子模块数量。
 
-bundle 包含全部已提交项目源文件，不包含凭据、安装环境、模型权重、受忽略的原始大数据或全部第三方子模块源码；不能将其称为免下载的完整离线环境包。原始作者文件在 air-lab 保持不可变，本报告提供来源直链与校验清单。
+bundle 包含全部已提交项目源文件，不包含凭据、安装环境、模型权重、受忽略的原始大数据或全部第三方子模块源码；不能将其称为免下载的完整离线环境包。原始作者文件在 validation host 保持不可变，本报告提供来源直链与校验清单。
 
-报告副本置于 `E:/Desktop/activity/iGEM/drylab-doc/光甘草定论文复现报告_20261004.md`。报告、来源清单、诊断脚本及 bundle 同步到 air-lab；具体交付 SHA-256 由同步校验记录保存，避免报告嵌入自身内容哈希。
+报告副本置于 `E:/Desktop/activity/iGEM/drylab-doc/光甘草定论文复现报告_20261004.md`。报告、来源清单、诊断脚本及 bundle 同步到 validation host；具体交付 SHA-256 由同步校验记录保存，避免报告嵌入自身内容哈希。
 
 ## 不得称为“整篇论文完整复现”
 

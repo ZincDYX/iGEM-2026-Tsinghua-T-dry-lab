@@ -1,4 +1,4 @@
-"""air-lab-only controlled diagnostic; never patches the production solver."""
+"""validation host-only controlled diagnostic; never patches the production solver."""
 import argparse
 import ast
 from contextlib import contextmanager

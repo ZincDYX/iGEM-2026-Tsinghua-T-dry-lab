@@ -1,4 +1,4 @@
-"""Read-only diagnostics: execute on air-lab, never a production correction."""
+"""Read-only diagnostics: execute on validation host, never a production correction."""
 import argparse
 import builtins
 import copy
@@ -16,8 +16,8 @@ import numpy as np
 from openpyxl import load_workbook
 from scipy.optimize import curve_fit
 arguments = argparse.ArgumentParser(description=__doc__)
-arguments.add_argument('--sources', type=Path, default=Path('/mnt/data/dyx/glabridin-reproduction/raw'))
-arguments.add_argument('--repository', type=Path, default=Path('/mnt/data/dyx/drylab-m1m4-runtime'))
+arguments.add_argument('--sources', type=Path, required=True)
+arguments.add_argument('--repository', type=Path, default=Path(__file__).resolve().parents[1])
 arguments.add_argument('--compact', action='store_true')
 args = arguments.parse_args()
 sys.path.insert(0, str(args.repository / 'src'))

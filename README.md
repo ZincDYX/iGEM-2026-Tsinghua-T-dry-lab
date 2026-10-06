@@ -251,9 +251,9 @@ The generic fusion-protein/self-assembly workspace is separate from the Galatea 
 
 See [platform design and startup](docs/fusionlab_platform.md), [plugin protocol and examples](docs/plugin_development.md), and [deployment/license audit](docs/external_tool_deployment.md). The current external-tool budget is **15 GB (decimal)**. The Windows source-first desktop shell requires an installed Python environment; a standalone bundled installer and untrusted-code sandbox are not provided.
 
-## air-lab publication reproduction
+## validation host publication reproduction
 
-The complete current source tree and the glabridin numerical/source-data reproduction run on `air-lab`, not the workstation. See [server deployment, verified results and unresolved paper inconsistencies](docs/airlab_glabridin_reproduction.md). The immutable author RHS is kept separate from the production condensate model; reproducing its published curves does not validate all biological assumptions or reproduce the whole paper's omics/MD/wet-lab work.
+The complete current source tree and the glabridin numerical/source-data reproduction run on `validation host`, not the workstation. See [server deployment, verified results and unresolved paper inconsistencies](docs/glabridin_reference_reproduction.md). The immutable author RHS is kept separate from the production condensate model; reproducing its published curves does not validate all biological assumptions or reproduce the whole paper's omics/MD/wet-lab work.
 
 ## Contributing
 

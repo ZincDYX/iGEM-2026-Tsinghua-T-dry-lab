@@ -5,6 +5,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tarfile
 import xml.etree.ElementTree as ET
 import zipfile
@@ -55,7 +56,7 @@ def main():
         mutations=json.loads(args.mutation_summary.read_text())
         if not mutations.get('passed') or not mutations.get('production_sources_unchanged'):
             raise ValueError('directed_numeric_fault_audit_not_passed')
-    lock = subprocess.check_output([str(Path('/mnt/data/dyx/miniconda3/envs/drylab-m1m2/bin/python')),'-m','pip','freeze','--all'],text=True)
+    lock = subprocess.check_output([sys.executable,'-m','pip','freeze','--all'],text=True)
     (args.results/'production_environment.lock.txt').write_text(lock)
     summary = {'commit':args.commit,'backend_tests':counts,
         'duration_seconds':sum(float(s.attrib.get('time',0)) for s in suites),

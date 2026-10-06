@@ -1,6 +1,6 @@
 # 本轮新增功能的调用与边界
 
-配置和原始输入仍走既有审核/身份/单位门控。下列命令在 air-lab 的生产环境运行；参数文件由实际数据提供，不附任何为跑通程序捏造的生物参数。
+配置和原始输入仍走既有审核/身份/单位门控。下列命令在 validation host 的生产环境运行；参数文件由实际数据提供，不附任何为跑通程序捏造的生物参数。
 
 ## M3
 
@@ -45,4 +45,4 @@ freeze-plan 显式提供 freeze_id、construct_id、condition_id、claim_scope �
 
 继续使用 igem.compute.run_tool 执行实际外部工具，显式声明 input_files/expected_outputs；没有安装/授权/版本解析的预测器仍不能冒充已运行。FreeSASA 完整残基 JSON 与 stdout 摘要分开保存。
 
-实际服务器证据位于 /mnt/data/dyx/glabridin-reproduction/results/latest-review-20261004。科学方程、软件夹具、历史论文复现、真实工具 smoke 与未来生物学预测验收分别报告。
+实际服务器证据位于 ${DEPLOYMENT_ROOT}/glabridin-reproduction/results/latest-review-20261004。科学方程、软件夹具、历史论文复现、真实工具 smoke 与未来生物学预测验收分别报告。

@@ -30,4 +30,4 @@ GitHub 下载入口 `/api/platform/plugins/github` 只接受公开仓库 URL 与
 
 `GET /api/platform/schemas` 返回 Project、Workflow、Pathway 和 PluginManifest 的 JSON Schema；Pydantic 类是唯一 schema 定义源，不维护另一套手写副本。
 
-用户已于 2026-10-04 把预算更新为十进制 15 GB。插件目录注册前按 15,000,000,000 字节检查总量，但这是该目录的检查：不是整个 air-lab 外部工具的合并预算，也不对 pip 安装过程的临时占用提供 OS 硬配额。部署验收仍必须合并审计所有外部环境、程序、模型和缓存。
+用户已于 2026-10-04 把预算更新为十进制 15 GB。插件目录注册前按 15,000,000,000 字节检查总量，但这是该目录的检查：不是整个 validation host 外部工具的合并预算，也不对 pip 安装过程的临时占用提供 OS 硬配额。部署验收仍必须合并审计所有外部环境、程序、模型和缓存。

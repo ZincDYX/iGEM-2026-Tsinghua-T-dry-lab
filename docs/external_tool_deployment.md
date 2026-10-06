@@ -1,19 +1,19 @@
 # External-tool deployment contract
 
-Measured on `air-lab` on 2026-10-03 after the MCP runtime was installed. Byte counts are the conservative logical-file totals returned by `igem.compute.audit_deployment`. **User update (2026-10-04): the current limit is 15 GB = 15,000,000,000 bytes.** The recorded deployment is below that new limit. It was not below the original 10 GB requirement: treating that requirement as 10 GiB was an error. This is a historical measurement, not a fresh combined audit. No server files were removed during this correction.
+Measured on `validation host` on 2026-10-03 after the MCP runtime was installed. Byte counts are the conservative logical-file totals returned by `igem.compute.audit_deployment`. **User update (2026-10-04): the current limit is 15 GB = 15,000,000,000 bytes.** The recorded deployment is below that new limit. It was not below the original 10 GB requirement: treating that requirement as 10 GiB was an error. This is a historical measurement, not a fresh combined audit. No server files were removed during this correction.
 
 ## Lean deployed environment
 
 | Deployment root | Bytes | Verified behavior |
 |---|---:|---|
-| `/mnt/data/dyx/miniconda3/envs/drylab-m1m2` | 6,547,731,215 | ColabFold 1.6.2 GPU run; FreeSASA calculation; Vina 1.2.7 docking; Meeko import; JPred REST v1.5; BioLib CLI; MCP 2.3.0 server/client |
-| `/mnt/data/dyx/redirect/dongyuxin/cache/colabfold` | 3,722,743,024 | Local AlphaFold/ColabFold parameter cache used by the GPU smoke run |
-| `/mnt/data/dyx/drylab-tools` | 211,341 | Standalone NCBI SEG executable |
+| `${PRODUCTION_ENV}` | 6,547,731,215 | ColabFold 1.6.2 GPU run; FreeSASA calculation; Vina 1.2.7 docking; Meeko import; JPred REST v1.5; BioLib CLI; MCP 2.3.0 server/client |
+| `${MODEL_CACHE}` | 3,722,743,024 | Local AlphaFold/ColabFold parameter cache used by the GPU smoke run |
+| `${DEPLOYMENT_ROOT}/drylab-tools` | 211,341 | Standalone NCBI SEG executable |
 | **Total external deployment** | **10,270,685,580** | **4,729,314,420 bytes below the current 15 GB limit** |
 
-Smoke-test inputs and outputs occupy another 758,346 bytes under `/mnt/data/dyx/drylab-tool-smoke`. The clean deployed source tree is separate from the external-tool budget and occupies 2,629,704 bytes. A fresh combined audit is needed before claiming the current deployment still meets 15 GB. The FusionLab plugin-directory budget alone is not a combined deployment-size guarantee.
+Smoke-test inputs and outputs occupy another 758,346 bytes under `${DEPLOYMENT_ROOT}/drylab-tool-smoke`. The clean deployed source tree is separate from the external-tool budget and occupies 2,629,704 bytes. A fresh combined audit is needed before claiming the current deployment still meets 15 GB. The FusionLab plugin-directory budget alone is not a combined deployment-size guarantee.
 
-Fresh read-only audit on 2026-10-04 used the same `audit_deployment` function with `budget_bytes=15000000000`, including all four roots above: **10,271,419,350 bytes, within budget**, leaving 4,728,580,650 bytes. The smoke directory contributes 733,770 logical file bytes. `du -sb` reports a different figure because its directory/hardlink accounting differs; the acceptance value here is the original per-file audit method. This budget is the declared air-lab deployment, not unrelated environments or this workstation's developer/compiler caches.
+Fresh read-only audit on 2026-10-04 used the same `audit_deployment` function with `budget_bytes=15000000000`, including all four roots above: **10,271,419,350 bytes, within budget**, leaving 4,728,580,650 bytes. The smoke directory contributes 733,770 logical file bytes. `du -sb` reports a different figure because its directory/hardlink accounting differs; the acceptance value here is the original per-file audit method. This budget is the declared validation host deployment, not unrelated environments or this workstation's developer/compiler caches.
 
 The deployment audit must include these roots in the project YAML `deployment_paths` and call `igem.compute.audit_deployment` before a formal run. Nested paths are deduplicated by the audit. A real stdio MCP smoke call listed 18 tools, passed this audit, invoked `igem.compute.run_tool`, and wrote both FreeSASA output and its run manifest.
 
@@ -51,3 +51,16 @@ igem-vina \
 ```
 
 For a real run, set the corresponding YAML tool to `enabled: true`, `mode: external`, and use these commands. The MCP tool `igem.compute.run_tool` executes that same command boundary and writes a run manifest; it does not emulate a successful predictor.
+
+Deployment verification now takes explicit machine-local paths; no private deployment is preconfigured:
+
+```bash
+python scripts/verify_latest_review_tools.py \
+  --results-root /absolute/new-results \
+  --pdb /absolute/structure.pdb \
+  --tool-config /absolute/tools.yaml \
+  --deployment-root /absolute/tool-environment \
+  --deployment-root /absolute/model-cache
+```
+
+Repeat `--deployment-root` for every tool/environment/cache included in the combined budget. Paper diagnostics require `--sources`; historical evidence packaging requires `--historical-python`. Historical report paths below/above are placeholders, not a claim that those directories exist on a new workstation.

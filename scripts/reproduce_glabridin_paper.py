@@ -2,7 +2,7 @@
 
 This reproduces numerical figures and reanalyses supplied measurements, not
 genome assembly, MD, wet-lab experiments, or validation of the production model.
-All computations are intended to run on air-lab. No fitted parameter is fed
+All computations are intended to run on validation host. No fitted parameter is fed
 back into the author RHS or the production scientific parameter registry.
 """
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Air-lab actual FreeSASA/MCP smoke, explicitly not fusion biological evidence."""
+"""validation host actual FreeSASA/MCP smoke, explicitly not fusion biological evidence."""
 import asyncio
 import argparse
 from hashlib import sha256
@@ -14,9 +14,8 @@ from igem_drylab.external_tools import audit_deployment
 from igem_drylab.parsers.freesasa import parse_freesasa_json
 
 
-async def main(run_name,root):
+async def main(run_name,root,pdb,tool_config,roots):
     root.mkdir(parents=True,exist_ok=True)
-    pdb = Path('/mnt/data/dyx/drylab-tool-smoke/two_chain_interface.pdb')
     if not run_name.replace("-","").isalnum():
         raise ValueError("run_name_must_be_single_alphanumeric_directory")
     output = root/run_name
@@ -25,7 +24,7 @@ async def main(run_name,root):
     params = StdioServerParameters(command=sys.executable,args=['-m','igem_drylab.mcp.server'],cwd=Path.cwd())
     async with Client(params,read_timeout_seconds=60) as client:
         response = await client.call_tool('igem.compute.run_tool', {
-            'config_path':'/mnt/data/dyx/drylab-tool-smoke/mcp-smoke.yaml',
+            'config_path':str(tool_config),
             'tool_name':'freesasa','output_dir':str(output),'dry_run':False,'timeout_seconds':60,
             'context':{'pdb_file':str(pdb),'input_files':{'structure':str(pdb)},
                        'expected_outputs':{'freesasa':str(output/'freesasa.json')}}})
@@ -39,12 +38,6 @@ async def main(run_name,root):
     areas = parse_freesasa_json(output/'freesasa.json')
     if not parsed or not areas:
         raise RuntimeError('actual_FreeSASA_output_empty')
-    roots = [Path(p) for p in (
-        '/mnt/data/dyx/miniconda3/envs/drylab-m1m2',
-        '/mnt/data/dyx/redirect/dongyuxin/cache/colabfold',
-        '/mnt/data/dyx/drylab-tools',
-        '/mnt/data/dyx/drylab-tool-smoke',
-        '/mnt/data/dyx/drylab-envs/glabridin-reference')]
     audit = audit_deployment(roots)
     if not audit.within_budget:
         raise RuntimeError('external_deployment_exceeds_15GB')
@@ -61,6 +54,9 @@ async def main(run_name,root):
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-name',default='actual-freesasa-mcp-final')
-    parser.add_argument('--results-root',type=Path,default=Path('/mnt/data/dyx/glabridin-reproduction/results/latest-review-20261004'))
+    parser.add_argument('--results-root',type=Path,required=True)
+    parser.add_argument('--pdb',type=Path,required=True)
+    parser.add_argument('--tool-config',type=Path,required=True)
+    parser.add_argument('--deployment-root',type=Path,action='append',required=True)
     args=parser.parse_args()
-    asyncio.run(main(args.run_name,args.results_root))
+    asyncio.run(main(args.run_name,args.results_root,args.pdb,args.tool_config,args.deployment_root))
