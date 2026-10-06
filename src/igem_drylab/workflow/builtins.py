@@ -89,8 +89,7 @@ def recommend(project: Project, goal: Goal) -> Workflow:
         for index, stage in enumerate(("m1", "m2", "m3", "m4", "m5")):
             inputs = {"project": ProjectInput(path=["scientific_project"])}
             if index:
-                inputs["upstream_records"] = NodeInput(node_id=nodes[-1].id, path=["records"])
-                inputs["upstream_artifacts"] = NodeInput(node_id=nodes[-1].id, path=["resource_artifacts"])
+                inputs["upstream_result"] = NodeInput(node_id=nodes[-1].id, path=["result_identity"])
             nodes.append(WorkflowNode(id=stage, label=stage.upper() + " 原式管线与证据门控", tool_id="project." + stage, inputs=inputs))
         return Workflow(id="scientific-project", name="M1–M5 科学项目管线", description="配置/证据绑定；各模块独立持久化，缺数据保持阻断。参数审批仍需人工，数值完成不是实验验证。", nodes=nodes)
     if goal == "pathway_simulation":

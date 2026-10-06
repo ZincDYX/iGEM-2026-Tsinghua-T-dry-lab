@@ -222,3 +222,13 @@ risks:
     units: not_applicable
     tolerance_basis: exact unauthorized_status_no_marker_in_public_payload_and_no_registered_sensitive_artifact
     expected_faults: [anonymous_production_access, query_token_authentication, cross_project_file_binding, secret_in_public_error_or_result, automatic_plugin_secret_grant]
+  - risk_id: WORKBENCH_DURABLE_CONTROL
+    group: integration
+    test_nodeids: ["tests/test_workbench_execution.py::test_multiple_runs_share_actual_global_task_and_gpu_budget", "tests/test_workbench_execution.py::test_single_stage_and_checkpoint_resume_are_real_and_do_not_reexecute_success", "tests/test_workbench_execution.py::test_cancel_waits_for_actual_handler_and_does_not_publish_late_output", "tests/test_workbench_execution.py::test_confirmed_request_is_idempotent_and_policy_changes_require_new_review", "tests/test_workbench_execution.py::test_registered_parent_content_and_identity_not_client_flags_are_authoritative", "tests/test_workbench_execution.py::test_node_record_requires_registered_successful_artifact_bytes"]
+    requirement_or_formula_source: 20261006 SCI-01 RUN-01 and stage control review
+    oracle_type: independent_blocking_handlers_registered_file_bytes_and_SQLite_identities
+    fixture_scope: software_only_no_biological_computation
+    formula_version: not_applicable
+    units: task_count
+    tolerance_basis: exact resource_peak_calls_status_registered_artifact_and_identity_rejection
+    expected_faults: [per_run_budget_multiplies, premature_checkpoint, successful_node_repeated, cancelled_output_published, literal_records_promoted]

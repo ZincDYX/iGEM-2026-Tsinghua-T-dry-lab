@@ -14,6 +14,8 @@ from igem_drylab.pipeline.models import M1Candidate, M2FusionAssessment, M3Conce
 from igem_drylab.pipeline import stages
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics
 from .models import Contract
+from .models import NodeInput, ProjectInput, WorkflowError
+from .store import canonical
 from .tools import NodeContext, ToolDefinition
 
 
@@ -91,6 +93,46 @@ class StageInput(Contract):
     project: ScientificProject
     upstream_records: list[dict[str, Any]] = Field(default_factory=list)
     upstream_artifacts: list[EvidenceFile] = Field(default_factory=list)
+    upstream_result: dict[str, str] | None = None
+
+
+def validate_stage_bindings(workflow) -> None:
+    nodes = {node.id: node for node in workflow.nodes}
+    preceding = {"project.m2":"project.m1","project.m3":"project.m2","project.m4":"project.m3","project.m5":"project.m4"}
+    for node in workflow.nodes:
+        if node.tool_id not in {"project.m1",*preceding}: continue
+        project = node.inputs.get("project")
+        if not isinstance(project,ProjectInput) or project.path != ["scientific_project"] or node.map is not None:
+            raise WorkflowError("formal_stage_requires_bound_project")
+        if node.tool_id == "project.m1":
+            if set(node.inputs) != {"project"}: raise WorkflowError("unexpected_formal_stage_input")
+            continue
+        source = node.inputs.get("upstream_result")
+        if set(node.inputs) != {"project","upstream_result"} or not isinstance(source,NodeInput) or source.path != ["result_identity"]:
+            raise WorkflowError("formal_stage_requires_registered_upstream_result")
+        if nodes[source.node_id].tool_id != preceding[node.tool_id] or node.dependencies() != {source.node_id}:
+            raise WorkflowError("formal_stage_predecessor_mismatch")
+
+
+def bound_predecessor(payload: StageInput, context: NodeContext, stage: str) -> list[dict[str, Any]]:
+    if not context.scientific_project_sha256 or sha256(canonical(payload.project.model_dump(mode="json")).encode()).hexdigest() != context.scientific_project_sha256:
+        raise WorkflowError("scientific_snapshot_identity_mismatch")
+    if stage == "m1": return []
+    previous = {"m2":"m1","m3":"m2","m4":"m3","m5":"m4"}[stage]
+    if len(context.upstream_results) != 1 or payload.upstream_result is None:
+        raise WorkflowError("formal_stage_requires_registered_upstream_result")
+    parent = context.upstream_results[0]
+    if payload.upstream_result != {"artifact_id":parent["artifact_id"],"sha256":parent["sha256"]} or parent["run_id"] != context.run_id or parent["project_id"] != context.project_id or parent["snapshot_hash"] != context.snapshot_sha256:
+        raise WorkflowError("upstream_result_identity_mismatch")
+    output = parent["output"]
+    if output.get("schema_version") != "scientific-stage-v1" or output.get("module") != previous:
+        raise WorkflowError("upstream_schema_or_stage_mismatch")
+    rows = output.get("records")
+    if not isinstance(rows,list): raise WorkflowError("invalid_registered_upstream_records")
+    if payload.upstream_records and canonical(payload.upstream_records) != canonical(rows):
+        raise WorkflowError("client_records_not_registered_result")
+    for item in output.get("resource_artifacts",[]): EvidenceFile.model_validate(item).verify()
+    return rows
 
 
 def stage_tools():
@@ -100,6 +142,7 @@ def stage_tools():
     for stage, predecessor in (("m1", None), ("m2", M1Candidate), ("m3", M2FusionAssessment),
                                ("m4", M3ConcentrationAssessment), ("m5", M4ReactionPrediction)):
         def handler(payload: StageInput, context: NodeContext, *, stage=stage, predecessor=predecessor):
+            upstream = bound_predecessor(payload,context,stage)
             payload.project.verify()
             for item in payload.upstream_artifacts:
                 item.verify()
@@ -112,7 +155,7 @@ def stage_tools():
             runner = getattr(stages, "run_" + stage)
             args = [config, context.work_dir]
             if predecessor is not None:
-                args.append([predecessor.model_validate(row) for row in payload.upstream_records])
+                args.append([predecessor.model_validate(row) for row in upstream])
             records, output = runner(*args)
             serialized = [row.model_dump(mode="json") for row in records]
             trajectories = {}
@@ -128,5 +171,5 @@ def stage_tools():
                 "trajectories": trajectories, "output": output.model_dump(mode="json"),
                 "claim_scope": "original_stage_contracts_not_automatic_experimental_validation"}
         definitions.append(ToolDefinition("project." + stage, stage.upper() + " 原式项目管线", "读取已绑定科学配置和证据，复用确定性 stage。",
-            "1", StageInput, handler, "scientific_project", implementation_files=implementation))
+            "2", StageInput, handler, "scientific_project", implementation_files=implementation))
     return definitions

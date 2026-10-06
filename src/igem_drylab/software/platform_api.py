@@ -55,6 +55,7 @@ class RunRequest(Contract):
     project_id: str
     workflow: Workflow
     confirmation: PlanBinding
+    request_id: str | None = Field(default=None, max_length=128)
 
 
 class CustomPlanRequest(Contract):
@@ -64,6 +65,7 @@ class CustomPlanRequest(Contract):
 
 class ControlRequest(Contract):
     action: Literal["pause", "cancel", "resume", "retry"]
+    node_id: str | None = None
 
 
 class PluginRequest(Contract):
@@ -82,6 +84,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
     store = WorkflowStore(data_dir / "platform.sqlite3")
     tools = builtin_tools()
     engine = WorkflowEngine(store, tools, data_dir / "artifacts")
+    from igem_drylab.workflow.scheduler import RunDispatcher
+    dispatcher = RunDispatcher(engine)
     boundary = engine.disclosure
     boundary.register_private(str(data_dir))
     plugins = PluginManager(data_dir / "plugins", store, tools, disclosure=boundary)
@@ -101,17 +105,12 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
     if discover_tools:
         Thread(target=discover, daemon=True).start()
 
-    def launch(run_id: str, retry: bool = False) -> None:
-        def execute() -> None:
-            try:
-                engine.run(run_id, retry_failed=retry)
-            except Exception as exc:
-                store.event(run_id, "dispatch_error", boundary.diagnostic(exc))
-        Thread(target=execute, daemon=True).start()
+    def launch(run_id: str, retry: bool = False, node_id: str | None = None) -> None:
+        dispatcher.submit(run_id,retry=retry,node_id=node_id)
 
     @router.get("/info")
     def info() -> dict[str, Any]:
-        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "validated_workflow_templates", "capabilities": capabilities, "remote_desktop_authenticated_session": False, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
+        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "validated_workflow_templates", "capabilities": capabilities | {"stage_step":"ready","checkpoints":"ready","cancel_dispatch":"ready"}, "resources":engine.budget.state() | dispatcher.state(), "remote_desktop_authenticated_session": False, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
 
     @router.get("/projects")
     def projects() -> list[dict[str, Any]]:
@@ -252,6 +251,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
     @router.post("/workflows/validate")
     def validate_workflow(workflow: Workflow) -> Workflow:
         boundary.check(workflow.model_dump(mode="json"))
+        from igem_drylab.workflow.scientific_project import validate_stage_bindings
+        validate_stage_bindings(workflow)
         for node in workflow.nodes:
             tools.get(node.tool_id)
         return workflow
@@ -260,9 +261,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
     def run(request: RunRequest) -> dict[str, Any]:
         if request.project_id != request.confirmation.project_id:
             raise WorkflowError("plan_project_mismatch", status_code=409)
-        run_id = engine.create_confirmed(request.confirmation, request.workflow)
+        request_id = request.request_id or sha256(request.confirmation.model_dump_json().encode()).hexdigest()
+        run_id = engine.create_confirmed(request.confirmation, request.workflow, request_id)
         result = store.run(run_id)
-        launch(run_id)
+        if result["status"] == "queued": launch(run_id)
         return boundary.run(result)
 
     @router.get("/runs")
@@ -284,11 +286,14 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
             if run["status"] in {"succeeded", "cancelled"}:
                 raise WorkflowError("run_is_terminal", status_code=409)
             engine.verify_snapshot(run)
+            if request.node_id and request.node_id not in {node["id"] for node in run["snapshot"]["workflow"]["nodes"]}:
+                raise WorkflowError("unknown_retry_node")
             if run["owner"]:
                 from datetime import datetime, timedelta, timezone
                 if run["heartbeat"] > (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat():
                     raise WorkflowError("run_has_active_worker", status_code=409)
-            launch(run_id, retry=request.action == "retry")
+            store.clear_control(run_id)
+            launch(run_id, retry=request.action == "retry", node_id=request.node_id)
         return boundary.run(store.run(run_id))
 
     @router.post("/runs/{run_id}/clone", status_code=202)

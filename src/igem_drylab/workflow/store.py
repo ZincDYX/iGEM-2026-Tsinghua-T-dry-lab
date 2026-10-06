@@ -55,6 +55,8 @@ class WorkflowStore:
                 CREATE TABLE IF NOT EXISTS private_diagnostics(id TEXT PRIMARY KEY, error_type TEXT NOT NULL, message TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS file_assets(id TEXT PRIMARY KEY, project_id TEXT, path TEXT NOT NULL UNIQUE, hash TEXT NOT NULL, name TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS plugin_grants(hash TEXT NOT NULL, capability TEXT NOT NULL, PRIMARY KEY(hash,capability));
+                CREATE TABLE IF NOT EXISTS run_requests(id TEXT PRIMARY KEY, binding_hash TEXT NOT NULL, run_id TEXT NOT NULL REFERENCES runs(id));
+                CREATE TABLE IF NOT EXISTS checkpoints(run_id TEXT NOT NULL, node_id TEXT NOT NULL, position TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(run_id,node_id,position));
                 CREATE INDEX IF NOT EXISTS events_run_seq ON events(run_id,seq);
                 CREATE INDEX IF NOT EXISTS artifacts_run ON artifacts(run_id);
                 CREATE INDEX IF NOT EXISTS runs_project_time ON runs(project_id,created_at DESC);
@@ -94,7 +96,7 @@ class WorkflowStore:
             raise KeyError(project_id)
         return Project.model_validate_json(row["payload"])
 
-    def create_confirmed_run(self, binding: PlanBinding, workflow: Workflow, build_snapshot) -> str:
+    def create_confirmed_run(self, binding: PlanBinding, workflow: Workflow, build_snapshot, request_id: str | None = None) -> str:
         # The same writer lock excludes saves between approval checking and
         # recording the immutable snapshot (including custom workflows).
         with self.connection() as db:
@@ -105,7 +107,16 @@ class WorkflowStore:
             project = Project.model_validate_json(row["payload"])
             if plan_binding(project, workflow) != binding:
                 raise WorkflowError("plan_input_or_workflow_changed_regenerate_and_review", status_code=409)
-            return self._insert_run(db, build_snapshot(project))
+            digest = sha256(canonical(binding.model_dump(mode="json")).encode()).hexdigest()
+            if request_id:
+                previous = db.execute("SELECT * FROM run_requests WHERE id=?", (request_id,)).fetchone()
+                if previous:
+                    if previous["binding_hash"] != digest:
+                        raise WorkflowError("request_identity_conflict", status_code=409)
+                    return previous["run_id"]
+            run_id = self._insert_run(db, build_snapshot(project))
+            if request_id: db.execute("INSERT INTO run_requests VALUES(?,?,?)", (request_id, digest, run_id))
+            return run_id
 
     def create_run(self, snapshot: dict[str, Any]) -> str:
         with self.connection() as db:
@@ -152,8 +163,56 @@ class WorkflowStore:
                 raise WorkflowError("run_is_terminal", status_code=409)
             if row["owner"] and row["heartbeat"] > stale_before:
                 raise WorkflowError("run_has_active_worker", status_code=409)
-            db.execute("UPDATE nodes SET status=? WHERE run_id=? AND status=?", (NodeStatus.interrupted.value, run_id, NodeStatus.running.value))
-            db.execute("UPDATE runs SET status=?,owner=?,heartbeat=?,control=NULL,updated_at=? WHERE id=?", (RunStatus.running.value, owner, now(), now(), run_id))
+            db.execute("UPDATE nodes SET status=? WHERE run_id=? AND status IN (?,?)", (NodeStatus.interrupted.value, run_id, NodeStatus.running.value, NodeStatus.queued.value))
+            db.execute("UPDATE runs SET status=?,owner=?,heartbeat=?,updated_at=? WHERE id=?", (RunStatus.running.value, owner, now(), now(), run_id))
+
+    def clear_control(self, run_id: str) -> None:
+        with self.connection() as db:
+            db.execute("UPDATE runs SET control=NULL,updated_at=? WHERE id=?", (now(),run_id))
+            db.execute("UPDATE checkpoints SET acknowledged=1 WHERE run_id=?", (run_id,))
+
+    def checkpoint(self, run_id: str, node_id: str, position: str) -> bool:
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            control = db.execute("SELECT control FROM runs WHERE id=?", (run_id,)).fetchone()
+            if control is None: raise KeyError(run_id)
+            if control[0] == "cancel": return False
+            row = db.execute("SELECT acknowledged FROM checkpoints WHERE run_id=? AND node_id=? AND position=?", (run_id,node_id,position)).fetchone()
+            if row and row[0]: return False
+            db.execute("INSERT OR IGNORE INTO checkpoints(run_id,node_id,position) VALUES(?,?,?)", (run_id,node_id,position))
+            db.execute("INSERT INTO events(run_id,node_id,event,payload,timestamp) VALUES(?,?,?,?,?)", (run_id,node_id,"checkpoint_reached",canonical({"position":position}),now()))
+            db.execute("UPDATE runs SET control='pause',updated_at=? WHERE id=?", (now(),run_id))
+        return True
+
+    def execution_state(self, run_id: str) -> dict[str, Any]:
+        with self.connection() as db:
+            row = db.execute("SELECT id,project_id,status,control,created_at,updated_at,heartbeat FROM runs WHERE id=?", (run_id,)).fetchone()
+            if row is None: raise KeyError(run_id)
+            result = dict(row)
+            result["nodes"] = [dict(item) | {"inputs":json.loads(item["inputs"]) if item["inputs"] else None, "output":None, "error":None}
+                for item in db.execute("SELECT id,parent_id,status,attempts,inputs FROM nodes WHERE run_id=? ORDER BY rowid",(run_id,))]
+            result["artifacts"] = [dict(item) for item in db.execute("SELECT id,node_id,hash FROM artifacts WHERE run_id=?",(run_id,))]
+        return result
+
+    def node_output(self, run_id: str, node_id: str):
+        with self.connection() as db:
+            row = db.execute("SELECT output FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()
+        if row is None: raise KeyError(node_id)
+        return json.loads(row[0]) if row[0] else None
+
+    def verified_upstream(self, run_id: str, node_ids: list[str]) -> tuple[dict[str, Any], ...]:
+        results = []
+        with self.connection() as db:
+            for node_id in node_ids:
+                row = db.execute("SELECT artifacts.*,nodes.status,runs.project_id,runs.snapshot_hash FROM artifacts JOIN nodes ON nodes.run_id=artifacts.run_id AND nodes.id=artifacts.node_id JOIN runs ON runs.id=artifacts.run_id WHERE artifacts.run_id=? AND artifacts.node_id=?",(run_id,node_id)).fetchone()
+                if row is None or row["status"] != NodeStatus.succeeded.value:
+                    raise WorkflowError("upstream_result_not_successful")
+                path = Path(row["path"])
+                raw = path.read_bytes()
+                if sha256(raw).hexdigest() != row["hash"]: raise WorkflowError("upstream_result_hash_mismatch")
+                results.append({"artifact_id":row["id"],"sha256":row["hash"],"node_id":node_id,"run_id":run_id,
+                    "project_id":row["project_id"],"snapshot_hash":row["snapshot_hash"],"output":json.loads(raw)})
+        return tuple(results)
 
     def heartbeat(self, run_id: str, owner: str) -> bool:
         with self.connection() as db:
@@ -197,6 +256,10 @@ class WorkflowStore:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             record = db.execute("SELECT inputs,attempts FROM nodes WHERE run_id=? AND id=?", (run_id, node_id)).fetchone()
+            if db.execute("SELECT control FROM runs WHERE id=?", (run_id,)).fetchone()[0] == "cancel":
+                error = canonical({"code":"cancelled_before_publication","message":"已取消；结果未发布。"})
+                db.execute("UPDATE nodes SET status=?,error=? WHERE run_id=? AND id=?", (NodeStatus.interrupted.value,error,run_id,node_id))
+                return
             metadata = {"type": "application/json", "attempt": record["attempts"], "inputs_sha256": sha256((record["inputs"] or "{}").encode()).hexdigest()}
             db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?,?)", (artifact_id, run_id, node_id, digest, str(path.resolve()), canonical(upstream), canonical(metadata)))
             db.execute("UPDATE nodes SET status=?,output=?,error=NULL WHERE run_id=? AND id=?", (NodeStatus.succeeded.value, canonical(output), run_id, node_id))

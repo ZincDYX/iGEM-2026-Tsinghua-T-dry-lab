@@ -15,6 +15,9 @@ class NodeContext:
     work_dir: Path
     runtime_tools: dict[str, Any] = field(default_factory=dict)
     upstream_results: tuple[dict[str, Any], ...] = ()
+    scientific_project_sha256: str | None = None
+    project_id: str | None = None
+    snapshot_sha256: str | None = None
     # Inputs are resolved before dispatch; no live project state is provided.
 
 

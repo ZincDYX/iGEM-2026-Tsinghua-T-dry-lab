@@ -37,6 +37,7 @@ class RunStatus(str, Enum):
 
 class NodeStatus(str, Enum):
     pending = "pending"
+    queued = "queued"
     running = "running"
     succeeded = "succeeded"
     failed = "failed"
@@ -83,18 +84,37 @@ class WorkflowNode(Contract):
         return set(self.depends_on) | {value.node_id for value in values if isinstance(value, NodeInput)}
 
 
+class ExecutionPolicy(Contract):
+    target_node_id: str | None = None
+    max_completed_stages: int | None = Field(default=None, ge=1)
+    checkpoints_before: list[str] = Field(default_factory=list)
+    checkpoints_after: list[str] = Field(default_factory=list)
+    allowed_tools: list[str] = Field(default_factory=list)
+    max_tool_calls: int = Field(default=1000, ge=1)
+    stop_after_seconds: float | None = Field(default=None, gt=0)
+    memory_limit_mb: int | None = Field(default=None, ge=1)
+
+
 class Workflow(Contract):
     id: str
     name: str
     description: str = ""
     version: str = "1"
     nodes: list[WorkflowNode] = Field(min_length=1)
+    execution_policy: ExecutionPolicy = Field(default_factory=ExecutionPolicy)
 
     @model_validator(mode="after")
     def validate_graph(self) -> "Workflow":
         ids = [node.id for node in self.nodes]
         if len(set(ids)) != len(ids):
             raise ValueError("duplicate_node_id")
+        policy = self.execution_policy
+        selected = set(policy.checkpoints_before + policy.checkpoints_after)
+        if policy.target_node_id: selected.add(policy.target_node_id)
+        if selected - set(ids): raise ValueError("unknown_policy_node")
+        if policy.memory_limit_mb is not None: raise ValueError("memory_limit_not_supported_by_process_backend")
+        if not policy.allowed_tools: policy.allowed_tools = sorted({node.tool_id for node in self.nodes})
+        if {node.tool_id for node in self.nodes} - set(policy.allowed_tools): raise ValueError("tool_not_in_execution_authorization")
         remaining = {node.id: node.dependencies() for node in self.nodes}
         if any(dependencies - set(ids) for dependencies in remaining.values()):
             raise ValueError("unknown_dependency")
