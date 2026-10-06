@@ -202,3 +202,13 @@ risks:
     units: uM; uM/h
     tolerance_basis: absolute 1e-10 uM root/conservation and uM/h initial flux
     expected_faults: [reused_M2_geometry, reused_M3_distribution, ignored_site_counts_in_M4]
+  - risk_id: MCP_RUNTIME_RESOURCE_CONTROL
+    group: integration
+    test_nodeids: ["tests/test_mcp_runtime_environment.py::test_explicit_runtime_controls_are_kept_but_tokens_are_not", "tests/test_mcp_runtime_environment.py::test_absent_controls_are_not_invented_for_server_runs"]
+    requirement_or_formula_source: desktop runtime BLAS resource policy; MCP restricted environment inheritance
+    oracle_type: explicit_stdio_parameters_and_environment_whitelist
+    fixture_scope: transport_configuration_software_fixture_not_numeric_or_biological_validation
+    formula_version: not_applicable
+    units: thread_count
+    tolerance_basis: exact configured values; no unrelated tokens; empty when unspecified
+    expected_faults: [numeric_runtime_controls_dropped, desktop_token_forwarded, invented_server_thread_count]

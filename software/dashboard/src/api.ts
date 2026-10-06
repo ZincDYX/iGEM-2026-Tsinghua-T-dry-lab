@@ -16,19 +16,25 @@ import type {
 export let baseUrl =
   import.meta.env.VITE_DASHBOARD_API_URL ?? "http://127.0.0.1:8780";
 let sessionToken = "";
+export let backendMode: "local" | "ssh" = "local";
 declare global {
   interface Window {
-    __TAURI__?: { core: { invoke<T>(command: string): Promise<T> } };
+    __TAURI__?: { core: { invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> } };
   }
 }
 const connection = window.__TAURI__
   ? window.__TAURI__.core
-      .invoke<{ url: string; token: string }>("backend_info")
+      .invoke<{ url: string; token: string; mode: "local" | "ssh" }>("backend_info")
       .then((info) => {
         baseUrl = info.url;
         sessionToken = info.token;
-      })
+        backendMode = info.mode;
+      }).catch((reason: unknown) => { throw new Error(`桌面后台连接失败：${String(reason)}`); })
   : Promise.resolve();
+export interface DesktopSettings { mode: "local" | "ssh"; ssh_host: string; remote_port: number }
+export const isDesktop = () => Boolean(window.__TAURI__);
+export const getDesktopSettings = () => window.__TAURI__!.core.invoke<DesktopSettings>("desktop_settings");
+export const saveDesktopSettings = (settings: DesktopSettings) => window.__TAURI__!.core.invoke<void>("save_desktop_settings", {settings});
 async function request<T>(path: string, body?: unknown): Promise<T> {
   await connection;
   const response = await fetch(`${baseUrl}/api/platform${path}`, {

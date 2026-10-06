@@ -19,7 +19,7 @@ export function ScientificProjectPanel({project, busy, action, onChange}: {
   const execution = scientific?.config.execution;
   const inputs = scientific?.config.inputs;
   return <section className="card"><h2>科学项目输入与证据</h2>
-    <p>绑定已有 ProjectConfig 和服务器上的真实输入文件。缺项保留；载入不代表证据已批准或模型已验证。</p>
+    <p>绑定已有 ProjectConfig 和当前后台可读取的真实输入文件。缺项保留；载入不代表证据已批准或模型已验证。</p>
     <label>后台所在机器的配置文件路径<input aria-label="科学配置路径" placeholder="当前后台可读取的项目 YAML 绝对路径" value={path} onChange={(e) => setPath(e.target.value)} /></label>
     <button disabled={busy || !path} onClick={() => action(async () => {
       const result = await api.previewScientificProject(path);

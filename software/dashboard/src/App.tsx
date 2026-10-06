@@ -15,6 +15,7 @@ import type {
 import "./styles.css";
 import { ScientificResults, ResultComparison, nodeTool, sequenceOutput } from "./ScientificResults";
 import { ScientificProjectPanel } from "./ScientificProjectPanel";
+import { DesktopConnectionPanel } from "./DesktopConnectionPanel";
 
 type Page =
   | "Dashboard"
@@ -287,7 +288,7 @@ export default function App() {
           )}
         </nav>
         <div className="sidebar-bottom">
-          <span className="local-indicator" /> Local-first · SQLite
+          <span className="local-indicator" /> {api.backendMode === "ssh" ? "远程服务器 · SQLite" : "Local-first · SQLite"}
           <button
             className="mode-button"
             onClick={() => {
@@ -945,6 +946,7 @@ export default function App() {
         {page === "Settings" && (
           <section className="card">
             <h2>工作空间设置</h2>
+            <DesktopConnectionPanel />
             <label className="checkbox">
               <input
                 type="checkbox"
@@ -962,6 +964,8 @@ export default function App() {
             <dl>
               <dt>项目与运行数据库</dt>
               <dd>{info?.data_dir ?? "连接后显示"}</dd>
+              <dt>计算位置</dt>
+              <dd>{api.backendMode === "ssh" ? "用户配置的远程服务器；本机仅显示桌面前端和建立 SSH 隧道" : "当前连接的本地 Python 后台"}</dd>
               <dt>执行状态保存</dt>
               <dd>每个节点执行前后写入 SQLite，历史运行保留输入快照</dd>
               <dt>任务恢复</dt>

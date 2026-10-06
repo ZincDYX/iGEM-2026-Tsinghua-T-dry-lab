@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import os
 import sys
 from typing import Any
 
@@ -31,12 +32,22 @@ SCIENTIFIC_TOOLS = {
 }
 
 
+def server_parameters(package: Path) -> StdioServerParameters:
+    # MCP intentionally filters environment inheritance. Pass only numeric
+    # runtime controls, never the desktop session token or unrelated secrets.
+    runtime_env = {key: os.environ[key] for key in (
+        "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS", "PYTHONUTF8"
+    ) if key in os.environ}
+    return StdioServerParameters(command=sys.executable, args=["-m", "igem_drylab.mcp.server"],
+        cwd=package.parents[1], env=runtime_env)
+
+
 def register_scientific_mcp(tools: WorkflowTools) -> None:
     package = Path(__file__).resolve().parents[1]
     implementations = tuple(sorted(package.rglob("*.py")))
 
     async def discover() -> list[dict[str, Any]]:
-        parameters = StdioServerParameters(command=sys.executable, args=["-m", "igem_drylab.mcp.server"], cwd=package.parents[1])
+        parameters = server_parameters(package)
         async with Client(parameters, read_timeout_seconds=30) as client:
             listed = await client.list_tools()
             return [tool.model_dump(mode="json", by_alias=True) for tool in listed.tools]
@@ -57,7 +68,7 @@ def register_scientific_mcp(tools: WorkflowTools) -> None:
                 jsonschema.Draft202012Validator(contract["inputSchema"]).validate(arguments)
 
                 async def call() -> dict[str, Any]:
-                    parameters = StdioServerParameters(command=sys.executable, args=["-m", "igem_drylab.mcp.server"], cwd=package.parents[1])
+                    parameters = server_parameters(package)
                     async with Client(parameters, read_timeout_seconds=300) as client:
                         result = await client.call_tool(contract["name"], arguments)
                         if result.is_error:

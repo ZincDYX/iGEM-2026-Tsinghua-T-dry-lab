@@ -5,6 +5,8 @@ import * as api from "./api";
 import type { Project } from "./types";
 
 vi.mock("./api", () => ({
+  isDesktop: () => false,
+  backendMode: "local",
   getProjects: vi.fn(),
   getTools: vi.fn(),
   getInfo: vi.fn(),

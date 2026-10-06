@@ -10,11 +10,15 @@ use std::{
     time::Duration,
 };
 use tauri::Manager;
+mod remote;
+mod settings;
+use settings::{DesktopSettings, Mode};
 
 #[derive(Clone, Serialize)]
 struct BackendInfo {
     url: String,
     token: String,
+    mode: String,
 }
 
 struct Backend {
@@ -23,6 +27,11 @@ struct Backend {
     ready: PathBuf,
     #[cfg(windows)]
     _job: WindowsJob,
+}
+
+struct Connection {
+    backend: Result<Backend, String>,
+    settings_path: PathBuf,
 }
 
 #[cfg(windows)]
@@ -80,14 +89,38 @@ impl Drop for Backend {
 }
 
 #[tauri::command]
-fn backend_info(backend: tauri::State<'_, Backend>) -> BackendInfo {
-    backend.info.clone()
+fn backend_info(connection: tauri::State<'_, Connection>) -> Result<BackendInfo, String> {
+    connection
+        .backend
+        .as_ref()
+        .map(|backend| backend.info.clone())
+        .map_err(Clone::clone)
 }
 
-fn launch(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
+#[tauri::command]
+fn desktop_settings(connection: tauri::State<'_, Connection>) -> Result<DesktopSettings, String> {
+    DesktopSettings::load(&connection.settings_path)
+}
+#[tauri::command]
+fn save_desktop_settings(
+    connection: tauri::State<'_, Connection>,
+    settings: DesktopSettings,
+) -> Result<(), String> {
+    settings.save(&connection.settings_path)
+}
+
+fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
     let root = std::env::var_os("FUSIONLAB_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
+            let portable = std::env::current_exe()
+                .expect("executable path")
+                .parent()
+                .expect("executable directory")
+                .join("resources");
+            if portable.join("src/igem_drylab").is_dir() {
+                return portable;
+            }
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../..")
                 .canonicalize()
@@ -96,6 +129,14 @@ fn launch(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
     let python = std::env::var_os("FUSIONLAB_PYTHON")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
+            let portable = std::env::current_exe()
+                .expect("executable path")
+                .parent()
+                .expect("executable directory")
+                .join("python/python.exe");
+            if cfg!(windows) && portable.is_file() {
+                return portable;
+            }
             root.join(if cfg!(windows) {
                 ".venv/Scripts/python.exe"
             } else {
@@ -124,6 +165,13 @@ fn launch(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::from(fs::File::create(data.join("backend.log"))?));
+    // Avoid BLAS oversubscription across the backend and MCP/plugin processes.
+    // This is a runtime resource default, not a different scientific equation.
+    for key in ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"] {
+        if std::env::var_os(key).is_none() {
+            command.env(key, "1");
+        }
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -144,6 +192,7 @@ fn launch(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
         info: BackendInfo {
             url: String::new(),
             token,
+            mode: "local".into(),
         },
         ready,
         #[cfg(windows)]
@@ -178,10 +227,56 @@ fn launch(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
     Err("Python backend startup timed out; inspect backend.log".into())
 }
 
+fn launch(
+    app: &tauri::App,
+    settings: &DesktopSettings,
+) -> Result<Backend, Box<dyn std::error::Error>> {
+    if settings.mode == Mode::Local {
+        return launch_local(app);
+    }
+    let data = std::env::var_os("FUSIONLAB_DATA_DIR")
+        .map(PathBuf::from)
+        .unwrap_or(app.path().app_data_dir()?);
+    fs::create_dir_all(&data)?;
+    let (mut child, config, url) = remote::launch(&data, &settings.ssh_host, settings.remote_port)?;
+    #[cfg(windows)]
+    let job = match WindowsJob::attach(&child) {
+        Ok(job) => job,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_file(config);
+            return Err(error.into());
+        }
+    };
+    Ok(Backend {
+        child: Mutex::new(child),
+        info: BackendInfo {
+            url,
+            token: String::new(),
+            mode: "ssh".into(),
+        },
+        ready: config,
+        #[cfg(windows)]
+        _job: job,
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            app.manage(launch(app)?);
+            // A failed connection still opens the app and exposes a useful error.
+            let directory = std::env::var_os("FUSIONLAB_DATA_DIR")
+                .map(PathBuf::from)
+                .unwrap_or(app.path().app_data_dir()?);
+            fs::create_dir_all(&directory)?;
+            let settings_path = directory.join("desktop-settings.json");
+            let backend = DesktopSettings::load(&settings_path)
+                .and_then(|settings| launch(app, &settings).map_err(|error| error.to_string()));
+            app.manage(Connection {
+                backend,
+                settings_path,
+            });
             if !std::env::args().any(|argument| argument == "--smoke-test") {
                 app.get_webview_window("main")
                     .ok_or("main window missing")?
@@ -189,7 +284,11 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_info])
+        .invoke_handler(tauri::generate_handler![
+            backend_info,
+            desktop_settings,
+            save_desktop_settings
+        ])
         .run(tauri::generate_context!())
         .expect("FusionLab desktop failed");
 }
