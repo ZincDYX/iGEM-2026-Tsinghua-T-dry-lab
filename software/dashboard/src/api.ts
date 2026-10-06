@@ -1,124 +1,34 @@
-import type {
-  Goal,
-  ImportPreview,
-  PluginInspection,
-  Project,
-  Run,
-  RunSummary,
-  RuntimeInfo,
-  Tool,
-  Workflow,
-  PlanBinding,
-  ReviewedPlan,
-  ScientificProject,
-} from "./types";
-
-export let baseUrl =
-  import.meta.env.VITE_DASHBOARD_API_URL ?? "http://127.0.0.1:8780";
-let sessionToken = "";
-export let backendMode: "local" | "ssh" = "local";
+export let baseUrl=import.meta.env.VITE_DASHBOARD_API_URL??"http://127.0.0.1:8780";
+let sessionToken="";
+export let backendMode:"local"|"ssh"="local";
 declare global {
   interface Window {
-    __TAURI__?: { core: { invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> } };
+    __TAURI__?:{core:{invoke<T>(command:string,args?:Record<string,unknown>):Promise<T>}};
   }
 }
-const connection = window.__TAURI__
-  ? window.__TAURI__.core
-      .invoke<{ url: string; token: string; mode: "local" | "ssh" }>("backend_info")
-      .then((info) => {
-        baseUrl = info.url;
-        sessionToken = info.token;
-        backendMode = info.mode;
-      }).catch((reason: unknown) => { throw new Error(`桌面后台连接失败：${String(reason)}`); })
-  : Promise.resolve();
-export interface DesktopSettings { mode: "local" | "ssh"; ssh_host: string; remote_port: number }
-export const isDesktop = () => Boolean(window.__TAURI__);
-export const getDesktopSettings = () => window.__TAURI__!.core.invoke<DesktopSettings>("desktop_settings");
-export const saveDesktopSettings = (settings: DesktopSettings) => window.__TAURI__!.core.invoke<void>("save_desktop_settings", {settings});
-async function request<T>(path: string, body?: unknown): Promise<T> {
+const connection=window.__TAURI__
+  ?window.__TAURI__.core.invoke<{url:string;token:string;mode:"local"|"ssh"}>("backend_info").then(info=>{
+    baseUrl=info.url;sessionToken=info.token;backendMode=info.mode;
+  }).catch(()=>{throw new Error("桌面后台连接失败；请查看私有运维诊断。");})
+  :Promise.resolve();
+export interface DesktopSettings{mode:"local"|"ssh";ssh_host:string;remote_port:number}
+export const isDesktop=()=>Boolean(window.__TAURI__);
+export const getDesktopSettings=()=>window.__TAURI__!.core.invoke<DesktopSettings>("desktop_settings");
+export const saveDesktopSettings=(settings:DesktopSettings)=>window.__TAURI__!.core.invoke<void>("save_desktop_settings",{settings});
+export async function requestJson(path:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
   await connection;
-  const response = await fetch(`${baseUrl}/api/platform${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(sessionToken ? { "X-FusionLab-Token": sessionToken } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
+  const response=await fetch(`${baseUrl}/api/platform${path}`,{
+    method:body===undefined?"GET":"POST",headers:{"Content-Type":"application/json",...(sessionToken?{"X-FusionLab-Token":sessionToken}:{})},
+    body:body===undefined?undefined:JSON.stringify(body),signal,cache:"no-store",
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new Error(
-      typeof error?.detail?.message === "string"
-        ? error.detail.message
-        : JSON.stringify(error?.detail ?? `请求失败 (${response.status})`),
-    );
-  }
-  return response.json() as Promise<T>;
+  if(!response.ok){const error=await response.json().catch(()=>null);throw new Error(typeof error?.detail?.message==="string"?error.detail.message:`请求失败 (${response.status})；请查看安全诊断。`);}
+  return response.json();
 }
-export const getProjects = () => request<Project[]>("/projects");
-export const saveProject = (project: Project, expectedRevision?: number) =>
-  request<Project>("/projects", {
-    project,
-    expected_revision: expectedRevision,
-  });
-export const previewImport = (file: File, inputKind = "auto") =>
-  file.text().then((content) =>
-    request<ImportPreview>("/imports/preview", {
-      filename: file.name,
-      content,
-      input_kind: inputKind,
-    }),
-  );
-export const previewScientificProject = (configPath: string) =>
-  request<{scientific_project: ScientificProject; requires_confirmation: boolean}>("/scientific-projects/preview", {config_path:configPath});
-export const createPlan = (projectId: string, goal: Goal, objective: string) =>
-  request<ReviewedPlan>("/plans", { project_id: projectId, goal, objective });
-export const reviewCustomPlan = (projectId: string, workflow: Workflow) =>
-  request<ReviewedPlan>("/plans/custom", { project_id: projectId, workflow });
-export const validateWorkflow = (workflow: unknown) =>
-  request<Workflow>("/workflows/validate", workflow);
-export const startRun = (projectId: string, workflow: Workflow, confirmation: PlanBinding) =>
-  request<Run>("/runs", { project_id: projectId, workflow, confirmation });
-export const getRun = (id: string) =>
-  request<Run>(`/runs/${encodeURIComponent(id)}`);
-export const getRuns = (projectId?: string) =>
-  request<RunSummary[]>(
-    `/runs${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
-  );
-export const controlRun = (
-  id: string,
-  action: "pause" | "cancel" | "resume" | "retry",
-) => request<Run>(`/runs/${encodeURIComponent(id)}/control`, { action });
-export const cloneRun = (id: string) =>
-  request<Run>(`/runs/${encodeURIComponent(id)}/clone`, {});
-export const getTools = () => request<Tool[]>("/tools");
-export const getInfo = () => request<RuntimeInfo>("/info");
-export const inspectPlugin = (sourcePath: string) =>
-  request<PluginInspection>("/plugins/inspect", { source_path: sourcePath });
-export const fetchGithubPlugin = (repositoryUrl: string, commit: string) =>
-  request<PluginInspection & { source_path: string }>("/plugins/github", {
-    repository_url: repositoryUrl,
-    commit,
-  });
-export const installPlugin = (
-  sourcePath: string,
-  trusted: boolean,
-  expectedHash: string,
-) =>
-  request<PluginInspection>("/plugins/install", {
-    source_path: sourcePath,
-    trusted,
-    expected_hash: expectedHash,
-  });
-export async function downloadArtifact(id: string, projectId: string) {
+export const downloadArtifact=(id:string,projectId:string)=>downloadResource(`/artifacts/${encodeURIComponent(id)}/science-export?project_id=${encodeURIComponent(projectId)}`,"scientific-public-export.json");
+export async function downloadResource(path:string,filename:string){
   await connection;
-  const response = await fetch(`${baseUrl}/api/platform/artifacts/${encodeURIComponent(id)}?project_id=${encodeURIComponent(projectId)}`, {
-    headers: sessionToken ? {"X-FusionLab-Token": sessionToken} : {},
-  });
-  if (!response.ok) throw new Error(`下载被拒绝 (${response.status})；请核对授权或安全诊断。`);
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url; link.download = "scientific-result.json"; link.click();
-  URL.revokeObjectURL(url);
+  const response=await fetch(`${baseUrl}/api/platform${path}`,{headers:sessionToken?{"X-FusionLab-Token":sessionToken}:{}});
+  if(!response.ok)throw new Error(`下载被拒绝 (${response.status})；请核对授权或安全诊断。`);
+  const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement("a");
+  link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }

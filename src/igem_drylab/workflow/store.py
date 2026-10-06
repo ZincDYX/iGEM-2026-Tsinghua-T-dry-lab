@@ -178,7 +178,7 @@ class WorkflowStore:
 
     def clear_control(self, run_id: str) -> None:
         with self.connection() as db:
-            db.execute("UPDATE runs SET control=NULL,updated_at=? WHERE id=?", (now(),run_id))
+            db.execute("UPDATE runs SET control=NULL,status=?,updated_at=? WHERE id=?", (RunStatus.queued.value,now(),run_id))
             db.execute("UPDATE checkpoints SET acknowledged=1 WHERE run_id=?", (run_id,))
             self._event(db,run_id,"control_resumed",{"action":"resume"})
 
@@ -231,8 +231,8 @@ class WorkflowStore:
 
     def finish(self, run_id: str, owner: str, status: RunStatus) -> None:
         with self.connection() as db:
-            db.execute("UPDATE runs SET status=?,owner=NULL,heartbeat=NULL,updated_at=? WHERE id=? AND owner=?", (status.value, now(), run_id, owner))
-            self._event(db,run_id,"run_finished",{"status":status.value})
+            changed=db.execute("UPDATE runs SET status=?,control=NULL,owner=NULL,heartbeat=NULL,updated_at=? WHERE id=? AND owner=?", (status.value, now(), run_id, owner)).rowcount
+            if changed:self._event(db,run_id,"run_finished",{"status":status.value})
 
     def control(self, run_id: str, action: str) -> None:
         if action not in {"pause", "cancel"}:

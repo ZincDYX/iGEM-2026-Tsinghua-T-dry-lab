@@ -109,7 +109,7 @@ class DashboardRuns:
 
 
 def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = None, session_token: str | None = None,
-               deployment_mode: Literal["authenticated", "development"] = "authenticated", discover_tools: bool = True) -> FastAPI:
+               deployment_mode: Literal["authenticated", "development"] = "authenticated", discover_tools: bool = True, planning_backend=None, workflow_tools=None) -> FastAPI:
     """Build the durable platform API and retain deprecated legacy routes."""
     if deployment_mode == "authenticated" and not session_token:
         raise ValueError("authenticated_deployment_requires_private_session_token")
@@ -117,7 +117,7 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
     runs = DashboardRuns()
     app = FastAPI(title="iGEM Dry-Lab Dashboard API", version="0.1.0")
     from .platform_api import platform_router
-    router = platform_router(data_dir or Path("outputs/platform"), discover_tools=discover_tools)
+    router = platform_router(data_dir or Path("outputs/platform"), discover_tools=discover_tools,planning_backend=planning_backend,workflow_tools=workflow_tools)
     app.include_router(router)
     app.state.platform_store, app.state.workflow_engine, app.state.disclosure = router.store, router.engine, router.disclosure
     if session_token:

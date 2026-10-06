@@ -4,10 +4,11 @@ export function pollVersioned<T extends {state_version: number; status: string}>
   accept: (value: T) => void;
   fail: (reason: unknown) => void;
   interval?: number;
+  initialVersion?: number;
 }) {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let version = -1;
+  let version = options.initialVersion ?? -1;
   const stopped = new Set(["succeeded", "failed", "paused", "cancelled"]);
   async function next() {
     try {
@@ -16,8 +17,8 @@ export function pollVersioned<T extends {state_version: number; status: string}>
       if (value.state_version >= version) {
         version = value.state_version;
         options.accept(value);
+        if (stopped.has(value.status)) return;
       }
-      if (stopped.has(value.status)) return;
     } catch (reason) {
       if (controller.signal.aborted) return;
       options.fail(reason);

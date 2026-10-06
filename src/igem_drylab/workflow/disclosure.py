@@ -159,6 +159,7 @@ class DisclosureBoundary:
 
     def project(self, project: Project) -> dict[str, Any]:
         result = project.model_dump(mode="json", exclude={"scientific_project"})
+        result["runtime_profile_ref"] = None
         result["files"] = [self.asset(item["path"], project_id=project.id) for item in project.files]
         result["scientific_project"] = self.scientific(project.scientific_project, project.id) if project.scientific_project else None
         result = self.tree(result, project_id=project.id)
@@ -167,6 +168,16 @@ class DisclosureBoundary:
 
     def private_project(self, project: Project) -> Project:
         raw = project.model_dump(mode="json")
+        if project.runtime_profile_ref is not None:
+            raise WorkflowError("runtime_profile_assignment_requires_maintainer",status_code=403)
+        try:
+            saved = self.store.project(project.id)
+            raw["runtime_profile_ref"] = saved.runtime_profile_ref
+            if (project.parent_run_id,project.parent_snapshot_sha256) != (saved.parent_run_id,saved.parent_snapshot_sha256):
+                raise WorkflowError("iteration_identity_is_server_owned",status_code=403)
+        except KeyError:
+            if project.parent_run_id is not None or project.parent_snapshot_sha256 is not None:
+                raise WorkflowError("iteration_identity_is_server_owned",status_code=403)
         if raw["scientific_project"]:
             science = raw["scientific_project"]
             if science["config"].get("tools"):

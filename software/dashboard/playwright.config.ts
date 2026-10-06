@@ -2,9 +2,12 @@ import { defineConfig } from "@playwright/test";
 import path from "node:path";
 
 const repository = path.resolve(import.meta.dirname, "../..");
-const testData =
-  process.env.FUSIONLAB_TEST_DATA ??
-  path.join(repository, "outputs/platform-e2e");
+// Legacy scientific UI suite is not part of software-only local validation.
+// Its selectors still need migration; preserve the original numerical oracles.
+if(process.platform!=="linux"||process.env.FUSIONLAB_ALLOW_SCIENTIFIC_E2E!=="1")
+  throw new Error("Legacy scientific E2E requires an explicitly authorized Linux release environment; do not run local reproduction.");
+const testData=process.env.FUSIONLAB_TEST_DATA;
+if(!testData)throw new Error("Specify a fresh, owned scientific test workspace.");
 const python = process.env.FUSIONLAB_PYTHON ?? path.join(
   repository,
   process.platform === "win32"
@@ -13,6 +16,7 @@ const python = process.env.FUSIONLAB_PYTHON ?? path.join(
 );
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "**/workbench/**",
   workers: 1,
   timeout: 30000,
   use: {

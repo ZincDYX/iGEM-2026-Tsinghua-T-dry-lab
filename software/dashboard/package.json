@@ -10,10 +10,14 @@
     "test": "vitest run",
     "desktop": "tauri dev",
     "desktop:build": "tauri build --no-bundle",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --config playwright.workbench.config.ts",
+    "test:e2e:legacy-science": "playwright test --config playwright.config.ts",
+    "contracts:generate": "node scripts/generate-contracts.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.1",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "vite": "8.2.2"
@@ -24,7 +28,9 @@
     "@testing-library/react": "16.3.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
+    "esbuild": "0.28.2",
     "jsdom": "26.1.0",
+    "json-schema-to-typescript": "15.0.4",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   }

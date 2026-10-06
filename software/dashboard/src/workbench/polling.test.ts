@@ -10,7 +10,7 @@ it("does not overlap slow requests, rejects old versions and stops terminal poll
   await vi.advanceTimersByTimeAsync(100);
   expect(load).toHaveBeenCalledTimes(1);
   finish({state_version:5,status:"running"}); await vi.advanceTimersByTimeAsync(10);
-  finish({state_version:4,status:"running"}); await vi.advanceTimersByTimeAsync(10);
+  finish({state_version:4,status:"succeeded"}); await vi.advanceTimersByTimeAsync(10);
   expect(accept).toHaveBeenCalledTimes(1);
   finish({state_version:6,status:"succeeded"}); await vi.advanceTimersByTimeAsync(100);
   expect(load).toHaveBeenCalledTimes(3); expect(accept).toHaveBeenCalledTimes(2);

@@ -1,0 +1,40 @@
+import {requestJson} from "../api";
+import {parsePublic,parseList} from "../contracts/validation";
+import type {Protocol} from "../contracts/validation";
+import type {ProjectView,Workflow,ProposalView} from "../contracts/generated";
+import type {ExecutionPolicy} from "../contracts/Workflow.generated";
+import type {Goal} from "../types";
+
+const read = async<K extends keyof Protocol>(name:K,path:string,body?:unknown,signal?:AbortSignal)=>parsePublic(name,await requestJson(path,body,signal));
+const list = async<K extends keyof Protocol>(name:K,path:string,signal?:AbortSignal)=>parseList(name,await requestJson(path,undefined,signal));
+export const projectSummaries=(signal?:AbortSignal)=>list("ProjectSummaryView","/project-summaries",signal);
+export const history=(id:string,offset=0,signal?:AbortSignal)=>list("RunListView",`/runs?project_id=${encodeURIComponent(id)}&offset=${offset}&limit=50`,signal);
+export const project=(id:string,signal?:AbortSignal)=>read("ProjectView",`/projects/${encodeURIComponent(id)}`,undefined,signal);
+export const save=(value:ProjectView,revision?:number)=>read("ProjectView","/projects",{project:value,expected_revision:revision});
+export const info=(signal?:AbortSignal)=>read("RuntimeInfoView","/info",undefined,signal);
+export const summary=(id:string,signal?:AbortSignal)=>read("RunSummaryView",`/runs/${encodeURIComponent(id)}/summary`,undefined,signal);
+export const events=(id:string,cursor:number,signal?:AbortSignal)=>read("EventPage",`/runs/${encodeURIComponent(id)}/events?after_seq=${cursor}&limit=200`,undefined,signal);
+export const node=(id:string,nodeId:string,offset=0,signal?:AbortSignal)=>read("NodePage",`/runs/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeId)}/result?offset=${offset}&limit=20`,undefined,signal);
+export const propose=(id:string,goal:Goal,objective:string,mode:"template"|"hybrid",policy:ExecutionPolicy,permission:boolean)=>read("ProposalView","/proposals",{project_id:id,goal,objective,mode,policy,external_planning_approved:permission});
+export const decide=(id:string,action:"accept"|"reject")=>read("ProposalView",`/proposals/${encodeURIComponent(id)}/decision`,{action});
+export async function start(proposal:ProposalView) {
+  if (!proposal.workflow || !proposal.confirmation || proposal.status !== "accepted") throw new Error("必须先接受当前版本提案。");
+  const result=await requestJson("/runs",{project_id:proposal.project_id,workflow:proposal.workflow,confirmation:proposal.confirmation,proposal_id:proposal.id,request_id:proposal.id});
+  if (!result || typeof result !== "object" || !("id" in result) || typeof result.id !== "string") throw new Error("运行身份协议不兼容。");
+  return summary(result.id);
+}
+export async function control(id:string,action:"pause"|"cancel"|"resume"|"retry",nodeId?:string) {
+  await requestJson(`/runs/${encodeURIComponent(id)}/control`,{action,node_id:nodeId});return summary(id);
+}
+export const actions=(id:string,after=0,signal?:AbortSignal)=>list("ActionView",`/plan-actions?project_id=${encodeURIComponent(id)}&after_seq=${after}`,signal);
+export const diff=(id:string,runId:string,signal?:AbortSignal)=>read("InputDiffView",`/projects/${encodeURIComponent(id)}/input-diff?run_id=${encodeURIComponent(runId)}`,undefined,signal);
+export const uploadScientific=(configFilename:string,files:{filename:string;content:string}[])=>read("ScientificPreviewView","/scientific-projects/upload-preview",{config_filename:configFilename,files});
+export const importFile=async(file:File,inputKind:string)=>read("ImportView","/imports/preview",{filename:file.name,content:await file.text(),input_kind:inputKind});
+export const bindMeasurement=(id:string,revision:number,fileId:string)=>read("BindingPreviewView","/scientific-projects/bind-measurement",{project_id:id,expected_revision:revision,file_id:fileId});
+export const iteration=(id:string)=>read("IterationView",`/runs/${encodeURIComponent(id)}/iteration`,{});
+export const review=(id:string,workflow:Workflow)=>read("PlanView","/plans/custom",{project_id:id,workflow});
+export const validate=(workflow:unknown)=>read("Workflow","/workflows/validate",workflow);
+export const proposeCustom=(id:string,workflow:Workflow,objective:string)=>read("ProposalView","/custom-proposals",{project_id:id,workflow,objective});
+export const fetchPlugin=(repositoryUrl:string,commit:string)=>read("PluginInspectionView","/plugins/github",{repository_url:repositoryUrl,commit});
+export const installPlugin=(source:string,hash:string)=>read("PluginInspectionView","/plugins/install",{source_path:source,expected_hash:hash,trusted:true});
+export const defaultPolicy=():ExecutionPolicy=>({target_node_id:null,max_completed_stages:null,checkpoints_before:[],checkpoints_after:[],allowed_tools:[],max_tool_calls:1000,stop_after_seconds:null,memory_limit_mb:null});

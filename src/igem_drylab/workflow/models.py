@@ -159,6 +159,8 @@ class Project(Contract):
     # dependency cycle between the generic ledger and scientific stage adapter.
     scientific_project: dict[str, Any] | None = None
     runtime_profile_ref: str | None = None
+    parent_run_id: str | None = None
+    parent_snapshot_sha256: str | None = None
 
     @model_validator(mode="after")
     def unique_sequences(self) -> "Project":

@@ -1,0 +1,17 @@
+export function ProjectView(value:unknown):value is import("./ProjectView.generated").ProjectView;
+export function ProjectSummaryView(value:unknown):value is import("./ProjectSummaryView.generated").ProjectSummaryView;
+export function RunSummaryView(value:unknown):value is import("./RunSummaryView.generated").RunSummaryView;
+export function RuntimeInfoView(value:unknown):value is import("./RuntimeInfoView.generated").RuntimeInfoView;
+export function EventPage(value:unknown):value is import("./EventPage.generated").EventPage;
+export function NodePage(value:unknown):value is import("./NodePage.generated").NodePage;
+export function PlanView(value:unknown):value is import("./PlanView.generated").PlanView;
+export function ProposalView(value:unknown):value is import("./ProposalView.generated").ProposalView;
+export function ScientificPreviewView(value:unknown):value is import("./ScientificPreviewView.generated").ScientificPreviewView;
+export function BindingPreviewView(value:unknown):value is import("./BindingPreviewView.generated").BindingPreviewView;
+export function IterationView(value:unknown):value is import("./IterationView.generated").IterationView;
+export function ImportView(value:unknown):value is import("./ImportView.generated").ImportView;
+export function ActionView(value:unknown):value is import("./ActionView.generated").ActionView;
+export function RunListView(value:unknown):value is import("./RunListView.generated").RunListView;
+export function InputDiffView(value:unknown):value is import("./InputDiffView.generated").InputDiffView;
+export function PluginInspectionView(value:unknown):value is import("./PluginInspectionView.generated").PluginInspectionView;
+export function Workflow(value:unknown):value is import("./Workflow.generated").Workflow;

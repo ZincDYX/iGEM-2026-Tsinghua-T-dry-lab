@@ -23,6 +23,7 @@ from igem_drylab.workflow.models import Contract, PlanBinding, Project, Sequence
 from igem_drylab.workflow.pathway import Pathway
 from igem_drylab.workflow.plugins import PluginManager
 from igem_drylab.workflow.store import WorkflowStore, plan_binding
+from igem_drylab.workflow.planning import PlanningService, ProposalRequest, ProposalDecision
 
 
 class SaveProject(Contract):
@@ -56,11 +57,19 @@ class RunRequest(Contract):
     workflow: Workflow
     confirmation: PlanBinding
     request_id: str | None = Field(default=None, max_length=128)
+    proposal_id: str | None = None
+
+
+class MeasurementBindingRequest(Contract):
+    project_id: str
+    expected_revision: int
+    file_id: str
 
 
 class CustomPlanRequest(Contract):
     project_id: str
     workflow: Workflow
+    objective: str = ""
 
 
 class ControlRequest(Contract):
@@ -79,16 +88,21 @@ class GithubPluginRequest(Contract):
     commit: str
 
 
-def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter:
+def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_backend=None, workflow_tools=None) -> APIRouter:
     data_dir = data_dir.resolve()
     store = WorkflowStore(data_dir / "platform.sqlite3")
-    tools = builtin_tools()
+    tools = workflow_tools if workflow_tools is not None else builtin_tools()
     engine = WorkflowEngine(store, tools, data_dir / "artifacts")
     from igem_drylab.workflow.scheduler import RunDispatcher
     dispatcher = RunDispatcher(engine)
     boundary = engine.disclosure
     from igem_drylab.workflow.views import PublicReads
     reads = PublicReads(store,boundary)
+    planning = PlanningService(store,boundary,planning_backend)
+    if planning_backend is not None:
+        private_client = getattr(planning_backend,"client",None)
+        for field in ("api_key","api_base"):
+            boundary.register_private(getattr(private_client,field,None))
     boundary.register_private(str(data_dir))
     plugins = PluginManager(data_dir / "plugins", store, tools, disclosure=boundary)
     plugins.load_installed()
@@ -112,7 +126,60 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
 
     @router.get("/info")
     def info() -> dict[str, Any]:
-        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "validated_workflow_templates", "capabilities": capabilities | {"stage_step":"ready","checkpoints":"ready","cancel_dispatch":"ready"}, "resources":engine.budget.state() | dispatcher.state(), "remote_desktop_authenticated_session": False, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
+        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "hybrid_semantic_compiler" if planning_backend else "validated_workflow_templates", "capabilities": capabilities | {"stage_step":"ready","checkpoints":"ready","cancel_dispatch":"ready","hybrid_planning":"ready" if planning_backend else "unavailable","cross_run_reuse":"unavailable"}, "resources":engine.budget.state() | dispatcher.state(), "remote_desktop_authenticated_session": False, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
+
+    @router.post("/proposals")
+    def propose(request: ProposalRequest):
+        result = planning.propose(request)
+        if result.workflow: validate_workflow(result.workflow)
+        return result
+
+    @router.get("/proposals/{proposal_id}")
+    def proposal(proposal_id: str):
+        result = planning.get(proposal_id)
+        boundary.check(result.model_dump(mode="json"))
+        return result
+
+    @router.post("/proposals/{proposal_id}/decision")
+    def proposal_decision(proposal_id: str,request: ProposalDecision):
+        return planning.decide(proposal_id,request.action)
+
+    @router.post("/custom-proposals")
+    def custom_proposal(request: CustomPlanRequest):
+        validate_workflow(request.workflow)
+        return planning.custom(request.project_id,request.workflow,request.objective)
+
+    @router.get("/projects/{project_id}/input-diff")
+    def project_diff(project_id:str,run_id:str):
+        from igem_drylab.workflow.input_diff import input_diff
+        result=input_diff(store,boundary,store.project(project_id),run_id)
+        boundary.check(result)
+        return result
+
+    @router.get("/plan-actions")
+    def plan_actions(project_id: str,after_seq: int = Query(0,ge=0),limit: int = Query(100,ge=1,le=200)):
+        return planning.actions(project_id,after_seq,limit)
+
+    @router.post("/scientific-projects/bind-measurement")
+    def bind_measurement(request: MeasurementBindingRequest):
+        project = store.project(request.project_id)
+        if project.revision != request.expected_revision: raise WorkflowError("project_revision_conflict",status_code=409)
+        if project.scientific_project is None: raise WorkflowError("typed_scientific_project_required")
+        dataset = next((row for row in project.datasets if row.get("kind") == "wetlab" and row.get("file_id") == request.file_id),None)
+        if dataset is None: raise WorkflowError("registered_wetlab_dataset_required")
+        path = Path(boundary.resolve_asset(request.file_id,project.id))
+        from igem_drylab.wetlab.models import WetLabResult
+        raw = json.loads(path.read_bytes())
+        rows = raw.get("records") if isinstance(raw,dict) else raw
+        if not isinstance(rows,list) or not rows: raise WorkflowError("wetlab_requires_nonempty_typed_records")
+        for row in rows: WetLabResult.model_validate(row)
+        from igem_drylab.workflow.scientific_project import ScientificProject, EvidenceFile
+        science = ScientificProject.model_validate(project.scientific_project)
+        science.config.stages.m5_feedback.wetlab_results_file = path
+        science.evidence_files = [item for item in science.evidence_files if item.path != path] + [EvidenceFile(path=path,sha256=sha256(path.read_bytes()).hexdigest())]
+        science.verify()
+        draft = project.model_copy(update={"scientific_project":science.model_dump(mode="json")})
+        return {"project":boundary.project(draft),"requires_confirmation":True,"status":"binding_preview_not_parameter_approval"}
 
     @router.get("/projects")
     def projects() -> list[dict[str, Any]]:
@@ -268,10 +335,45 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
         if request.project_id != request.confirmation.project_id:
             raise WorkflowError("plan_project_mismatch", status_code=409)
         request_id = request.request_id or sha256(request.confirmation.model_dump_json().encode()).hexdigest()
+        if request.proposal_id: planning.authorize_run(request.proposal_id,request.confirmation,request.workflow)
         run_id = engine.create_confirmed(request.confirmation, request.workflow, request_id)
         result = store.run(run_id)
         if result["status"] == "queued": launch(run_id)
+        if request.proposal_id: planning.started(request.proposal_id,run_id)
         return boundary.run(result)
+
+    @router.post("/runs/{run_id}/iteration")
+    def iteration(run_id: str):
+        frozen = store.run(run_id)
+        project = Project.model_validate(frozen["snapshot"]["project"])
+        engine.verify_snapshot(frozen)
+        identity = str(uuid4())
+        # Rebind byte-identical inputs into the new project's owned workspace.
+        # No reference belonging to another project is silently claimed.
+        inputs = {Path(item["path"]).resolve() for item in project.files}
+        if project.scientific_project:
+            from igem_drylab.workflow.scientific_project import ScientificProject
+            science = ScientificProject.model_validate(project.scientific_project)
+            inputs.update(item.path.resolve() for item in science.evidence_files)
+        root = data_dir / "imports" / identity
+        replacements = {}
+        for source in inputs:
+            raw = source.read_bytes()
+            target = root / (sha256(str(source).encode()).hexdigest()[:12]+"-"+source.name)
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(raw)
+            replacements[str(source)] = str(target)
+        def rebind(value):
+            if isinstance(value,str): return replacements.get(str(Path(value).resolve()),value) if (Path(value).is_absolute()) else value
+            if isinstance(value,dict): return {key:rebind(item) for key,item in value.items()}
+            if isinstance(value,list): return [rebind(item) for item in value]
+            return value
+        payload = rebind(project.model_dump(mode="json"))
+        payload.update(id=identity,name=project.name+" · 迭代",revision=1,parent_run_id=run_id,parent_snapshot_sha256=frozen["snapshot_hash"])
+        updated = store.save_project(Project.model_validate(payload))
+        public = boundary.project(updated)
+        return {"project":public,"parent_run_id":run_id,"parent_snapshot_sha256":frozen["snapshot_hash"],
+            "reuse_supported":False,"explanation":"从冻结快照创建独立项目；原运行不改写。尚未核验跨运行可复用身份，重新审阅的计划必须显式包含依赖。"}
 
     @router.get("/runs")
     def runs(project_id: str | None = None, offset: int = Query(0,ge=0), limit: int = Query(100,ge=1,le=200)) -> list[dict[str, Any]]:
@@ -392,11 +494,25 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
 
     @router.get("/tools")
     def tool_list() -> list[dict[str, Any]]:
-        return tools.list()
+        # The public catalogue is attestation, not private executable schemas.
+        # Internal tool schemas may include runtime command/profile definitions.
+        result=[{key:item[key] for key in ("id","name","description","version","capability","runtime","plugin_hash","idempotent","resource")} for item in tools.list()]
+        boundary.check(result)
+        return result
 
     @router.get("/plugins")
     def plugin_list() -> list[dict[str, Any]]:
-        return [{key: item[key] for key in ("manifest", "hash", "sandboxed", "trust_required", "installed")} for item in plugins.installed()]
+        return [public_plugin(item) for item in plugins.installed()]
+
+    def public_plugin(item):
+        from igem_drylab.software.public_contracts import PluginInspectionView
+        manifest=item["manifest"]
+        result=PluginInspectionView(manifest={key:manifest[key] for key in ("id","name","description","version","capability","license","runtime","permissions")},
+            hash=item["hash"],sandboxed=item["sandboxed"],trust_required=item["trust_required"],installed=item.get("installed",False),
+            source_path="plugin-source:"+Path(item["source_path"]).name if item.get("source_path") else None,
+            capability_requests=["permission:"+key for key in manifest.get("permissions",[])]+["secret_env:"+key for key in manifest.get("secret_env",[])]).model_dump(mode="json")
+        boundary.check(result)
+        return result
 
     @router.post("/plugins/inspect")
     def inspect_plugin(request: PluginRequest) -> dict[str, Any]:
@@ -404,21 +520,20 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
             request.source_path = data_dir / "plugins" / "sources" / str(request.source_path).removeprefix("plugin-source:")
         if not request.source_path.resolve().is_relative_to(data_dir / "plugins" / "sources"):
             raise WorkflowError("plugin_source_outside_owned_workspace", status_code=403)
-        return plugins.inspect(request.source_path)
+        return public_plugin(plugins.inspect(request.source_path))
 
     @router.post("/plugins/github")
     def github_plugin(request: GithubPluginRequest) -> dict[str, Any]:
         result = plugins.fetch_github(request.repository_url, request.commit)
-        result["source_path"] = "plugin-source:" + Path(result["source_path"]).name
-        return result
+        return public_plugin(result)
 
     @router.get("/schemas")
     def schemas() -> dict[str, Any]:
-        from igem_drylab.workflow.plugins import PluginManifest
-        from igem_drylab.workflow.scientific_project import ScientificProject
+        from igem_drylab.software.public_contracts import public_schemas
         from igem_drylab.wetlab.models import WetLabResult
-        return {"Project": Project.model_json_schema(), "Workflow": Workflow.model_json_schema(), "Pathway": Pathway.model_json_schema(), "PluginManifest": PluginManifest.model_json_schema(),
-            "ScientificProject": ScientificProject.model_json_schema(), "WetLabResult": WetLabResult.model_json_schema()}
+        result=public_schemas() | {"Pathway":Pathway.model_json_schema(),"WetLabResult":WetLabResult.model_json_schema()}
+        boundary.check(result)
+        return result
 
     @router.post("/plugins/install")
     def install_plugin(request: PluginRequest) -> dict[str, Any]:
@@ -429,6 +544,6 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
         if not request.source_path.resolve().is_relative_to(data_dir / "plugins" / "sources"):
             raise WorkflowError("plugin_source_outside_owned_workspace", status_code=403)
         result = plugins.install(request.source_path, trusted=request.trusted, expected_hash=request.expected_hash)
-        return {key: result[key] for key in ("manifest", "hash", "sandboxed", "trust_required", "installed")}
+        return public_plugin(result)
 
     return router

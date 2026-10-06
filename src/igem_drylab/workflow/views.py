@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from .disclosure import ArtifactView
-from .models import Contract, WorkflowError
+from .models import Contract, WorkflowError, Workflow
 
 
 class ProjectSummaryView(Contract):
@@ -37,7 +37,7 @@ class RunSummaryView(Contract):
     state_version: int
     event_cursor: int
     project_revision: int
-    workflow: dict[str, Any]
+    workflow: Workflow
     tools: dict[str, Any]
     nodes: list[NodeStateView]
     artifacts: list[ArtifactView]

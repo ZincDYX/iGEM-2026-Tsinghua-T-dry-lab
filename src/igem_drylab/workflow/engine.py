@@ -319,6 +319,7 @@ class WorkflowEngine:
             attempt = next(node["attempts"] for node in self.store.execution_state(run_id)["nodes"] if node["id"] == node_id)
             work_dir = self.artifact_root / run_id / sha256(node_id.encode()).hexdigest()[:16] / f"attempt-{attempt}"
             work_dir.mkdir(parents=True, exist_ok=True)
+            arguments = self.disclosure.materialize(arguments,snapshot["project"]["id"])
             payload = definition.input_model.model_validate(arguments)
             runtime_tools = {}
             if snapshot.get("runtime_profile"):
