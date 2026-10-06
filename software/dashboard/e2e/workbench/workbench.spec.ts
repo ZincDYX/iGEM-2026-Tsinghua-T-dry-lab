@@ -11,7 +11,7 @@ test("authenticated real HTTP compiler/ledger/handlers, staged control, provenan
     const response=await route.fetch();
     await route.fulfill({response,headers:{...response.headers(),"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:*; img-src 'self' data:; object-src 'none'"}});
   });
-  await page.addInitScript(({token})=>{window.__TAURI__={core:{invoke:async<T>(command:string)=>{
+  await page.addInitScript(({token})=>{if(!localStorage.getItem("fusionlab.project"))localStorage.setItem("fusionlab.project","software-fixture");window.__TAURI__={core:{invoke:async<T>(command:string)=>{
     if(command==="backend_info")return {url:"http://127.0.0.1:5191",token,mode:"local"} as T;
     if(command==="desktop_settings")return {mode:"local",ssh_host:"",remote_port:8780} as T;
     throw new Error("SOFTWARE_FIXTURE: unsupported native command");
@@ -38,7 +38,7 @@ test("authenticated real HTTP compiler/ledger/handlers, staged control, provenan
   await page.getByRole("button",{name:"M4 原式管线与证据门控",exact:true}).click();
   await page.getByRole("tablist",{name:"中央工作区"}).getByRole("tab",{name:"阶段结果"}).click();
   await expect(page.getByRole("heading",{name:"M4 · 科学项目结果"})).toBeVisible();
-  await expect(page.getByText(/产物 15：未提供/)).toBeVisible();await expect(page.getByText(/software_fixture_not_prediction/)).toBeVisible();
+  await expect(page.getByText(/产物 15：未提供/)).toBeVisible();await expect(page.getByLabel("四类独立状态")).toContainText("software_fixture_not_prediction");
   expect(await page.locator(".workspace-content pre").count()).toBe(0);
   const download=page.waitForEvent("download");await page.getByRole("button",{name:/授权科学导出/}).click();const result=await download;const destination=testInfo.outputPath("scientific-public-export.json");await result.saveAs(destination);
   const raw=await readFile(destination,"utf8");const exported=JSON.parse(raw);expect(exported.export_schema).toBe("scientific-public-export-v1");expect(exported.result.records[0].numerically_solved).toBe(false);expect(raw).not.toContain(token);expect(raw).not.toMatch(/[A-Z]:\\/);

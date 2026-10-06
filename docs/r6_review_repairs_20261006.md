@@ -23,3 +23,17 @@
 初轮软件回归 32 通过，覆盖实际工作线程的暂停/取消、队列取消、工具变化、clone、取消/恢复并发、幂等以及原 crash/non-idempotent 测试。profile 与显式手动审阅追加专项及提案回归 16 通过。
 
 用户再次确认：科学数值/作者回归只在服务器运行，本机不运行这些测试。
+
+## C：工作台交互
+
+- 三条 7px 分隔条采用 Pointer Capture + requestAnimationFrame；拖动结束才持久化，支持方向一致的箭头微调、Shift 大步、双击默认、Escape 撤销本次拖动及 pointercancel/卸载清理。可访问名称、方向、控制面板及 min/max/now 都有实际值。没有宣称实现 APG 的所有可选键盘行为。
+- 尺寸由视口和实际工具栏高度约束；中央优先。窄屏默认折叠检查器，显式打开抽屉和关闭入口，抽屉限中央区域，不遮顶部授权控制。隐藏/打开不改科学数据；存储失败不崩溃。
+- UI-01：同项目输入面板保持挂载，跨标签保留未应用文本；校验失败仍保留文本；项目切换/新建/迭代明确确认丢弃未保存和未应用草稿。未应用时不能规划；编辑时其他输入冻结。
+- UI-02：少量职责 hook 管理 `{projectId,runId,nodeId,attempt,artifactHash,page}`。身份改变在 render 中即撤掉投影，旧异步回包不能覆盖新选择，计划页也可以读取同身份结果，检查器明确标注实际结果身份。
+- UI-03：首次绑定科学包且用户未选择入口时转到科学管线；手动选序列分析后普通保存不覆盖。
+- 缺项主视图分开作业、数值、证据/审批、实验验证四类状态，展示阶段、后端原缺项代码、来源类型、条件与下一步，不填缺失值，不改变门控。
+- 请求计数替代 busy 布尔；中断停止轮询；能力显式刷新；受信插件移到独立运维入口。
+
+前端单元 16 通过；生产构建通过。生产浏览器 5 项通过，覆盖目录树上传、JSON 草稿、实际三条 Pointer/键盘分隔条及科学输入不变、暂停取消与计划页结果身份、原综合授权/导出/迭代流程。此时全部科学 handler 为明确的软件 fixture，不是生物验证。
+
+交互参考：[WAI-ARIA Window Splitter](https://www.w3.org/WAI/ARIA/apg/patterns/windowsplitter/)、[MDN Pointer Capture](https://developer.mozilla.org/en-US/docs/Web/API/Element/setPointerCapture)。这些不作为科学参数来源。

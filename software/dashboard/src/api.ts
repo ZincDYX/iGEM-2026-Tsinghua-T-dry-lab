@@ -1,3 +1,5 @@
+import {PublicError as isPublicError} from "./contracts/public.validators.generated.js";
+import type {PublicError} from "./contracts/generated";
 export let baseUrl=import.meta.env.VITE_DASHBOARD_API_URL??"http://127.0.0.1:8780";
 let sessionToken="";
 export let backendMode:"local"|"ssh"="local";
@@ -16,7 +18,7 @@ export const isDesktop=()=>Boolean(window.__TAURI__);
 export const getDesktopSettings=()=>window.__TAURI__!.core.invoke<DesktopSettings>("desktop_settings");
 export const saveDesktopSettings=(settings:DesktopSettings)=>window.__TAURI__!.core.invoke<void>("save_desktop_settings",{settings});
 export class PublicApiError extends Error {
-  constructor(public readonly detail:{code:string;message:string;diagnostic_id:string;field_paths:string[];logical_files:string[];actions:string[]}) {
+  constructor(public readonly detail:PublicError) {
     super([detail.message,...detail.field_paths.map(value=>`字段：${value}`),...detail.logical_files.map(value=>`文件：${value}`),...detail.actions,`诊断 ID：${detail.diagnostic_id}`].join("\n"));
   }
 }
@@ -28,7 +30,7 @@ export async function requestJson(path:string,body?:unknown,signal?:AbortSignal)
   });
   if(!response.ok){
     const error=await response.json().catch(()=>null), detail=error?.detail;
-    if(detail&&typeof detail.code==="string"&&typeof detail.message==="string"&&typeof detail.diagnostic_id==="string"&&[detail.field_paths,detail.logical_files,detail.actions].every(value=>Array.isArray(value)&&value.every(item=>typeof item==="string")))throw new PublicApiError(detail);
+    if(isPublicError(detail))throw new PublicApiError(detail);
     throw new Error(`请求失败 (${response.status})；请查看安全诊断。`);
   }
   return response.json();

@@ -9,7 +9,7 @@ export function pollVersioned<T extends {state_version: number; status: string}>
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let version = options.initialVersion ?? -1;
-  const stopped = new Set(["succeeded", "failed", "paused", "cancelled"]);
+  const stopped = new Set(["succeeded", "failed", "paused", "cancelled", "interrupted"]);
   async function next() {
     try {
       const value = await options.load(controller.signal);

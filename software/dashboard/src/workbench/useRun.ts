@@ -24,5 +24,6 @@ export function useRun(id:string|undefined,projectId:string|undefined,refresh:nu
       return{...summary,newEvents:rows.slice(-500),newCursor:cursor};
     },accept:value=>{identity.current.cursor=value.newCursor;identity.current.version=value.state_version;setRun(value);setEvents(previous=>[...previous,...value.newEvents].slice(-500));localStorage.setItem(`fusionlab.run.${projectId}`,id);},fail});
   },[id,projectId,refresh,fail]);
-  return{run,events};
+  const current=run!==undefined&&run.id===id&&run.project_id===projectId;
+  return{run:current?run:undefined,events:current?events:[]};
 }

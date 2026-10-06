@@ -4,6 +4,7 @@ import {adaptSteadyResult,numbers,sequenceOutput,show,stageRecords} from "./cont
 import {LazyJson} from "./contracts/LazyJson";
 import {requestJson} from "./api";
 import {M1Matrix,M2Metrics} from "./workbench/ScreenResultTables";
+import {MissingEvidence} from "./workbench/MissingEvidence";
 export {object,adaptSteadyResult,sequenceOutput};
 
 export interface ResultRun {
@@ -53,7 +54,8 @@ function StageResult({output,records,projectId}:{output:Record<string,unknown>;r
   if(!record)return<section><h2>{module} · 科学项目结果</h2><p>无候选记录；不视为有效预测。</p></section>;
   const id=String(record.candidate_id??record.experiment_id??selected);
   return<section><h2>{module} · 科学项目结果</h2><label>当前候选<select aria-label="当前候选" value={selected} onChange={e=>setSelected(Number(e.target.value))}>{records.map((row,i)=><option key={i} value={i}>{show(row.candidate_id??row.experiment_id??i)}</option>)}</select></label>
-    <p>作业完成 · 科学状态：{show(record.status)} · 数值求解：{show(record.numerically_solved)} · 证据就绪：{show(record.evidence_ready)}</p><p>缺项：{show(record.missing_inputs)} · 声明范围：{show(record.claim_scope)}</p>
+    <table className="science-status" aria-label="四类独立状态"><thead><tr><th>作业状态</th><th>数值状态</th><th>证据 / 审批状态</th><th>实验验证状态</th></tr></thead><tbody><tr><td>执行完成{record.status==="insufficient_data"?"，科学数据不足":""}</td><td>{record.numerically_solved===true?"已求解（不等于证据充分）":record.numerically_solved===false?"未获得数值预测":"未提供"}</td><td>{record.evidence_ready===true?"后端声明证据就绪；参数审批仍按原记录":"未声明证据充分"} · {show(record.status)}</td><td>未提供独立实验验证结论；不能由作业状态推断</td></tr></tbody></table><p>声明范围：{show(record.claim_scope)}</p>
+    <MissingEvidence module={module} missing={record.missing_inputs} status={record.status}/>
     <p>原式 {show(record.formula_version)} · 参数身份 {show(record.parameter_ids)} · 来源分级 {show(record.provenance_summary)}；作业完成不升级实验验证状态。</p>
     {["M1","M2"].includes(module)&&<p>序列/静态结构负筛与几何指标，不代表酶活或自组装已经由实验确认。</p>}
     {module==="M1"&&<><M1Matrix records={records}/><LazyJson value={record.part_screens} label="部件原特征、规则与否决原因"/><LazyJson value={record.full_fusion_screen} label="完整融合序列筛查与规则来源"/></>}

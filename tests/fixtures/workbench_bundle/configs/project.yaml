@@ -1,0 +1,8 @@
+run:
+  id: SOFTWARE_FIXTURE_directory_import
+inputs:
+  protein_fasta: ../data/proteins.fasta
+  enzymes: []
+  scaffolds: []
+  linkers: []
+# Software directory-import oracle only; no biological measurements/approval.

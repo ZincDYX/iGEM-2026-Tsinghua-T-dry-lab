@@ -25,7 +25,7 @@ def test_typed_project_executes_original_stages_and_preserves_missing_evidence(t
         replacements[str(item.path)] = '../' + logical
         files.append({'filename':logical,'content':item.path.read_text(encoding='utf-8')})
     def relative(value):
-        if isinstance(value,str): return replacements.get(value,value)
+        if isinstance(value,str): return replacements.get(str(Path(value).resolve()),value) if Path(value).is_absolute() else value
         if isinstance(value,dict): return {key:relative(item) for key,item in value.items()}
         if isinstance(value,list): return [relative(item) for item in value]
         return value
