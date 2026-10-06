@@ -3,9 +3,10 @@
 use serde::Serialize;
 use std::{
     fs,
+    io::{BufRead, BufReader},
     path::PathBuf,
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{mpsc, Mutex},
     thread,
     time::Duration,
 };
@@ -24,7 +25,7 @@ struct BackendInfo {
 struct Backend {
     child: Mutex<Child>,
     info: BackendInfo,
-    ready: PathBuf,
+    cleanup_file: Option<PathBuf>,
     #[cfg(windows)]
     _job: WindowsJob,
 }
@@ -83,7 +84,9 @@ impl Drop for Backend {
             let _ = child.kill();
             let _ = child.wait();
         }
-        let _ = fs::remove_file(&self.ready);
+        if let Some(path) = &self.cleanup_file {
+            let _ = fs::remove_file(path);
+        }
         // On Windows dropping the job handle also terminates plugin/MCP children.
     }
 }
@@ -150,20 +153,17 @@ fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>>
     }
     let data = std::env::var_os("FUSIONLAB_DATA_DIR")
         .map(PathBuf::from)
-        .unwrap_or(app.path().app_data_dir()?);
+        .unwrap_or(app.path().app_local_data_dir()?);
     fs::create_dir_all(&data)?;
     let token = uuid::Uuid::new_v4().to_string();
-    let ready = data.join(format!("backend-{}.json", uuid::Uuid::new_v4()));
     let mut command = Command::new(python);
     command
         .args(["-m", "igem_drylab.software.desktop_backend", "--data-dir"])
         .arg(&data)
-        .arg("--ready-file")
-        .arg(&ready)
         .env("FUSIONLAB_SESSION_TOKEN", &token)
         .current_dir(root)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::from(fs::File::create(data.join("backend.log"))?));
     // Avoid BLAS oversubscription across the backend and MCP/plugin processes.
     // This is a runtime resource default, not a different scientific equation.
@@ -187,6 +187,7 @@ fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>>
             return Err(error.into());
         }
     };
+    let stdout = child.stdout.take().ok_or("Python startup pipe missing")?;
     let mut backend = Backend {
         child: Mutex::new(child),
         info: BackendInfo {
@@ -194,37 +195,24 @@ fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>>
             token,
             mode: "local".into(),
         },
-        ready,
+        cleanup_file: None,
         #[cfg(windows)]
         _job: job,
     };
-    for _ in 0..200 {
-        let ready = &backend.ready;
-        if ready.is_file() {
-            let content: serde_json::Value = serde_json::from_slice(&fs::read(&ready)?)?;
-            let url = content["url"]
-                .as_str()
-                .ok_or("invalid backend ready message")?
-                .to_owned();
-            backend.info.url = url;
-            return Ok(backend);
-        }
-        if backend
-            .child
-            .get_mut()
-            .map_err(|_| "backend lock poisoned")?
-            .try_wait()?
-            .is_some()
-        {
-            return Err(format!(
-                "Python backend exited; inspect {}",
-                data.join("backend.log").display()
-            )
-            .into());
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
-    Err("Python backend startup timed out; inspect backend.log".into())
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut line = String::new();
+        let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+        let _ = sender.send(result);
+    });
+    let line = receiver.recv_timeout(Duration::from_secs(20)).map_err(|error| {
+        format!("Python backend startup failed ({error}); inspect {}", data.join("backend.log").display())
+    })??;
+    let content: serde_json::Value = serde_json::from_str(&line).map_err(|error| {
+        format!("Invalid Python startup message ({error}); inspect {}", data.join("backend.log").display())
+    })?;
+    backend.info.url = content["url"].as_str().ok_or("invalid backend ready message")?.to_owned();
+    Ok(backend)
 }
 
 fn launch(
@@ -236,7 +224,7 @@ fn launch(
     }
     let data = std::env::var_os("FUSIONLAB_DATA_DIR")
         .map(PathBuf::from)
-        .unwrap_or(app.path().app_data_dir()?);
+        .unwrap_or(app.path().app_local_data_dir()?);
     fs::create_dir_all(&data)?;
     let (mut child, config, url) = remote::launch(&data, &settings.ssh_host, settings.remote_port)?;
     #[cfg(windows)]
@@ -256,7 +244,7 @@ fn launch(
             token: String::new(),
             mode: "ssh".into(),
         },
-        ready: config,
+        cleanup_file: Some(config),
         #[cfg(windows)]
         _job: job,
     })
@@ -268,7 +256,7 @@ fn main() {
             // A failed connection still opens the app and exposes a useful error.
             let directory = std::env::var_os("FUSIONLAB_DATA_DIR")
                 .map(PathBuf::from)
-                .unwrap_or(app.path().app_data_dir()?);
+                .unwrap_or(app.path().app_local_data_dir()?);
             fs::create_dir_all(&directory)?;
             let settings_path = directory.join("desktop-settings.json");
             let backend = DesktopSettings::load(&settings_path)

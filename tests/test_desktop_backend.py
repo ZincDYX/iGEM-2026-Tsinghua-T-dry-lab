@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from time import monotonic, sleep
+from queue import Queue
+from threading import Thread
 
 from fastapi.testclient import TestClient
 import requests
@@ -21,17 +22,17 @@ def test_desktop_session_token_is_required(tmp_path: Path):
 
 
 def test_real_desktop_python_process_uses_random_loopback_port(tmp_path: Path):
-    ready = tmp_path / "ready.json"
     env = {**os.environ, "FUSIONLAB_SESSION_TOKEN": "process-test-token"}
-    process = subprocess.Popen([sys.executable, "-m", "igem_drylab.software.desktop_backend", "--data-dir", str(tmp_path), "--ready-file", str(ready)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen([sys.executable, "-m", "igem_drylab.software.desktop_backend", "--data-dir", str(tmp_path)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        deadline = monotonic() + 15
-        while not ready.exists() and process.poll() is None and monotonic() < deadline:
-            sleep(0.05)
-        assert ready.exists(), "Desktop backend did not start"
-        url = json.loads(ready.read_text())["url"]
+        ready = Queue()
+        Thread(target=lambda: ready.put(process.stdout.readline()), daemon=True).start()
+        message = ready.get(timeout=15)
+        assert message, "Desktop backend did not announce startup on its pipe"
+        url = json.loads(message)["url"]
         assert url.startswith("http://127.0.0.1:")
-        assert "token" not in ready.read_text()
+        assert b"token" not in message
+        assert not list(tmp_path.glob("backend-*")), "Startup must not require filesystem IPC"
         assert requests.get(url + "/api/platform/info", timeout=5).status_code == 401
         assert requests.get(url + "/api/platform/projects", headers={"X-FusionLab-Token": "process-test-token"}, timeout=5).json() == []
     finally:
