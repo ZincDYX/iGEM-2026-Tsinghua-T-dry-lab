@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from secrets import compare_digest
 from threading import Lock, Thread
-from typing import Literal
+from typing import Literal, TYPE_CHECKING
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
@@ -15,7 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 
-from igem_drylab.mcp import ToolRegistry, create_default_registry
+if TYPE_CHECKING:
+    from igem_drylab.mcp import ToolRegistry
 
 RunStatus = Literal["queued", "running", "succeeded", "failed", "unavailable"]
 
@@ -113,7 +114,11 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
     """Build the durable platform API and retain deprecated legacy routes."""
     if deployment_mode == "authenticated" and not session_token:
         raise ValueError("authenticated_deployment_requires_private_session_token")
-    tool_registry = registry or create_default_registry()
+    # Production workbench never executes the deprecated in-memory runner.
+    # Loading its complete science/research registry must not block basic API
+    # readiness. Explicit development callers initialize it only when used.
+    tool_registry = registry
+    registry_lock = Lock()
     runs = DashboardRuns()
     app = FastAPI(title="iGEM Dry-Lab Dashboard API", version="0.1.0")
     from .platform_api import platform_router
@@ -169,6 +174,7 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
 
     @app.post("/api/dashboard/runs", response_model=DashboardRun, status_code=202, deprecated=True)
     def start_run(request: DashboardRunRequest) -> DashboardRun:
+        nonlocal tool_registry
         if deployment_mode != "development":
             raise HTTPException(status_code=410, detail={"code": "legacy_execution_requires_durable_reviewed_plan"})
         module = _BY_ID.get(request.module_id)
@@ -178,6 +184,10 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
         if not module.run_available:
             runs.append(run.run_id, "unavailable", module.unavailable_reason or "This module cannot run independently.")
             return runs.get(run.run_id)  # type: ignore[return-value]
+        with registry_lock:
+            if tool_registry is None:
+                from igem_drylab.mcp import create_default_registry
+                tool_registry = create_default_registry()
         Thread(target=_execute, args=(runs, tool_registry, run.run_id, request), daemon=True).start()
         return run
 

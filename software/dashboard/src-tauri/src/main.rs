@@ -240,6 +240,13 @@ fn launch(
 
 fn main() {
     tauri::Builder::default()
+        .on_window_event(|window, event| {
+            // The hidden/test and visible workbench have the same lifecycle.
+            // Do not leave a headless backend after its only UI is destroyed.
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                window.app_handle().exit(0);
+            }
+        })
         .setup(|app| {
             // A failed connection still opens the app and exposes a useful error.
             let directory = std::env::var_os("FUSIONLAB_DATA_DIR")

@@ -182,3 +182,12 @@ def test_registered_m5_binding_is_preview_only_and_keeps_empty_measurements_empt
         assert result["project"]["datasets"][0]["records"][0]["metabolites"]=={}
         assert store.project(saved["id"]).model_dump(mode="json")==frozen
         assert app.state.fixture_calls==[]
+
+
+def test_base_api_does_not_eagerly_import_deprecated_scientific_registry(tmp_path):
+    import os,subprocess,sys
+    code="from pathlib import Path; import sys; from igem_drylab.software.dashboard import create_app; app=create_app(data_dir=Path(sys.argv[1]),session_token='SOFTWARE_FIXTURE_SESSION',discover_tools=False); assert 'igem_drylab.mcp.registry' not in sys.modules; print('basic-api-without-legacy-registry')"
+    result=subprocess.run([sys.executable,"-B","-c",code,str(tmp_path/"cold-import")],capture_output=True,text=True,timeout=30,
+        env={"SYSTEMROOT":os.environ.get("SYSTEMROOT",""),"OPENBLAS_NUM_THREADS":"1","PYTHONDONTWRITEBYTECODE":"1"})
+    assert result.returncode==0,result.stderr
+    assert result.stdout.strip()=="basic-api-without-legacy-registry"
