@@ -83,6 +83,7 @@ class PlanView(Contract):
     confirmation: PlanBinding
     source: str
     requires_confirmation: bool
+    review_id: str
 
 
 class ScientificPreviewView(Contract):

@@ -67,7 +67,9 @@ class RunDispatcher:
         while True:
             run_id, retry, node_id = self._queue.get()
             try:
-                self.engine.run(run_id, retry_failed=retry, retry_node_id=node_id)
+                # A cancelled queue entry cannot claim or call a handler.
+                if self.engine.store.execution_state(run_id)["status"] != "cancelled":
+                    self.engine.run(run_id, retry_failed=retry, retry_node_id=node_id)
             except Exception as exc:
                 self.engine.store.event(run_id, "dispatch_error", self.engine.disclosure.diagnostic(exc))
             finally:

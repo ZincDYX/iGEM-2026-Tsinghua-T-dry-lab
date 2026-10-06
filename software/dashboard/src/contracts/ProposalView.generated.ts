@@ -47,6 +47,12 @@ export type ProjectRevision = number;
 export type ProjectInputSha256 = string;
 export type WorkflowSha256 = string;
 export type CreatedAt = string;
+export type ReviewIdentity = {
+  [k: string]: unknown;
+} | null;
+export type PreviousReviewIdentity = {
+  [k: string]: unknown;
+} | null;
 
 export interface ProposalView {
   id: Id;
@@ -66,6 +72,8 @@ export interface ProposalView {
   workflow: Workflow | null;
   confirmation: PlanBinding | null;
   created_at: CreatedAt;
+  review_identity: ReviewIdentity;
+  previous_review_identity: PreviousReviewIdentity;
 }
 export interface Workflow {
   id: Id1;

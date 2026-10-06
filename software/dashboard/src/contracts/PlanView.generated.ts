@@ -34,12 +34,14 @@ export type ProjectInputSha256 = string;
 export type WorkflowSha256 = string;
 export type Source = string;
 export type RequiresConfirmation = boolean;
+export type ReviewId = string;
 
 export interface PlanView {
   workflow: Workflow;
   confirmation: PlanBinding;
   source: Source;
   requires_confirmation: RequiresConfirmation;
+  review_id: ReviewId;
 }
 export interface Workflow {
   id: Id;

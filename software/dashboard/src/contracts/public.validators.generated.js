@@ -15058,13 +15058,13 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.workflow === void 0 && (missing0 = "workflow") || data.confirmation === void 0 && (missing0 = "confirmation") || data.source === void 0 && (missing0 = "source") || data.requires_confirmation === void 0 && (missing0 = "requires_confirmation")) {
+      if (data.workflow === void 0 && (missing0 = "workflow") || data.confirmation === void 0 && (missing0 = "confirmation") || data.source === void 0 && (missing0 = "source") || data.requires_confirmation === void 0 && (missing0 = "requires_confirmation") || data.review_id === void 0 && (missing0 = "review_id")) {
         validate163.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "workflow" || key0 === "confirmation" || key0 === "source" || key0 === "requires_confirmation")) {
+          if (!(key0 === "workflow" || key0 === "confirmation" || key0 === "source" || key0 === "requires_confirmation" || key0 === "review_id")) {
             validate163.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
@@ -15114,6 +15114,18 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
                 } else {
                   var valid0 = true;
                 }
+                if (valid0) {
+                  if (data.review_id !== void 0) {
+                    const _errs8 = errors;
+                    if (typeof data.review_id !== "string") {
+                      validate163.errors = [{ instancePath: instancePath + "/review_id", schemaPath: "#/properties/review_id/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                      return false;
+                    }
+                    var valid0 = _errs8 === errors;
+                  } else {
+                    var valid0 = true;
+                  }
+                }
               }
             }
           }
@@ -15129,7 +15141,7 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
 }
 validate163.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 var ProposalView = validate170;
-var schema79 = { "additionalProperties": false, "properties": { "id": { "title": "Id", "type": "string" }, "task_id": { "title": "Task Id", "type": "string" }, "project_id": { "title": "Project Id", "type": "string" }, "source": { "title": "Source", "type": "string" }, "status": { "enum": ["proposed", "accepted", "rejected", "blocked", "stale"], "title": "Status", "type": "string" }, "objective": { "title": "Objective", "type": "string" }, "rationale": { "title": "Rationale", "type": "string" }, "change_types": { "items": { "type": "string" }, "title": "Change Types", "type": "array" }, "evidence": { "items": { "type": "string" }, "title": "Evidence", "type": "array" }, "requested_stages": { "items": { "type": "string" }, "title": "Requested Stages", "type": "array" }, "execution_stages": { "items": { "type": "string" }, "title": "Execution Stages", "type": "array" }, "reused_artifacts": { "items": { "type": "string" }, "title": "Reused Artifacts", "type": "array" }, "missing_inputs": { "items": { "type": "string" }, "title": "Missing Inputs", "type": "array" }, "limitations": { "items": { "type": "string" }, "title": "Limitations", "type": "array" }, "workflow": { "anyOf": [{ "$ref": "urn:fusionlab:shared#/$defs/Workflow" }, { "type": "null" }] }, "confirmation": { "anyOf": [{ "$ref": "urn:fusionlab:shared#/$defs/PlanBinding" }, { "type": "null" }] }, "created_at": { "title": "Created At", "type": "string" } }, "required": ["id", "task_id", "project_id", "source", "status", "objective", "rationale", "change_types", "evidence", "requested_stages", "execution_stages", "reused_artifacts", "missing_inputs", "limitations", "workflow", "confirmation", "created_at"], "title": "ProposalView", "type": "object" };
+var schema79 = { "additionalProperties": false, "properties": { "id": { "title": "Id", "type": "string" }, "task_id": { "title": "Task Id", "type": "string" }, "project_id": { "title": "Project Id", "type": "string" }, "source": { "title": "Source", "type": "string" }, "status": { "enum": ["proposed", "accepted", "rejected", "blocked", "stale"], "title": "Status", "type": "string" }, "objective": { "title": "Objective", "type": "string" }, "rationale": { "title": "Rationale", "type": "string" }, "change_types": { "items": { "type": "string" }, "title": "Change Types", "type": "array" }, "evidence": { "items": { "type": "string" }, "title": "Evidence", "type": "array" }, "requested_stages": { "items": { "type": "string" }, "title": "Requested Stages", "type": "array" }, "execution_stages": { "items": { "type": "string" }, "title": "Execution Stages", "type": "array" }, "reused_artifacts": { "items": { "type": "string" }, "title": "Reused Artifacts", "type": "array" }, "missing_inputs": { "items": { "type": "string" }, "title": "Missing Inputs", "type": "array" }, "limitations": { "items": { "type": "string" }, "title": "Limitations", "type": "array" }, "workflow": { "anyOf": [{ "$ref": "urn:fusionlab:shared#/$defs/Workflow" }, { "type": "null" }] }, "confirmation": { "anyOf": [{ "$ref": "urn:fusionlab:shared#/$defs/PlanBinding" }, { "type": "null" }] }, "created_at": { "title": "Created At", "type": "string" }, "review_identity": { "anyOf": [{ "additionalProperties": true, "type": "object" }, { "type": "null" }], "default": null, "title": "Review Identity" }, "previous_review_identity": { "anyOf": [{ "additionalProperties": true, "type": "object" }, { "type": "null" }], "default": null, "title": "Previous Review Identity" } }, "required": ["id", "task_id", "project_id", "source", "status", "objective", "rationale", "change_types", "evidence", "requested_stages", "execution_stages", "reused_artifacts", "missing_inputs", "limitations", "workflow", "confirmation", "created_at", "review_identity", "previous_review_identity"], "title": "ProposalView", "type": "object" };
 function validate171(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -15380,7 +15392,7 @@ function validate170(data, { instancePath = "", parentData, parentDataProperty, 
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.id === void 0 && (missing0 = "id") || data.task_id === void 0 && (missing0 = "task_id") || data.project_id === void 0 && (missing0 = "project_id") || data.source === void 0 && (missing0 = "source") || data.status === void 0 && (missing0 = "status") || data.objective === void 0 && (missing0 = "objective") || data.rationale === void 0 && (missing0 = "rationale") || data.change_types === void 0 && (missing0 = "change_types") || data.evidence === void 0 && (missing0 = "evidence") || data.requested_stages === void 0 && (missing0 = "requested_stages") || data.execution_stages === void 0 && (missing0 = "execution_stages") || data.reused_artifacts === void 0 && (missing0 = "reused_artifacts") || data.missing_inputs === void 0 && (missing0 = "missing_inputs") || data.limitations === void 0 && (missing0 = "limitations") || data.workflow === void 0 && (missing0 = "workflow") || data.confirmation === void 0 && (missing0 = "confirmation") || data.created_at === void 0 && (missing0 = "created_at")) {
+      if (data.id === void 0 && (missing0 = "id") || data.task_id === void 0 && (missing0 = "task_id") || data.project_id === void 0 && (missing0 = "project_id") || data.source === void 0 && (missing0 = "source") || data.status === void 0 && (missing0 = "status") || data.objective === void 0 && (missing0 = "objective") || data.rationale === void 0 && (missing0 = "rationale") || data.change_types === void 0 && (missing0 = "change_types") || data.evidence === void 0 && (missing0 = "evidence") || data.requested_stages === void 0 && (missing0 = "requested_stages") || data.execution_stages === void 0 && (missing0 = "execution_stages") || data.reused_artifacts === void 0 && (missing0 = "reused_artifacts") || data.missing_inputs === void 0 && (missing0 = "missing_inputs") || data.limitations === void 0 && (missing0 = "limitations") || data.workflow === void 0 && (missing0 = "workflow") || data.confirmation === void 0 && (missing0 = "confirmation") || data.created_at === void 0 && (missing0 = "created_at") || data.review_identity === void 0 && (missing0 = "review_identity") || data.previous_review_identity === void 0 && (missing0 = "previous_review_identity")) {
         validate170.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
@@ -15778,6 +15790,122 @@ function validate170(data, { instancePath = "", parentData, parentDataProperty, 
                                             var valid0 = _errs54 === errors;
                                           } else {
                                             var valid0 = true;
+                                          }
+                                          if (valid0) {
+                                            if (data.review_identity !== void 0) {
+                                              let data24 = data.review_identity;
+                                              const _errs56 = errors;
+                                              const _errs57 = errors;
+                                              let valid10 = false;
+                                              const _errs58 = errors;
+                                              if (errors === _errs58) {
+                                                if (data24 && typeof data24 == "object" && !Array.isArray(data24)) {
+                                                } else {
+                                                  const err4 = { instancePath: instancePath + "/review_identity", schemaPath: "#/properties/review_identity/anyOf/0/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+                                                  if (vErrors === null) {
+                                                    vErrors = [err4];
+                                                  } else {
+                                                    vErrors.push(err4);
+                                                  }
+                                                  errors++;
+                                                }
+                                              }
+                                              var _valid2 = _errs58 === errors;
+                                              valid10 = valid10 || _valid2;
+                                              const _errs61 = errors;
+                                              if (data24 !== null) {
+                                                const err5 = { instancePath: instancePath + "/review_identity", schemaPath: "#/properties/review_identity/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                                                if (vErrors === null) {
+                                                  vErrors = [err5];
+                                                } else {
+                                                  vErrors.push(err5);
+                                                }
+                                                errors++;
+                                              }
+                                              var _valid2 = _errs61 === errors;
+                                              valid10 = valid10 || _valid2;
+                                              if (!valid10) {
+                                                const err6 = { instancePath: instancePath + "/review_identity", schemaPath: "#/properties/review_identity/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                                                if (vErrors === null) {
+                                                  vErrors = [err6];
+                                                } else {
+                                                  vErrors.push(err6);
+                                                }
+                                                errors++;
+                                                validate170.errors = vErrors;
+                                                return false;
+                                              } else {
+                                                errors = _errs57;
+                                                if (vErrors !== null) {
+                                                  if (_errs57) {
+                                                    vErrors.length = _errs57;
+                                                  } else {
+                                                    vErrors = null;
+                                                  }
+                                                }
+                                              }
+                                              var valid0 = _errs56 === errors;
+                                            } else {
+                                              var valid0 = true;
+                                            }
+                                            if (valid0) {
+                                              if (data.previous_review_identity !== void 0) {
+                                                let data25 = data.previous_review_identity;
+                                                const _errs63 = errors;
+                                                const _errs64 = errors;
+                                                let valid11 = false;
+                                                const _errs65 = errors;
+                                                if (errors === _errs65) {
+                                                  if (data25 && typeof data25 == "object" && !Array.isArray(data25)) {
+                                                  } else {
+                                                    const err7 = { instancePath: instancePath + "/previous_review_identity", schemaPath: "#/properties/previous_review_identity/anyOf/0/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+                                                    if (vErrors === null) {
+                                                      vErrors = [err7];
+                                                    } else {
+                                                      vErrors.push(err7);
+                                                    }
+                                                    errors++;
+                                                  }
+                                                }
+                                                var _valid3 = _errs65 === errors;
+                                                valid11 = valid11 || _valid3;
+                                                const _errs68 = errors;
+                                                if (data25 !== null) {
+                                                  const err8 = { instancePath: instancePath + "/previous_review_identity", schemaPath: "#/properties/previous_review_identity/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                                                  if (vErrors === null) {
+                                                    vErrors = [err8];
+                                                  } else {
+                                                    vErrors.push(err8);
+                                                  }
+                                                  errors++;
+                                                }
+                                                var _valid3 = _errs68 === errors;
+                                                valid11 = valid11 || _valid3;
+                                                if (!valid11) {
+                                                  const err9 = { instancePath: instancePath + "/previous_review_identity", schemaPath: "#/properties/previous_review_identity/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                                                  if (vErrors === null) {
+                                                    vErrors = [err9];
+                                                  } else {
+                                                    vErrors.push(err9);
+                                                  }
+                                                  errors++;
+                                                  validate170.errors = vErrors;
+                                                  return false;
+                                                } else {
+                                                  errors = _errs64;
+                                                  if (vErrors !== null) {
+                                                    if (_errs64) {
+                                                      vErrors.length = _errs64;
+                                                    } else {
+                                                      vErrors = null;
+                                                    }
+                                                  }
+                                                }
+                                                var valid0 = _errs63 === errors;
+                                              } else {
+                                                var valid0 = true;
+                                              }
+                                            }
                                           }
                                         }
                                       }

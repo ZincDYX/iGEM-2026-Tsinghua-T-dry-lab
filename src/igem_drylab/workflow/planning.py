@@ -40,6 +40,8 @@ class ProposalView(Contract):
     workflow: Workflow | None
     confirmation: PlanBinding | None
     created_at: str
+    review_identity: dict | None = None
+    previous_review_identity: dict | None = None
 
 
 class ProposalDecision(Contract):
@@ -47,8 +49,9 @@ class ProposalDecision(Contract):
 
 
 class PlanningService:
-    def __init__(self,store,boundary,backend=None):
+    def __init__(self,store,boundary,backend=None,engine=None):
         self.store,self.boundary,self.backend = store,boundary,backend
+        self.engine = engine
         with store.connection() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS proposals(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,payload TEXT NOT NULL);
@@ -122,19 +125,21 @@ class PlanningService:
             result.execution_stages = [node.id for node in workflow.nodes]
             result.workflow = workflow
             result.confirmation = plan_binding(project,workflow)
+            result.review_identity = self.engine.review_identity(project,workflow) if self.engine else None
         self.boundary.check(result.model_dump(mode="json"))
         with self.store.connection() as db:
             db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project.id,result.model_dump_json()))
             self._action(db,result,"proposed","planner")
         return result
 
-    def custom(self,project_id:str,workflow:Workflow,objective:str):
+    def custom(self,project_id:str,workflow:Workflow,objective:str,*,source="user_reviewed_workflow",previous_review_identity=None):
         project=self.store.project(project_id)
         identity=str(uuid4())
-        result=ProposalView(id=identity,task_id=identity,project_id=project_id,source="user_reviewed_workflow",status="proposed",
+        result=ProposalView(id=identity,task_id=identity,project_id=project_id,source=source,status="proposed",
             objective=objective,rationale="用户提交的 DAG；已校验图、工具与正式前序来源绑定，尚未接受或执行。",evidence=[],requested_stages=[node.id for node in workflow.nodes],
             execution_stages=[node.id for node in workflow.nodes],reused_artifacts=[],missing_inputs=[],limitations=["用户 DAG 不自动批准科学参数；同一 durable 执行器仍核验来源与审批。"],
-            workflow=workflow,confirmation=plan_binding(project,workflow),created_at=now())
+            workflow=workflow,confirmation=plan_binding(project,workflow),created_at=now(),
+            review_identity=self.engine.review_identity(project,workflow) if self.engine else None,previous_review_identity=previous_review_identity)
         self.boundary.check(result.model_dump(mode="json"))
         with self.store.connection() as db:
             db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project_id,result.model_dump_json()))
@@ -148,6 +153,8 @@ class PlanningService:
         return ProposalView.model_validate_json(row[0])
 
     def decide(self,proposal_id: str,action: str):
+        prepared = self.get(proposal_id)
+        current = self.engine.review_identity(self.store.project(prepared.project_id),prepared.workflow) if self.engine and prepared.workflow else None
         with self.store.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT payload FROM proposals WHERE id=?",(proposal_id,)).fetchone()
@@ -158,15 +165,33 @@ class PlanningService:
             from .models import Project
             if not project or result.workflow is None or result.confirmation != plan_binding(Project.model_validate_json(project[0]),result.workflow):
                 raise WorkflowError("proposal_stale_regenerate",status_code=409)
+            if action == "accept" and result.review_identity != current:
+                raise WorkflowError("reviewed_tool_or_profile_changed",status_code=409)
             result.status = "accepted" if action == "accept" else "rejected"
             db.execute("UPDATE proposals SET payload=? WHERE id=?",(result.model_dump_json(),proposal_id))
             self._action(db,result,action,"user")
+            if action == "accept" and result.source == "manual_compatibility":
+                self._action(db,result,"manual_plan_confirmed","user")
         return result
 
-    def authorize_run(self,proposal_id: str,confirmation: PlanBinding,workflow: Workflow):
-        proposal = self.get(proposal_id)
+    def authorize_run(self,proposal_id: str,confirmation: PlanBinding,workflow: Workflow,*,db=None,snapshot=None,manual=False):
+        if db is None: proposal = self.get(proposal_id)
+        else:
+            row = db.execute("SELECT payload FROM proposals WHERE id=?",(proposal_id,)).fetchone()
+            if row is None: raise KeyError(proposal_id)
+            proposal = ProposalView.model_validate_json(row[0])
         if proposal.status != "accepted" or proposal.confirmation != confirmation or proposal.workflow != workflow:
             raise WorkflowError("accepted_proposal_binding_required",status_code=409)
+        if manual != (proposal.source == "manual_compatibility"):
+            raise WorkflowError("explicit_review_execution_type_required",status_code=409)
+        actual = self.engine.snapshot_review_identity(snapshot) if snapshot is not None else self.engine.review_identity(self.store.project(proposal.project_id),workflow)
+        if proposal.review_identity is None or proposal.review_identity != actual:
+            raise WorkflowError("reviewed_tool_or_profile_changed",status_code=409)
+        if db is not None and snapshot.get("runtime_profile"):
+            profile=snapshot["runtime_profile"]
+            row=db.execute("SELECT revision,hash FROM runtime_profiles WHERE id=?",(profile["id"],)).fetchone()
+            if row is None or (row["revision"],row["hash"]) != (profile["revision"],profile["hash"]):
+                raise WorkflowError("reviewed_tool_or_profile_changed",status_code=409)
 
     def actions(self,project_id: str,after: int,limit: int):
         with self.store.connection() as db:
@@ -179,5 +204,7 @@ class PlanningService:
 
     def started(self,proposal_id,run_id):
         with self.store.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT 1 FROM plan_actions WHERE proposal_id=? AND run_id=? AND action='execution_requested'",(proposal_id,run_id)).fetchone(): return
             self._action(db,self.get(proposal_id),"execution_requested","user",run_id)
         self.store.event(run_id,"agent_plan_execution_requested",{"proposal_id":proposal_id,"actor":"user"})

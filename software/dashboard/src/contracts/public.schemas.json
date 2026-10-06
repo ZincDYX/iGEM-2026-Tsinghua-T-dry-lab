@@ -4459,13 +4459,18 @@
       "requires_confirmation": {
         "title": "Requires Confirmation",
         "type": "boolean"
+      },
+      "review_id": {
+        "title": "Review Id",
+        "type": "string"
       }
     },
     "required": [
       "workflow",
       "confirmation",
       "source",
-      "requires_confirmation"
+      "requires_confirmation",
+      "review_id"
     ],
     "title": "PlanView",
     "type": "object"
@@ -4950,6 +4955,32 @@
       "created_at": {
         "title": "Created At",
         "type": "string"
+      },
+      "review_identity": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Review Identity"
+      },
+      "previous_review_identity": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Previous Review Identity"
       }
     },
     "required": [
@@ -4969,7 +5000,9 @@
       "limitations",
       "workflow",
       "confirmation",
-      "created_at"
+      "created_at",
+      "review_identity",
+      "previous_review_identity"
     ],
     "title": "ProposalView",
     "type": "object"

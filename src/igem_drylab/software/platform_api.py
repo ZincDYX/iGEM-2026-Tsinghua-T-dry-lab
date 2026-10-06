@@ -58,6 +58,8 @@ class RunRequest(Contract):
     confirmation: PlanBinding
     request_id: str | None = Field(default=None, max_length=128)
     proposal_id: str | None = None
+    execution_type: Literal["reviewed_proposal","manual_review"] = "reviewed_proposal"
+    manual_review_id: str | None = None
 
 
 class MeasurementBindingRequest(Contract):
@@ -98,7 +100,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     boundary = engine.disclosure
     from igem_drylab.workflow.views import PublicReads
     reads = PublicReads(store,boundary)
-    planning = PlanningService(store,boundary,planning_backend)
+    planning = PlanningService(store,boundary,planning_backend,engine)
     if planning_backend is not None:
         private_client = getattr(planning_backend,"client",None)
         for field in ("api_key","api_base"):
@@ -319,14 +321,16 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         if request.objective:
             workflow.description += f" 用户任务说明：{request.objective}"
         boundary.check(workflow.model_dump(mode="json"))
+        review = planning.custom(project.id,workflow,request.objective,source="manual_compatibility")
         return {"workflow": workflow.model_dump(mode="json"), "source": "validated_template", "requires_confirmation": True,
-            "confirmation": plan_binding(project, workflow).model_dump(mode="json")}
+            "confirmation": review.confirmation.model_dump(mode="json"),"review_id":review.id}
 
     @router.post("/plans/custom")
     def custom_plan(request: CustomPlanRequest) -> dict[str, Any]:
         validate_workflow(request.workflow)
+        review = planning.custom(request.project_id,request.workflow,request.objective,source="manual_compatibility")
         return {"workflow": request.workflow.model_dump(mode="json"), "source": "user_reviewed_workflow", "requires_confirmation": True,
-            "confirmation": plan_binding(store.project(request.project_id), request.workflow).model_dump(mode="json")}
+            "confirmation": review.confirmation.model_dump(mode="json"),"review_id":review.id}
 
     @router.post("/workflows/validate")
     def validate_workflow(workflow: Workflow) -> Workflow:
@@ -342,11 +346,16 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         if request.project_id != request.confirmation.project_id:
             raise WorkflowError("plan_project_mismatch", status_code=409)
         request_id = request.request_id or sha256(request.confirmation.model_dump_json().encode()).hexdigest()
-        if request.proposal_id: planning.authorize_run(request.proposal_id,request.confirmation,request.workflow)
-        run_id = engine.create_confirmed(request.confirmation, request.workflow, request_id)
+        review_id = request.proposal_id if request.execution_type == "reviewed_proposal" else request.manual_review_id
+        if not review_id or (request.proposal_id and request.manual_review_id):
+            raise WorkflowError("accepted_proposal_binding_required",status_code=409)
+        manual = request.execution_type == "manual_review"
+        planning.authorize_run(review_id,request.confirmation,request.workflow,manual=manual)
+        run_id = engine.create_confirmed(request.confirmation, request.workflow, request_id,
+            authorize=lambda db,snapshot: planning.authorize_run(review_id,request.confirmation,request.workflow,db=db,snapshot=snapshot,manual=manual))
         result = store.run(run_id)
         if result["status"] == "queued": launch(run_id)
-        if request.proposal_id: planning.started(request.proposal_id,run_id)
+        planning.started(review_id,run_id)
         return boundary.run(result)
 
     @router.post("/runs/{run_id}/iteration")
@@ -443,8 +452,6 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def control(run_id: str, request: ControlRequest) -> dict[str, Any]:
         run = store.run(run_id)
         if request.action in {"pause", "cancel"}:
-            if run["status"] in {"succeeded", "cancelled", "failed"}:
-                raise ValueError("terminal_run_cannot_be_paused_or_cancelled")
             store.control(run_id, request.action)
         else:
             if run["status"] in {"succeeded", "cancelled"}:
@@ -463,10 +470,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.post("/runs/{run_id}/clone", status_code=202)
     def clone(run_id: str) -> dict[str, Any]:
         old = store.run(run_id)["snapshot"]
-        new_id = engine.create(Project.model_validate(old["project"]), Workflow.model_validate(old["workflow"]))
-        result = store.run(new_id)
-        launch(new_id)
-        return boundary.run(result)
+        # A clone is a newly reviewed plan against the current input revision,
+        # not permission to reinterpret the immutable old run.
+        return planning.custom(old["project"]["id"],Workflow.model_validate(old["workflow"]),
+            "从旧运行生成新审阅范围；尚未执行。",source="run_clone",previous_review_identity=engine.snapshot_review_identity(old)).model_dump(mode="json")
 
     @router.get("/artifacts/{artifact_id}")
     def artifact(artifact_id: str, project_id: str) -> FileResponse:

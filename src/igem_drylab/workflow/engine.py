@@ -64,8 +64,27 @@ class WorkflowEngine:
     def create(self, project: Project, workflow: Workflow) -> str:
         return self.store.create_run(self.snapshot(project, workflow))
 
-    def create_confirmed(self, binding, workflow: Workflow, request_id: str | None = None) -> str:
-        return self.store.create_confirmed_run(binding, workflow, lambda project: self.snapshot(project, workflow), request_id)
+    def create_confirmed(self, binding, workflow: Workflow, request_id: str | None = None, authorize=None) -> str:
+        return self.store.create_confirmed_run(binding, workflow, lambda project: self.snapshot(project, workflow), request_id, authorize)
+
+    def review_identity(self, project: Project, workflow: Workflow) -> dict[str, Any]:
+        cache: dict[Path, bytes] = {}
+        tools = {node.tool_id: self.tools.get(node.tool_id) for node in workflow.nodes}
+        profile_hash = None
+        if project.runtime_profile_ref:
+            from .runtime_profiles import RuntimeProfiles
+            identity, private = RuntimeProfiles(self.store).get(project.runtime_profile_ref)
+            self.disclosure.register_runtime(private)
+            profile_hash = identity["hash"]
+        return {"tools": {key: {"version":tool.version,"runtime":tool.runtime,"plugin_hash":tool.plugin_hash,
+            "implementation_sha256":self._implementation_hash(tool,cache)} for key,tool in tools.items()},
+            "runtime_profile_sha256":profile_hash,"environment":self._environment()}
+
+    @staticmethod
+    def snapshot_review_identity(snapshot) -> dict[str, Any]:
+        return {"tools":{key:{field:value[field] for field in ("version","runtime","plugin_hash","implementation_sha256")}
+            for key,value in snapshot["tools"].items()},"runtime_profile_sha256":snapshot.get("runtime_profile",{}).get("hash"),
+            "environment":snapshot["environment"]}
 
     def run(self, run_id: str, *, retry_failed: bool = False, retry_node_id: str | None = None) -> dict[str, Any]:
         owner = str(uuid4())

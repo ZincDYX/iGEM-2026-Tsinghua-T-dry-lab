@@ -110,7 +110,7 @@ class WorkflowStore:
             raise KeyError(project_id)
         return Project.model_validate_json(row["payload"])
 
-    def create_confirmed_run(self, binding: PlanBinding, workflow: Workflow, build_snapshot, request_id: str | None = None) -> str:
+    def create_confirmed_run(self, binding: PlanBinding, workflow: Workflow, build_snapshot, request_id: str | None = None, authorize=None) -> str:
         # Expensive file/source verification must not hold the writer lock.
         prepared_project = self.project(binding.project_id)
         if plan_binding(prepared_project, workflow) != binding:
@@ -133,6 +133,7 @@ class WorkflowStore:
                     if previous["binding_hash"] != digest:
                         raise WorkflowError("request_identity_conflict", status_code=409)
                     return previous["run_id"]
+            if authorize is not None: authorize(db, snapshot)
             if snapshot["project"] != project.model_dump(mode="json"):
                 raise WorkflowError("prepared_snapshot_project_mismatch", status_code=409)
             run_id = self._insert_run(db, snapshot, encoded=encoded, digest=snapshot_hash)
@@ -192,6 +193,15 @@ class WorkflowStore:
 
     def clear_control(self, run_id: str) -> None:
         with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status,owner,heartbeat,control FROM runs WHERE id=?", (run_id,)).fetchone()
+            if row is None: raise KeyError(run_id)
+            if row["status"] in {"succeeded","cancelled"} or row["control"] == "cancel":
+                raise WorkflowError("run_is_terminal",status_code=409)
+            if row["owner"]:
+                from datetime import timedelta
+                if row["heartbeat"] and row["heartbeat"] > (datetime.now(timezone.utc)-timedelta(seconds=20)).isoformat():
+                    raise WorkflowError("run_has_active_worker",status_code=409)
             db.execute("UPDATE runs SET control=NULL,status=?,updated_at=? WHERE id=?", (RunStatus.queued.value,now(),run_id))
             db.execute("UPDATE checkpoints SET acknowledged=1 WHERE run_id=?", (run_id,))
             self._event(db,run_id,"control_resumed",{"action":"resume"})
@@ -245,15 +255,30 @@ class WorkflowStore:
 
     def finish(self, run_id: str, owner: str, status: RunStatus) -> None:
         with self.connection() as db:
-            changed=db.execute("UPDATE runs SET status=?,control=NULL,owner=NULL,heartbeat=NULL,updated_at=? WHERE id=? AND owner=?", (status.value, now(), run_id, owner)).rowcount
-            if changed:self._event(db,run_id,"run_finished",{"status":status.value})
+            db.execute("BEGIN IMMEDIATE")
+            row=db.execute("SELECT control FROM runs WHERE id=? AND owner=?",(run_id,owner)).fetchone()
+            if row is None: return
+            final = "cancelled" if row["control"] == "cancel" else status.value
+            db.execute("UPDATE runs SET status=?,control=NULL,owner=NULL,heartbeat=NULL,updated_at=? WHERE id=? AND owner=?", (final, now(), run_id, owner))
+            self._event(db,run_id,"run_finished",{"status":final})
 
     def control(self, run_id: str, action: str) -> None:
         if action not in {"pause", "cancel"}:
             raise ValueError("unknown_control")
         with self.connection() as db:
-            if db.execute("UPDATE runs SET control=?,updated_at=? WHERE id=?", (action, now(), run_id)).rowcount != 1:
-                raise KeyError(run_id)
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status,owner,control FROM runs WHERE id=?", (run_id,)).fetchone()
+            if row is None: raise KeyError(run_id)
+            if action == "cancel" and row["status"] == "cancelled": return
+            if row["status"] in {"succeeded","failed","cancelled"}:
+                raise WorkflowError("run_is_terminal",status_code=409)
+            if row["control"] == "cancel": return
+            if action == "cancel" and row["owner"] is None:
+                db.execute("UPDATE runs SET status='cancelled',control=NULL,updated_at=? WHERE id=?", (now(),run_id))
+                self._event(db,run_id,"control_requested",{"action":"cancel","actor":"user"})
+                self._event(db,run_id,"run_finished",{"status":"cancelled"})
+                return
+            db.execute("UPDATE runs SET control=?,updated_at=? WHERE id=?", (action, now(), run_id))
             self._event(db,run_id,"control_requested",{"action":action,"actor":"user_or_execution_policy"})
 
     def set_node(self, run_id: str, node_id: str, status: NodeStatus, *, inputs: Any = None, output: Any = None, error: Any = None, increment: bool = False) -> None:

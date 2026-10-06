@@ -22,4 +22,6 @@ ERROR_GUIDANCE = {
     "proposal_not_accepted": ("该提案尚未接受，不能开始执行。", [], ["审阅并接受当前提案"]),
     "plan_input_or_workflow_changed_regenerate_and_review": ("输入或计划已变更，原审阅不再适用。", [], ["重新生成并审阅提案"]),
     "run_is_terminal": ("该运行已终结，不能恢复。", [], ["创建迭代并重新审阅"]),
+    "accepted_proposal_binding_required": ("执行必须引用已接受且身份一致的审阅记录。", [], ["审阅并接受当前提案", "旧客户端请显式提交 manual_review 身份"]),
+    "reviewed_tool_or_profile_changed": ("工具或运行配置身份已变化，原审阅不再适用。", [], ["生成新提案并核对身份差异"]),
 }

@@ -19,7 +19,8 @@ def api_project(tmp_path):
     project = client.post('/api/platform/projects', json={'project': {'id': 'p', 'name': 'software_fixture',
         'sequences': [{'id': 'same', 'sequence': 'MAGSGS'}]}}).json()
     plan = client.post('/api/platform/plans', json={'project_id': 'p', 'goal': 'fusion_screen'}).json()
-    return client, project, {'project_id': 'p', 'workflow': plan['workflow'], 'confirmation': plan['confirmation']}
+    assert client.post(f"/api/platform/proposals/{plan['review_id']}/decision",json={'action':'accept'}).status_code == 200
+    return client, project, {'project_id': 'p', 'workflow': plan['workflow'], 'confirmation': plan['confirmation'], 'execution_type':'manual_review','manual_review_id':plan['review_id']}
 
 
 def test_normal_plan_executes_and_changed_project_refuses_old_confirmation(api_project):
@@ -41,7 +42,8 @@ def test_workflow_edit_or_missing_confirmation_is_not_silently_approved(api_proj
     assert client.post('/api/platform/runs', json=modified).status_code == 409
     assert client.post('/api/platform/runs', json={k:v for k,v in request.items() if k != 'confirmation'}).status_code == 422
     custom = client.post('/api/platform/plans/custom', json={'project_id': 'p', 'workflow': modified['workflow']}).json()
-    response = client.post('/api/platform/runs', json={'project_id': 'p', 'workflow': custom['workflow'], 'confirmation': custom['confirmation']})
+    assert client.post(f"/api/platform/proposals/{custom['review_id']}/decision",json={'action':'accept'}).status_code == 200
+    response = client.post('/api/platform/runs', json={'project_id': 'p', 'workflow': custom['workflow'], 'confirmation': custom['confirmation'],'execution_type':'manual_review','manual_review_id':custom['review_id']})
     assert response.status_code == 202
 
 
