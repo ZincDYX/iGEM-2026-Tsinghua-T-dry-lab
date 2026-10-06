@@ -87,4 +87,9 @@ test("real folder upload retains configs/data siblings and synchronizes only an 
   await page.getByLabel("计算入口",{exact:true}).selectOption("fusion_screen");
   await page.getByRole("button",{name:"保存草稿"}).click();await expect(page.locator(".document-status")).toContainText("草稿已同步");
   await expect(page.getByLabel("计算入口",{exact:true})).toHaveValue("fusion_screen");
+  await page.getByRole("button",{name:"检查已保存输入缺项"}).click();
+  const precheck=page.getByLabel("已保存科学输入预检");
+  await expect(precheck).toContainText("explicit_construct_definitions");
+  await expect(precheck).toContainText("wetlab_results_file");
+  await expect(precheck).toContainText("不是完整候选门控或运行许可");
 });

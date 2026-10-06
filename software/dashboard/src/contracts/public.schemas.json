@@ -1,4 +1,125 @@
 {
+  "ScientificPrecheckView": {
+    "$defs": {
+      "KnownMissingInput": {
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "field_path": {
+            "title": "Field Path",
+            "type": "string"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Id"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "code",
+          "field_path",
+          "construct_id",
+          "condition_id",
+          "reason_codes",
+          "source_kind"
+        ],
+        "title": "KnownMissingInput",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "project_revision": {
+        "title": "Project Revision",
+        "type": "integer"
+      },
+      "input_sha256": {
+        "title": "Input Sha256",
+        "type": "string"
+      },
+      "missing": {
+        "items": {
+          "$ref": "#/$defs/KnownMissingInput"
+        },
+        "title": "Missing",
+        "type": "array"
+      },
+      "scope": {
+        "default": "declared_inputs_and_parameter_contracts_only",
+        "title": "Scope",
+        "type": "string"
+      },
+      "final_stage_gates_required": {
+        "default": true,
+        "title": "Final Stage Gates Required",
+        "type": "boolean"
+      },
+      "scientific_approval_granted": {
+        "default": false,
+        "title": "Scientific Approval Granted",
+        "type": "boolean"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Limitations",
+        "type": "array"
+      }
+    },
+    "required": [
+      "project_id",
+      "project_revision",
+      "input_sha256",
+      "missing",
+      "scope",
+      "final_stage_gates_required",
+      "scientific_approval_granted",
+      "limitations"
+    ],
+    "title": "ScientificPrecheckView",
+    "type": "object"
+  },
   "PublicError": {
     "additionalProperties": false,
     "properties": {

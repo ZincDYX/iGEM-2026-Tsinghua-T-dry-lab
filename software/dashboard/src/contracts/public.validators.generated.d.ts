@@ -1,3 +1,4 @@
+export function ScientificPrecheckView(value:unknown):value is import("./ScientificPrecheckView.generated").ScientificPrecheckView;
 export function PublicError(value:unknown):value is import("./PublicError.generated").PublicError;
 export function ProjectView(value:unknown):value is import("./ProjectView.generated").ProjectView;
 export function ProjectSummaryView(value:unknown):value is import("./ProjectSummaryView.generated").ProjectSummaryView;

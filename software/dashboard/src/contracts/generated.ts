@@ -1,3 +1,4 @@
+export type { ScientificPrecheckView } from "./ScientificPrecheckView.generated";
 export type { PublicError } from "./PublicError.generated";
 export type { ProjectView } from "./ProjectView.generated";
 export type { ProjectSummaryView } from "./ProjectSummaryView.generated";

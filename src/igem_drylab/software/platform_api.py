@@ -158,6 +158,13 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         boundary.check(result)
         return result
 
+    @router.get("/projects/{project_id}/precheck")
+    def scientific_precheck(project_id:str):
+        from igem_drylab.workflow.precheck import precheck
+        result=precheck(store.project(project_id)).model_dump(mode="json")
+        boundary.check(result)
+        return result
+
     @router.get("/plan-actions")
     def plan_actions(project_id: str,after_seq: int = Query(0,ge=0),limit: int = Query(100,ge=1,le=200)):
         return planning.actions(project_id,after_seq,limit)

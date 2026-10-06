@@ -4,6 +4,7 @@ import {object,parsePublic} from "../contracts/validation";
 import * as client from "./client";
 import {downloadResource} from "../api";
 import {LazyJson} from "../contracts/LazyJson";
+import {PrecheckPanel} from "./PrecheckPanel";
 
 export function InputEditor({project,busy,dirty,onChange,onEditing,action}:{project:ProjectView;busy:boolean;dirty:boolean;onChange:(value:ProjectView)=>void;onEditing:(value:boolean)=>void;action:(job:()=>Promise<unknown>)=>Promise<void>}) {
   const[kind,setKind]=useState("auto");
@@ -44,6 +45,7 @@ export function InputEditor({project,busy,dirty,onChange,onEditing,action}:{proj
     <h3>测量与 M5</h3>{dirty&&<p>请先保存当前草稿，再预览后端 M5 绑定，避免覆盖未保存修改。</p>}{project.datasets.filter(row=>row.kind==="wetlab").map((row,i)=><article key={i}><p>{String(row.name)} · 导入 / QC 不等于拟合参数已批准。</p><LazyJson value={row}/>{scope&&typeof row.file_id==="string"&&<button disabled={busy||dirty} onClick={()=>{const fileId=row.file_id;if(typeof fileId!=="string")return;const stamp=epoch.current;void action(async()=>{const value=await client.bindMeasurement(project.id,project.revision,fileId);if(mounted.current&&stamp===epoch.current)change(value.project);});}}>预览 M5 测量绑定（需保存与重审）</button>}</article>)}
     <p>{project.sequences.length} 条蛋白序列 · {project.assemblies.length} 份组成声明</p><LazyJson value={project.sequences} label="序列与角色"/><LazyJson value={project.assemblies} label="自组装声明（不是实验确认）"/>
     </fieldset>
+    <PrecheckPanel key={`${project.id}:${project.revision}`} projectId={project.id} revision={project.revision} disabled={busy||dirty||editing}/>
     <button disabled={busy||editing} onClick={startEditor}>编辑完整公开输入 JSON</button>
     {editing&&<section><p>编辑的是科学草稿，不含运维 profile；未应用时禁止启动新计划。后台仍二次核验。</p><textarea aria-label="公开输入 JSON" className="json-editor" value={text} onChange={e=>{setText(e.target.value);++epoch.current;}}/>
       <button disabled={busy} onClick={()=>void action(async()=>{const value=parsePublic("ProjectView",JSON.parse(text));if(value.id!==project.id||value.revision!==project.revision)throw new Error("不能在输入编辑器改项目 ID/revision；请创建迭代。");change(value);setEditing(false);onEditing(false);})}>应用已校验草稿</button><button disabled={busy} onClick={()=>{setEditing(false);onEditing(false);}}>撤销未应用编辑</button></section>}

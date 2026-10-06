@@ -10,6 +10,7 @@ const list = async<K extends keyof Protocol>(name:K,path:string,signal?:AbortSig
 export const projectSummaries=(signal?:AbortSignal)=>list("ProjectSummaryView","/project-summaries",signal);
 export const history=(id:string,offset=0,signal?:AbortSignal)=>list("RunListView",`/runs?project_id=${encodeURIComponent(id)}&offset=${offset}&limit=50`,signal);
 export const project=(id:string,signal?:AbortSignal)=>read("ProjectView",`/projects/${encodeURIComponent(id)}`,undefined,signal);
+export const precheck=(id:string,signal?:AbortSignal)=>read("ScientificPrecheckView",`/projects/${encodeURIComponent(id)}/precheck`,undefined,signal);
 export const save=(value:ProjectView,revision?:number)=>read("ProjectView","/projects",{project:value,expected_revision:revision});
 export const info=(signal?:AbortSignal)=>read("RuntimeInfoView","/info",undefined,signal);
 export const summary=(id:string,signal?:AbortSignal)=>read("RunSummaryView",`/runs/${encodeURIComponent(id)}/summary`,undefined,signal);

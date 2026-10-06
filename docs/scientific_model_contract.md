@@ -48,9 +48,9 @@ production conflict scan rather than causing a dimension-inference fallback.
 - The primary Galatea mechanism is recruitment stoichiometry plus LLPS partitioning. Delayed DMT is limited to a published-like temporal control or optional ablation, not the default primary mechanism.
 - `author_native_sensitivity` starts at the input boundary: the reaction CSV supplies author-native kcat/Km and `author_native_inputs` supplies relative enzyme scales. Physical `uM` abundance and `1/h`/`uM` kinetic records are neither required nor read on this path. It currently rejects transport rather than reinterpreting a physical export-rate record.
 - M5 matches a prediction by `(construct_id, condition_id)` and compares each available M4 `x13` and `x15` trajectory to observed time points. Endpoint-only data are labelled as such and are not treated as a trajectory fit. Replicate variation is computed only within identical construct, condition, metabolite, and timepoint after canonical unit conversion; systematic directional discrepancy requires multiple independent conditions.
-- `side_product_fraction_13` is calculated from net production over the simulated interval: `delta_13 / (delta_13 + delta_15)` when the denominator is positive. Compound 13 is a side-product proxy in this minimal model, not a prediction of extracellular export: no explicit export kinetic term is present.
+- In the reduced dynamic mode, `side_product_fraction_13` is calculated from net production over the simulated interval: `delta_13 / (delta_13 + delta_15)` when the denominator is positive. Compound 13 is a side-product proxy, not extracellular export. This statement does not describe the explicit transport extension of the physical full network or the secretion terms of the documented steady-state mode.
 - M3 emits a candidate-specific, mass-conserving M4 context containing PTR/PT/OC/DMT dense and dilute abundance, `phi`, metabolite Kp8--Kp15, and parameter provenance. M4 consumes these context fields directly and recomputes dynamic dense/dilute metabolite concentrations during every ODE evaluation; parameter scope is exact construct+condition, then construct-only, condition-only, then global. Recruitment/site occupancy remain reported binding observations and are never multiplied into `kcat` or enzyme abundance.
-- The numerical kernel contains first-order `kdeg_9/10/11/13/15`. Production M4 leaves it disabled (all zero) by default; enabling degradation requires approved `degradation_rate` records. The model still has no export, ER/LD, or other organelle compartment.
+- The legacy reduced kernel contains first-order `kdeg_9/10/11/13/15`, disabled by default; enabling them requires approved `degradation_rate` records. This option is rejected by the other network modes, not silently applied to them.
 - M5 can optionally use an explicit one-parameter FitPlan. It must declare the parameter, fixed parameters, bounds, and 13/15 observables; a fitted value is a validated candidate only and needs human approval before registry use.
 - Real-data ingestion uses typed review-only evidence contracts: enzyme kinetics, LLPS partitioning, protein abundance, and recruitment binding. They share identity, host/assay, condition, unit, uncertainty, replicate, DOI, and evidence-location metadata. Evidence is never an approved parameter: an explicit reviewed Evidence→ParameterCandidate mapping is required.
 - Phase-specific residual activity has its own `PhaseActivityEvidence` contract and maps to `activity_dense_*` / `activity_dilute_*` only through a matching `ParameterRequirement`. Production resolver priority is direct wet-lab measurement, model-fit wet-lab value, direct literature measurement, literature-derived extraction, prediction, then assumption; equal scope/tier conflicts are not auto-selected.
@@ -59,6 +59,23 @@ production conflict scan rather than causing a dimension-inference fallback.
 - FitPlan excludes QC-invalid or unit-invalid records, does not impute censored values, and fingerprints its source experiment/replicate lineage, fit points, bounds, observables, production parameter IDs, and contract version. Requirement-to-kernel mapping is explicit (for example `partition_x10` → `partition_10`), while fitted candidates retain requirement species and phase identity.
 - FitPlan aggregates matching biological replicate time courses. It never bootstraps correlated timepoints as IID samples; if replicate trajectories needed for a block bootstrap are unavailable, the fit has no CI and records an explicit identifiability warning.
 - Validated wet-lab parameter candidates require an explicit human approval action before `approve_and_persist_parameter` appends an approved, provenance-bearing record to project YAML. `ProjectState`, CLI, and MCP invoke the same identity/unit/lineage/reviewer validation boundary. Agent replanning after that external action is explicit, not autonomous.
+
+## Mode-specific scope (documentation only; equations unchanged)
+
+| Mode | Implemented boundary | Not implied |
+|---|---|---|
+| M3 documented equilibrium | Explicit site basis, geometry/accessibility, binding and mass conservation in the declared cytosolic two-phase model | M1 ER localization checks do not implement an ER-anchored M3 concentration model; no ER/lipid-droplet spatial biophysics |
+| M4 `markdown_steady_state` | Original ten-reaction steady equations, continuous input of 8 and explicit species secretion; optional local Jacobian stability analysis | No dynamic induction, dynamic initial states, or full-network transport switch; local stability is not global stability or experimental validation |
+| M4 `galatea_full_competitive`, physical | Eight-compound competitive dynamics; optional explicit intracellular/extracellular transport with volumes, access mode, ratios and reviewed evidence | No arbitrary organelle compartments; no transport inferred from side-product fraction |
+| M4 `galatea_full_competitive`, `author_native_sensitivity` | Relative author-native inputs and time axis | Transport rejected; no physical absolute-titer claim |
+| M4 `legacy_reduced` | Compatibility five-state dynamics, optional reviewed degradation | No full-network transport, full-network initial states or steady-state initial guesses |
+| M4 `published_reference` | Frozen author/reference replay boundary | Not an adaptable project prediction or permission to reinterpret source units |
+
+The M1 localization context supports ER-specific screening/review, but the
+documented M3 input declares only `cytosolic_two_phase`. It must not be presented
+as a complete ER equilibrium or membrane/LD simulation. The stage gates and mode-specific
+requirements remain authoritative. A completed job or a non-solving input precheck
+does not establish biological validity, parameter approval, or experimental validation.
 
 ## Experimental inputs required for real mode
 
