@@ -125,7 +125,7 @@ def bound_predecessor(payload: StageInput, context: NodeContext, stage: str) -> 
     if payload.upstream_result != {"artifact_id":parent["artifact_id"],"sha256":parent["sha256"]} or parent["run_id"] != context.run_id or parent["project_id"] != context.project_id or parent["snapshot_hash"] != context.snapshot_sha256:
         raise WorkflowError("upstream_result_identity_mismatch")
     output = parent["output"]
-    if output.get("schema_version") != "scientific-stage-v1" or output.get("module") != previous:
+    if output.get("schema_version") not in {"scientific-stage-v1","scientific-stage-v2"} or output.get("module") != previous:
         raise WorkflowError("upstream_schema_or_stage_mismatch")
     rows = output.get("records")
     if not isinstance(rows,list): raise WorkflowError("invalid_registered_upstream_records")
@@ -158,17 +158,17 @@ def stage_tools():
                 args.append([predecessor.model_validate(row) for row in upstream])
             records, output = runner(*args)
             serialized = [row.model_dump(mode="json") for row in records]
-            trajectories = {}
+            trajectory_refs = {}
             artifacts = {output.json_file, output.csv_file}
             if stage == "m4":
                 for row in records:
                     if row.trajectory_artifact and row.trajectory_artifact.is_file():
                         artifacts.add(row.trajectory_artifact)
-                        trajectories[row.candidate_id] = json.loads(row.trajectory_artifact.read_text(encoding="utf-8"))
-            return {"schema_version": "scientific-stage-v1", "module": stage,
+                        trajectory_refs[row.candidate_id] = EvidenceFile(path=row.trajectory_artifact,sha256=sha256(row.trajectory_artifact.read_bytes()).hexdigest()).model_dump(mode="json")
+            return {"schema_version": "scientific-stage-v2", "module": stage,
                 "execution_mode": config.execution.mode, "records": serialized,
                 "resource_artifacts": [EvidenceFile(path=path,sha256=sha256(path.read_bytes()).hexdigest()).model_dump(mode="json") for path in sorted(artifacts)],
-                "trajectories": trajectories, "output": output.model_dump(mode="json"),
+                "trajectory_refs": trajectory_refs, "output": output.model_dump(mode="json"),
                 "claim_scope": "original_stage_contracts_not_automatic_experimental_validation"}
         definitions.append(ToolDefinition("project." + stage, stage.upper() + " 原式项目管线", "读取已绑定科学配置和证据，复用确定性 stage。",
             "2", StageInput, handler, "scientific_project", implementation_files=implementation))

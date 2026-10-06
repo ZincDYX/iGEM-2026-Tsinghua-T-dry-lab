@@ -83,6 +83,10 @@ class DisclosureBoundary:
                     raise WorkflowError("private_path_not_exportable", status_code=403)
             walk(value)
 
+    def check_bytes(self, raw: bytes) -> None:
+        if any(secret.encode() in raw for secret in self._private_values):
+            raise WorkflowError("disclosure_quarantined",status_code=403)
+
     def diagnostic(self, error: Exception, *, code: str = "operation_failed") -> dict[str, Any]:
         diagnostic_id = str(uuid4())
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,95}", code) or any(value in code for value in self._private_values):

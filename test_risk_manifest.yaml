@@ -232,3 +232,13 @@ risks:
     units: task_count
     tolerance_basis: exact resource_peak_calls_status_registered_artifact_and_identity_rejection
     expected_faults: [per_run_budget_multiplies, premature_checkpoint, successful_node_repeated, cancelled_output_published, literal_records_promoted]
+  - risk_id: WORKBENCH_INCREMENTAL_READS
+    group: integration
+    test_nodeids: ["tests/test_workbench_reads.py::test_status_and_project_lists_are_bounded_and_events_are_incremental", "tests/test_workbench_reads.py::test_snapshot_preparation_holds_no_writer_lock_and_rereads_approval", "tests/test_workbench_reads.py::test_representative_history_uses_indices_and_page_limits"]
+    requirement_or_formula_source: 20261006 PERF-01 PERF-02
+    oracle_type: actual_SQLite_query_plans_concurrent_writer_and_independent_page_indices
+    fixture_scope: 1000_software_candidates_10000_events_no_biological_computation
+    formula_version: not_applicable
+    units: record_count
+    tolerance_basis: exact_binding_conflict_content_omission_page_indices_and_query_index_identity
+    expected_faults: [full_project_or_results_in_status, unbounded_history, write_lock_during_preparation, stale_approval_inserted]

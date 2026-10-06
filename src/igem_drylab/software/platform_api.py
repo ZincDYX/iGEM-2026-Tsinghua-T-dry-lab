@@ -11,8 +11,8 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from Bio import SeqIO
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse, Response
 from pydantic import Field
 
 from igem_drylab.workflow.builtins import Goal, builtin_tools, recommend
@@ -87,6 +87,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
     from igem_drylab.workflow.scheduler import RunDispatcher
     dispatcher = RunDispatcher(engine)
     boundary = engine.disclosure
+    from igem_drylab.workflow.views import PublicReads
+    reads = PublicReads(store,boundary)
     boundary.register_private(str(data_dir))
     plugins = PluginManager(data_dir / "plugins", store, tools, disclosure=boundary)
     plugins.load_installed()
@@ -115,6 +117,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
     @router.get("/projects")
     def projects() -> list[dict[str, Any]]:
         return [boundary.project(Project.model_validate(item)) for item in store.projects()]
+
+    @router.get("/project-summaries")
+    def project_summaries(offset: int = Query(0,ge=0), limit: int = Query(100,ge=1,le=200)):
+        return reads.projects(offset,limit)
 
     @router.get("/projects/{project_id}")
     def get_project(project_id: str) -> dict[str, Any]:
@@ -268,8 +274,57 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
         return boundary.run(result)
 
     @router.get("/runs")
-    def runs(project_id: str | None = None) -> list[dict[str, Any]]:
-        return store.runs(project_id)
+    def runs(project_id: str | None = None, offset: int = Query(0,ge=0), limit: int = Query(100,ge=1,le=200)) -> list[dict[str, Any]]:
+        result = store.runs(project_id,offset=offset,limit=limit)
+        boundary.check(result)
+        return result
+
+    @router.get("/runs/{run_id}/summary")
+    def run_summary(run_id: str):
+        return reads.summary(run_id)
+
+    @router.get("/runs/{run_id}/events")
+    def run_events(run_id: str, after_seq: int = Query(0,ge=0), limit: int = Query(100,ge=1,le=500)):
+        return reads.events(run_id,after_seq,limit)
+
+    @router.get("/runs/{run_id}/nodes/{node_id}/result")
+    def node_result(run_id: str,node_id: str, offset: int = Query(0,ge=0), limit: int = Query(20,ge=1,le=100)):
+        return reads.node(run_id,node_id,offset,limit)
+
+    @router.get("/files/{file_id}")
+    def science_file(file_id: str,project_id: str):
+        with store.connection() as db:
+            row = db.execute("SELECT project_id FROM file_assets WHERE id=?",(file_id,)).fetchone()
+        if row is None or row[0] != project_id:
+            raise WorkflowError("file_project_mismatch",status_code=403)
+        path = Path(boundary.resolve_asset(file_id,project_id))
+        raw = path.read_bytes()
+        boundary.check_bytes(raw)
+        if path.suffix.lower() == ".json": boundary.check(json.loads(raw))
+        return FileResponse(path,filename=path.name,headers={"X-Content-SHA256":sha256(raw).hexdigest()})
+
+    @router.get("/files/{file_id}/data")
+    def scientific_data(file_id: str,project_id: str,offset: int = Query(0,ge=0),limit: int = Query(100,ge=1,le=500)):
+        with store.connection() as db:
+            row = db.execute("SELECT project_id,hash FROM file_assets WHERE id=?",(file_id,)).fetchone()
+        if row is None or row[0] != project_id:
+            raise WorkflowError("file_project_mismatch",status_code=403)
+        path = Path(boundary.resolve_asset(file_id,project_id))
+        data = json.loads(path.read_bytes())
+        contract = data.get("prediction_contract") if isinstance(data,dict) else None
+        if not isinstance(contract,dict) or not isinstance(contract.get("time"),list) or not isinstance(contract.get("concentrations"),dict):
+            raise WorkflowError("unsupported_trajectory_contract")
+        time = contract["time"]
+        sliced = {**contract,"time":time[offset:offset+limit],"concentrations":{}}
+        for compartment,species in contract["concentrations"].items():
+            if not isinstance(species,dict): raise WorkflowError("invalid_trajectory_contract")
+            sliced["concentrations"][compartment] = {}
+            for name,values in species.items():
+                if not isinstance(values,list) or len(values) != len(time): raise WorkflowError("invalid_trajectory_contract")
+                sliced["concentrations"][compartment][name] = values[offset:offset+limit]
+        result = {"file_id":file_id,"sha256":row["hash"],"offset":offset,"total":len(time),"prediction_contract":sliced}
+        boundary.check(result)
+        return result
 
     @router.get("/runs/{run_id}")
     def get_run(run_id: str) -> dict[str, Any]:
@@ -319,6 +374,21 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True) -> APIRouter
             raise ValueError("artifact_hash_mismatch")
         boundary.check(json.loads(path.read_text(encoding="utf-8")))
         return FileResponse(path, media_type="application/json", filename="result.json", headers={"X-Content-SHA256": row["hash"]})
+
+    @router.get("/artifacts/{artifact_id}/science-export")
+    def science_export(artifact_id: str, project_id: str):
+        with store.connection() as db:
+            row = db.execute("SELECT artifacts.*,runs.project_id FROM artifacts JOIN runs ON runs.id=artifacts.run_id WHERE artifacts.id=?",(artifact_id,)).fetchone()
+        if row is None: raise KeyError(artifact_id)
+        if row["project_id"] != project_id: raise WorkflowError("artifact_project_mismatch",status_code=403)
+        raw = Path(row["path"]).read_bytes()
+        if sha256(raw).hexdigest() != row["hash"]: raise WorkflowError("artifact_hash_mismatch")
+        from igem_drylab.workflow.store import canonical
+        projected = boundary.tree(json.loads(raw),project_id=project_id)
+        boundary.check(projected)
+        body = canonical({"export_schema":"scientific-public-export-v1","original_artifact_id":artifact_id,
+            "original_sha256":row["hash"],"path_projection":"registered_file_identities_only; not_original_bytes", "result":projected}).encode()
+        return Response(body,media_type="application/json",headers={"Content-Disposition":"attachment; filename=scientific-public-export.json","X-Content-SHA256":sha256(body).hexdigest()})
 
     @router.get("/tools")
     def tool_list() -> list[dict[str, Any]]:

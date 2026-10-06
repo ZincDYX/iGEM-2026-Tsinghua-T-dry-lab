@@ -97,8 +97,13 @@ class WorkflowStore:
         return Project.model_validate_json(row["payload"])
 
     def create_confirmed_run(self, binding: PlanBinding, workflow: Workflow, build_snapshot, request_id: str | None = None) -> str:
-        # The same writer lock excludes saves between approval checking and
-        # recording the immutable snapshot (including custom workflows).
+        # Expensive file/source verification must not hold the writer lock.
+        prepared_project = self.project(binding.project_id)
+        if plan_binding(prepared_project, workflow) != binding:
+            raise WorkflowError("plan_input_or_workflow_changed_regenerate_and_review", status_code=409)
+        snapshot = build_snapshot(prepared_project)
+        encoded = canonical(snapshot)
+        snapshot_hash = sha256(encoded.encode()).hexdigest()
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT payload FROM projects WHERE id=?", (binding.project_id,)).fetchone()
@@ -114,7 +119,9 @@ class WorkflowStore:
                     if previous["binding_hash"] != digest:
                         raise WorkflowError("request_identity_conflict", status_code=409)
                     return previous["run_id"]
-            run_id = self._insert_run(db, build_snapshot(project))
+            if snapshot["project"] != project.model_dump(mode="json"):
+                raise WorkflowError("prepared_snapshot_project_mismatch", status_code=409)
+            run_id = self._insert_run(db, snapshot, encoded=encoded, digest=snapshot_hash)
             if request_id: db.execute("INSERT INTO run_requests VALUES(?,?,?)", (request_id, digest, run_id))
             return run_id
 
@@ -122,12 +129,12 @@ class WorkflowStore:
         with self.connection() as db:
             return self._insert_run(db, snapshot)
 
-    def _insert_run(self, db, snapshot: dict[str, Any]) -> str:
+    def _insert_run(self, db, snapshot: dict[str, Any], *, encoded: str | None = None, digest: str | None = None) -> str:
         run_id = str(uuid4())
-        encoded = canonical(snapshot)
+        encoded = encoded if encoded is not None else canonical(snapshot)
         db.execute("INSERT INTO runs VALUES(?,?,?,?,?,NULL,NULL,NULL,?,?)", (
             run_id, snapshot["project"]["id"], RunStatus.queued.value, encoded,
-            sha256(encoded.encode()).hexdigest(), now(), now(),
+            digest or sha256(encoded.encode()).hexdigest(), now(), now(),
         ))
         db.executemany("INSERT INTO nodes(run_id,id,status) VALUES(?,?,?)", [
             (run_id, node["id"], NodeStatus.pending.value) for node in snapshot["workflow"]["nodes"]
@@ -148,9 +155,11 @@ class WorkflowStore:
             result["artifacts"] = [{**dict(item), "upstream": json.loads(item["upstream"]), "metadata": json.loads(item["metadata"])} for item in db.execute("SELECT * FROM artifacts WHERE run_id=?", (run_id,))]
         return result
 
-    def runs(self, project_id: str | None = None) -> list[dict[str, Any]]:
+    def runs(self, project_id: str | None = None, *, offset: int = 0, limit: int = 100) -> list[dict[str, Any]]:
         with self.connection() as db:
-            rows = db.execute("SELECT id,project_id,status,snapshot_hash,created_at,updated_at,json_extract(snapshot,'$.workflow.name') AS name,json_extract(snapshot,'$.project.revision') AS project_revision FROM runs WHERE (? IS NULL OR project_id=?) ORDER BY created_at DESC", (project_id, project_id))
+            where = " WHERE project_id=?" if project_id else ""
+            args = (project_id,) if project_id else ()
+            rows = db.execute("SELECT id,project_id,status,snapshot_hash,created_at,updated_at,json_extract(snapshot,'$.workflow.name') AS name,json_extract(snapshot,'$.project.revision') AS project_revision FROM runs" + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?", (*args,limit,offset))
             return [dict(row) for row in rows]
 
     def claim(self, run_id: str, owner: str, stale_before: str) -> None:
@@ -165,11 +174,13 @@ class WorkflowStore:
                 raise WorkflowError("run_has_active_worker", status_code=409)
             db.execute("UPDATE nodes SET status=? WHERE run_id=? AND status IN (?,?)", (NodeStatus.interrupted.value, run_id, NodeStatus.running.value, NodeStatus.queued.value))
             db.execute("UPDATE runs SET status=?,owner=?,heartbeat=?,updated_at=? WHERE id=?", (RunStatus.running.value, owner, now(), now(), run_id))
+            self._event(db,run_id,"run_claimed",{"status":"running"})
 
     def clear_control(self, run_id: str) -> None:
         with self.connection() as db:
             db.execute("UPDATE runs SET control=NULL,updated_at=? WHERE id=?", (now(),run_id))
             db.execute("UPDATE checkpoints SET acknowledged=1 WHERE run_id=?", (run_id,))
+            self._event(db,run_id,"control_resumed",{"action":"resume"})
 
     def checkpoint(self, run_id: str, node_id: str, position: str) -> bool:
         with self.connection() as db:
@@ -221,7 +232,7 @@ class WorkflowStore:
     def finish(self, run_id: str, owner: str, status: RunStatus) -> None:
         with self.connection() as db:
             db.execute("UPDATE runs SET status=?,owner=NULL,heartbeat=NULL,updated_at=? WHERE id=? AND owner=?", (status.value, now(), run_id, owner))
-        self.event(run_id, "run_finished", {"status": status.value})
+            self._event(db,run_id,"run_finished",{"status":status.value})
 
     def control(self, run_id: str, action: str) -> None:
         if action not in {"pause", "cancel"}:
@@ -229,6 +240,7 @@ class WorkflowStore:
         with self.connection() as db:
             if db.execute("UPDATE runs SET control=?,updated_at=? WHERE id=?", (action, now(), run_id)).rowcount != 1:
                 raise KeyError(run_id)
+            self._event(db,run_id,"control_requested",{"action":action,"actor":"user_or_execution_policy"})
 
     def set_node(self, run_id: str, node_id: str, status: NodeStatus, *, inputs: Any = None, output: Any = None, error: Any = None, increment: bool = False) -> None:
         with self.connection() as db:
@@ -237,7 +249,7 @@ class WorkflowStore:
                 canonical(output) if output is not None else None, canonical(error) if error else None,
                 int(increment), run_id, node_id,
             ))
-        self.event(run_id, "node_state", {"status": status.value, "error": error}, node_id)
+            self._event(db,run_id,"node_state",{"status":status.value,"diagnostic_id":error.get("diagnostic_id") if error else None},node_id)
 
     def expand(self, run_id: str, parent: str, inputs: list[dict[str, Any]]) -> None:
         with self.connection() as db:
@@ -245,10 +257,15 @@ class WorkflowStore:
             for index, arguments in enumerate(inputs):
                 db.execute("INSERT OR IGNORE INTO nodes(run_id,id,parent_id,status,inputs) VALUES(?,?,?,?,?)", (run_id, f"{parent}[{index}]", parent, NodeStatus.pending.value, canonical(arguments)))
             db.execute("UPDATE nodes SET inputs=? WHERE run_id=? AND id=?", (canonical({"shard_count": len(inputs)}), run_id, parent))
+            self._event(db,run_id,"map_expanded",{},parent)
 
     def event(self, run_id: str, event: str, payload: Any, node_id: str | None = None) -> None:
         with self.connection() as db:
-            db.execute("INSERT INTO events(run_id,node_id,event,payload,timestamp) VALUES(?,?,?,?,?)", (run_id, node_id, event, canonical(payload), now()))
+            self._event(db,run_id,event,payload,node_id)
+
+    @staticmethod
+    def _event(db, run_id: str, event: str, payload: Any, node_id: str | None = None):
+        db.execute("INSERT INTO events(run_id,node_id,event,payload,timestamp) VALUES(?,?,?,?,?)", (run_id,node_id,event,canonical(payload),now()))
 
     def complete_node(self, run_id: str, node_id: str, output: dict[str, Any], path: Path, upstream: list[str]) -> None:
         digest = sha256(path.read_bytes()).hexdigest()

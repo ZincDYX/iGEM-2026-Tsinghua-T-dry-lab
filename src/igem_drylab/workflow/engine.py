@@ -42,10 +42,11 @@ class WorkflowEngine:
         from .scientific_project import validate_stage_bindings
         validate_stage_bindings(workflow)
         tools: dict[str, Any] = {}
+        source_bytes: dict[Path, bytes] = {}
         for node in workflow.nodes:
             definition = self.tools.get(node.tool_id)
             metadata = definition.metadata()
-            metadata["implementation_sha256"] = self._implementation_hash(definition)
+            metadata["implementation_sha256"] = self._implementation_hash(definition, source_bytes)
             tools[node.tool_id] = metadata
         snapshot = {
             "project": project.model_dump(mode="json"), "workflow": workflow.model_dump(mode="json"),
@@ -106,12 +107,15 @@ class WorkflowEngine:
                 return
 
     @staticmethod
-    def _implementation_hash(definition: Any) -> str | None:
+    def _implementation_hash(definition: Any, cache: dict[Path, bytes] | None = None) -> str | None:
         source = inspect.getsourcefile(definition.handler)
         paths = ((Path(source),) if source else ()) + definition.implementation_files
         if not paths:
             return None
-        return sha256(b"\0".join(path.read_bytes() for path in paths)).hexdigest()
+        cache = {} if cache is None else cache
+        for path in paths:
+            if path not in cache: cache[path] = path.read_bytes()
+        return sha256(b"\0".join(cache[path] for path in paths)).hexdigest()
 
     @staticmethod
     def _environment() -> dict[str, Any]:
@@ -140,9 +144,10 @@ class WorkflowEngine:
             path = Path(artifact["path"])
             if not path.is_file() or sha256(path.read_bytes()).hexdigest() != artifact["hash"]:
                 raise ValueError("output_artifact_hash_mismatch")
+        source_bytes: dict[Path, bytes] = {}
         for tool_id, expected in run["snapshot"]["tools"].items():
             current = self.tools.get(tool_id)
-            digest = self._implementation_hash(current)
+            digest = self._implementation_hash(current, source_bytes)
             if current.version != expected["version"] or current.plugin_hash != expected["plugin_hash"] or digest != expected["implementation_sha256"]:
                 raise ValueError(f"tool_changed_since_snapshot:{tool_id}; clone the run with the new tool version")
 
