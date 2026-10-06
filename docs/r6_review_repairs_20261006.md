@@ -50,3 +50,16 @@
 服务器首次完整运行出现 4 个失败：作者随附 simulation-data.txt 未绑定、Node 不在 PATH、测试对 configs/../examples 的非归一化路径替换漏项、冷启动子进程未固定 PYTHONPATH 而导入旧 editable checkout。前两项修复独立验收环境，后两项修复测试 oracle，未改变科学核函数。修复后原 handler、作者回归与相关 QA 专项 18 项通过；此专项不替代最终统一源码完整套件。
 
 尚不能声称真实项目正向预测或独立生物学验证完成；缺完整相容数据、部分许可工具有效作业与完整 ER 定量机制。干净 Windows 安装、签名和真实许可工具不因本轮软件测试被视为通过。
+
+## 统一源码最终回归
+
+统一计算/软件源码提交 `a90841cd14f595e754ea7fb3c208628237be200c` 在独立服务器目录运行全套 `pytest --require-author-reference`：**542 passed，0 failed，0 skipped，50.06 秒**。显式固定当前源码 PYTHONPATH 与 Node 路径，绑定两份不可变作者原文件，没有复用旧 editable checkout。作者文件 SHA-256：
+
+- `simulation-network-glabridin-final.py`：`bbd12e1c631e4f68923ab202ba81393c6620dd163712360401894f5b14c8eaa1`
+- `simulation-data.txt`：`d5821b0d8d299f57b8a204b6986daf044599135c8a9a31371e41712fb4690c56`
+
+原 M1–M5 handler 缺数据路径、作者冻结、独立数值 oracle、运输/稳态、真实插件依赖隔离及工作流权限/恢复测试均在这一套件内。数学夹具及作者基线仅证明对应实现/冻结合同，不等于本项目的生物学参数适用性。本文后的发布记录修改不改变该源码算法。
+
+本机最终软件边界子集 27 passed（不含科学求解）；Rust 4 passed；前端 18 passed；生产浏览器 5 passed。Python 有 Path 默认值的 Pydantic schema 警告，构建有主 JS 体积警告，Rust 有禁用远程函数的 dead-code 警告，均未隐藏，也没有证据表明这些警告改变科学值。
+
+A/B/C/D 分别提交并推送：`d46f864`、`c412060`、`7a498ee`、`a90841c`。发布包、完整 bundle 和仓库外验收记录提供真实 hash 与具体原生验收边界；不将 manifest 当数字签名。
