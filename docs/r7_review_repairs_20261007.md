@@ -109,6 +109,36 @@ An additional server-only regression replays these 12 source-derived sequences
 using the production handler and compares all original recorded metrics exactly;
 only the new explicit display schema tag may differ. Test-risk metadata separates
 this numerical replay from read-only parser/display and software control tests.
-Its execution result is reported below only after server acceptance.
+Final unified runtime-source acceptance (`abc8cc1ea3f78e918fa0843026729983b216823c`):
+**567 passed / 0 failed / 0 skipped, 51.78 seconds**, including required immutable
+author reference and the 12-source statistical replay. Only the server ran these
+numerical tests. Review data had Python 3.12.14 / Biopython 1.88; the old validation
+environment had Python 3.11.15 / Biopython 1.85. Exact replay initially failed on
+tool-version identity and last-bit sums. A new isolated Python 3.12.14 / Biopython
+1.88 environment passed the unchanged exact assertion. No formula or tolerance
+was altered. Python documents its 3.12 summation change in the
+[official built-in function reference](https://docs.python.org/3.12/library/functions.html#sum).
+Environment matching isolates this dataset's reproducibility, not universal
+equivalence between library/Python versions or independent biological validation.
+
+The reference environment's observed versions are pinned in
+`requirements/r7_reference_reproduction.txt` (install the project itself from
+the tested source; these are version pins, not wheel-hash/CVE certification).
+Installed tool/environment directories including the new environment and cache
+have a measured apparent total of 8,521,244,599 bytes, below 15 GB. No model
+weights or viewer libraries were downloaded; pre-existing environments were not
+upgraded. Matplotlib/openpyxl were required for the unchanged author scripts;
+their absence caused an interim failure/collection skip that was resolved by
+installing dependencies, not by disabling the tests.
+
+Native package acceptance: real, unmocked Tauri/WebView2 bridge, anonymous 401 /
+authenticated 200, MCP discovery ready, current embedded JS/CSS byte identities,
+empty software-project save/restart persistence, and normal window close with
+zero owned backend processes. No scientific calculation was performed locally.
+Native scientific viewers, clean-machine installation and signing are not part
+of this acceptance. The r7A executable/package use the tested runtime commit
+`abc8cc1`; any subsequent documentation/environment-pin commit changes no runtime
+source bytes.
+
 Complete model/ER/biological validation, licensed tool jobs, clean-machine
 installation, signing and comprehensive supply-chain security remain unverified.

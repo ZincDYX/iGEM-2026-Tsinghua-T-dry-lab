@@ -10,6 +10,8 @@ These byte-identical files are from the user-supplied r6 review evidence ZIP
 
 The source-derived FASTA contains 12 records. The JSON contains already recorded
 sequence statistics. Tests parse identities and render these existing values;
-they do not invoke scientific handlers or recompute numerical features. This is
+the read-only display tests do not invoke scientific handlers or recompute features.
+The separate `test_r7_sequence_reproduction.py` executes the production handler
+only in server numerical regression, against these fixed recorded values. This is
 an incomplete source-derived dataset, not validated cloning/structure/LLPS data.
 Original source provenance remains in the user's review evidence archive.
