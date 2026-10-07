@@ -18,6 +18,9 @@
     "@vitejs/plugin-react": "6.1.1",
     "ajv": "8.17.1",
     "ajv-formats": "3.0.1",
+    "fflate": "0.8.3",
+    "molstar": "5.13.0",
+    "plotly.js-strict-dist-min": "4.1.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "vite": "8.2.2"
@@ -26,11 +29,13 @@
     "@playwright/test": "1.63.0",
     "@tauri-apps/cli": "2.12.1",
     "@testing-library/react": "16.3.3",
+    "@types/plotly.js": "3.0.14",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "esbuild": "0.28.2",
     "jsdom": "26.1.0",
     "json-schema-to-typescript": "15.0.4",
+    "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   }

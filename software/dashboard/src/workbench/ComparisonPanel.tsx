@@ -1,18 +1,193 @@
-import {useEffect,useState} from "react";
-import type {RunListView,RunSummaryView} from "../contracts/generated";
-import {ResultComparison,type ResultRun} from "../ScientificResults";
-import * as client from "./client";
+import { useEffect, useState } from "react";
+import type {
+  ComparePage,
+  LineagePage,
+  RunListView,
+  RunSummaryView,
+} from "../contracts/generated";
+import { requestJson } from "../api";
+import { parsePublic } from "../contracts/validation";
+import { LazyJson } from "../contracts/LazyJson";
 
-export function ComparisonPanel({history,current}:{history:RunListView[];current?:RunSummaryView}) {
-  const[other,setOther]=useState("");const[pair,setPair]=useState<ResultRun[]>([]);const[error,setError]=useState("");
-  useEffect(()=>{const controller=new AbortController();setPair([]);setError("");if(!current||!other)return;
-    async function load(){const second=await client.summary(other,controller.signal);if(second.project_id!==current!.project_id)throw new Error("比较对象不属于当前项目。");
-      const values:ResultRun[]=[];for(const run of[current!,second]){
-        const nodes=[];for(const node of run.nodes.filter(value=>value.tool_id==="fusion.sequence_metrics"&&value.parent_id&&value.status==="succeeded").slice(0,100)){nodes.push((await client.node(run.id,node.id,0,controller.signal)).node);}
-        values.push({id:run.id,snapshot:{workflow:run.workflow,project:{revision:run.project_revision}},nodes});
-      }if(!controller.signal.aborted)setPair(values);
-    }void load().catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:"比较加载失败")});return()=>controller.abort();
-  },[current?.id,other]);
-  return<section><h2>冻结版本比较</h2><p>仅在打开本标签后加载已完成序列对象，最多 100 条；未实现正式 F3 自动排名，不复用相同文本 ID 冒充科学身份。</p><label>前次运行<select value={other} onChange={e=>setOther(e.target.value)}><option value="">选择比较运行</option>{history.filter(run=>run.id!==current?.id).map(run=><option key={run.id} value={run.id}>{run.name} · revision {run.project_revision} · {run.status}</option>)}</select></label>
-    {error&&<p role="alert">{error}</p>}{pair.length===2&&<ResultComparison runs={pair}/>}</section>;
+export function ComparisonPanel({
+  current,
+}: {
+  history: RunListView[];
+  current?: RunSummaryView;
+}) {
+  const [lineage, setLineage] = useState<LineagePage>();
+  const [lineageOffset, setLineageOffset] = useState(0);
+  const [other, setOther] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState<ComparePage>();
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    setOther("");
+    setPage(undefined);
+    setLineage(undefined);
+    if (current)
+      void requestJson(
+        `/projects/${encodeURIComponent(current.project_id)}/lineage?offset=${lineageOffset}`,
+        undefined,
+        controller.signal,
+      )
+        .then((raw) => {
+          if (!controller.signal.aborted)
+            setLineage(parsePublic("LineagePage", raw));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted)
+            setError("Authorized lineage unavailable.");
+        });
+    return () => controller.abort();
+  }, [current?.project_id, lineageOffset]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setPage(undefined);
+    setError("");
+    if (current && other)
+      void requestJson(
+        `/projects/${encodeURIComponent(current.project_id)}/compare?left_run_id=${encodeURIComponent(other)}&right_run_id=${encodeURIComponent(current.id)}&offset=${offset}`,
+        undefined,
+        controller.signal,
+      )
+        .then((raw) => {
+          if (!controller.signal.aborted) {
+            const value = parsePublic("ComparePage", raw);
+            if (
+              value.left.run_id !== other ||
+              value.right.run_id !== current.id ||
+              value.right.snapshot_hash !== current.snapshot_hash
+            )
+              throw new Error("Comparison identity changed.");
+            setPage(value);
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted)
+            setError("Comparison denied or frozen evidence changed.");
+        });
+    return () => controller.abort();
+  }, [current?.id, current?.snapshot_hash, other, offset]);
+  return (
+    <section>
+      <h2>Compare frozen runs</h2>
+      <p>
+        Authorized parent/child lineage only. Inputs and evidence remain visible
+        when numerical comparison is blocked. No automatic ranking.
+      </p>
+      <label>
+        Related run
+        <select
+          value={other}
+          onChange={(e) => {
+            setOther(e.target.value);
+            setOffset(0);
+          }}
+        >
+          <option value="">Select related run</option>
+          {lineage?.items
+            .filter((r) => r.run_id !== current?.id)
+            .map((r) => (
+              <option key={r.run_id} value={r.run_id}>
+                {r.project_id} · r{r.revision} · {r.status} ·{" "}
+                {r.run_id.slice(0, 8)}
+              </option>
+            ))}
+        </select>
+      </label>
+      <button
+        disabled={!lineageOffset}
+        onClick={() => setLineageOffset(Math.max(0, lineageOffset - 50))}
+      >
+        Previous lineage page
+      </button>
+      <button
+        disabled={!lineage?.has_more}
+        onClick={() => setLineageOffset(lineageOffset + 50)}
+      >
+        Next lineage page
+      </button>
+      {error && <p role="alert">{error}</p>}
+      {page && (
+        <>
+          <p>
+            Left {page.left.run_id} / {page.left.snapshot_hash}
+            <br />
+            Right {page.right.run_id} / {page.right.snapshot_hash}
+          </p>
+          <h3>Changed input fields</h3>
+          <ul>
+            {page.input_changed_fields.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+          {page.input_diff_truncated && (
+            <p>Input differences truncated to 200 fields.</p>
+          )}
+          <table>
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Left identity / evidence</th>
+                <th>Right identity / evidence</th>
+                <th>F3 gate / values</th>
+              </tr>
+            </thead>
+            <tbody>
+              {page.rows.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.module}</td>
+                  <td>
+                    {r.left?.record_id ?? "Missing"}
+                    <br />
+                    {r.left?.sequence_identity_sha256 ??
+                      "Sequence identity not registered"}
+                    <br />
+                    {r.left?.status} / evidence{" "}
+                    {String(r.left?.evidence_ready ?? false)}
+                  </td>
+                  <td>
+                    {r.right?.record_id ?? "Missing"}
+                    <br />
+                    {r.right?.sequence_identity_sha256 ??
+                      "Sequence identity not registered"}
+                    <br />
+                    {r.right?.status} / evidence{" "}
+                    {String(r.right?.evidence_ready ?? false)}
+                  </td>
+                  <td>
+                    {r.comparable
+                      ? `${r.left?.value} → ${r.right?.value} (${r.metric_unit}); ${r.metric_definition}`
+                      : `Not comparable: ${r.reason_codes.join(", ")}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <LazyJson
+            value={page.rows}
+            label="Data, F3 contracts and artifact identities"
+          />
+          <button
+            disabled={!offset}
+            onClick={() => setOffset(Math.max(0, offset - 20))}
+          >
+            Previous comparison page
+          </button>
+          <button
+            disabled={!page.has_more}
+            onClick={() => setOffset(offset + 20)}
+          >
+            Next comparison page
+          </button>
+          <p>
+            {Math.min(offset + 1, page.total)}–
+            {Math.min(offset + 20, page.total)} / {page.total}
+          </p>
+        </>
+      )}
+    </section>
+  );
 }

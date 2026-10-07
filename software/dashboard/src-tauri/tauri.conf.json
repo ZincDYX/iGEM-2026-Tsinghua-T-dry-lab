@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "FusionLab · 融合蛋白研究工作台",
+        "title": "FusionLab · Fusion Protein Workbench",
         "visible": false,
         "width": 1280,
         "height": 850,
@@ -23,7 +23,7 @@
     ],
     "security": {
       "capabilities": ["main-workbench"],
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost http://127.0.0.1:*"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; object-src 'none'; frame-src 'none'; worker-src 'self'; font-src 'self' data:"
     }
   },
   "bundle": { "active": false }

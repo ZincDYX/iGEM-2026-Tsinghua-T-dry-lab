@@ -32,10 +32,10 @@ impl DesktopSettings {
                 || self.ssh_host.starts_with('-')
                 || self.ssh_host.chars().any(char::is_whitespace))
         {
-            return Err("请选择有效的用户 SSH 别名；没有内置远程服务器".into());
+            return Err("Select a valid private SSH alias; no built-in remote server".into());
         }
         if self.remote_port == 0 {
-            return Err("远程 API 端口不能为 0".into());
+            return Err("Remote API port must not be zero".into());
         }
         Ok(())
     }

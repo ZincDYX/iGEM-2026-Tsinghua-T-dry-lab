@@ -14,8 +14,8 @@ function run(id: string, output: unknown, tool = "igem.m4.solve_steady_state") {
 it("tool identity survives arbitrary node names and blocked success is not a prediction", () => {
   for (const id of ["pathway", "renamed"]) {
     render(<ScientificResults run={run(id, {ok:true, result:base})} />);
-    expect(screen.getByRole("heading", {name: "M4 原式稳态"})).toBeTruthy();
-    expect(screen.getByText(/未获得有效预测/)).toBeTruthy();
+    expect(screen.getByRole("heading", {name: "M4 Original-formula steady state"})).toBeTruthy();
+    expect(screen.getByText(/No valid prediction/)).toBeTruthy();
     expect(screen.getByText("missing_required_outlet")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
     cleanup();
@@ -26,7 +26,7 @@ it("unknown, old, incomplete and failed MCP envelopes fall back without zeros or
       {ok:true,result:{...base,schema_version:"future"}}, null]) {
     expect(adaptSteadyResult("igem.m4.solve_steady_state", output)).toBeNull();
     render(<ScientificResults run={run("pathway", output)} />);
-    expect(screen.getByText(/未知、旧版本或缺字段/)).toBeTruthy();
+    expect(screen.getByText(/Unknown\/legacy\/incomplete/)).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
     cleanup();
   }
