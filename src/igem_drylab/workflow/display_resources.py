@@ -321,25 +321,30 @@ class DisplayResources:
 
     def series(self, project_id, file_id, offset, limit, series_id=None):
         path, identity, _ = self.source(project_id, file_id)
+        key = (file_id, identity.source_sha256, "display-series-v1")
+        with self.store.connection() as db:
+            row = db.execute("SELECT payload FROM display_series_meta WHERE file_id=? AND hash=? AND schema=?", key).fetchone()
         declaration = None
         target_path = None
         data_sha = None
-        if path.suffix.lower() == ".json":
-            declared_raw = json.loads(path.read_bytes())
-            if isinstance(declared_raw, dict) and declared_raw.get("schema_version") == "display-series-source-v1":
-                from .declared_series import DeclaredSeries, target
-                declaration = DeclaredSeries.model_validate(declared_raw)
-                target_path, target_identity = target(self, project_id, declaration)
-                data_sha = target_identity.source_sha256
-        key = (file_id, identity.source_sha256, "display-series-v1:" + data_sha if data_sha else "display-series-v1")
-        with self.store.connection() as db:
-            row = db.execute("SELECT payload FROM display_series_meta WHERE file_id=? AND hash=? AND schema=?", key).fetchone()
+        data = None
+        if row is None:
+            data = json.loads(path.read_bytes())
+            declaration_raw = data if isinstance(data, dict) and data.get("schema_version") == "display-series-source-v1" else None
+        else:
+            declaration_raw = json.loads(row[0]).get("declaration")
+        if declaration_raw:
+            from .declared_series import DeclaredSeries, target
+            declaration = DeclaredSeries.model_validate(declaration_raw)
+            # Cached declaration is bound to the sealed sidecar hash. The target
+            # keeps its own grant and streamed original hash check on every hit.
+            target_path, target_identity = target(self, project_id, declaration)
+            data_sha = target_identity.source_sha256
         if row is None:
             if declaration:
                 from .declared_series import read_columns
                 contract = read_columns(target_path, declaration)
             else:
-                data = json.loads(path.read_bytes())
                 contract = data.get("prediction_contract") if isinstance(data, dict) else None
             if not isinstance(contract, dict) or contract.get("schema_version") not in {"m4-prediction-v2", "display-series-source-v1"}:
                 raise WorkflowError("unsupported_trajectory_contract")
@@ -366,7 +371,7 @@ class DisplayResources:
             if len(columns) > MAX_SERIES:
                 raise WorkflowError("display_source_budget_exceeded")
             meta = {key: contract[key] for key in ("schema_version", "model_kind", "formula_version", "time_unit")}
-            meta.update(total=len(time), series=descriptors)
+            meta.update(total=len(time), series=descriptors, declaration=declaration.model_dump(mode="json") if declaration else None)
             self.boundary.check(meta)
             with self.store.connection() as db:
                 db.execute("BEGIN IMMEDIATE")

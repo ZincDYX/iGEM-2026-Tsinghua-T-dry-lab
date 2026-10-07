@@ -11,7 +11,7 @@ from igem_drylab.workflow.models import WorkflowError
 
 
 @pytest.mark.parametrize("format_name", ["csv", "npz"])
-def test_declared_csv_npz_keep_original_units_null_zero_and_recheck_target(tmp_path, format_name):
+def test_declared_csv_npz_keep_original_units_null_zero_and_recheck_target(tmp_path, monkeypatch, format_name):
     _, boundary, resources = environment(tmp_path)
     source = tmp_path/("sample."+format_name)
     if format_name == "csv":
@@ -31,7 +31,10 @@ def test_declared_csv_npz_keep_original_units_null_zero_and_recheck_target(tmp_p
     assert page["series"][0]==dict(id="0",compartment="extracellular",species="13",unit="mM")
     assert page["time_unit"]=="min" and page["model_kind"]=="registered_source_not_prediction"
     assert page["data_source_sha256"]==target["sha256"]
-    assert resources.series("a",asset["id"],2,2)["values"]=={"0":[2.5]}
+    from igem_drylab.workflow import declared_series
+    with monkeypatch.context() as guard:
+        guard.setattr(declared_series,"read_columns",lambda *args: pytest.fail("cached data reparsed"))
+        assert resources.series("a",asset["id"],2,2)["values"]=={"0":[2.5]}
     assert source.read_bytes()==original
     assert next(r for r in resources.catalog("a")["items"] if r["identity"]["file_id"]==asset["id"])["kind"]=="series"
     with pytest.raises(WorkflowError, match="file_project_mismatch"):

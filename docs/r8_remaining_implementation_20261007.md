@@ -105,6 +105,13 @@ object/structured-array importer. Generic BCIF is still not enabled: a bounded,
 identity-preserving binary decoder needs its own acceptance, rather than exposing
 untrusted compressed input to an unrestricted parser.
 
+The first full regression after this extension caught an unintended whole-source
+JSON read on an existing cached page (604 passed, one cache oracle failed).
+The adapter now reuses the sealed declaration metadata, checking grants and
+streamed original hashes without reparsing either registered source. The original
+cache oracle was retained; an additional CSV/NPZ parser-fail-on-cache-hit guard
+protects the new paths. Final regression results supersede that failed run below.
+
 ## Release dependency inventory and dated advisory queries
 
 `scripts/release_inventory.py` produces a CycloneDX 1.6 component inventory from
