@@ -18,15 +18,19 @@ authored English strings; user inputs and original evidence text are retained.
 - Series plot and table read identical bounded SQL pages, retain null versus
   zero, and link selected points. PDB/mmCIF views load authorized coordinate-only
   projections, use model/chain/residue/insertion identity and show only registered
-  fusion/reference/pocket/pLDDT sidecars. No B-factor-to-confidence conversion,
-  automatic reference alignment or invented assembly. WebGL failure retains
+  fusion/reference/pocket/pLDDT sidecars. Cartoon/surface/sticks, chain and source-only annotation coloring, camera
+  reset, original pocket/clash selection and authorized reference coordinates
+  are available. Annotation coloring covers the current page and leaves unknown
+  residues gray; the declared continuous pLDDT display scale is not an approval
+  threshold. Reference coordinates are independent unless an original transform
+  is registered: no automatic alignment or invented assembly. WebGL failure retains
   residue tables and original download. Plots, React roots, GPU contexts and
   blob URLs are disposed on resource change/unmount.
 - Authorized lineage comparison is paginated/batched and displays source
   identities, frozen input differences and formal comparability reasons. It
   does not turn different construct/condition/unit IDs into automatic ranking.
 
-TypeScript and production build pass. Main JS is about 873 kB (gzip 142 kB);
+TypeScript and production build pass. Main JS is about 877 kB (gzip 142 kB);
 Molstar ~3.56 MB and Plotly strict ~4.97 MB are loaded only when opened.
 The build-size warning is retained, not disguised as a solved performance issue.
 No model weights are installed. Viewer dependencies are MIT-licensed; licenses

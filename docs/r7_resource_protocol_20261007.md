@@ -20,7 +20,8 @@ scientific formula, parameter approval or evidence grade was modified.
   Residue model/chain/auth number/insertion identity is retained. Dedicated
   hash-bound sidecars may register fusion/reference mappings, pocket membership
   and explicitly sourced pLDDT. References require a current project grant,
-  byte hash and exact reference residue match. B-factor is never pLDDT.
+  byte hash and exact reference residue match. Full-fusion positions additionally
+  require an authorized FASTA hash, unique sequence ID and matching amino acid. B-factor is never pLDDT.
 - Lineage edges require server-owned parent run and exact frozen snapshot.
   Strangers are forbidden. Comparison is one paginated batch, aligned by
   stage/object key, not ordinal position; ambiguous duplicate keys are rejected.
@@ -32,7 +33,9 @@ scientific formula, parameter approval or evidence grade was modified.
   view does not approve varying factors or execute a finite-design scan.
   M1/M2/M3/M5 are descriptive comparisons, not newly defined F3 metrics.
 
-Selected software/parser tests: 20 passed, no solver invoked locally.
+The first selected software/parser group had 20 passes; later Windows filename
+  and FASTA identity cases are included in final server acceptance. No solver is
+  invoked in the local display/parser group.
 Independent oracles cover byte/pixel/metadata identity, grant-before-cache,
 tamper refusal, PDB/mmCIF model/chain/insertion, sealed source, hostile ZIP,
 actual HTTP preview/save/download, reversed candidate ordering and exact

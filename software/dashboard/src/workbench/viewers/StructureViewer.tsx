@@ -6,6 +6,12 @@ import { PluginSpec } from "molstar/lib/mol-plugin/spec";
 import { PluginBehaviors } from "molstar/lib/mol-plugin/behavior";
 import { PluginConfig } from "molstar/lib/mol-plugin/config";
 import type { PluginUIContext } from "molstar/lib/mol-plugin-ui/context";
+import {
+  StructureElement,
+  StructureProperties,
+} from "molstar/lib/mol-model/structure";
+import { ColorTheme } from "molstar/lib/mol-theme/color";
+import { Color } from "molstar/lib/mol-util/color";
 import { applyStructureInteractivity } from "molstar/lib/extensions/plugin/interactivity";
 import "molstar/build/viewer/molstar.css";
 import { requestBinary, requestJson } from "../../api";
@@ -15,9 +21,11 @@ import type { StructurePage } from "../../contracts/generated";
 export function StructureViewer({
   fileId,
   projectId,
+  allowReference = true,
 }: {
   fileId: string;
   projectId: string;
+  allowReference?: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const plugin = useRef<PluginUIContext | undefined>(undefined);
@@ -25,12 +33,19 @@ export function StructureViewer({
   const [error, setError] = useState("");
   const [chain, setChain] = useState("");
   const [offset, setOffset] = useState(0);
+  const [ready, setReady] = useState(false);
+  const [displayBusy, setDisplayBusy] = useState(false);
+  const [representation, setRepresentation] = useState("cartoon");
+  const [colorMode, setColorMode] = useState("chain");
+  const [reference, setReference] = useState<string>();
   useEffect(() => {
     const controller = new AbortController();
     let owned: PluginUIContext | undefined;
     let reactRoot: Root | undefined;
     setError("");
     setMeta(undefined);
+    setReady(false);
+    setReference(undefined);
     setOffset(0);
     async function load() {
       const [raw, response] = await Promise.all([
@@ -107,6 +122,7 @@ export function StructureViewer({
       if (controller.signal.aborted) return;
       setMeta(metadata);
       setChain(metadata.chains[0] ?? "");
+      setReady(true);
     }
     void load().catch(() => {
       if (!controller.signal.aborted)
@@ -146,6 +162,9 @@ export function StructureViewer({
       });
     return () => controller.abort();
   }, [offset, fileId, projectId]);
+  useEffect(() => {
+    if (ready && colorMode !== "chain") void display(representation, colorMode);
+  }, [meta?.offset]);
   function focus(
     chainId: string,
     residue?: string,
@@ -186,6 +205,99 @@ export function StructureViewer({
         }),
     });
   }
+  async function display(type: string, mode: string) {
+    const owned = plugin.current;
+    if (!owned || !meta) return;
+    setDisplayBusy(true);
+    try {
+      const colors: Record<string, number> = {
+        enzyme: 0x2878b5,
+        scaffold: 0x7b4ab8,
+        idr: 0xe69f00,
+        linker: 0x009e73,
+        ligand_tail: 0xcc79a7,
+        tag: 0xd55e00,
+      };
+      const factory: ColorTheme.Factory<{}, "group"> = () => ({
+        factory,
+        props: {},
+        granularity: "group",
+        description:
+          "Registered annotations on the current residue page only; unknown residues gray.",
+        color: (location) => {
+          if (!StructureElement.Location.is(location)) return Color(0xaaaaaa);
+          const annotation = meta.annotations.find(
+            (a) =>
+              a.residue.model === String(location.unit.model.modelNum) &&
+              a.residue.chain ===
+                StructureProperties.chain.auth_asym_id(location) &&
+              a.residue.residue_number ===
+                String(StructureProperties.residue.auth_seq_id(location)) &&
+              a.residue.insertion_code ===
+                StructureProperties.residue.pdbx_PDB_ins_code(location),
+          );
+          if (
+            mode === "confidence" &&
+            annotation?.plddt !== null &&
+            annotation?.plddt !== undefined
+          )
+            return Color.interpolate(
+              Color(0xd73027),
+              Color(0x4575b4),
+              annotation.plddt / 100,
+            );
+          if (mode === "region" && annotation?.region)
+            return Color(colors[annotation.region]);
+          return Color(0xaaaaaa);
+        },
+      });
+      const theme: ColorTheme.Provider<{}> = {
+        name: "fusionlab-registered-page",
+        label: "Registered annotation page",
+        category: ColorTheme.Category.Validation,
+        factory,
+        getParams: () => ({}),
+        defaultValues: {},
+        isApplicable: (ctx) => !!ctx.structure,
+      };
+      const registry = owned.representation.structure.themes.colorThemeRegistry;
+      const previousTheme = registry.get(theme.name);
+      if (registry.has(previousTheme)) registry.remove(previousTheme);
+      registry.add(theme);
+      const components =
+        owned.managers.structure.hierarchy.current.structures.flatMap(
+          (s) => s.components,
+        );
+      await owned.managers.structure.component.removeRepresentations(
+        components,
+      );
+      for (const component of components) {
+        await owned.builders.structure.representation.addRepresentation(
+          component.cell,
+          {
+            type: owned.representation.structure.registry.get(type),
+            color:
+              mode === "chain"
+                ? owned.representation.structure.themes.colorThemeRegistry.get(
+                    "chain-id",
+                  )
+                : theme,
+          },
+        );
+      }
+      if (plugin.current === owned) {
+        setRepresentation(type);
+        setColorMode(mode);
+      }
+    } catch {
+      if (plugin.current === owned)
+        setError(
+          "Representation unavailable; registered values and originals are retained.",
+        );
+    } finally {
+      if (plugin.current === owned) setDisplayBusy(false);
+    }
+  }
   return (
     <section>
       <p>
@@ -194,6 +306,60 @@ export function StructureViewer({
         annotation source. No inferred overlays or activity claims.
       </p>
       {error && <p role="alert">{error}</p>}
+      <label>
+        Representation
+        <select
+          aria-label="Representation"
+          disabled={!ready || displayBusy}
+          value={representation}
+          onChange={(e) => void display(e.target.value, colorMode)}
+        >
+          <option value="cartoon">Cartoon</option>
+          <option value="molecular-surface">Surface</option>
+          <option value="ball-and-stick">Sticks / atoms</option>
+        </select>
+      </label>
+      <label>
+        Color source
+        <select
+          aria-label="Color source"
+          disabled={!ready || displayBusy}
+          value={colorMode}
+          onChange={(e) => void display(representation, e.target.value)}
+        >
+          <option value="chain">Chain</option>
+          <option
+            value="region"
+            disabled={
+              meta?.mapping_status !==
+              "source_registered_not_scientific_approval"
+            }
+          >
+            Registered parts (current page)
+          </option>
+          <option
+            value="confidence"
+            disabled={
+              meta?.confidence_status !==
+              "source_registered_not_scientific_approval"
+            }
+          >
+            Registered pLDDT (current page)
+          </option>
+        </select>
+      </label>
+      <button
+        disabled={!ready}
+        onClick={() => plugin.current?.managers.camera.reset()}
+      >
+        Reset structure view
+      </button>
+      <p>
+        Display {representation} / {colorMode}. Annotation coloring uses the
+        currently loaded residue page; other residues are gray. Continuous pLDDT
+        color scale: red 0 to blue 100, no approval thresholds. Rotate/zoom/pan
+        in the viewport; no new geometry or alignment is computed.
+      </p>
       <div
         ref={root}
         className="structure-canvas"
@@ -214,6 +380,10 @@ export function StructureViewer({
                 {meta.annotation_source_tool}{" "}
                 {meta.annotation_source_tool_version} ·{" "}
                 {meta.annotation_file_id} · SHA-256 {meta.annotation_sha256}
+              </p>
+              <p>
+                Fusion FASTA {meta.fusion_sequence_id ?? "Not registered"} ·
+                SHA-256 {meta.fusion_sequence_file_sha256 ?? "Not registered"}
               </p>
               <p>
                 Registered display source, not scientific approval. Reference
@@ -247,6 +417,7 @@ export function StructureViewer({
                 <th>Fusion position / region</th>
                 <th>Reference residue</th>
                 <th>Registered pocket</th>
+                <th>Registered clash</th>
                 <th>pLDDT (registered source)</th>
               </tr>
             </thead>
@@ -289,12 +460,45 @@ export function StructureViewer({
                         ? "Yes — select residue to highlight"
                         : "Not registered"}
                     </td>
+                    <td>
+                      {annotation?.clash
+                        ? "Yes — select residue to highlight"
+                        : "Not registered"}
+                    </td>
                     <td>{annotation?.plddt ?? "Not registered"}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          {allowReference &&
+            meta.annotations
+              .filter((a) => a.reference_file_id)
+              .map((a, i) => (
+                <button
+                  key={i}
+                  onClick={() => setReference(a.reference_file_id!)}
+                >
+                  Open registered reference {a.reference_residue?.chain}:
+                  {a.reference_residue?.residue_number}
+                </button>
+              ))}
+          {reference && (
+            <section>
+              <h3>
+                Registered reference — independent coordinates, not aligned
+              </h3>
+              <button onClick={() => setReference(undefined)}>
+                Close reference
+              </button>
+              <StructureViewer
+                key={reference}
+                projectId={projectId}
+                fileId={reference}
+                allowReference={false}
+              />
+            </section>
+          )}
           <button
             disabled={!offset}
             onClick={() => setOffset(Math.max(0, offset - 100))}

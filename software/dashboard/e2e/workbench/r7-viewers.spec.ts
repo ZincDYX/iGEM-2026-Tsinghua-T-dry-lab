@@ -28,9 +28,21 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   await collect();
   const pdb =
     "MODEL        7\nATOM      1  N   ALA B  12A     11.000  12.000  13.000  1.00 99.00           N\nATOM      2  CA  ALA B  12A     12.000  12.000  13.000  1.00 99.00           C\nATOM      3  C   ALA B  12A     13.000  12.000  13.000  1.00 99.00           C\nENDMDL\nEND\n";
-  const coordinateSource = pdb.replace("ENDMDL", Array.from({length: 105}, (_, i) => `ATOM  ${String(i + 4).padStart(5)}  CA  ALA B${String(i + 20).padStart(4)}      11.000  12.000  13.000  1.00 99.00           C`).join("\n") + "\nENDMDL");
+  const coordinateSource = pdb.replace(
+    "ENDMDL",
+    Array.from(
+      { length: 105 },
+      (_, i) =>
+        `ATOM  ${String(i + 4).padStart(5)}  CA  ALA B${String(i + 20).padStart(4)}      11.000  12.000  13.000  1.00 99.00           C`,
+    ).join("\n") + "\nENDMDL",
+  );
   files["structures/coordinate-sample.pdb"] = Buffer.from(coordinateSource);
-  const sourceHash = createHash("sha256").update(coordinateSource).digest("hex");
+  const sourceHash = createHash("sha256")
+    .update(coordinateSource)
+    .digest("hex");
+  files["data/fusion-mapping.fasta"] = Buffer.from(
+    ">PARSER_FULL_FUSION\n" + "A".repeat(20) + "\n",
+  );
   files["structures/annotations.json"] = Buffer.from(
     JSON.stringify({
       schema_version: "structure-display-annotations-v1",
@@ -38,6 +50,10 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
       source_reference: "SOFTWARE_PARSER_SAMPLE_NOT_SCIENCE",
       source_tool: "PARSER_SAMPLE",
       source_tool_version: "1",
+      fusion_sequence_id: "PARSER_FULL_FUSION",
+      fusion_sequence_file_sha256: createHash("sha256")
+        .update(files["data/fusion-mapping.fasta"])
+        .digest("hex"),
       confidence_semantics: "plddt",
       rows: [
         {
@@ -206,11 +222,32 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   ).toContainText("42");
   await expect(page.locator(".workspace-content")).toContainText(sourceHash);
   await page.getByRole("button", { name: "12A", exact: true }).click();
+  await page
+    .getByLabel("Representation", { exact: true })
+    .selectOption("ball-and-stick");
+  await expect(
+    page.getByLabel("Representation", { exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByLabel("Color source", { exact: true })
+    .selectOption("confidence");
+  await expect(page.getByLabel("Color source", { exact: true })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByLabel("Representation", {exact:true}).selectOption("molecular-surface");
+  await expect(page.getByLabel("Representation", {exact:true})).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("button", { name: "Reset structure view" }).click();
   await page.getByRole("button", { name: "Next residues" }).click();
-  await expect(page.getByRole("button", { name: "Previous residues" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "12A", exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Previous residues" }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "12A", exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Previous residues" }).click();
-  await expect(page.getByRole("button", { name: "12A", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "12A", exact: true }),
+  ).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("offline-structure.png") });
   await page.getByRole("button", { name: "pixel-sample.png · image" }).click();
   await expect(page.locator(".structure-canvas canvas")).toHaveCount(0);

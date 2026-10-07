@@ -105,8 +105,12 @@ def test_structure_annotations_bind_exact_model_chain_insertion_and_reference(tm
     reference = tmp_path / "reference.pdb"
     reference.write_bytes(source.read_bytes())
     reference_asset = boundary.asset(reference, project_id="a")
+    fasta = tmp_path / "fusion.fasta"
+    fasta.write_text(">PARSER_FULL_FUSION\n" + "A"*20 + "\n")
+    fusion = boundary.asset(fasta, project_id="a")
     sidecar = tmp_path / "annotations.json"
     original = {"schema_version":"structure-display-annotations-v1", "target_sha256":target["sha256"], "source_reference":"SOFTWARE_PARSER_SAMPLE_NOT_PREDICTION", "source_tool":"PARSER_SAMPLE", "source_tool_version":"1", "confidence_semantics":"plddt", "rows":[{"residue":residue, "full_fusion_position":17, "region":"enzyme", "reference_residue":residue, "reference_sha256":reference_asset["sha256"], "pocket":True, "plddt":42}]}
+    original.update(fusion_sequence_file_sha256=fusion["sha256"], fusion_sequence_id="PARSER_FULL_FUSION")
     sidecar.write_text(json.dumps(original))
     boundary.asset(sidecar, project_id="a")
     meta, _ = display.structure("a", target["id"])
@@ -114,14 +118,36 @@ def test_structure_annotations_bind_exact_model_chain_insertion_and_reference(tm
     assert meta["annotations"][0]["plddt"] == 42  # Explicit sidecar, never B-factor 99.
     assert meta["annotations"][0]["full_fusion_position"] == 17
     assert meta["annotation_sha256"] == sha256(sidecar.read_bytes()).hexdigest()
+    assert meta["fusion_sequence_file_id"] == fusion["id"]
+    assert meta["fusion_sequence_file_sha256"] == fusion["sha256"]
+    assert meta["annotations"][0]["reference_file_id"] is not None
     assert meta["pocket_status"] == "source_registered_not_scientific_approval"
     invalid = tmp_path / "invalid-confidence.json"
     invalid.write_text(json.dumps({**original, "confidence_semantics":"not_provided"}))
     other_target = boundary.asset(source, project_id="b")
     boundary.asset(reference, project_id="b")
+    boundary.asset(fasta, project_id="b")
     boundary.asset(invalid, project_id="b")
     with pytest.raises(WorkflowError, match="structure_confidence_semantics_missing"):
         display.structure("b", other_target["id"])
+
+
+@pytest.mark.parametrize("wrong_field", ["sequence_hash", "position", "amino_acid"])
+def test_fusion_mapping_cannot_guess_fasta_or_residue_identity(tmp_path, wrong_field):
+    _, boundary, display = environment(tmp_path)
+    source = tmp_path / "mapped.pdb"
+    source.write_text("ATOM      1  CA  ALA B  12A     11.000  12.000  13.000  1.00 99.00           C\nEND\n")
+    model = boundary.asset(source, project_id="a")
+    sequence = tmp_path / "fusion.fasta"
+    sequence.write_text(">PARSER_SAMPLE\n" + ("C" if wrong_field == "amino_acid" else "A") + "\n")
+    fasta = boundary.asset(sequence, project_id="a")
+    row = dict(residue=dict(model="1", chain="B", residue_number="12", insertion_code="A", residue_name="ALA"), full_fusion_position=2 if wrong_field == "position" else 1)
+    sidecar = tmp_path / "mapping.json"
+    sidecar.write_text(json.dumps(dict(schema_version="structure-display-annotations-v1", target_sha256=model["sha256"], source_reference="SOFTWARE_PARSER_SAMPLE", confidence_semantics="not_provided", fusion_sequence_id="PARSER_SAMPLE", fusion_sequence_file_sha256="f"*64 if wrong_field == "sequence_hash" else fasta["sha256"], rows=[row])))
+    boundary.asset(sidecar, project_id="a")
+    code = "structure_sequence_mapping_not_authorized" if wrong_field == "sequence_hash" else "structure_sequence_mapping_identity_mismatch"
+    with pytest.raises(WorkflowError, match=code):
+        display.structure("a", model["id"])
 
 
 def test_mmcif_coordinate_projection_removes_custom_metadata(tmp_path):

@@ -1031,7 +1031,7 @@
   },
   "StructurePage": {
     "$defs": {
-      "ResidueAnnotation": {
+      "DisplayResidueAnnotation": {
         "additionalProperties": false,
         "properties": {
           "residue": {
@@ -1099,6 +1099,11 @@
             "title": "Pocket",
             "type": "boolean"
           },
+          "clash": {
+            "default": false,
+            "title": "Clash",
+            "type": "boolean"
+          },
           "plddt": {
             "anyOf": [
               {
@@ -1112,6 +1117,18 @@
             ],
             "default": null,
             "title": "Plddt"
+          },
+          "reference_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference File Id"
           }
         },
         "required": [
@@ -1121,9 +1138,11 @@
           "reference_residue",
           "reference_sha256",
           "pocket",
-          "plddt"
+          "clash",
+          "plddt",
+          "reference_file_id"
         ],
-        "title": "ResidueAnnotation",
+        "title": "DisplayResidueAnnotation",
         "type": "object"
       },
       "ResidueIdentity": {
@@ -1407,9 +1426,45 @@
         "default": null,
         "title": "Annotation Source Tool Version"
       },
+      "fusion_sequence_file_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Fusion Sequence File Id"
+      },
+      "fusion_sequence_file_sha256": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Fusion Sequence File Sha256"
+      },
+      "fusion_sequence_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Fusion Sequence Id"
+      },
       "annotations": {
         "items": {
-          "$ref": "#/$defs/ResidueAnnotation"
+          "$ref": "#/$defs/DisplayResidueAnnotation"
         },
         "title": "Annotations",
         "type": "array"
@@ -1438,6 +1493,9 @@
       "annotation_source_reference",
       "annotation_source_tool",
       "annotation_source_tool_version",
+      "fusion_sequence_file_id",
+      "fusion_sequence_file_sha256",
+      "fusion_sequence_id",
       "annotations",
       "preview_policy"
     ],

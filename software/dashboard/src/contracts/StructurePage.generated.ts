@@ -30,12 +30,17 @@ export type AnnotationSha256 = string | null;
 export type AnnotationSourceReference = string | null;
 export type AnnotationSourceTool = string | null;
 export type AnnotationSourceToolVersion = string | null;
+export type FusionSequenceFileId = string | null;
+export type FusionSequenceFileSha256 = string | null;
+export type FusionSequenceId = string | null;
 export type FullFusionPosition = number | null;
 export type Region = ("enzyme" | "scaffold" | "idr" | "linker" | "ligand_tail" | "tag") | null;
 export type ReferenceSha256 = string | null;
 export type Pocket = boolean;
+export type Clash = boolean;
 export type Plddt = number | null;
-export type Annotations = ResidueAnnotation[];
+export type ReferenceFileId = string | null;
+export type Annotations = DisplayResidueAnnotation[];
 export type PreviewPolicy = "atom_coordinates_only_original_sealed";
 
 export interface StructurePage {
@@ -55,6 +60,9 @@ export interface StructurePage {
   annotation_source_reference: AnnotationSourceReference;
   annotation_source_tool: AnnotationSourceTool;
   annotation_source_tool_version: AnnotationSourceToolVersion;
+  fusion_sequence_file_id: FusionSequenceFileId;
+  fusion_sequence_file_sha256: FusionSequenceFileSha256;
+  fusion_sequence_id: FusionSequenceId;
   annotations: Annotations;
   preview_policy: PreviewPolicy;
 }
@@ -77,12 +85,14 @@ export interface ResidueIdentity {
   insertion_code: InsertionCode;
   residue_name: ResidueName;
 }
-export interface ResidueAnnotation {
+export interface DisplayResidueAnnotation {
   residue: ResidueIdentity;
   full_fusion_position: FullFusionPosition;
   region: Region;
   reference_residue: ResidueIdentity | null;
   reference_sha256: ReferenceSha256;
   pocket: Pocket;
+  clash: Clash;
   plddt: Plddt;
+  reference_file_id: ReferenceFileId;
 }

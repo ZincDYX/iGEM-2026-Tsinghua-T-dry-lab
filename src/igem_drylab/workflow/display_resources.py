@@ -120,6 +120,7 @@ class ResidueAnnotation(Contract):
     reference_residue: ResidueIdentity | None = None
     reference_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     pocket: bool = False
+    clash: bool = False
     plddt: float | None = Field(default=None, ge=0, le=100)
 
 
@@ -129,8 +130,14 @@ class StructureAnnotations(Contract):
     source_reference: str = Field(min_length=1)
     source_tool: str | None = None
     source_tool_version: str | None = None
+    fusion_sequence_file_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    fusion_sequence_id: str | None = None
     confidence_semantics: Literal["plddt", "not_provided"]
     rows: list[ResidueAnnotation] = Field(max_length=100_000)
+
+
+class DisplayResidueAnnotation(ResidueAnnotation):
+    reference_file_id: str | None = None  # Derived from verified project grants.
 
 
 class StructurePage(Contract):
@@ -150,7 +157,10 @@ class StructurePage(Contract):
     annotation_source_reference: str | None = None
     annotation_source_tool: str | None = None
     annotation_source_tool_version: str | None = None
-    annotations: list[ResidueAnnotation] = Field(default_factory=list)
+    fusion_sequence_file_id: str | None = None
+    fusion_sequence_file_sha256: str | None = None
+    fusion_sequence_id: str | None = None
+    annotations: list[DisplayResidueAnnotation] = Field(default_factory=list)
     preview_policy: Literal["atom_coordinates_only_original_sealed"] = "atom_coordinates_only_original_sealed"
 
 
@@ -410,6 +420,17 @@ class DisplayResources:
             self.source(project_id, candidate["id"])
             annotation = StructureAnnotations.model_validate(raw)
             self.boundary.check(annotation.model_dump(mode="json"))
+            fusion_sequence = None
+            if any(r.full_fusion_position is not None for r in annotation.rows):
+                from Bio import SeqIO
+                sequence_file_id = references.get(annotation.fusion_sequence_file_sha256)
+                if not sequence_file_id or not annotation.fusion_sequence_id:
+                    raise WorkflowError("structure_sequence_mapping_not_authorized", status_code=403)
+                sequence_path, _, _ = self.source(project_id, sequence_file_id)
+                matching = [str(r.seq).upper() for r in SeqIO.parse(sequence_path, "fasta") if r.id == annotation.fusion_sequence_id]
+                if len(matching) != 1:
+                    raise WorkflowError("structure_sequence_mapping_identity_mismatch")
+                fusion_sequence = matching[0]
             seen = set()
             for entry in annotation.rows:
                 residue = entry.residue
@@ -417,6 +438,12 @@ class DisplayResources:
                 if key in seen or key not in residues or residues[key]["residue_name"] != residue.residue_name:
                     raise WorkflowError("structure_annotation_identity_mismatch")
                 seen.add(key)
+                if entry.full_fusion_position is not None:
+                    from Bio.Data.IUPACData import protein_letters_3to1
+                    position = entry.full_fusion_position - 1
+                    amino_acid = protein_letters_3to1.get(residue.residue_name.title())
+                    if position >= len(fusion_sequence) or amino_acid is None or fusion_sequence[position] != amino_acid:
+                        raise WorkflowError("structure_sequence_mapping_identity_mismatch")
                 if entry.plddt is not None and (annotation.confidence_semantics != "plddt" or not annotation.source_tool or not annotation.source_tool_version):
                     raise WorkflowError("structure_confidence_semantics_missing")
                 if entry.reference_residue is not None:
@@ -435,8 +462,11 @@ class DisplayResources:
             candidate, annotation = found[0]
             paged = {tuple(r[k] for k in ("model", "chain", "residue_number", "insertion_code")) for r in meta["residues"]}
             meta.update(annotation_file_id=candidate["id"], annotation_sha256=candidate["hash"], annotation_source_reference=annotation.source_reference,
+                fusion_sequence_file_id=references.get(annotation.fusion_sequence_file_sha256) if fusion_sequence is not None else None,
+                fusion_sequence_file_sha256=annotation.fusion_sequence_file_sha256 if fusion_sequence is not None else None,
+                fusion_sequence_id=annotation.fusion_sequence_id if fusion_sequence is not None else None,
                 annotation_source_tool=annotation.source_tool, annotation_source_tool_version=annotation.source_tool_version,
-                annotations=[r.model_dump(mode="json") for r in annotation.rows if tuple(getattr(r.residue, k) for k in ("model", "chain", "residue_number", "insertion_code")) in paged])
+                annotations=[{**r.model_dump(mode="json"), "reference_file_id":references.get(r.reference_sha256) if r.reference_residue else None} for r in annotation.rows if tuple(getattr(r.residue, k) for k in ("model", "chain", "residue_number", "insertion_code")) in paged])
             registered = "source_registered_not_scientific_approval"
             if any(r.plddt is not None for r in annotation.rows):
                 meta["confidence_status"] = registered
