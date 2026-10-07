@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R10_ORDINARY_IMPORT_EXACT_MAPPING
+    group: integration
+    test_nodeids: ["tests/test_r10_ordinary_imports.py::test_empty_project_table_mapping_full_overview_and_original_indices", "tests/test_r10_ordinary_imports.py::test_invalid_tables_rejected_before_grants", "tests/test_r10_ordinary_imports.py::test_bad_numeric_mapping_does_not_publish_declaration", "tests/test_r10_ordinary_imports.py::test_json_role_is_explicit_and_binary_import_original_is_exact", "tests/test_r10_ordinary_imports.py::test_typed_record_preview_enforces_units_provenance_and_no_approval", "tests/test_r10_ordinary_imports.py::test_overview_cell_budget_reports_exact_partial_coverage"]
+    requirement_or_formula_source: r8 R8-04 R8-05 R8-08 R8-09
+    oracle_type: independently_declared_original_strings_bytes_indices_null_zero_units_and_no_approval
+    fixture_scope: software_parser_samples_no_solver_or_biological_calibration
+    formula_version: not_applicable_no_recalculation
+    units: original_declared_units_no_conversion
+    tolerance_basis: exact_original_values_grants_counts_revision_and_source_identity
+    expected_faults: [JSON_role_guessing, inferred_units, manual_hash_dependency, null_to_zero, last_point_missing, plot_coupled_to_table_page, approval_on_import, oversized_overview_response]
   - risk_id: R9_SCIENTIFIC_STATUS_PROJECTION
     group: platform
     test_nodeids: ["tests/test_r9_stage_summary.py::test_job_success_never_promotes_missing_scientific_evidence"]

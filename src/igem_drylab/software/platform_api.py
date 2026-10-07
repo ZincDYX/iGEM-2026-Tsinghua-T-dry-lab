@@ -24,6 +24,7 @@ from igem_drylab.workflow.pathway import Pathway
 from igem_drylab.workflow.plugins import PluginManager
 from igem_drylab.workflow.store import WorkflowStore, plan_binding
 from igem_drylab.workflow.planning import PlanningService, ProposalRequest, ProposalDecision
+from igem_drylab.workflow.declared_series import DeclaredColumn, DeclaredSeries, read_columns
 
 
 class SaveProject(Contract):
@@ -35,6 +36,21 @@ class ImportRequest(Contract):
     filename: str
     content: str = Field(max_length=10_000_000)
     input_kind: Literal["auto", "pathway", "wetlab"] = "auto"
+
+
+class SeriesMappingRequest(Contract):
+    project_id: str
+    expected_revision: int
+    file_id: str
+    source_reference: str = Field(min_length=1)
+    time_key: str = Field(min_length=1)
+    time_unit: str = Field(min_length=1)
+    columns: list[DeclaredColumn] = Field(min_length=1, max_length=128)
+
+
+class ScientificRecordRequest(Contract):
+    kind: Literal["construct", "parameter"]
+    value: dict[str, Any]
 
 
 class ScientificImportRequest(Contract):
@@ -322,11 +338,83 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         return comparisons.compare(project_id, left_run_id, right_run_id, offset, limit, objective)
 
     @router.get("/files/{file_id}/series")
-    def display_series(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=1000), series_id: str | None = None):
+    def display_series(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=100_000), series_id: list[str] | None = Query(None)):
         return resources.series(project_id, file_id, offset, limit, series_id)
 
+    @router.get("/files/{file_id}/table")
+    def display_table(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=1000)):
+        from igem_drylab.workflow.table_display import table_page
+        return table_page(resources, project_id, file_id, offset, limit)
+
+    @router.get("/files/{file_id}/resource")
+    def resource_item(file_id: str, project_id: str, run_id: str | None = None):
+        resources.source(project_id, file_id)
+        result = resources.catalog(project_id, run_id=run_id, file_id=file_id)
+        if not result["items"]:
+            raise WorkflowError("resource_not_in_selected_run", status_code=404)
+        return result
+
+    @router.post("/imports/series-mapping")
+    def series_mapping(request: SeriesMappingRequest):
+        project = store.project(request.project_id)
+        if project.revision != request.expected_revision:
+            raise WorkflowError("project_revision_changed", status_code=409)
+        path, identity, name = resources.source(project.id, request.file_id)
+        boundary.check_original(path)
+        if path.suffix.lower() not in {".csv", ".tsv"}:
+            raise WorkflowError("mapping_requires_delimited_table")
+        declaration = DeclaredSeries(schema_version="display-series-source-v1",
+            target_sha256=identity.source_sha256, source_reference=request.source_reference,
+            format=path.suffix.lower()[1:], time_key=request.time_key, time_unit=request.time_unit,
+            missing_token="", columns=request.columns)
+        read_columns(path, declaration)  # Validate all original values before publishing a declaration.
+        raw = declaration.model_dump_json().encode()
+        boundary.check(declaration.model_dump(mode="json"))
+        root = data_dir / "imports"
+        root.mkdir(parents=True, exist_ok=True)
+        source = root / (sha256(raw).hexdigest() + ".json")
+        source.write_bytes(raw)
+        file = boundary.asset(source, project_id=project.id, fresh=True, logical_name=name + ".series.json")
+        return {"kind": "series", "patch": {}, "file": file}
+
+    @router.post("/scientific-records/preview")
+    def scientific_record(request: ScientificRecordRequest):
+        from igem_drylab.software.public_contracts import ScientificRecordView
+        from igem_drylab.pipeline.config import ConstructDefinition
+        from igem_drylab.parameters import ParameterRecord
+        boundary.check(request.value)
+        if request.kind == "construct":
+            result = ScientificRecordView(kind="construct", construct_record=ConstructDefinition.model_validate(request.value))
+        else:
+            if request.value.get("review_status", "extracted") != "extracted" or request.value.get("approved_by") is not None:
+                raise WorkflowError("record_preview_cannot_approve")
+            result = ScientificRecordView(kind="parameter", parameter=ParameterRecord.model_validate(request.value))
+        value = result.model_dump(mode="json")
+        boundary.check(value)
+        return value
+
+    @router.post("/imports/display-file")
+    async def display_import(request: Request, filename: str):
+        extension = Path(filename).suffix.lower()
+        if extension not in {".png", ".jpg", ".jpeg", ".pdb", ".cif", ".mmcif"}:
+            raise WorkflowError("unsupported_display_import")
+        raw = bytearray()
+        async for chunk in request.stream():
+            raw.extend(chunk)
+            if len(raw) > 20_000_000:
+                raise WorkflowError("display_source_budget_exceeded", status_code=413)
+        from igem_drylab.workflow.disclosure import check_import_content
+        check_import_content(filename, bytes(raw))
+        boundary.check_bytes(bytes(raw))
+        root = data_dir / "imports"
+        root.mkdir(parents=True, exist_ok=True)
+        source = root / (sha256(raw).hexdigest() + extension)
+        source.write_bytes(raw)
+        file = boundary.asset(source, fresh=True, logical_name=filename)
+        return {"kind": "display_only", "patch": {}, "file": file}
+
     @router.get("/files/{file_id}/scan")
-    def display_scan(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
+    def display_scan(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=10000)):
         from igem_drylab.workflow.scan_display import scan_page
         return scan_page(resources, project_id, file_id, offset, limit)
 
@@ -389,16 +477,26 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             qc = quality_control([WetLabResult.model_validate(row) for row in records])
             patch, kind = {"datasets": [{"id": digest, "name": request.filename, "kind": "wetlab",
                 "records": records, "qc": [item.model_dump(mode="json") for item in qc]}]}, "wetlab"
-        elif extension == ".json":
+        elif extension == ".json" and request.input_kind == "pathway":
             pathway = Pathway.model_validate_json(request.content)
             patch, kind = {"pathway": pathway.model_dump(mode="json")}, "pathway"
+        elif extension == ".json":
+            json.loads(request.content)
+            patch, kind = {}, "configuration_display_only"
         elif extension in {".csv", ".tsv"}:
-            rows = list(csv.DictReader(StringIO(request.content), delimiter="\t" if extension == ".tsv" else ","))
-            if not rows:
+            reader = csv.DictReader(StringIO(request.content), delimiter="\t" if extension == ".tsv" else ",")
+            if not reader.fieldnames or len(reader.fieldnames) > 128 or len(set(reader.fieldnames)) != len(reader.fieldnames) or any(not c for c in reader.fieldnames):
+                raise WorkflowError("table_columns_missing_or_duplicate")
+            count = 0
+            for row in reader:
+                if None in row or any(v is None for v in row.values()) or count >= 100_000:
+                    raise WorkflowError("table_row_budget_or_shape_invalid")
+                count += 1
+            if not count:
                 raise ValueError("empty_table")
-            patch, kind = {"datasets": [{"id": digest, "name": request.filename, "rows": rows}]}, "dataset"
+            patch, kind = {}, "dataset"
         else:
-            raise ValueError("supported_imports: FASTA, annotated GenBank, pathway JSON, CSV, TSV")
+            raise ValueError("supported_imports: FASTA, annotated GenBank, explicit-role JSON, CSV, TSV")
         source.write_bytes(request.content.encode("utf-8"))
         file = boundary.asset(source, fresh=True, logical_name=request.filename)
         for dataset in patch.get("datasets", []):

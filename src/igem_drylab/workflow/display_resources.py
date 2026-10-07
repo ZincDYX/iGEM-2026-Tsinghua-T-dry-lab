@@ -255,7 +255,7 @@ class DisplayResources:
         identity = ResourceIdentity(project_id=project_id, file_id=file_id, source_sha256=row["hash"])
         return path, identity, row["name"]
 
-    def catalog(self, project_id, offset=0, limit=50, run_id=None):
+    def catalog(self, project_id, offset=0, limit=50, run_id=None, file_id=None):
         self.store.project(project_id)
         snapshot = None
         allowed = None
@@ -286,6 +286,8 @@ class DisplayResources:
             rows = db.execute("SELECT * FROM file_assets WHERE project_id=? ORDER BY rowid", (project_id,)).fetchall()
         if allowed is not None:
             rows = [row for row in rows if row["id"] in allowed]
+        if file_id is not None:
+            rows = [row for row in rows if row["id"] == file_id]
         items = []
         for row in rows[offset:offset + limit]:
             path = Path(row["path"])
@@ -384,12 +386,16 @@ class DisplayResources:
                     db.execute("INSERT INTO display_series_meta VALUES(?,?,?,?)", (*key, json.dumps(meta)))
         else:
             meta = json.loads(row[0])
-        selected = [item for item in meta["series"] if series_id is None or item["id"] == series_id]
-        if series_id is not None and not selected:
+        requested = {series_id} if isinstance(series_id, str) else set(series_id) if series_id is not None else None
+        selected = [item for item in meta["series"] if requested is None or item["id"] in requested]
+        if requested is not None and requested != {item["id"] for item in selected}:
             raise WorkflowError("unknown_registered_series")
+        # The overview uses this same exact projection, not a second decimator.
+        limit = min(limit, MAX_POINTS, 300_000 // max(1, len(selected)))
         with self.store.connection() as db:
             points = db.execute("SELECT time,values_json FROM display_series_points WHERE file_id=? AND hash=? AND schema=? AND ordinal>=? ORDER BY ordinal LIMIT ?", (*key, offset, limit)).fetchall()
-        result = SeriesPage(identity=identity, result_schema_version=meta["schema_version"], model_kind=meta["model_kind"], formula_version=meta["formula_version"], time_unit=meta["time_unit"], data_source_sha256=data_sha, source_reference=declaration.source_reference if declaration else None, offset=offset, total=meta["total"], has_more=offset + len(points) < meta["total"], time=[p[0] for p in points], series=selected, values={s["id"]: [json.loads(p[1])[s["id"]] for p in points] for s in selected}).model_dump(mode="json")
+        values = [json.loads(p[1]) for p in points]
+        result = SeriesPage(identity=identity, result_schema_version=meta["schema_version"], model_kind=meta["model_kind"], formula_version=meta["formula_version"], time_unit=meta["time_unit"], data_source_sha256=data_sha, source_reference=declaration.source_reference if declaration else None, offset=offset, total=meta["total"], has_more=offset + len(points) < meta["total"], time=[p[0] for p in points], series=selected, values={s["id"]: [p[s["id"]] for p in values] for s in selected}).model_dump(mode="json")
         self.boundary.check(result)
         return result
 

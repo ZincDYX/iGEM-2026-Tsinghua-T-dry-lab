@@ -1,5 +1,6 @@
 """Declared CSV/NPZ display columns, never guessed scientific semantics."""
 import csv
+import math
 from typing import Literal
 from zipfile import ZipFile
 
@@ -18,7 +19,7 @@ class DeclaredSeries(Contract):
     schema_version: Literal["display-series-source-v1"]
     target_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     source_reference: str = Field(min_length=1)
-    format: Literal["csv", "npz"]
+    format: Literal["csv", "tsv", "npz"]
     time_key: str = Field(min_length=1)
     time_unit: str = Field(min_length=1)
     missing_token: Literal["", "nan"]
@@ -42,11 +43,11 @@ def read_columns(path, declaration):
     keys = [declaration.time_key, *(c.key for c in declaration.columns)]
     if len(set(keys)) != len(keys):
         raise WorkflowError("declared_series_duplicate_column")
-    if declaration.format == "csv":
+    if declaration.format in {"csv", "tsv"}:
         if declaration.missing_token != "":
             raise WorkflowError("csv_requires_explicit_empty_missing_token")
         with path.open(encoding="utf-8-sig", newline="") as source:
-            reader = csv.DictReader(source)
+            reader = csv.DictReader(source, delimiter="\t" if declaration.format == "tsv" else ",")
             if not reader.fieldnames or len(set(reader.fieldnames)) != len(reader.fieldnames) or not set(keys).issubset(reader.fieldnames):
                 raise WorkflowError("declared_series_column_missing_or_duplicate")
             columns = {k: [] for k in keys}
@@ -90,6 +91,10 @@ def read_columns(path, declaration):
     time = columns.pop(declaration.time_key)
     if any(t is None for t in time) or any(len(v) != len(time) for v in columns.values()):
         raise WorkflowError("declared_series_lengths_or_time_invalid")
+    if not time or not all(math.isfinite(t) for t in time) or any(a >= b for a, b in zip(time, time[1:])):
+        raise WorkflowError("invalid_trajectory_contract")
+    if any(not math.isfinite(v) for values in columns.values() for v in values if v is not None):
+        raise WorkflowError("invalid_trajectory_contract")
     contract = dict(schema_version=declaration.schema_version,
                     model_kind="registered_source_not_prediction",
                     formula_version="not_applicable_no_recalculation", time_unit=declaration.time_unit,

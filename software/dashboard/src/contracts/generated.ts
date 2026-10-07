@@ -1,3 +1,5 @@
+export type { ScientificRecordView } from "./ScientificRecordView.generated";
+export type { TablePage } from "./TablePage.generated";
 export type { ScanPage } from "./ScanPage.generated";
 export type { M5ComparisonSeries } from "./M5ComparisonSeries.generated";
 export type { LineagePage } from "./LineagePage.generated";

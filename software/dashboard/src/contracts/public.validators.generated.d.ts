@@ -1,3 +1,5 @@
+export function ScientificRecordView(value:unknown):value is import("./ScientificRecordView.generated").ScientificRecordView;
+export function TablePage(value:unknown):value is import("./TablePage.generated").TablePage;
 export function ScanPage(value:unknown):value is import("./ScanPage.generated").ScanPage;
 export function M5ComparisonSeries(value:unknown):value is import("./M5ComparisonSeries.generated").M5ComparisonSeries;
 export function LineagePage(value:unknown):value is import("./LineagePage.generated").LineagePage;

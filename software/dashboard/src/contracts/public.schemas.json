@@ -1,4 +1,942 @@
 {
+  "ScientificRecordView": {
+    "$defs": {
+      "ConstructDefinition": {
+        "additionalProperties": false,
+        "description": "A wet-lab construct description; no fusion topology is inferred by code.",
+        "properties": {
+          "id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/$defs/OrderedPartConfig"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "domain_order": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Domain Order",
+            "type": "array"
+          },
+          "fusion_orientation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fusion Orientation"
+          },
+          "localization_context": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cytosolic",
+                  "er_anchored"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Localization Context"
+          },
+          "localization_design_evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Localization Design Evidence"
+          },
+          "m1_review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "M1 Review"
+          },
+          "linker_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Linker Ids",
+            "type": "array"
+          },
+          "scaffold_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scaffold Id"
+          },
+          "recruitment_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recruitment Tags",
+            "type": "array"
+          },
+          "enzyme_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Enzyme Ids",
+            "type": "array"
+          },
+          "oc_n_terminal_truncation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Oc N Terminal Truncation"
+          },
+          "experimental_baseline": {
+            "default": false,
+            "title": "Experimental Baseline",
+            "type": "boolean"
+          },
+          "coding_dna": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Coding Dna"
+          },
+          "sequence_source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sequence Source Ref"
+          },
+          "forbidden_restriction_sites": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Forbidden Restriction Sites"
+          },
+          "idr_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Idr Ids",
+            "type": "array"
+          },
+          "sequences": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Sequences",
+            "type": "object"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "title": "Provenance",
+            "type": "object"
+          },
+          "oc_truncation_mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TruncationMapping"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "components",
+          "parts",
+          "domain_order",
+          "fusion_orientation",
+          "localization_context",
+          "localization_design_evidence",
+          "m1_review",
+          "linker_ids",
+          "scaffold_id",
+          "recruitment_tags",
+          "enzyme_ids",
+          "oc_n_terminal_truncation",
+          "experimental_baseline",
+          "coding_dna",
+          "sequence_source_ref",
+          "forbidden_restriction_sites",
+          "idr_ids",
+          "sequences",
+          "provenance",
+          "oc_truncation_mapping"
+        ],
+        "title": "ConstructDefinition",
+        "type": "object"
+      },
+      "OrderedPartConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "protein",
+              "idr",
+              "enzyme_ligand_linker",
+              "scaffold_linker",
+              "rigid_linker",
+              "tag"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sequence"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "sequence"
+        ],
+        "title": "OrderedPartConfig",
+        "type": "object"
+      },
+      "ParameterRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "parameter_id": {
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unit"
+          },
+          "species_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Species Id"
+          },
+          "enzyme_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Enzyme Id"
+          },
+          "substrate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Substrate Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Product Id"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Condition Id"
+          },
+          "parameter_type": {
+            "default": "other",
+            "enum": [
+              "kcat",
+              "km",
+              "kd",
+              "kp",
+              "phi",
+              "abundance",
+              "activity_ratio",
+              "degradation_rate",
+              "export_rate",
+              "input_flux",
+              "hill_coefficient",
+              "other"
+            ],
+            "title": "Parameter Type",
+            "type": "string"
+          },
+          "source_type": {
+            "enum": [
+              "literature",
+              "wetlab",
+              "prediction",
+              "assumption"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "derivation_type": {
+            "default": "other",
+            "enum": [
+              "direct_measurement",
+              "model_fit",
+              "literature_extraction",
+              "other"
+            ],
+            "title": "Derivation Type",
+            "type": "string"
+          },
+          "source_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Reference"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Doi"
+          },
+          "evidence_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Evidence Text"
+          },
+          "evidence_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Evidence Location"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ParameterUncertainty"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "review_status": {
+            "default": "extracted",
+            "enum": [
+              "extracted",
+              "validated",
+              "approved",
+              "rejected"
+            ],
+            "title": "Review Status",
+            "type": "string"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Approved By"
+          },
+          "validation_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Validation Flags",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Version"
+          },
+          "parameter_version": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Parameter Version",
+            "type": "integer"
+          },
+          "supersedes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Supersedes"
+          },
+          "derived_from": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Derived From",
+            "type": "array"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parameter_id",
+          "name",
+          "value",
+          "unit",
+          "species_id",
+          "enzyme_id",
+          "substrate_id",
+          "product_id",
+          "construct_id",
+          "condition_id",
+          "parameter_type",
+          "source_type",
+          "derivation_type",
+          "source_reference",
+          "doi",
+          "evidence_text",
+          "evidence_location",
+          "conditions",
+          "uncertainty",
+          "review_status",
+          "approved_by",
+          "validation_flags",
+          "created_at",
+          "updated_at",
+          "model_version",
+          "parameter_version",
+          "supersedes",
+          "derived_from",
+          "notes"
+        ],
+        "title": "ParameterRecord",
+        "type": "object"
+      },
+      "ParameterUncertainty": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lower"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Upper"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Type"
+          }
+        },
+        "title": "ParameterUncertainty",
+        "type": "object",
+        "required": [
+          "value",
+          "lower",
+          "upper",
+          "type"
+        ]
+      },
+      "TruncationMapping": {
+        "additionalProperties": false,
+        "properties": {
+          "reference_accession": {
+            "title": "Reference Accession",
+            "type": "string"
+          },
+          "deleted_reference_residues": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Deleted Reference Residues",
+            "type": "array"
+          },
+          "reference_to_fusion": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Reference To Fusion",
+            "type": "object"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference_accession",
+          "deleted_reference_residues",
+          "reference_to_fusion",
+          "source_reference"
+        ],
+        "title": "TruncationMapping",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "kind": {
+        "enum": [
+          "construct",
+          "parameter"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "construct_record": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ConstructDefinition"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "parameter": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ParameterRecord"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "kind",
+      "construct_record",
+      "parameter"
+    ],
+    "title": "ScientificRecordView",
+    "type": "object"
+  },
+  "TablePage": {
+    "$defs": {
+      "ResourceIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "snapshot_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Snapshot Hash"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Node Id"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attempt"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Id"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Condition Id"
+          }
+        },
+        "required": [
+          "project_id",
+          "file_id",
+          "source_sha256",
+          "run_id",
+          "snapshot_hash",
+          "node_id",
+          "attempt",
+          "candidate_id",
+          "construct_id",
+          "condition_id"
+        ],
+        "title": "ResourceIdentity",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "display-table-v1",
+        "default": "display-table-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "identity": {
+        "$ref": "#/$defs/ResourceIdentity"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      },
+      "columns": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Columns",
+        "type": "array"
+      },
+      "rows": {
+        "items": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "title": "Rows",
+        "type": "array"
+      },
+      "text": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Text"
+      }
+    },
+    "required": [
+      "schema_version",
+      "identity",
+      "offset",
+      "total",
+      "has_more",
+      "columns",
+      "rows",
+      "text"
+    ],
+    "title": "TablePage",
+    "type": "object"
+  },
   "ScanPage": {
     "$defs": {
       "ResourceIdentity": {

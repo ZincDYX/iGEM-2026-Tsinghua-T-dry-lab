@@ -18,6 +18,9 @@ from igem_drylab.workflow.display_resources import ResourcePage, SeriesPage, Str
 from igem_drylab.workflow.lineage_compare import LineagePage, ComparePage
 from igem_drylab.wetlab.comparison import M5ComparisonSeries
 from igem_drylab.workflow.scan_display import ScanPage
+from igem_drylab.workflow.table_display import TablePage
+from igem_drylab.pipeline.config import ConstructDefinition
+from igem_drylab.parameters import ParameterRecord
 
 
 class AssetIdentity(Contract):
@@ -121,6 +124,12 @@ class ImportView(Contract):
     file: AssetIdentity
 
 
+class ScientificRecordView(Contract):
+    kind: Literal["construct", "parameter"]
+    construct_record: ConstructDefinition | None = None
+    parameter: ParameterRecord | None = None
+
+
 class ActionView(Contract):
     seq: int
     proposal_id: str | None
@@ -174,7 +183,7 @@ class PluginInspectionView(Contract):
     capability_requests: list[str]
 
 
-PUBLIC_MODELS = {model.__name__:model for model in (ScanPage, M5ComparisonSeries, LineagePage, ComparePage, ResourcePage, SeriesPage, StructurePage, ScientificPrecheckView,PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
+PUBLIC_MODELS = {model.__name__:model for model in (ScientificRecordView, TablePage, ScanPage, M5ComparisonSeries, LineagePage, ComparePage, ResourcePage, SeriesPage, StructurePage, ScientificPrecheckView,PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
     NodePage,PlanView,ProposalView,ScientificPreviewView,BindingPreviewView,IterationView,ImportView,ActionView,RunListView,InputDiffView,PluginInspectionView,Workflow)}
 
 
