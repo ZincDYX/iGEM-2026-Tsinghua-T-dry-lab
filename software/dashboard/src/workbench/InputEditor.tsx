@@ -127,7 +127,7 @@ export function InputEditor({
           <input
             aria-label="Import data file"
             type="file"
-            accept=".fasta,.fa,.faa,.gb,.gbk,.genbank,.json,.csv,.tsv,.png,.jpg,.jpeg,.pdb,.cif,.mmcif"
+            accept=".fasta,.fa,.faa,.gb,.gbk,.genbank,.json,.csv,.tsv,.png,.jpg,.jpeg,.pdb,.cif,.mmcif,.bcif"
             disabled={busy}
             onChange={(e) => {
               const file = e.target.files?.[0];

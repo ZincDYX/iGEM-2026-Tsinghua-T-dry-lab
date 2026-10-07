@@ -409,7 +409,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.post("/imports/display-file")
     async def display_import(request: Request, filename: str):
         extension = Path(filename).suffix.lower()
-        if extension not in {".png", ".jpg", ".jpeg", ".pdb", ".cif", ".mmcif"}:
+        if extension not in {".png", ".jpg", ".jpeg", ".pdb", ".cif", ".mmcif", ".bcif"}:
             raise WorkflowError("unsupported_display_import")
         raw = bytearray()
         async for chunk in request.stream():

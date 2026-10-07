@@ -314,7 +314,7 @@ class DisplayResources:
             extension = path.suffix.lower()
             if extension in {".png", ".jpg", ".jpeg"}:
                 items.append(ImageResource(**common, media_type="image/png" if extension == ".png" else "image/jpeg"))
-            elif extension in {".pdb", ".cif", ".mmcif"}:
+            elif extension in {".pdb", ".cif", ".mmcif", ".bcif"}:
                 items.append(StructureResource(**common, format="pdb" if extension == ".pdb" else "mmcif"))
             elif extension == ".json":
                 if isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
@@ -468,17 +468,11 @@ class DisplayResources:
                     lines.append(line[:80])
             preview = "\n".join(lines).encode()
             format_name = "pdb"
-        elif extension in {".cif", ".mmcif"}:
+        elif extension in {".cif", ".mmcif", ".bcif"}:
             from Bio.PDB.MMCIF2Dict import MMCIF2Dict
-            data = MMCIF2Dict(str(path))
-            atom_fields = {
-                "group_PDB", "id", "type_symbol", "label_atom_id", "label_alt_id",
-                "label_comp_id", "label_asym_id", "label_entity_id", "label_seq_id",
-                "pdbx_PDB_ins_code", "Cartn_x", "Cartn_y", "Cartn_z", "occupancy",
-                "B_iso_or_equiv", "pdbx_formal_charge", "auth_seq_id", "auth_comp_id",
-                "auth_asym_id", "auth_atom_id", "pdbx_PDB_model_num",
-            }
-            fields = [k for k in data if k.startswith("_atom_site.") and k[11:] in atom_fields]
+            from .bcif_display import ATOM_FIELDS, binary_atom_columns
+            data = binary_atom_columns(path, 200_000) if extension == ".bcif" else MMCIF2Dict(str(path))
+            fields = [k for k in data if k.startswith("_atom_site.") and k[11:] in ATOM_FIELDS]
             if not fields:
                 raise WorkflowError("invalid_structure_source")
             count = len(data[fields[0]])

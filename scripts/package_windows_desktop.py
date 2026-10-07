@@ -60,7 +60,7 @@ def main():
     pth.write_text('\n'.join([stdlib_zip,'.','Lib','Lib/site-packages','Lib/site-packages/win32',
         'Lib/site-packages/win32/lib','Lib/site-packages/Pythonwin','../resources/src','import site','']),encoding='utf-8')
     checked = subprocess.run([str(python/'python.exe'),'-c',
-        'import json,sqlite3,importlib.metadata; import fastapi,uvicorn,numpy,scipy,mcp,PIL.Image,igem_drylab.software.desktop_backend; print(json.dumps({d.metadata["Name"]:d.version for d in importlib.metadata.distributions()}))'],
+        'import json,sqlite3,importlib.metadata; import fastapi,uvicorn,numpy,scipy,mcp,PIL.Image,ihm.format_bcif,msgpack,igem_drylab.software.desktop_backend; print(json.dumps({d.metadata["Name"]:d.version for d in importlib.metadata.distributions()}))'],
         cwd=root,capture_output=True,text=True,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','OPENBLAS_NUM_THREADS':'1','OMP_NUM_THREADS':'1','MKL_NUM_THREADS':'1'})
     (root/'runtime-import-check.log').write_text(checked.stdout+'\n'+checked.stderr,encoding='utf-8')
     if checked.returncode: raise RuntimeError('runtime import check failed; see '+str(root/'runtime-import-check.log'))
