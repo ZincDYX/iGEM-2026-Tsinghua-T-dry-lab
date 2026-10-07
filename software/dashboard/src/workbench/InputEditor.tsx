@@ -3,6 +3,7 @@ import type {
   ProjectView,
   ImportView,
   ScientificPreviewView,
+  ScientificPrecheckView,
 } from "../contracts/generated";
 import { object, parsePublic } from "../contracts/validation";
 import * as client from "./client";
@@ -18,6 +19,10 @@ export function InputEditor({
   onChange,
   onEditing,
   action,
+  inputCheck,
+  checkStale,
+  onCheck,
+  onLocate,
 }: {
   project: ProjectView;
   busy: boolean;
@@ -25,6 +30,10 @@ export function InputEditor({
   onChange: (value: ProjectView) => void;
   onEditing: (value: boolean) => void;
   action: (job: () => Promise<unknown>) => Promise<void>;
+  inputCheck?: ScientificPrecheckView;
+  checkStale: boolean;
+  onCheck: () => void;
+  onLocate: (field: string) => void;
 }) {
   const [kind, setKind] = useState("auto");
   const [preview, setPreview] = useState<ImportView>();
@@ -110,9 +119,12 @@ export function InputEditor({
           {preview && (
             <div>
               <p>
-                Preview: {preview.kind} · {preview.file.name} · SHA-256{" "}
-                {preview.file.sha256}
+                Preview: {preview.kind} · {preview.file.name}
               </p>
+              <details>
+                <summary>File provenance</summary>
+                <p>SHA-256 {preview.file.sha256}</p>
+              </details>
               <LazyJson value={preview.patch} />
               <button
                 disabled={busy}
@@ -347,10 +359,11 @@ export function InputEditor({
         />
       </fieldset>
       <PrecheckPanel
-        key={`${project.id}:${project.revision}`}
-        projectId={project.id}
-        revision={project.revision}
-        disabled={busy || dirty || editing}
+        result={inputCheck}
+        stale={checkStale}
+        disabled={busy || editing}
+        onCheck={onCheck}
+        onLocate={onLocate}
       />
       <button disabled={busy || editing} onClick={startEditor}>
         Advanced: Edit public project JSON

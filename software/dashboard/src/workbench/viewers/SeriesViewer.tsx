@@ -108,6 +108,7 @@ export function SeriesViewer({
       </p>
       <Suspense fallback={<p>Loading local plot renderer…</p>}>
         <Plot
+          dataIdentity={`${projectId}:${fileId}:${page.identity.source_sha256}:${selected}:${offset}`}
           data={data}
           title="Recorded time course"
           xLabel={`Time (${page.time_unit})`}

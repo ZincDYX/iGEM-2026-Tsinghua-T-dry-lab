@@ -60,6 +60,7 @@ function run(
       attempts: attempt,
       tool_id: "project." + id,
       label: id,
+      scientific_summary: null,
     })),
     artifacts: ["m1", "m4"].map((node_id) => ({
       id: node_id + hash,

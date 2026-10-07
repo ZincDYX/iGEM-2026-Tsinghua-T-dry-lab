@@ -69,6 +69,7 @@ export function ScanViewer({
             no scan, selection, interpolation or ranking is performed here.
           </p>
           <PlotViewer
+            dataIdentity={`${projectId}:${fileId}:${page.identity.source_sha256}:${offset}`}
             data={data}
             title="F3 registered finite scan points"
             xLabel="Declared SH3/PDZ site ratio (1)"

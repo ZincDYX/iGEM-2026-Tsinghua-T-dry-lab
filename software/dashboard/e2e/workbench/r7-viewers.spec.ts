@@ -31,7 +31,7 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   const coordinateSource = pdb.replace(
     "ENDMDL",
     Array.from(
-      { length: 105 },
+      { length: 119 },
       (_, i) =>
         `ATOM  ${String(i + 4).padStart(5)}  CA  ALA B${String(i + 20).padStart(4)}      11.000  12.000  13.000  1.00 99.00           C`,
     ).join("\n") + "\nENDMDL",
@@ -91,6 +91,18 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
           pocket: true,
           plddt: 42,
         },
+        ...Array.from({ length: 119 }, (_, i) => ({
+          residue: {
+            model: "7",
+            chain: "B",
+            residue_number: String(i + 20),
+            insertion_code: "",
+            residue_name: "ALA",
+          },
+          region: "enzyme",
+          plddt: 42,
+          pocket: i === 118,
+        })),
       ],
     }),
   );
@@ -190,6 +202,25 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   await expect(page.getByLabel("Current project")).toHaveValue(
     "viewer-parser-sample",
   );
+  const checks: string[] = [];
+  page.on("response", (response) => {
+    if (response.url().endsWith("/precheck")) checks.push(response.url());
+  });
+  await page
+    .getByRole("button", { name: "Check inputs", exact: true })
+    .first()
+    .click();
+  await expect(page.getByLabel("Input check issues")).toHaveCount(2);
+  const returnedCheck = await request.get(
+    `${backend}/projects/viewer-parser-sample/precheck`,
+    { headers },
+  );
+  expect(returnedCheck.status()).toBe(200);
+  const expectedIssues = (await returnedCheck.json()).missing.length;
+  expect(expectedIssues).toBeGreaterThan(0);
+  for (const issues of await page.getByLabel("Input check issues").all())
+    await expect(issues.locator("tbody tr")).toHaveCount(expectedIssues);
+  expect(checks).toHaveLength(1);
   await page
     .getByRole("button", { name: "▸ Plots / Images / Structures / Tables" })
     .click();
@@ -209,6 +240,9 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
     .getByLabel("Recorded time course")
     .locator(".js-plotly-plot");
   await expect(chart).toBeVisible();
+  await expect(
+    page.getByRole("tab", { name: "Resources", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
   expect(
     await chart.evaluate((element) =>
       (
@@ -222,10 +256,38 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
       .locator("..")
       .locator("table"),
   ).toContainText("Not recorded");
+  await chart.scrollIntoViewIfNeeded();
+  const zoom = await chart.locator(".nsewdrag").boundingBox();
+  expect(zoom).not.toBeNull();
+  await page.mouse.move(
+    zoom!.x + zoom!.width * 0.2,
+    zoom!.y + zoom!.height * 0.2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    zoom!.x + zoom!.width * 0.75,
+    zoom!.y + zoom!.height * 0.75,
+    { steps: 12 },
+  );
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      chart.evaluate(
+        (e) =>
+          (e as any)._fullLayout.xaxis.range[1] -
+          (e as any)._fullLayout.xaxis.range[0],
+      ),
+    )
+    .toBeLessThan(2);
+  const range = await chart.evaluate((e) => (e as any)._fullLayout.xaxis.range);
+  expect(range[1] - range[0]).toBeLessThan(2);
   await page.locator(".workspace-content tbody tr").last().click();
   await expect(
     page.locator(".workspace-content tbody tr").last(),
   ).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => chart.evaluate((e) => (e as any)._fullLayout.xaxis.range))
+    .toEqual(range);
   await page
     .getByRole("button", { name: "coordinate-sample.pdb · structure" })
     .click();
@@ -260,7 +322,7 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
       throw Error("Actual viewer context missing");
     });
   // Source model 7 is internally numbered 1; selecting must still target only
-  // the three atoms of chain B / residue 12 / insertion A, not all 108 atoms.
+  // the three atoms of chain B / residue 12 / insertion A, not all 122 atoms.
   expect(selectedAtoms).toBe(3);
   await page
     .getByLabel("Representation", { exact: true })
@@ -303,6 +365,41 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   // Independent fixed RGB oracle for the declared 0..100 linear display scale
   // at the registered value 42. Gray or the B-factor 99 cannot pass.
   expect(actualColor).toBe(0x994c62);
+  async function allColors() {
+    return page.locator(".structure-canvas").evaluate((element) => {
+      const node = element as any;
+      for (
+        let fiber =
+          node[Object.keys(node).find((k) => k.startsWith("__reactFiber$"))!];
+        fiber;
+        fiber = fiber.return
+      )
+        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+          const owned = hook.memoizedState?.current;
+          if (!owned?.managers?.structure) continue;
+          return owned.managers.structure.hierarchy.current.structures.flatMap(
+            (s: any) =>
+              s.components.flatMap((c: any) => {
+                const structure = c.cell.obj.data;
+                return structure.units.flatMap((unit: any) =>
+                  Array.from(unit.elements).map((element) =>
+                    c.representations[0].cell.obj.data.repr.theme.color.color({
+                      kind: "element-location",
+                      structure,
+                      unit,
+                      element,
+                    }),
+                  ),
+                );
+              }),
+          );
+        }
+      throw Error("Actual viewer missing");
+    });
+  }
+  const colorsBefore = await allColors();
+  expect(colorsBefore).toHaveLength(122);
+  expect(new Set(colorsBefore)).toEqual(new Set([0x994c62]));
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page
     .getByLabel("Representation", { exact: true })
@@ -319,6 +416,7 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   await expect(
     page.getByRole("button", { name: "12A", exact: true }),
   ).toHaveCount(0);
+  expect(await allColors()).toEqual(colorsBefore);
   await page.getByRole("button", { name: "Previous residues" }).click();
   await expect(
     page.getByRole("button", { name: "12A", exact: true }),

@@ -9,6 +9,7 @@ import type {
   ProposalView,
   RunListView,
   RuntimeInfoView,
+  ScientificPrecheckView,
 } from "../contracts/generated";
 import type { ExecutionPolicy } from "../contracts/Workflow.generated";
 import type { Goal } from "../types";
@@ -20,6 +21,7 @@ import { useRun } from "./useRun";
 import { PlanPanel, dependencies, statusLabel } from "./PlanPanel";
 import { AgentPanel } from "./AgentPanel";
 import { InputEditor } from "./InputEditor";
+import { InputIssues } from "./PrecheckPanel";
 import { SelectedResult } from "./SelectedResult";
 import { ComparisonPanel } from "./ComparisonPanel";
 import { InputDiffPanel } from "./InputDiffPanel";
@@ -50,6 +52,9 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "plan", label: "Workflow" },
   { id: "results", label: "Results" },
   { id: "compare", label: "Compare" },
+  { id: "artifacts", label: "Resources" },
+  { id: "settings", label: "Settings" },
+  { id: "plugins", label: "Plugins" },
 ];
 function Tabs({
   values,
@@ -130,10 +135,7 @@ export function WorkspaceShell() {
   const goalChosen = useRef(false);
   const planController = usePlanController();
   const planGeneration = planController.generation;
-  const [checkedRevision, setCheckedRevision] = useState<{
-    projectId: string;
-    revision: number;
-  }>();
+  const [inputCheck, setInputCheck] = useState<ScientificPrecheckView>();
   const currentProject = project.draft;
   const selected =
     selection && selection.kind !== "resource" ? selection.nodeId : "";
@@ -402,33 +404,57 @@ export function WorkspaceShell() {
     proposal,
     run,
     runSelected,
-    checkedRevision !== undefined &&
-      checkedRevision.projectId === currentProject?.id &&
-      checkedRevision.revision === currentProject?.revision &&
-      !project.dirty,
+    inputCheck?.project_id === currentProject?.id &&
+      inputCheck?.project_revision === currentProject?.revision &&
+      !project.dirty &&
+      !editing,
   );
   async function runPrimary() {
     if (primary === "resume") return control("resume");
     if (primary === "start") return start();
     if (primary === "review") return propose();
-    if (primary === "check")
-      await action(async () => {
-        const stamp = project.generation.current;
-        const saved = await project.save();
-        if (saved && stamp === project.generation.current) {
-          const result = await client.precheck(saved.id);
-          if (stamp !== project.generation.current) return;
-          setCheckedRevision({ projectId: saved.id, revision: saved.revision });
-          setTab("inputs");
-          setBottom("problems");
-          setBottomOpen(true);
-          setError(
-            result.missing.length
-              ? "Partial input check: required evidence is missing. Open Check inputs for stage-specific issues."
-              : "Partial input check complete; final scientific gates and review still apply.",
-          );
-        }
-      });
+    if (primary === "check") return checkInputs();
+  }
+  async function checkInputs() {
+    if (editing) return;
+    await action(async () => {
+      const stamp = project.generation.current;
+      const saved = await project.save();
+      if (saved && stamp === project.generation.current) {
+        const result = await client.precheck(saved.id);
+        if (stamp !== project.generation.current) return;
+        if (
+          result.project_id !== saved.id ||
+          result.project_revision !== saved.revision
+        )
+          throw new Error("Input revision changed; save and check again.");
+        setInputCheck(result);
+        setTab("inputs");
+        setBottom("problems");
+        setBottomOpen(true);
+      }
+    });
+  }
+  const projectCheck =
+    inputCheck?.project_id === currentProject?.id ? inputCheck : undefined;
+  const checkStale =
+    project.dirty ||
+    editing ||
+    projectCheck?.project_revision !== currentProject?.revision;
+  function openInput(field: string) {
+    setTab("inputs");
+    const section = field.includes("construct")
+      ? "constructs"
+      : field.includes("fasta")
+        ? "sequences"
+        : field.includes("condition")
+          ? "conditions"
+          : "evidence";
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`input-${section}`)
+        ?.scrollIntoView({ block: "start" }),
+    );
   }
   const style = {
     "--left-width": `${layout.left}px`,
@@ -773,6 +799,10 @@ export function WorkspaceShell() {
                   invalidate();
                 }}
                 action={action}
+                inputCheck={projectCheck}
+                checkStale={checkStale}
+                onCheck={() => void checkInputs()}
+                onLocate={openInput}
               />
             </div>
           ) : tab === "inputs" ? (
@@ -788,6 +818,7 @@ export function WorkspaceShell() {
                     : "Select a proposal or a frozen run."}
               </p>
               <PlanPanel
+                inputCheck={checkStale ? undefined : projectCheck}
                 workflow={workflow ?? undefined}
                 run={selection?.kind === "proposal-node" ? undefined : run}
                 selected={selected}
@@ -1236,6 +1267,11 @@ export function WorkspaceShell() {
           )}
           {bottom === "problems" && (
             <>
+              <InputIssues
+                result={projectCheck}
+                stale={checkStale}
+                onLocate={openInput}
+              />
               <p>
                 {error ||
                   "No current public  API error; not proof of evidence completeness."}

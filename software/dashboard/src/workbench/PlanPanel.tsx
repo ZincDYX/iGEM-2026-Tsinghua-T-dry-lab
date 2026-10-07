@@ -1,4 +1,8 @@
-import type { Workflow, RunSummaryView } from "../contracts/generated";
+import type {
+  Workflow,
+  RunSummaryView,
+  ScientificPrecheckView,
+} from "../contracts/generated";
 import type { WorkflowNode } from "../contracts/Workflow.generated";
 
 import { jobLabels } from "./messages.en";
@@ -22,11 +26,13 @@ export function PlanPanel({
   run,
   selected,
   onSelect,
+  inputCheck,
 }: {
   workflow?: Workflow;
   run?: RunSummaryView;
   selected: string;
   onSelect: (id: string) => void;
+  inputCheck?: ScientificPrecheckView;
 }) {
   if (!workflow)
     return (
@@ -52,6 +58,8 @@ export function PlanPanel({
             <th>Actual tool</th>
             <th>Dependencies</th>
             <th>Job status</th>
+            <th>Scientific record status</th>
+            <th>Saved input check</th>
             <th>Checkpoints</th>
           </tr>
         </thead>
@@ -76,6 +84,47 @@ export function PlanPanel({
                 <td>{dependencies(node).join(" → ") || "No dependencies"}</td>
                 <td>{statusLabel(state?.status ?? "pending")}</td>
                 <td>
+                  {state?.scientific_summary ? (
+                    <>
+                      <p>
+                        {state.scientific_summary.record_count &&
+                        (state.scientific_summary.evidence_ready_count <
+                          state.scientific_summary.record_count ||
+                          state.scientific_summary.missing_input_count > 0)
+                          ? "Missing evidence"
+                          : "Recorded scientific state"}
+                      </p>
+                      <p>
+                        {Object.entries(state.scientific_summary.status_counts)
+                          .map(([status, count]) => `${status}: ${count}`)
+                          .join("; ") || "No scientific records"}
+                      </p>
+                      <p>
+                        Numerically solved:{" "}
+                        {state.scientific_summary.numerically_solved_count}/
+                        {state.scientific_summary.record_count} · Evidence
+                        ready: {state.scientific_summary.evidence_ready_count}/
+                        {state.scientific_summary.record_count} · Missing
+                        inputs: {state.scientific_summary.missing_input_count}
+                      </p>
+                      <details>
+                        <summary>Scope</summary>
+                        {state.scientific_summary.claim_scope ?? "Not recorded"}
+                      </details>
+                    </>
+                  ) : (
+                    "Not recorded"
+                  )}
+                </td>
+                <td>
+                  {inputCheck &&
+                  (!run ||
+                    run.project_revision === inputCheck.project_revision) &&
+                  node.tool_id.startsWith("project.m")
+                    ? `${inputCheck.missing.filter((item) => node.tool_id === `project.${item.stage}`).length} known omissions · r${inputCheck.project_revision}`
+                    : "Not checked for these inputs"}
+                </td>
+                <td>
                   {[
                     policy.checkpoints_before.includes(node.id)
                       ? "before"
@@ -90,19 +139,22 @@ export function PlanPanel({
           })}
         </tbody>
       </table>
-      <p className="subtle">
-        Scope:{" "}
-        {workflow.execution_policy.target_node_id ?? "All planned stages"} ·
-        Stages per dispatch:{" "}
-        {workflow.execution_policy.max_completed_stages ??
-          "Continuous within authorized scope"}{" "}
-        · Tool call budget: {workflow.execution_policy.max_tool_calls} · Hard
-        memory limit: unsupported.
-      </p>
-      <p className="subtle">
-        Existing scientific gates block missing evidence. Job completion is not
-        numerical validity, evidence approval or experimental validation.
-      </p>
+      <details className="subtle">
+        <summary>Execution scope and scientific boundaries</summary>
+        <p>
+          Scope:{" "}
+          {workflow.execution_policy.target_node_id ?? "All planned stages"} ·
+          Stages per dispatch:{" "}
+          {workflow.execution_policy.max_completed_stages ??
+            "Continuous within authorized scope"}{" "}
+          · Tool call budget: {workflow.execution_policy.max_tool_calls} · Hard
+          memory limit: unsupported.
+        </p>
+        <p>
+          Existing scientific gates block missing evidence. Job completion is
+          not numerical validity, evidence approval or experimental validation.
+        </p>
+      </details>
     </section>
   );
 }

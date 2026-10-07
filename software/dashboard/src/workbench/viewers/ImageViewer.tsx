@@ -28,10 +28,12 @@ export function ImageViewer({
         owned = URL.createObjectURL(blob);
         setUrl(owned);
       })
-      .catch(() => {
+      .catch((reason) => {
         if (!controller.signal.aborted)
           setError(
-            "Image preview unavailable. Check format, decode budget and authorization.",
+            reason instanceof Error
+              ? reason.message
+              : "Image preview could not be decoded.",
           );
       });
     return () => {

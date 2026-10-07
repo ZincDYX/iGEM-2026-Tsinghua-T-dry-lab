@@ -96,9 +96,18 @@ export function ResourceBrowser({
           .filter((r) => kind === "all" || kind === r.kind)
           .map((r) => (
             <li key={r.identity.file_id}>
-              <button onClick={() => setSelected(r.identity.file_id)}>
+              <button
+                disabled={r.status !== "available"}
+                onClick={() => setSelected(r.identity.file_id)}
+              >
                 {r.name} · {r.kind}
               </button>
+              {r.status !== "available" && (
+                <span>
+                  {" "}
+                  {r.status} · {r.error_code}
+                </span>
+              )}
             </li>
           ))}
       </ul>
@@ -129,9 +138,16 @@ export function ResourceBrowser({
         >
           <h3>{resource.name}</h3>
           <p>
-            {resource.identity.file_id} · SHA-256{" "}
-            {resource.identity.source_sha256} · {resource.byte_count} bytes
+            {resource.logical_relative_path ?? resource.name} ·{" "}
+            {resource.byte_count} bytes · Verified
           </p>
+          <details>
+            <summary>Provenance</summary>
+            <p>
+              {resource.identity.file_id} · SHA-256{" "}
+              {resource.identity.source_sha256}
+            </p>
+          </details>
           <Suspense fallback={<p>Loading local viewer…</p>}>
             {resource.kind === "image" ? (
               <Image projectId={projectId} fileId={selected} />

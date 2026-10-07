@@ -21,6 +21,13 @@ import { requestBinary, requestJson } from "../../api";
 import { parsePublic } from "../../contracts/validation";
 import type { StructurePage } from "../../contracts/generated";
 
+const residueKey = (
+  model: string,
+  chain: string,
+  number: string,
+  insertion: string,
+) => JSON.stringify([model, chain, number, insertion]);
+
 export function StructureViewer({
   fileId,
   projectId,
@@ -36,6 +43,10 @@ export function StructureViewer({
     new Map<string, { source: string; number: number }>(),
   );
   const [meta, setMeta] = useState<StructurePage>();
+  const annotationIndex = useRef(
+    new Map<string, StructurePage["annotations"][number]>(),
+  );
+  const [annotationsReady, setAnnotationsReady] = useState(false);
   const [error, setError] = useState("");
   const [chain, setChain] = useState("");
   const [offset, setOffset] = useState(0);
@@ -54,13 +65,15 @@ export function StructureViewer({
     setError("");
     setMeta(undefined);
     setReady(false);
+    setAnnotationsReady(false);
+    annotationIndex.current.clear();
     setReference(undefined);
     setOverlayIndex(undefined);
     overlayRoot.current = undefined;
     setOffset(0);
     sourceModels.current.clear();
     async function load() {
-      const [raw, response] = await Promise.all([
+      const [raw, response, annotationRaw] = await Promise.all([
         requestJson(
           `/files/${encodeURIComponent(fileId)}/structure-metadata?project_id=${encodeURIComponent(projectId)}&limit=100`,
           undefined,
@@ -71,8 +84,14 @@ export function StructureViewer({
           undefined,
           controller.signal,
         ),
+        requestJson(
+          `/files/${encodeURIComponent(fileId)}/structure-annotations?project_id=${encodeURIComponent(projectId)}`,
+          undefined,
+          controller.signal,
+        ),
       ]);
       const metadata = parsePublic("StructurePage", raw);
+      const fullAnnotations = parsePublic("StructurePage", annotationRaw);
       const data = await response.text();
       if (controller.signal.aborted || !root.current) return;
       if (
@@ -80,6 +99,27 @@ export function StructureViewer({
         metadata.identity.project_id !== projectId
       )
         throw new Error("Wrong resource identity.");
+      if (
+        fullAnnotations.identity.project_id !== projectId ||
+        fullAnnotations.identity.file_id !== fileId ||
+        fullAnnotations.identity.source_sha256 !==
+          metadata.identity.source_sha256 ||
+        fullAnnotations.annotation_sha256 !== metadata.annotation_sha256 ||
+        fullAnnotations.annotation_scope !== "full_model"
+      )
+        throw new Error("Annotation source identity changed.");
+      annotationIndex.current = new Map(
+        fullAnnotations.annotations.map((a) => [
+          residueKey(
+            a.residue.model,
+            a.residue.chain,
+            a.residue.residue_number,
+            a.residue.insertion_code,
+          ),
+          a,
+        ]),
+      );
+      setAnnotationsReady(true);
       setMeta(metadata);
       setChain(metadata.chains[0] ?? "");
       const spec = DefaultPluginUISpec();
@@ -192,9 +232,6 @@ export function StructureViewer({
       });
     return () => controller.abort();
   }, [offset, fileId, projectId]);
-  useEffect(() => {
-    if (ready && colorMode !== "chain") void display(representation, colorMode);
-  }, [meta?.offset]);
   function focus(
     chainId: string,
     residue?: string,
@@ -260,19 +297,16 @@ export function StructureViewer({
         props: {},
         granularity: "group",
         description:
-          "Registered annotations on the current residue page only; unknown residues gray.",
+          "Verified full-model annotation index; unknown residues gray.",
         color: (location) => {
           if (!StructureElement.Location.is(location)) return Color(0xaaaaaa);
-          const annotation = meta.annotations.find(
-            (a) =>
-              a.residue.model ===
-                sourceModels.current.get(location.unit.model.id)?.source &&
-              a.residue.chain ===
-                StructureProperties.chain.auth_asym_id(location) &&
-              a.residue.residue_number ===
-                String(StructureProperties.residue.auth_seq_id(location)) &&
-              a.residue.insertion_code ===
-                StructureProperties.residue.pdbx_PDB_ins_code(location),
+          const annotation = annotationIndex.current.get(
+            residueKey(
+              sourceModels.current.get(location.unit.model.id)?.source ?? "",
+              StructureProperties.chain.auth_asym_id(location),
+              String(StructureProperties.residue.auth_seq_id(location)),
+              StructureProperties.residue.pdbx_PDB_ins_code(location),
+            ),
           );
           if (
             mode === "confidence" &&
@@ -290,8 +324,8 @@ export function StructureViewer({
         },
       });
       const theme: ColorTheme.Provider<{}> = {
-        name: "fusionlab-registered-page",
-        label: "Registered annotation page",
+        name: "fusionlab-registered-model",
+        label: "Registered full-model annotations",
         category: ColorTheme.Category.Validation,
         factory,
         getParams: () => ({}),
@@ -452,7 +486,7 @@ export function StructureViewer({
         Representation
         <select
           aria-label="Representation"
-          disabled={!ready || displayBusy}
+          disabled={!ready || !annotationsReady || displayBusy}
           value={representation}
           onChange={(e) => void display(e.target.value, colorMode)}
         >
@@ -477,7 +511,7 @@ export function StructureViewer({
               "source_registered_not_scientific_approval"
             }
           >
-            Registered parts (current page)
+            Registered parts (full model)
           </option>
           <option
             value="confidence"
@@ -486,7 +520,7 @@ export function StructureViewer({
               "source_registered_not_scientific_approval"
             }
           >
-            Registered pLDDT (current page)
+            Registered pLDDT (full model)
           </option>
         </select>
       </label>
@@ -497,10 +531,13 @@ export function StructureViewer({
         Reset structure view
       </button>
       <p>
-        Display {representation} / {colorMode}. Annotation coloring uses the
-        currently loaded residue page; other residues are gray. Continuous pLDDT
-        color scale: red 0 to blue 100, no approval thresholds. Rotate/zoom/pan
-        in the viewport; no new geometry or alignment is computed.
+        Display {representation} / {colorMode}.{" "}
+        {annotationsReady
+          ? "Full-model annotations loaded; unannotated residues are gray."
+          : "Loading full-model annotations…"}{" "}
+        Continuous pLDDT color scale: red 0 to blue 100, no approval thresholds.
+        Rotate/zoom/pan in the viewport; no new geometry or alignment is
+        computed.
       </p>
       <div
         ref={root}
@@ -529,7 +566,10 @@ export function StructureViewer({
         ))}
       {meta && (
         <>
-          <p>Source SHA-256 {meta.identity.source_sha256}</p>
+          <details>
+            <summary>Coordinate provenance</summary>
+            <p>Source SHA-256 {meta.identity.source_sha256}</p>
+          </details>
           <p>
             Mapping: {meta.mapping_status}; pocket: {meta.pocket_status};
             confidence: {meta.confidence_status}.
@@ -585,8 +625,13 @@ export function StructureViewer({
             </thead>
             <tbody>
               {meta.residues.map((r, i) => {
-                const annotation = meta.annotations.find(
-                  (a) => JSON.stringify(a.residue) === JSON.stringify(r),
+                const annotation = annotationIndex.current.get(
+                  residueKey(
+                    r.model,
+                    r.chain,
+                    r.residue_number,
+                    r.insertion_code,
+                  ),
                 );
                 return (
                   <tr key={i}>
