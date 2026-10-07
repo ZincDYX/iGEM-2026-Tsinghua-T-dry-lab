@@ -4,9 +4,10 @@ Reproducible dry-lab software for the Tsinghua-T iGEM 2026 glabridin project. Th
 
 > **Project status:** ready for a small, human-reviewed `evidence.jsonl` pilot. The default workflow is deterministic and local. Optional external tools and LLM APIs are explicit opt-ins.
 
-FusionLab workbench: [r9 review fixes and remaining scope](docs/r9_review_fixes_20261007.md).
-This is the first correctness batch, not completion of the import/forms/whole-range
-visualization work or a new Windows-native release.
+FusionLab workbench: [r10 import/forms, whole-range viewers and Windows acceptance](docs/r10_review_fixes_20261007.md).
+Ordinary display imports, explicit column mapping, typed scientific-project editing,
+whole-range multi-series plots and recorded scan 3D/heatmaps are implemented.
+See the acceptance record for remaining configuration, native and biological limits.
 
 ## What this repository does
 
@@ -253,7 +254,7 @@ The exact M2 confidence gates, formulas, provenance requirements, and non-claims
 
 The generic fusion-protein/self-assembly workspace is separate from the Galatea reference equations. It provides project import/confirmation, bounded DAG fan-out/map/gather, SQLite run recovery, versioned trusted-plugin environments, real stdio MCP discovery/calls, Scientist/Developer views, and a thin Tauri desktop shell. It does **not** treat composition calculations as proof of assembly or LLPS.
 
-See [platform design and startup](docs/fusionlab_platform.md), [plugin protocol and examples](docs/plugin_development.md), and [deployment/license audit](docs/external_tool_deployment.md). The current external-tool budget is **15 GB (decimal)**. The Windows source-first desktop shell requires an installed Python environment; a standalone bundled installer and untrusted-code sandbox are not provided.
+See [platform design and startup](docs/fusionlab_platform.md), [plugin protocol and examples](docs/plugin_development.md), and [deployment/license audit](docs/external_tool_deployment.md). The current external-tool budget is **15 GB (decimal)**. The released Windows portable directory bundles Python and the local backend; the source-first shell still requires a Python environment. A signed installer and untrusted-code permission sandbox are not provided.
 
 ## validation host publication reproduction
 
