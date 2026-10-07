@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .models import Contract, WorkflowError
 
@@ -124,6 +124,40 @@ class ResidueAnnotation(Contract):
     plddt: float | None = Field(default=None, ge=0, le=100)
 
 
+class RegisteredOverlay(Contract):
+    reference_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_reference: str = Field(min_length=1)
+    source_tool: str = Field(min_length=1)
+    source_tool_version: str = Field(min_length=1)
+    direction: Literal["reference_to_target"]
+    coordinate_unit: Literal["angstrom"]
+    convention: Literal["row_major_column_vector_xyz1"]
+    matrix: list[list[float]]
+
+    @model_validator(mode="after")
+    def rigid_transform(self):
+        if len(self.matrix) != 4 or any(len(row) != 4 for row in self.matrix):
+            raise ValueError("overlay_requires_4x4_matrix")
+        if self.matrix[3] != [0, 0, 0, 1]:
+            raise ValueError("overlay_requires_affine_last_row")
+        rotation = self.matrix[:3]
+        for i in range(3):
+            for j in range(3):
+                expected = 1 if i == j else 0
+                if abs(sum(rotation[k][i]*rotation[k][j] for k in range(3))-expected) > 1e-6:
+                    raise ValueError("overlay_requires_rigid_rotation_no_scaling")
+        a, b, c = (row[:3] for row in rotation)
+        det = a[0]*(b[1]*c[2]-b[2]*c[1])-a[1]*(b[0]*c[2]-b[2]*c[0])+a[2]*(b[0]*c[1]-b[1]*c[0])
+        if abs(det-1) > 1e-6:
+            raise ValueError("overlay_requires_proper_rotation_no_reflection")
+        return self
+
+
+class DisplayOverlay(RegisteredOverlay):
+    reference_file_id: str
+    target_sha256: str
+
+
 class StructureAnnotations(Contract):
     schema_version: Literal["structure-display-annotations-v1"]
     target_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -134,6 +168,7 @@ class StructureAnnotations(Contract):
     fusion_sequence_id: str | None = None
     confidence_semantics: Literal["plddt", "not_provided"]
     rows: list[ResidueAnnotation] = Field(max_length=100_000)
+    overlays: list[RegisteredOverlay] = Field(default_factory=list, max_length=16)
 
 
 class DisplayResidueAnnotation(ResidueAnnotation):
@@ -161,6 +196,7 @@ class StructurePage(Contract):
     fusion_sequence_file_sha256: str | None = None
     fusion_sequence_id: str | None = None
     annotations: list[DisplayResidueAnnotation] = Field(default_factory=list)
+    overlays: list[DisplayOverlay] = Field(default_factory=list)
     preview_policy: Literal["atom_coordinates_only_original_sealed"] = "atom_coordinates_only_original_sealed"
 
 
@@ -453,6 +489,11 @@ class DisplayResources:
             self.source(project_id, candidate["id"])
             annotation = StructureAnnotations.model_validate(raw)
             self.boundary.check(annotation.model_dump(mode="json"))
+            for overlay in annotation.overlays:
+                reference_id = references.get(overlay.reference_sha256)
+                if reference_id is None:
+                    raise WorkflowError("structure_reference_not_authorized", status_code=403)
+                self.structure(project_id, reference_id, limit=1, annotations=False)
             fusion_sequence = None
             if any(r.full_fusion_position is not None for r in annotation.rows):
                 from Bio import SeqIO
@@ -499,6 +540,9 @@ class DisplayResources:
             raise WorkflowError("ambiguous_structure_annotations")
         if found:
             candidate, annotation = found[0]
+            meta["overlays"] = [DisplayOverlay(**overlay.model_dump(),
+                reference_file_id=references[overlay.reference_sha256],
+                target_sha256=identity.source_sha256).model_dump(mode="json") for overlay in annotation.overlays]
             paged = {tuple(r[k] for k in ("model", "chain", "residue_number", "insertion_code")) for r in meta["residues"]}
             meta.update(annotation_file_id=candidate["id"], annotation_sha256=candidate["hash"], annotation_source_reference=annotation.source_reference,
                 fusion_sequence_file_id=references.get(annotation.fusion_sequence_file_sha256) if fusion_sequence is not None else None,

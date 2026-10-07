@@ -37,6 +37,9 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
     ).join("\n") + "\nENDMDL",
   );
   files["structures/coordinate-sample.pdb"] = Buffer.from(coordinateSource);
+  files["structures/reference-overlay-sample.pdb"] = Buffer.from(
+    "ATOM      1  CA  GLY C  13       1.000   2.000   3.000  1.00 99.00           C\nEND\n",
+  );
   const sourceHash = createHash("sha256")
     .update(coordinateSource)
     .digest("hex");
@@ -55,6 +58,25 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
         .update(files["data/fusion-mapping.fasta"])
         .digest("hex"),
       confidence_semantics: "plddt",
+      overlays: [
+        {
+          reference_sha256: createHash("sha256")
+            .update(files["structures/reference-overlay-sample.pdb"])
+            .digest("hex"),
+          source_reference: "SOFTWARE_ORIGINAL_TRANSFORM",
+          source_tool: "PARSER_SAMPLE",
+          source_tool_version: "1",
+          direction: "reference_to_target",
+          coordinate_unit: "angstrom",
+          convention: "row_major_column_vector_xyz1",
+          matrix: [
+            [0, -1, 0, 5],
+            [1, 0, 0, 6],
+            [0, 0, 1, 7],
+            [0, 0, 0, 1],
+          ],
+        },
+      ],
       rows: [
         {
           residue: {
@@ -301,7 +323,59 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   await expect(
     page.getByRole("button", { name: "12A", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Show registered reference overlay 1",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Hide registered reference overlay 1",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  const overlayPositions = await page
+    .locator(".structure-canvas")
+    .evaluate((element) => {
+      const node = element as any;
+      let fiber =
+        node[Object.keys(node).find((key) => key.startsWith("__reactFiber$"))!];
+      for (; fiber; fiber = fiber.return)
+        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+          const owned = hook.memoizedState?.current;
+          if (!owned?.managers?.structure) continue;
+          return owned.managers.structure.hierarchy.current.structures.flatMap(
+            (s: any) =>
+              s.components.flatMap((c: any) => {
+                const structure = c.cell.obj.data;
+                return structure.units
+                  .filter((unit: any) => unit.elements.length === 1)
+                  .map((unit: any) =>
+                    Array.from(
+                      unit.conformation.position(unit.elements[0], [0, 0, 0]),
+                    ),
+                  );
+              }),
+          );
+        }
+      throw Error("Actual viewer context missing");
+    });
+  expect(overlayPositions).toContainEqual([3, 7, 10]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("offline-structure.png") });
+  await page
+    .getByRole("button", {
+      name: "Hide registered reference overlay 1",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Show registered reference overlay 1",
+      exact: true,
+    }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "pixel-sample.png · image" }).click();
   await expect(page.locator(".structure-canvas canvas")).toHaveCount(0);
   csp.push(

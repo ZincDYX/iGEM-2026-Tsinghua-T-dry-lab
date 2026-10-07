@@ -41,6 +41,17 @@ export type Clash = boolean;
 export type Plddt = number | null;
 export type ReferenceFileId = string | null;
 export type Annotations = DisplayResidueAnnotation[];
+export type ReferenceSha2561 = string;
+export type SourceReference = string;
+export type SourceTool = string;
+export type SourceToolVersion = string;
+export type Direction = "reference_to_target";
+export type CoordinateUnit = "angstrom";
+export type Convention = "row_major_column_vector_xyz1";
+export type Matrix = number[][];
+export type ReferenceFileId1 = string;
+export type TargetSha256 = string;
+export type Overlays = DisplayOverlay[];
 export type PreviewPolicy = "atom_coordinates_only_original_sealed";
 
 export interface StructurePage {
@@ -64,6 +75,7 @@ export interface StructurePage {
   fusion_sequence_file_sha256: FusionSequenceFileSha256;
   fusion_sequence_id: FusionSequenceId;
   annotations: Annotations;
+  overlays: Overlays;
   preview_policy: PreviewPolicy;
 }
 export interface ResourceIdentity {
@@ -95,4 +107,16 @@ export interface DisplayResidueAnnotation {
   clash: Clash;
   plddt: Plddt;
   reference_file_id: ReferenceFileId;
+}
+export interface DisplayOverlay {
+  reference_sha256: ReferenceSha2561;
+  source_reference: SourceReference;
+  source_tool: SourceTool;
+  source_tool_version: SourceToolVersion;
+  direction: Direction;
+  coordinate_unit: CoordinateUnit;
+  convention: Convention;
+  matrix: Matrix;
+  reference_file_id: ReferenceFileId1;
+  target_sha256: TargetSha256;
 }

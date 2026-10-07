@@ -1031,6 +1031,78 @@
   },
   "StructurePage": {
     "$defs": {
+      "DisplayOverlay": {
+        "additionalProperties": false,
+        "properties": {
+          "reference_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reference Sha256",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "source_tool": {
+            "minLength": 1,
+            "title": "Source Tool",
+            "type": "string"
+          },
+          "source_tool_version": {
+            "minLength": 1,
+            "title": "Source Tool Version",
+            "type": "string"
+          },
+          "direction": {
+            "const": "reference_to_target",
+            "title": "Direction",
+            "type": "string"
+          },
+          "coordinate_unit": {
+            "const": "angstrom",
+            "title": "Coordinate Unit",
+            "type": "string"
+          },
+          "convention": {
+            "const": "row_major_column_vector_xyz1",
+            "title": "Convention",
+            "type": "string"
+          },
+          "matrix": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Matrix",
+            "type": "array"
+          },
+          "reference_file_id": {
+            "title": "Reference File Id",
+            "type": "string"
+          },
+          "target_sha256": {
+            "title": "Target Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference_sha256",
+          "source_reference",
+          "source_tool",
+          "source_tool_version",
+          "direction",
+          "coordinate_unit",
+          "convention",
+          "matrix",
+          "reference_file_id",
+          "target_sha256"
+        ],
+        "title": "DisplayOverlay",
+        "type": "object"
+      },
       "DisplayResidueAnnotation": {
         "additionalProperties": false,
         "properties": {
@@ -1469,6 +1541,13 @@
         "title": "Annotations",
         "type": "array"
       },
+      "overlays": {
+        "items": {
+          "$ref": "#/$defs/DisplayOverlay"
+        },
+        "title": "Overlays",
+        "type": "array"
+      },
       "preview_policy": {
         "const": "atom_coordinates_only_original_sealed",
         "default": "atom_coordinates_only_original_sealed",
@@ -1497,6 +1576,7 @@
       "fusion_sequence_file_sha256",
       "fusion_sequence_id",
       "annotations",
+      "overlays",
       "preview_policy"
     ],
     "title": "StructurePage",

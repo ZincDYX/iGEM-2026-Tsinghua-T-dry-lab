@@ -13,6 +13,8 @@ import {
 } from "molstar/lib/mol-model/structure";
 import { ColorTheme } from "molstar/lib/mol-theme/color";
 import { Color } from "molstar/lib/mol-util/color";
+import { Mat4 } from "molstar/lib/mol-math/linear-algebra";
+import { StateTransforms } from "molstar/lib/mol-plugin-state/transforms";
 import { applyStructureInteractivity } from "molstar/lib/extensions/plugin/interactivity";
 import "molstar/build/viewer/molstar.css";
 import { requestBinary, requestJson } from "../../api";
@@ -42,6 +44,9 @@ export function StructureViewer({
   const [representation, setRepresentation] = useState("cartoon");
   const [colorMode, setColorMode] = useState("chain");
   const [reference, setReference] = useState<string>();
+  const overlayRoot = useRef<string>(undefined);
+  const overlayRequest = useRef<AbortController>(undefined);
+  const [overlayIndex, setOverlayIndex] = useState<number>();
   useEffect(() => {
     const controller = new AbortController();
     let owned: PluginUIContext | undefined;
@@ -50,6 +55,8 @@ export function StructureViewer({
     setMeta(undefined);
     setReady(false);
     setReference(undefined);
+    setOverlayIndex(undefined);
+    overlayRoot.current = undefined;
     setOffset(0);
     sourceModels.current.clear();
     async function load() {
@@ -154,6 +161,7 @@ export function StructureViewer({
     });
     return () => {
       controller.abort();
+      overlayRequest.current?.abort();
       reactRoot?.unmount();
       owned?.dispose();
       plugin.current = undefined;
@@ -295,8 +303,12 @@ export function StructureViewer({
       if (registry.has(previousTheme)) registry.remove(previousTheme);
       registry.add(theme);
       const components =
-        owned.managers.structure.hierarchy.current.structures.flatMap(
-          (s) => s.components,
+        owned.managers.structure.hierarchy.current.structures.flatMap((s) =>
+          s.cell.obj?.data.models.some((model) =>
+            sourceModels.current.has(model.id),
+          )
+            ? s.components
+            : [],
         );
       await owned.managers.structure.component.removeRepresentations(
         components,
@@ -324,6 +336,106 @@ export function StructureViewer({
         setError(
           "Representation unavailable; registered values and originals are retained.",
         );
+    } finally {
+      if (plugin.current === owned) setDisplayBusy(false);
+    }
+  }
+  async function showOverlay(index?: number) {
+    const owned = plugin.current;
+    if (!owned || !meta) return;
+    overlayRequest.current?.abort();
+    const controller = new AbortController();
+    overlayRequest.current = controller;
+    setDisplayBusy(true);
+    try {
+      if (overlayRoot.current) {
+        await owned.build().delete(overlayRoot.current).commit();
+        overlayRoot.current = undefined;
+        setOverlayIndex(undefined);
+      }
+      if (index === undefined) return;
+      const overlay = meta.overlays[index];
+      const query = `?project_id=${encodeURIComponent(projectId)}`;
+      const [raw, response] = await Promise.all([
+        requestJson(
+          `/files/${encodeURIComponent(overlay.reference_file_id)}/structure-metadata${query}&limit=1`,
+          undefined,
+          controller.signal,
+        ),
+        requestBinary(
+          `/files/${encodeURIComponent(overlay.reference_file_id)}/structure-preview${query}`,
+          undefined,
+          controller.signal,
+        ),
+      ]);
+      const referenceMeta = parsePublic("StructurePage", raw);
+      if (
+        referenceMeta.identity.file_id !== overlay.reference_file_id ||
+        referenceMeta.identity.project_id !== projectId ||
+        referenceMeta.identity.source_sha256 !== overlay.reference_sha256 ||
+        overlay.target_sha256 !== meta.identity.source_sha256
+      )
+        throw Error("Overlay source identity changed.");
+      const data = await response.text();
+      if (controller.signal.aborted || plugin.current !== owned) return;
+      const source = await owned.builders.data.rawData({
+        data,
+        label: "Registered reference overlay",
+      });
+      overlayRoot.current = source.ref;
+      const trajectory = await owned.builders.structure.parseTrajectory(
+        source,
+        referenceMeta.format as "pdb" | "mmcif",
+      );
+      if (trajectory.obj?.data.frameCount !== referenceMeta.models.length)
+        throw Error("Overlay model identity changed.");
+      const matrix = Mat4.transpose(
+        Mat4(),
+        Mat4.fromArray(Mat4(), overlay.matrix.flat(), 0),
+      );
+      for (let frame = 0; frame < referenceMeta.models.length; frame++) {
+        const model = await owned.builders.structure.createModel(trajectory, {
+          modelIndex: frame,
+        });
+        const structure = await owned.builders.structure.createStructure(model);
+        const transformed = await owned
+          .build()
+          .to(structure)
+          .apply(StateTransforms.Model.TransformStructureConformation, {
+            transform: {
+              name: "matrix",
+              params: { data: matrix, transpose: false },
+            },
+          })
+          .commit();
+        const component =
+          await owned.builders.structure.tryCreateComponentStatic(
+            transformed,
+            "all",
+          );
+        if (component)
+          await owned.builders.structure.representation.addRepresentation(
+            component,
+            {
+              type: "ball-and-stick",
+              color: "uniform",
+              colorParams: { value: Color(0xe69f00) },
+            },
+          );
+      }
+      if (controller.signal.aborted || plugin.current !== owned) return;
+      setOverlayIndex(index);
+      owned.managers.camera.reset();
+    } catch {
+      if (plugin.current === owned && !controller.signal.aborted) {
+        if (overlayRoot.current)
+          await owned.build().delete(overlayRoot.current).commit();
+        overlayRoot.current = undefined;
+        setOverlayIndex(undefined);
+        setError(
+          "Registered overlay unavailable; independent coordinates and sources remain available.",
+        );
+      }
     } finally {
       if (plugin.current === owned) setDisplayBusy(false);
     }
@@ -395,6 +507,26 @@ export function StructureViewer({
         className="structure-canvas"
         style={{ position: "relative", height: 420 }}
       />
+      {allowReference &&
+        meta?.overlays.map((overlay, index) => (
+          <section key={index}>
+            <button
+              disabled={!ready || displayBusy}
+              onClick={() =>
+                void showOverlay(overlayIndex === index ? undefined : index)
+              }
+            >
+              {overlayIndex === index ? "Hide" : "Show"} registered reference
+              overlay {index + 1}
+            </button>
+            <p>
+              Source {overlay.source_reference} · {overlay.source_tool}{" "}
+              {overlay.source_tool_version} · reference SHA-256{" "}
+              {overlay.reference_sha256}. Original reference-to-target matrix
+              (angstrom); no alignment fitted here.
+            </p>
+          </section>
+        ))}
       {meta && (
         <>
           <p>Source SHA-256 {meta.identity.source_sha256}</p>

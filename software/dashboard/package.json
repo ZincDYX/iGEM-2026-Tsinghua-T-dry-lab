@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.1",
-    "ajv": "8.17.1",
+    "ajv": "8.18.0",
     "ajv-formats": "3.0.1",
     "fflate": "0.8.3",
     "molstar": "5.13.0",
@@ -38,5 +38,11 @@
     "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
+  },
+  "pnpm": {
+    "overrides": {
+      "ajv": "8.18.0",
+      "source-map-js": "1.2.2"
+    }
   }
 }

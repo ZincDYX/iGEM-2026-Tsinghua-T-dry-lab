@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R8_REGISTERED_STRUCTURE_TRANSFORM
+    group: integration
+    test_nodeids: ["tests/test_r8_registered_overlay.py::test_original_overlay_matrix_is_source_bound_authorized_and_not_recomputed", "tests/test_r8_registered_overlay.py::test_overlay_rejects_scale_reflection_and_projective_matrices"]
+    requirement_or_formula_source: r6 original transform source and offline authorized structure overlay
+    oracle_type: fixed_original_4x4_rotation_translation_and_independent_grants
+    fixture_scope: software_parser_no_alignment_no_model_validation
+    formula_version: original_registered_matrix_only
+    units: angstrom
+    tolerance_basis: exact_matrix_bytes_source_SHA_and_grant_rejection
+    expected_faults: [recomputed_alignment, hash_only_reference_grant, reflection_or_scale_as_rigid_overlay, tampered_reference_used]
   - risk_id: R8_COORDINATE_CACHE_IDENTITY
     group: integration
     test_nodeids: ["tests/test_r8_coordinate_cache.py::test_coordinate_pages_reuse_index_but_never_skip_grants_or_original_hash"]
