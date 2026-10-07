@@ -131,3 +131,13 @@ dated inventory and report, and requires their commit to match the package.
 
 Primary sources: [CycloneDX specification](https://cyclonedx.org/specification/overview/),
 [OSV querybatch](https://google.github.io/osv.dev/post-v1-querybatch/).
+
+## Final acceptance
+
+Runtime `74d74dc`: 605 server tests passed, no failures/skips; 27 frontend
+components and 8 production-build browser tests passed. Real packaged WebView2
+verified exact plots, original overlay, offline CSP, normal exit and saved-project
+restart. Real FreeSASA and Vina jobs passed through stdio MCP on the server.
+Canonical server code now contains 500 verified tracked files and 13 production
+frontend assets; previous runtime was preserved. See the dated
+[release acceptance and unresolved scope](r8_release_acceptance_20261007.md).
