@@ -134,6 +134,20 @@ export function ScientificSettings({
     const next = config as NonNullable<
       ProjectView["scientific_project"]
     >["config"];
+    const previous = new Map(
+      scope!.config.inputs.construct_records.map((r) => [r.construct_id, r]),
+    );
+    // Approval belongs to the recorded declaration, not to an editable row.
+    // Identity lookup preserves approvals when the user only reorders records.
+    next.inputs = {
+      ...next.inputs,
+      construct_records: next.inputs.construct_records.map((record) => {
+        const original = previous.get(record.construct_id);
+        if (original && JSON.stringify(original) === JSON.stringify(record))
+          return record;
+        return { ...record, review_status: "extracted", m1_review: null };
+      }),
+    };
     const refs = new Set<string>();
     function walk(v: unknown) {
       if (typeof v === "string" && v.startsWith("asset:")) refs.add(v);
@@ -164,6 +178,11 @@ export function ScientificSettings({
         Fields use the backend's original scientific contract. Editing does not
         run or approve anything; incompatible combinations are rejected when
         saved.
+      </p>
+      <p>
+        Editing a construct record clears its stored approval and M1 review;
+        unchanged records keep their review. Reapproval uses the review
+        workflow.
       </p>
       {schema && (
         <>
