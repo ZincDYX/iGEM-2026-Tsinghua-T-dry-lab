@@ -81,7 +81,7 @@ Git comparisons against the baseline show no changes to these seven files:
 `scoring/m2_structure.py` (all under `src/igem_drylab/`).
 This proves unchanged committed bytes, not model validity for real cells.
 
-### Remaining review work
+### Work queued at the PR A checkpoint (historical)
 
 PR B: complete English public message catalog, menus/contextual toolbar, input
 object navigation, lifecycle/controller separation and scientific stage views.
@@ -92,7 +92,7 @@ WebView2 CSP/lifecycle acceptance; no missing structures/confidence invented.
 PR E/R6-06: authorized lineage pagination and formal scientific comparability;
 the existing same-project sequence comparison is not claimed to satisfy it.
 
-The current main JS bundle remains about 748 kB (gzip 132 kB), with a build-size
+At that checkpoint the main JS bundle was about 748 kB (gzip 132 kB), with a build-size
 warning. No new external viewer/model dependencies were installed in PR A.
 
 ### Server acceptance follow-up
@@ -142,3 +142,54 @@ source bytes.
 
 Complete model/ER/biological validation, licensed tool jobs, clean-machine
 installation, signing and comprehensive supply-chain security remain unverified.
+
+## PR B–E continuation
+
+Runtime source: `045c88c205f095996072ad8f73249864a6135ede`.
+Implementation records: [resources and comparison](r7_resource_protocol_20261007.md)
+and [workbench and viewers](r7_workbench_views_20261007.md).
+
+- PR B: authored English public/native messages, File/View/Tools/Help menus,
+  contextual commands, maintenance pages outside primary research navigation,
+  real input-section navigation, captured-intent plan controller, and M3/M4
+  views of existing registered values. Typed proposal/run/resource identities,
+  reviewed execution and stale-result boundaries remain enforced.
+- PR C: bounded binary ZIP streaming and exact original downloads, versioned
+  resource/series/structure projections, indexed SQL point pages, pixel-only
+  image previews and grant/hash checks before cache access. Generated public
+  schemas/TypeScript/AJV correspond to these Python contracts.
+- PR D: lazy local Plotly strict/Molstar, authorized images, exact plot/table
+  points, PDB/mmCIF model/chain/insertion identities, source-bound FASTA and
+  reference mappings, explicit confidence, representation and camera controls.
+  No source-free confidence/assembly/alignment or chart-side numerical solver.
+- PR E/R6-06: authorized parent-run/snapshot lineage, batched keyed comparisons,
+  frozen inputs and source identities, existing formal F3 eligibility/condition/
+  unit/context gates and explicit incompatibility reasons. No automatic ranking
+  or approval of changed constructs from a display comparison.
+
+Final unified server regression at this runtime commit: **593 passed / 0 failed /
+0 skipped, 54.11 seconds**, requiring immutable author references and original
+12-source statistics. Scientific numerical/author tests ran only on the server.
+Final component tests: **23 passed**, process exit 0, no unhandled errors.
+Production browser acceptance: **8 passed, 41.2 seconds**. The browser bridge is
+explicitly a software fixture; genuine desktop acceptance is recorded separately.
+Seven scientific-core files remain byte-identical to the review baseline.
+
+The first viewer control checks did not assert actual colors. A supplementary
+native inspection caught a real source-model/viewer-model mismatch: Molstar
+renumbered PDB model 7 to 1, so annotation coloring was gray and the previous
+model-index focus predicate matched nothing. The final mapping uses source frame
+order/identity and the parsed model's actual number. Browser oracles now require
+exactly the three atoms of B/12A and the fixed registered-42 color `#994c62`, not
+just enabled controls or visible metadata. Original files and values are unchanged.
+
+The first residue page could not be revisited after paging; the offset-0 guard
+was fixed and next/previous behavior is asserted. An interim component run had
+23 passing assertions but an unhandled JSDOM `scrollIntoView` error and exit 1;
+only the corrected test-environment run with exit 0 counts as passing acceptance.
+
+Remaining capabilities are tracked explicitly in the [final release acceptance
+record](r7BDE_release_acceptance_20261007.md). Real final-package WebView2 acceptance
+also passed exact structure color/focus, native CSP, software rendering and both
+normal close/restart checks. These PRs do not establish biological validity, full supply-chain
+certification, production remote access or approval of missing scientific inputs.
