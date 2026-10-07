@@ -74,6 +74,11 @@ export function M3View({ record }: { record: Record<string, unknown> }) {
           <Plot
             data={data}
             title="M3 recorded enzyme concentrations"
+            dataIdentity={JSON.stringify([
+              record.candidate_id,
+              record.condition_id,
+              data,
+            ])}
             xLabel="Enzyme identity"
             yLabel="Concentration (uM)"
           />
@@ -192,6 +197,11 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
           <Plot
             data={data}
             title="Recorded global sensitivity"
+            dataIdentity={JSON.stringify([
+              record.candidate_id,
+              record.condition_id,
+              data,
+            ])}
             xLabel="Parameter identity"
             yLabel="Spearman coefficient (1)"
           />
@@ -245,6 +255,7 @@ export function SequencePlot({
         <Plot
           data={data}
           title="Recorded sequence feature fractions"
+          dataIdentity={JSON.stringify([features.sequence_sha256, data])}
           xLabel="Feature group"
           yLabel="Fraction (1)"
         />

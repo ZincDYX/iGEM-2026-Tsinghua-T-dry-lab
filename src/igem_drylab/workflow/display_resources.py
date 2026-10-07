@@ -292,9 +292,10 @@ class DisplayResources:
             identity = ResourceIdentity(project_id=project_id, file_id=row["id"], source_sha256=row["hash"])
             identity = identity.model_copy(update=associations.get(row["id"], {}))
             common = dict(identity=identity, name=row["name"], logical_relative_path=row["logical_relative_path"], byte_count=0)
+            data = None
             try:
                 self.source(project_id, row["id"])
-                self.boundary.check_original(path)
+                data = self.boundary.check_original(path)
                 common["byte_count"] = path.stat().st_size
             except WorkflowError as error:
                 if str(error) == "file_project_mismatch":
@@ -308,10 +309,6 @@ class DisplayResources:
             elif extension in {".pdb", ".cif", ".mmcif"}:
                 items.append(StructureResource(**common, format="pdb" if extension == ".pdb" else "mmcif"))
             elif extension == ".json":
-                try:
-                    data = json.loads(path.read_bytes()) if common.get("status", "available") == "available" else None
-                except (OSError, ValueError, UnicodeError):
-                    data = None
                 if isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
                     items.append(SeriesResource(**common))
                 elif isinstance(data, dict) and data.get("schema_version") == "display-series-source-v1":

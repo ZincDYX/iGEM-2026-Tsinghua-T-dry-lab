@@ -20,7 +20,21 @@ SENSITIVE_KEYS = {"api_key", "access_token", "password", "private_key", "secret_
 TEXT_SUFFIXES = {".json", ".csv", ".tsv", ".yaml", ".yml", ".txt", ".ini", ".cfg", ".conf", ".env", ".pem", ".key"}
 
 
-def check_import_content(name: str, raw: bytes) -> None:
+def check_sensitive_keys(value: Any) -> None:
+    pending, visited = [value], set()
+    while pending:
+        item = pending.pop()
+        if isinstance(item, (dict, list)) and id(item) not in visited:
+            visited.add(id(item))
+            if isinstance(item, dict):
+                if any(isinstance(key, str) and key.lower() in SENSITIVE_KEYS for key in item):
+                    raise WorkflowError("disclosure_quarantined", status_code=403)
+                pending.extend(item.values())
+            else:
+                pending.extend(item)
+
+
+def check_import_content(name: str, raw: bytes) -> Any:
     """Reject credential-shaped originals without echoing their names or values."""
     filename = Path(name).name.lower()
     if filename == ".env" or filename.startswith(".env.") or filename in {"id_rsa", "id_ed25519", "credentials", "credentials.json"}:
@@ -44,6 +58,18 @@ def check_import_content(name: str, raw: bytes) -> None:
         header = next(csv.reader(StringIO(text), delimiter="\t" if name.lower().endswith(".tsv") else ","), [])
         if any(column.strip().lower() in SENSITIVE_KEYS for column in header):
             raise WorkflowError("disclosure_quarantined", status_code=403)
+    parsed = None
+    if Path(name).suffix.lower() == ".json":
+        parsed = json.loads(text)
+    elif Path(name).suffix.lower() in {".yaml", ".yml"}:
+        import yaml
+        try:
+            parsed = yaml.safe_load(text)
+        except yaml.YAMLError:
+            raise WorkflowError("invalid_structured_source") from None
+    # Interpret escaped/quoted structured keys too; aliases are visited once.
+    check_sensitive_keys(parsed)
+    return parsed
 
 
 class ArtifactView(Contract):
@@ -104,10 +130,9 @@ class DisclosureBoundary:
         if any(json.dumps(secret, ensure_ascii=False)[1:-1] in encoded for secret in self._private_values):
             raise WorkflowError("disclosure_quarantined", status_code=403)
         if not allow_paths:
+            check_sensitive_keys(value)
             def walk(item):
                 if isinstance(item, dict):
-                    if any(key.lower() in SENSITIVE_KEYS for key in item):
-                        raise WorkflowError("disclosure_quarantined", status_code=403)
                     for child in item.values(): walk(child)
                 elif isinstance(item, list):
                     for child in item: walk(child)
@@ -119,12 +144,13 @@ class DisclosureBoundary:
         if any(secret.encode() in raw for secret in self._private_values):
             raise WorkflowError("disclosure_quarantined",status_code=403)
 
-    def check_original(self, path: Path) -> None:
+    def check_original(self, path: Path) -> Any:
         raw = path.read_bytes()
         self.check_bytes(raw)
-        check_import_content(path.name, raw)
-        if path.suffix.lower() == ".json":
-            self.check(json.loads(raw))
+        parsed = check_import_content(path.name, raw)
+        if parsed is not None:
+            self.check(parsed)
+        return parsed
 
     def diagnostic(self, error: Exception, *, code: str = "operation_failed") -> dict[str, Any]:
         diagnostic_id = str(uuid4())

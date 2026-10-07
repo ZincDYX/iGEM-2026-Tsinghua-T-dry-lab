@@ -14,7 +14,7 @@ export function PlotViewer({
   xLabel: string;
   yLabel: string;
   onPoint?: (index: number) => void;
-  dataIdentity?: string;
+  dataIdentity: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
@@ -81,7 +81,7 @@ export function PlotViewer({
       title: { text: title },
       xaxis: { title: { text: xLabel } },
       yaxis: { title: { text: yLabel } },
-      uirevision: dataIdentity ?? `${title}:${xLabel}:${yLabel}`,
+      uirevision: dataIdentity,
       margin: { t: 45, b: 60, l: 70, r: 20 },
       autosize: true,
     };

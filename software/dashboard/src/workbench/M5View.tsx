@@ -147,6 +147,23 @@ function RegisteredComparison({
     () => (index: number) => setSelected(offset + index),
     [offset, setSelected],
   );
+  // Page values identify this immutable recorded comparison, not its selected
+  // point. Source and prediction changes reset the view; selections do not.
+  const dataIdentity = JSON.stringify([
+    series.experiment_id,
+    series.construct_id,
+    series.condition_id,
+    series.replicate_id,
+    series.raw_data_sha256,
+    metabolite,
+    offset,
+    indices.map((i) => [
+      series.time[i],
+      series.observed[i],
+      series.predicted[i],
+      series.residual_observed_minus_predicted[i],
+    ]),
+  ]);
   return (
     <section aria-label={`M5 recorded comparison ${metabolite}`}>
       <h3>M5 {metabolite}: registered comparison</h3>
@@ -168,6 +185,7 @@ function RegisteredComparison({
       </p>
       <Suspense fallback={<p>Loading local comparison plot…</p>}>
         <Plot
+          dataIdentity={dataIdentity}
           data={data}
           title={`M5 ${metabolite} recorded observations and predictions`}
           xLabel="Recorded time (h)"
@@ -175,6 +193,7 @@ function RegisteredComparison({
           onPoint={onPoint}
         />
         <Plot
+          dataIdentity={dataIdentity}
           data={residuals}
           title={`M5 ${metabolite} recorded residuals`}
           xLabel="Recorded time (h)"

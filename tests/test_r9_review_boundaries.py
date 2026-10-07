@@ -19,6 +19,8 @@ from test_r6_input_boundaries import bundle
     ("extra.csv", "time,api_key,password,ssh_host\n0,FAKE_R9_SECRET,p,h\n"),
     ("extra.tsv", "time\tpassword\n0\tFAKE_R9_SECRET\n"),
     ("extra.yaml", "nested:\n  password: FAKE_R9_SECRET\n"),
+    ("escaped.yaml", 'nested:\n  "pass\\u0077ord": FAKE_R9_SECRET\n'),
+    ("escaped.json", '{"pass\\u0077ord":"FAKE_R9_SECRET"}'),
     ("extra.txt", "api_key=FAKE_R9_SECRET\n"),
     (".env", "UNRELATED=FAKE_R9_SECRET\n"),
     ("id_ed25519", "-----BEGIN OPENSSH PRIVATE KEY-----\nFAKE_R9_SECRET\n"),
@@ -93,7 +95,7 @@ def test_single_frame_images_exif_orientation_pixels_and_original_bytes(tmp_path
 def test_catalog_isolates_missing_tampered_budget_and_credentials(tmp_path):
     _, boundary, display = environment(tmp_path)
     ids = {}
-    for name, text in {"good.csv":"time,value\n0,0\n", "tampered.csv":"time,value\n0,1\n", "missing.csv":"x\n0\n", "large.csv":"x\n0\n", "secret.csv":"api_key\nFAKE_R9_SECRET\n"}.items():
+    for name, text in {"good.csv":"time,value\n0,0\n", "tampered.csv":"time,value\n0,1\n", "missing.csv":"x\n0\n", "large.csv":"x\n0\n", "secret.csv":"api_key\nFAKE_R9_SECRET\n", "invalid.yaml":"[broken"}.items():
         source = tmp_path / name
         source.write_text(text)
         ids[name] = boundary.asset(source, project_id="a")["id"]
@@ -107,8 +109,26 @@ def test_catalog_isolates_missing_tampered_budget_and_credentials(tmp_path):
     assert items["missing.csv"]["error_code"] == "display_source_missing"
     assert items["large.csv"]["error_code"] == "display_source_budget_exceeded"
     assert items["secret.csv"]["status"] == "quarantined"
-    assert len(items) == 5 and "FAKE_R9_SECRET" not in json.dumps(items)
+    assert items["invalid.yaml"]["status"] == "unavailable"
+    assert len(items) == 6 and "FAKE_R9_SECRET" not in json.dumps(items)
     assert display.catalog("b")["items"] == []
+
+
+@pytest.mark.parametrize("case,code", [("damaged","invalid_image_source"),("multiple_frames","image_decode_budget_exceeded"),("pixel_budget","image_decode_budget_exceeded")])
+def test_image_failure_preserves_original_and_never_returns_preview(tmp_path, case, code):
+    _, boundary, display = environment(tmp_path)
+    source = tmp_path / "bad.png"
+    if case == "damaged":
+        source.write_bytes(b"not an image")
+    elif case == "multiple_frames":
+        Image.new("RGB", (2,3), "red").save(source, save_all=True, append_images=[Image.new("RGB", (2,3), "blue")])
+    else:
+        Image.new("RGB", (4001,4000), "white").save(source)
+    original = source.read_bytes()
+    asset = boundary.asset(source, project_id="a")
+    with pytest.raises(WorkflowError, match=code):
+        display.image("a", asset["id"])
+    assert source.read_bytes() == original
 
 
 def test_full_annotation_index_independent_of_residue_page_and_cached_identity(tmp_path, monkeypatch):
