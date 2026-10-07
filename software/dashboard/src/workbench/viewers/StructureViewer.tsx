@@ -652,6 +652,7 @@ export function StructureViewer({
           <label>
             Chain
             <select
+              aria-label="Chain"
               value={chain}
               onChange={(e) => {
                 setChain(e.target.value);
