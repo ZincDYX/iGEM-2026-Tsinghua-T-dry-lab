@@ -256,6 +256,8 @@ The generic fusion-protein/self-assembly workspace is separate from the Galatea 
 
 See [platform design and startup](docs/fusionlab_platform.md), [plugin protocol and examples](docs/plugin_development.md), and [deployment/license audit](docs/external_tool_deployment.md). The current external-tool budget is **15 GB (decimal)**. The released Windows portable directory bundles Python and the local backend; the source-first shell still requires a Python environment. A signed installer and untrusted-code permission sandbox are not provided.
 
+The [r11 completion and desktop verification record](docs/r11_review_fixes_20261008.md) covers explicit no-YAML setup, the original-contract field editor, exact M5 ranges/recorded artifacts, native directory import and public FTH1 display. It also lists the unresolved licensing, biological data, sandbox, remote authentication and clean-machine verification boundaries.
+
 ## validation host publication reproduction
 
 The complete current source tree and the glabridin numerical/source-data reproduction run on `validation host`, not the workstation. See [server deployment, verified results and unresolved paper inconsistencies](docs/glabridin_reference_reproduction.md). The immutable author RHS is kept separate from the production condensate model; reproducing its published curves does not validate all biological assumptions or reproduce the whole paper's omics/MD/wet-lab work.
