@@ -41,6 +41,7 @@ export type Clash = boolean;
 export type Plddt = number | null;
 export type ReferenceFileId = string | null;
 export type Annotations = DisplayResidueAnnotation[];
+export type AnnotationScope = "residue_page" | "full_model";
 export type ReferenceSha2561 = string;
 export type SourceReference = string;
 export type SourceTool = string;
@@ -75,6 +76,7 @@ export interface StructurePage {
   fusion_sequence_file_sha256: FusionSequenceFileSha256;
   fusion_sequence_id: FusionSequenceId;
   annotations: Annotations;
+  annotation_scope: AnnotationScope;
   overlays: Overlays;
   preview_policy: PreviewPolicy;
 }

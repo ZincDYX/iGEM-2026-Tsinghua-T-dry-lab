@@ -263,6 +263,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         if not isinstance(raw, dict) or raw.get("tools"):
             raise WorkflowError("runtime_settings_not_scientific_input")
         for target, content in contents.items():
+            from igem_drylab.workflow.disclosure import check_import_content
+            check_import_content(target.name, content.encode())
+            boundary.check_bytes(content.encode())
+        for target, content in contents.items():
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
         with store.connection() as db:
@@ -273,6 +277,17 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     async def scientific_binary(request: Request, config_filename: str):
         from igem_drylab.workflow.binary_import import receive_bundle
         def publish(root, filename, hashes):
+            # Validate every extra before granting it any public identity. Failed
+            # originals remain private in the owned quarantine, never masked.
+            try:
+                for name in hashes:
+                    boundary.check_original(root / name)
+            except WorkflowError as error:
+                if str(error) == "disclosure_quarantined":
+                    quarantine = data_dir / "quarantine"
+                    quarantine.mkdir(exist_ok=True)
+                    root.rename(quarantine / root.name)
+                raise
             from igem_drylab.workflow.scientific_project import load_scientific_project
             from igem_drylab.resources import default_config_path
             science = load_scientific_project(root / filename, allowed_roots=(root, default_config_path("m1_feature_definitions.yaml"), default_config_path("m1_rules_v3.yaml")))
@@ -286,7 +301,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
                 result = boundary.scientific(science.model_dump(mode="json"), db=db)
                 # Register extra uploaded display assets without inventing scientific bindings.
                 for logical_name in hashes:
-                    boundary.asset(root / logical_name, db=db)
+                    boundary.asset(root / logical_name, logical_name=logical_name, db=db)
             return {"scientific_project": result, "requires_confirmation": True, "dependency_scope": science.dependency_scope}
         return await receive_bundle(request, data_dir / "imports", config_filename, publish)
 
@@ -324,6 +339,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def structure_metadata(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
         return resources.structure(project_id, file_id, offset, limit)[0]
 
+    @router.get("/files/{file_id}/structure-annotations")
+    def structure_annotations(file_id: str, project_id: str):
+        return resources.structure(project_id, file_id, limit=0, full_annotations=True)[0]
+
     @router.get("/files/{file_id}/structure-preview")
     def structure_preview(file_id: str, project_id: str):
         _, raw = resources.structure(project_id, file_id)
@@ -331,6 +350,9 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.post("/imports/preview")
     def import_preview(request: ImportRequest) -> dict[str, Any]:
+        from igem_drylab.workflow.disclosure import check_import_content
+        check_import_content(request.filename, request.content.encode())
+        boundary.check_bytes(request.content.encode())
         extension = Path(request.filename).suffix.lower()
         digest = sha256(request.content.encode()).hexdigest()
         root = data_dir / "imports"
@@ -378,7 +400,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         else:
             raise ValueError("supported_imports: FASTA, annotated GenBank, pathway JSON, CSV, TSV")
         source.write_bytes(request.content.encode("utf-8"))
-        file = boundary.asset(source, fresh=True)
+        file = boundary.asset(source, fresh=True, logical_name=request.filename)
         for dataset in patch.get("datasets", []):
             dataset["file_id"] = file["id"]
         result = {"kind": kind, "patch": patch, "file": file}
@@ -455,14 +477,13 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.get("/files/{file_id}")
     def science_file(file_id: str,project_id: str):
         with store.connection() as db:
-            row = db.execute("SELECT project_id FROM file_assets WHERE id=?",(file_id,)).fetchone()
+            row = db.execute("SELECT project_id,name FROM file_assets WHERE id=?",(file_id,)).fetchone()
         if row is None or row[0] != project_id:
             raise WorkflowError("file_project_mismatch",status_code=403)
         path = Path(boundary.resolve_asset(file_id,project_id))
         raw = path.read_bytes()
-        boundary.check_bytes(raw)
-        if path.suffix.lower() == ".json": boundary.check(json.loads(raw))
-        return FileResponse(path,filename=path.name,headers={"X-Content-SHA256":sha256(raw).hexdigest()})
+        boundary.check_original(path)
+        return FileResponse(path,filename=row["name"],headers={"X-Content-SHA256":sha256(raw).hexdigest()})
 
     @router.get("/files/{file_id}/data")
     def scientific_data(file_id: str,project_id: str,offset: int = Query(0,ge=0),limit: int = Query(100,ge=1,le=500)):

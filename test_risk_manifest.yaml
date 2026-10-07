@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R9_REVIEW_CORRECTNESS
+    group: platform
+    test_nodeids: ["tests/test_r9_review_boundaries.py::test_extra_credentials_quarantined_before_grants_and_original_export", "tests/test_r9_review_boundaries.py::test_original_names_survive_content_dedup_and_old_schema", "tests/test_r9_review_boundaries.py::test_single_frame_images_exif_orientation_pixels_and_original_bytes", "tests/test_r9_review_boundaries.py::test_catalog_isolates_missing_tampered_budget_and_credentials", "tests/test_r9_review_boundaries.py::test_full_annotation_index_independent_of_residue_page_and_cached_identity"]
+    requirement_or_formula_source: r8 review R8-01 R8-02 R8-03 R8-06 R8-10
+    oracle_type: independent_fake_credentials_formats_original_bytes_orientation_120_residues_and_cache_parser_guard
+    fixture_scope: software_only_no_scientific_solver
+    formula_version: unchanged_scientific_core
+    units: original_coordinate_and_pixel_identity
+    tolerance_basis: exact_original_bytes_identity_status_and_registered_annotations
+    expected_faults: [non_json_secret_export, jpeg_attribute_error, orientation_lost, whole_catalog_failure, page_dependent_model_annotations, original_filename_lost, cached_annotation_grant_bypass]
   - risk_id: R8_RELEASE_INVENTORY
     group: platform
     test_nodeids: ["tests/test_release_inventory.py::test_inventory_projects_versions_licenses_without_private_paths_or_guessing"]

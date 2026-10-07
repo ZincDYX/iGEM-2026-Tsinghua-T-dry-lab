@@ -924,17 +924,55 @@
       "ImageResource": {
         "additionalProperties": false,
         "properties": {
-          "kind": {
-            "const": "image",
-            "default": "image",
-            "title": "Kind",
-            "type": "string"
-          },
           "identity": {
             "$ref": "#/$defs/ResourceIdentity"
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "logical_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Logical Relative Path"
+          },
+          "status": {
+            "default": "available",
+            "enum": [
+              "available",
+              "unavailable",
+              "quarantined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          },
+          "kind": {
+            "const": "image",
+            "default": "image",
+            "title": "Kind",
             "type": "string"
           },
           "media_type": {
@@ -944,10 +982,6 @@
             ],
             "title": "Media Type",
             "type": "string"
-          },
-          "byte_count": {
-            "title": "Byte Count",
-            "type": "integer"
           },
           "role": {
             "const": "registered_source",
@@ -963,11 +997,14 @@
           }
         },
         "required": [
-          "kind",
           "identity",
           "name",
-          "media_type",
           "byte_count",
+          "logical_relative_path",
+          "status",
+          "error_code",
+          "kind",
+          "media_type",
           "role",
           "claim_scope"
         ],
@@ -1092,12 +1129,6 @@
       "ScanResource": {
         "additionalProperties": false,
         "properties": {
-          "kind": {
-            "const": "scan",
-            "default": "scan",
-            "title": "Kind",
-            "type": "string"
-          },
           "identity": {
             "$ref": "#/$defs/ResourceIdentity"
           },
@@ -1108,6 +1139,46 @@
           "byte_count": {
             "title": "Byte Count",
             "type": "integer"
+          },
+          "logical_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Logical Relative Path"
+          },
+          "status": {
+            "default": "available",
+            "enum": [
+              "available",
+              "unavailable",
+              "quarantined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          },
+          "kind": {
+            "const": "scan",
+            "default": "scan",
+            "title": "Kind",
+            "type": "string"
           },
           "result_schema_version": {
             "const": "finite-scaffold-scan-v2",
@@ -1117,10 +1188,13 @@
           }
         },
         "required": [
-          "kind",
           "identity",
           "name",
           "byte_count",
+          "logical_relative_path",
+          "status",
+          "error_code",
+          "kind",
           "result_schema_version"
         ],
         "title": "ScanResource",
@@ -1129,12 +1203,6 @@
       "SeriesResource": {
         "additionalProperties": false,
         "properties": {
-          "kind": {
-            "const": "series",
-            "default": "series",
-            "title": "Kind",
-            "type": "string"
-          },
           "identity": {
             "$ref": "#/$defs/ResourceIdentity"
           },
@@ -1145,6 +1213,46 @@
           "byte_count": {
             "title": "Byte Count",
             "type": "integer"
+          },
+          "logical_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Logical Relative Path"
+          },
+          "status": {
+            "default": "available",
+            "enum": [
+              "available",
+              "unavailable",
+              "quarantined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          },
+          "kind": {
+            "const": "series",
+            "default": "series",
+            "title": "Kind",
+            "type": "string"
           },
           "result_schema_version": {
             "default": "m4-prediction-v2",
@@ -1166,10 +1274,13 @@
           }
         },
         "required": [
-          "kind",
           "identity",
           "name",
           "byte_count",
+          "logical_relative_path",
+          "status",
+          "error_code",
+          "kind",
           "result_schema_version",
           "role"
         ],
@@ -1179,17 +1290,55 @@
       "StructureResource": {
         "additionalProperties": false,
         "properties": {
-          "kind": {
-            "const": "structure",
-            "default": "structure",
-            "title": "Kind",
-            "type": "string"
-          },
           "identity": {
             "$ref": "#/$defs/ResourceIdentity"
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "logical_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Logical Relative Path"
+          },
+          "status": {
+            "default": "available",
+            "enum": [
+              "available",
+              "unavailable",
+              "quarantined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          },
+          "kind": {
+            "const": "structure",
+            "default": "structure",
+            "title": "Kind",
             "type": "string"
           },
           "format": {
@@ -1199,10 +1348,6 @@
             ],
             "title": "Format",
             "type": "string"
-          },
-          "byte_count": {
-            "title": "Byte Count",
-            "type": "integer"
           },
           "role": {
             "const": "registered_source",
@@ -1218,11 +1363,14 @@
           }
         },
         "required": [
-          "kind",
           "identity",
           "name",
-          "format",
           "byte_count",
+          "logical_relative_path",
+          "status",
+          "error_code",
+          "kind",
+          "format",
           "role",
           "claim_scope"
         ],
@@ -1232,12 +1380,6 @@
       "TableResource": {
         "additionalProperties": false,
         "properties": {
-          "kind": {
-            "const": "table",
-            "default": "table",
-            "title": "Kind",
-            "type": "string"
-          },
           "identity": {
             "$ref": "#/$defs/ResourceIdentity"
           },
@@ -1245,13 +1387,53 @@
             "title": "Name",
             "type": "string"
           },
-          "media_type": {
-            "title": "Media Type",
-            "type": "string"
-          },
           "byte_count": {
             "title": "Byte Count",
             "type": "integer"
+          },
+          "logical_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Logical Relative Path"
+          },
+          "status": {
+            "default": "available",
+            "enum": [
+              "available",
+              "unavailable",
+              "quarantined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          },
+          "kind": {
+            "const": "table",
+            "default": "table",
+            "title": "Kind",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
           },
           "role": {
             "const": "registered_source",
@@ -1261,11 +1443,14 @@
           }
         },
         "required": [
-          "kind",
           "identity",
           "name",
-          "media_type",
           "byte_count",
+          "logical_relative_path",
+          "status",
+          "error_code",
+          "kind",
+          "media_type",
           "role"
         ],
         "title": "TableResource",
@@ -2135,6 +2320,15 @@
         "title": "Annotations",
         "type": "array"
       },
+      "annotation_scope": {
+        "default": "residue_page",
+        "enum": [
+          "residue_page",
+          "full_model"
+        ],
+        "title": "Annotation Scope",
+        "type": "string"
+      },
       "overlays": {
         "items": {
           "$ref": "#/$defs/DisplayOverlay"
@@ -2170,6 +2364,7 @@
       "fusion_sequence_file_sha256",
       "fusion_sequence_id",
       "annotations",
+      "annotation_scope",
       "overlays",
       "preview_policy"
     ],

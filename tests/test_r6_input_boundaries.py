@@ -91,4 +91,5 @@ def test_asset_schema_migration_preserves_existing_identity_and_bytes(tmp_path):
     for _ in range(2):
         store = WorkflowStore(path)
         with store.connection() as db:
-            assert tuple(db.execute("SELECT * FROM file_assets").fetchone()) == ("old","p","private-fixture","sha","fixture")
+            assert tuple(db.execute("SELECT id,project_id,path,hash,name FROM file_assets").fetchone()) == ("old","p","private-fixture","sha","fixture")
+            assert db.execute("SELECT logical_relative_path FROM file_assets").fetchone()[0] is None

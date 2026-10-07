@@ -15,6 +15,36 @@ from uuid import uuid4
 from .models import Contract, Project, WorkflowError
 from .sequence_index import SequenceIndexView, sequence_index
 
+# Explicit rules, not a claim that arbitrary secrets can be detected.
+SENSITIVE_KEYS = {"api_key", "access_token", "password", "private_key", "secret_env", "deployment_paths", "repo_path", "ssh_host"}
+TEXT_SUFFIXES = {".json", ".csv", ".tsv", ".yaml", ".yml", ".txt", ".ini", ".cfg", ".conf", ".env", ".pem", ".key"}
+
+
+def check_import_content(name: str, raw: bytes) -> None:
+    """Reject credential-shaped originals without echoing their names or values."""
+    filename = Path(name).name.lower()
+    if filename == ".env" or filename.startswith(".env.") or filename in {"id_rsa", "id_ed25519", "credentials", "credentials.json"}:
+        raise WorkflowError("disclosure_quarantined", status_code=403)
+    if re.search(rb"-----BEGIN (?:OPENSSH |RSA |EC |DSA |ENCRYPTED )?PRIVATE KEY-----", raw):
+        raise WorkflowError("disclosure_quarantined", status_code=403)
+    if Path(name).suffix.lower() not in TEXT_SUFFIXES:
+        return
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise WorkflowError("invalid_text_encoding") from None
+    keys = "|".join(re.escape(key) for key in sorted(SENSITIVE_KEYS))
+    # Structured keys and line-start assignments; never scan scientific prose
+    # for the word 'password' alone. JSON also uses the recursive key gate.
+    if re.search(rf'(?:^|[{{,\n])\s*(?:-\s*)?[\"\']?(?:{keys})[\"\']?\s*[:=]', text, re.I):
+        raise WorkflowError("disclosure_quarantined", status_code=403)
+    if Path(name).suffix.lower() in {".csv", ".tsv"}:
+        import csv
+        from io import StringIO
+        header = next(csv.reader(StringIO(text), delimiter="\t" if name.lower().endswith(".tsv") else ","), [])
+        if any(column.strip().lower() in SENSITIVE_KEYS for column in header):
+            raise WorkflowError("disclosure_quarantined", status_code=403)
+
 
 class ArtifactView(Contract):
     id: str
@@ -76,7 +106,7 @@ class DisclosureBoundary:
         if not allow_paths:
             def walk(item):
                 if isinstance(item, dict):
-                    if any(key.lower() in {"api_key", "access_token", "password", "private_key", "secret_env", "deployment_paths", "repo_path"} for key in item):
+                    if any(key.lower() in SENSITIVE_KEYS for key in item):
                         raise WorkflowError("disclosure_quarantined", status_code=403)
                     for child in item.values(): walk(child)
                 elif isinstance(item, list):
@@ -88,6 +118,13 @@ class DisclosureBoundary:
     def check_bytes(self, raw: bytes) -> None:
         if any(secret.encode() in raw for secret in self._private_values):
             raise WorkflowError("disclosure_quarantined",status_code=403)
+
+    def check_original(self, path: Path) -> None:
+        raw = path.read_bytes()
+        self.check_bytes(raw)
+        check_import_content(path.name, raw)
+        if path.suffix.lower() == ".json":
+            self.check(json.loads(raw))
 
     def diagnostic(self, error: Exception, *, code: str = "operation_failed") -> dict[str, Any]:
         diagnostic_id = str(uuid4())
@@ -106,24 +143,32 @@ class DisclosureBoundary:
             files.append(name)
         return PublicError(code=code,message=message,diagnostic_id=diagnostic_id,field_paths=fields,logical_files=files,actions=actions).model_dump(mode="json")
 
-    def asset(self, path: str | Path, *, project_id: str | None = None, fresh: bool = False, db=None) -> dict[str, str]:
+    def asset(self, path: str | Path, *, project_id: str | None = None, fresh: bool = False, logical_name: str | None = None, db=None) -> dict[str, str]:
         if db is None:
             with self.store.connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                return self.asset(path, project_id=project_id, fresh=fresh, db=connection)
+                return self.asset(path, project_id=project_id, fresh=fresh, logical_name=logical_name, db=connection)
         source = Path(path).resolve()
+        name = Path(logical_name).name if logical_name else source.name
+        if logical_name:
+            if PurePosixPath(logical_name).is_absolute() or PureWindowsPath(logical_name).drive or ".." in PurePosixPath(logical_name).parts or "\\" in logical_name:
+                raise WorkflowError("invalid_upload_identity")
+            self.check(logical_name)
         row = None if fresh else db.execute(
             "SELECT * FROM file_assets WHERE path=? AND (project_id IS ? OR project_id IS NULL) ORDER BY project_id IS NULL LIMIT 1",
             (str(source), project_id)).fetchone()
         if row is None:
             file_id = str(uuid4())
             digest = sha256(source.read_bytes()).hexdigest() if source.is_file() else ""
-            db.execute("INSERT INTO file_assets VALUES(?,?,?,?,?)", (file_id, project_id, str(source), digest, source.name))
+            db.execute("INSERT INTO file_assets(id,project_id,path,hash,name,logical_relative_path) VALUES(?,?,?,?,?,?)", (file_id, project_id, str(source), digest, name, logical_name))
         else:
             file_id, digest = row["id"], row["hash"]
+            name = row["name"]
+            if logical_name:
+                db.execute("UPDATE file_assets SET logical_relative_path=? WHERE id=?", (logical_name, file_id))
             if project_id and row["project_id"] is None:
                 db.execute("UPDATE file_assets SET project_id=? WHERE id=?", (project_id,file_id))
-        return {"id": file_id, "file_id": file_id, "path": "asset:" + file_id, "sha256": digest, "name": source.name}
+        return {"id": file_id, "file_id": file_id, "path": "asset:" + file_id, "sha256": digest, "name": name}
 
     def resolve_asset(self, file_id: str, project_id: str | None = None) -> str:
         file_id = file_id.removeprefix("asset:")

@@ -33,49 +33,43 @@ class ResourceIdentity(Contract):
     condition_id: str | None = None
 
 
-class ImageResource(Contract):
-    kind: Literal["image"] = "image"
+class DisplayResource(Contract):
     identity: ResourceIdentity
     name: str
-    media_type: Literal["image/png", "image/jpeg"]
     byte_count: int
+    logical_relative_path: str | None = None
+    status: Literal["available", "unavailable", "quarantined"] = "available"
+    error_code: str | None = None
+
+
+class ImageResource(DisplayResource):
+    kind: Literal["image"] = "image"
+    media_type: Literal["image/png", "image/jpeg"]
     role: Literal["registered_source"] = "registered_source"
     claim_scope: Literal["display_only_not_experimental_validation"] = "display_only_not_experimental_validation"
 
 
-class StructureResource(Contract):
+class StructureResource(DisplayResource):
     kind: Literal["structure"] = "structure"
-    identity: ResourceIdentity
-    name: str
     format: Literal["pdb", "mmcif"]
-    byte_count: int
     role: Literal["registered_source"] = "registered_source"
     claim_scope: Literal["geometry_only_no_inferred_activity_or_confidence"] = "geometry_only_no_inferred_activity_or_confidence"
 
 
-class SeriesResource(Contract):
+class SeriesResource(DisplayResource):
     kind: Literal["series"] = "series"
-    identity: ResourceIdentity
-    name: str
-    byte_count: int
     result_schema_version: Literal["m4-prediction-v2", "display-series-source-v1"] = "m4-prediction-v2"
     role: Literal["prediction_contract", "declared_source_series"] = "prediction_contract"
 
 
-class ScanResource(Contract):
+class ScanResource(DisplayResource):
     kind: Literal["scan"] = "scan"
-    identity: ResourceIdentity
-    name: str
-    byte_count: int
     result_schema_version: Literal["finite-scaffold-scan-v2"] = "finite-scaffold-scan-v2"
 
 
-class TableResource(Contract):
+class TableResource(DisplayResource):
     kind: Literal["table"] = "table"
-    identity: ResourceIdentity
-    name: str
     media_type: str
-    byte_count: int
     role: Literal["registered_source"] = "registered_source"
 
 
@@ -206,6 +200,7 @@ class StructurePage(Contract):
     fusion_sequence_file_sha256: str | None = None
     fusion_sequence_id: str | None = None
     annotations: list[DisplayResidueAnnotation] = Field(default_factory=list)
+    annotation_scope: Literal["residue_page", "full_model"] = "residue_page"
     overlays: list[DisplayOverlay] = Field(default_factory=list)
     preview_policy: Literal["atom_coordinates_only_original_sealed"] = "atom_coordinates_only_original_sealed"
 
@@ -221,6 +216,9 @@ def digest_file(path: Path) -> str:
 class DisplayResources:
     def __init__(self, store, boundary):
         self.store, self.boundary = store, boundary
+        # Small process-local index of validated display annotations. The sealed
+        # identities and all dependency grants/hashes are still checked on hits.
+        self._annotation_cache = {}
         with store.connection() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS display_series_meta(
@@ -252,7 +250,9 @@ class DisplayResources:
         if row is None:
             raise WorkflowError("file_project_mismatch", status_code=403)
         path = Path(row["path"])
-        if not path.is_file() or path.stat().st_size > MAX_SOURCE_BYTES:
+        if not path.is_file():
+            raise WorkflowError("display_source_missing", status_code=404)
+        if path.stat().st_size > MAX_SOURCE_BYTES:
             raise WorkflowError("display_source_budget_exceeded")
         if digest_file(path) != row["hash"]:
             raise WorkflowError("file_identity_changed", status_code=409)
@@ -287,14 +287,25 @@ class DisplayResources:
             for node in nodes:
                 visit(self.boundary.tree(json.loads(node["output"]), project_id=project_id), node["id"], node["attempts"])
         with self.store.connection() as db:
-            rows = db.execute("SELECT id,name FROM file_assets WHERE project_id=? ORDER BY rowid", (project_id,)).fetchall()
+            rows = db.execute("SELECT * FROM file_assets WHERE project_id=? ORDER BY rowid", (project_id,)).fetchall()
         if allowed is not None:
             rows = [row for row in rows if row["id"] in allowed]
         items = []
         for row in rows[offset:offset + limit]:
-            path, identity, name = self.source(project_id, row["id"])
+            path = Path(row["path"])
+            identity = ResourceIdentity(project_id=project_id, file_id=row["id"], source_sha256=row["hash"])
             identity = identity.model_copy(update=associations.get(row["id"], {}))
-            common = dict(identity=identity, name=name, byte_count=path.stat().st_size)
+            common = dict(identity=identity, name=row["name"], logical_relative_path=row["logical_relative_path"], byte_count=0)
+            try:
+                self.source(project_id, row["id"])
+                self.boundary.check_original(path)
+                common["byte_count"] = path.stat().st_size
+            except WorkflowError as error:
+                if str(error) == "file_project_mismatch":
+                    raise
+                common.update(status="quarantined" if str(error) in {"disclosure_quarantined", "private_path_not_exportable"} else "unavailable", error_code=str(error))
+            except (OSError, ValueError, UnicodeError):
+                common.update(status="unavailable", error_code="invalid_display_source")
             extension = path.suffix.lower()
             if extension in {".png", ".jpg", ".jpeg"}:
                 items.append(ImageResource(**common, media_type="image/png" if extension == ".png" else "image/jpeg"))
@@ -302,8 +313,8 @@ class DisplayResources:
                 items.append(StructureResource(**common, format="pdb" if extension == ".pdb" else "mmcif"))
             elif extension == ".json":
                 try:
-                    data = json.loads(path.read_bytes())
-                except json.JSONDecodeError:
+                    data = json.loads(path.read_bytes()) if common.get("status", "available") == "available" else None
+                except (OSError, ValueError, UnicodeError):
                     data = None
                 if isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
                     items.append(SeriesResource(**common))
@@ -390,7 +401,7 @@ class DisplayResources:
         return result
 
     def image(self, project_id, file_id):
-        from PIL import Image
+        from PIL import Image, ImageOps
         path, _, _ = self.source(project_id, file_id)
         if path.suffix.lower() not in {".png", ".jpg", ".jpeg"}:
             raise WorkflowError("unsupported_image_format")
@@ -399,10 +410,11 @@ class DisplayResources:
                 expected_format = "PNG" if path.suffix.lower() == ".png" else "JPEG"
                 if source.format != expected_format:
                     raise WorkflowError("image_media_type_mismatch")
-                if source.width * source.height > MAX_IMAGE_PIXELS or source.n_frames != 1:
+                if source.width * source.height > MAX_IMAGE_PIXELS or getattr(source, "n_frames", 1) != 1:
                     raise WorkflowError("image_decode_budget_exceeded")
                 # Decode within budget. Export pixels only: EXIF/text/ICC is not public.
-                pixels = source.convert("RGBA")
+                oriented = ImageOps.exif_transpose(source)
+                pixels = Image.frombytes("RGBA", oriented.size, oriented.convert("RGBA").tobytes())
                 target = BytesIO()
                 pixels.save(target, format="PNG")
                 raw = target.getvalue()
@@ -481,7 +493,7 @@ class DisplayResources:
         meta = StructurePage(identity=identity, format=format_name, offset=offset, total=len(values), chains=sorted({r["chain"] for r in values}), models=list(dict.fromkeys(r["model"] for r in values)), residues=values[offset:offset + limit]).model_dump(mode="json")
         return meta, preview
 
-    def structure(self, project_id, file_id, offset=0, limit=100, *, annotations=True):
+    def structure(self, project_id, file_id, offset=0, limit=100, *, annotations=True, full_annotations=False):
         path, identity, _ = self.source(project_id, file_id)
         # Original SHA and project grant have already been checked, even on hits.
         key = (file_id, identity.source_sha256, "coordinate-index-v1")
@@ -509,19 +521,23 @@ class DisplayResources:
             references = {r["hash"]: r["id"] for r in db.execute("SELECT id,hash FROM file_assets WHERE project_id=?", (project_id,))}
         reference_residues = {}
         found = []
-        for candidate in candidates:
+        cache_key = (project_id, file_id, identity.source_sha256, tuple((r["id"], r["hash"]) for r in candidates), tuple(references.items()))
+        cached_annotations = self._annotation_cache.get(cache_key)
+        for candidate in candidates if cached_annotations is None else [item[0] for item in cached_annotations]:
             candidate_path = Path(candidate["path"])
-            if candidate_path.stat().st_size > MAX_SOURCE_BYTES:
+            if not candidate_path.is_file() or candidate_path.stat().st_size > MAX_SOURCE_BYTES:
+                if cached_annotations is not None:
+                    self.source(project_id, candidate["id"])
                 continue
             # A dedicated sidecar schema, never a guessed M2 JSON or B-factor.
             try:
-                raw = json.loads(candidate_path.read_bytes())
-            except json.JSONDecodeError:
+                raw = json.loads(candidate_path.read_bytes()) if cached_annotations is None else {"schema_version": "structure-display-annotations-v1", "target_sha256": identity.source_sha256}
+            except (ValueError, UnicodeError):
                 continue
             if not isinstance(raw, dict) or raw.get("schema_version") != "structure-display-annotations-v1" or raw.get("target_sha256") != identity.source_sha256:
                 continue
             self.source(project_id, candidate["id"])
-            annotation = StructureAnnotations.model_validate(raw)
+            annotation = StructureAnnotations.model_validate(raw) if cached_annotations is None else next(a for c, a in cached_annotations if c["id"] == candidate["id"])
             self.boundary.check(annotation.model_dump(mode="json"))
             for overlay in annotation.overlays:
                 reference_id = references.get(overlay.reference_sha256)
@@ -540,16 +556,19 @@ class DisplayResources:
                     raise WorkflowError("structure_sequence_mapping_identity_mismatch")
                 fusion_sequence = matching[0]
             seen = set()
-            for entry in annotation.rows:
+            dependency_hashes = {r.reference_sha256 for r in annotation.rows if r.reference_residue is not None}
+            for digest in dependency_hashes:
+                if digest not in references:
+                    raise WorkflowError("structure_reference_not_authorized", status_code=403)
+                self.source(project_id, references[digest])
+            with self.store.connection() as db:
+                coordinate_rows = db.execute("SELECT payload FROM display_structure_residues WHERE file_id=? AND hash=? AND schema=?", (file_id, identity.source_sha256, "coordinate-index-v1")).fetchall() if cached_annotations is None else []
+            actual_residues = {tuple(r[k] for k in ("model", "chain", "residue_number", "insertion_code")): r for row in coordinate_rows for r in [json.loads(row[0])]}
+            for entry in annotation.rows if cached_annotations is None else []:
                 residue = entry.residue
                 key = (residue.model, residue.chain, residue.residue_number, residue.insertion_code)
-                with self.store.connection() as db:
-                    actual = db.execute("""SELECT payload FROM display_structure_residues
-                        WHERE file_id=? AND hash=? AND schema=?
-                        AND json_extract(payload,'$.model')=? AND json_extract(payload,'$.chain')=?
-                        AND json_extract(payload,'$.residue_number')=? AND json_extract(payload,'$.insertion_code')=?""",
-                        (file_id, identity.source_sha256, "coordinate-index-v1", *key)).fetchone()
-                if key in seen or actual is None or json.loads(actual[0])["residue_name"] != residue.residue_name:
+                actual = actual_residues.get(key)
+                if key in seen or actual is None or actual["residue_name"] != residue.residue_name:
                     raise WorkflowError("structure_annotation_identity_mismatch")
                 seen.add(key)
                 if entry.full_fusion_position is not None:
@@ -572,6 +591,11 @@ class DisplayResources:
             found.append((candidate, annotation))
         if len(found) > 1:
             raise WorkflowError("ambiguous_structure_annotations")
+        if cached_annotations is None:
+            while self._annotation_cache and (len(self._annotation_cache) >= 16 or sum(len(a.rows) for entries in self._annotation_cache.values() for _, a in entries) + sum(len(a.rows) for _, a in found) > 100_000):
+                self._annotation_cache.pop(next(iter(self._annotation_cache)))
+            self._annotation_cache[cache_key] = found
+        meta["annotation_scope"] = "full_model" if full_annotations else "residue_page"
         if found:
             candidate, annotation = found[0]
             meta["overlays"] = [DisplayOverlay(**overlay.model_dump(),
@@ -583,7 +607,7 @@ class DisplayResources:
                 fusion_sequence_file_sha256=annotation.fusion_sequence_file_sha256 if fusion_sequence is not None else None,
                 fusion_sequence_id=annotation.fusion_sequence_id if fusion_sequence is not None else None,
                 annotation_source_tool=annotation.source_tool, annotation_source_tool_version=annotation.source_tool_version,
-                annotations=[{**r.model_dump(mode="json"), "reference_file_id":references.get(r.reference_sha256) if r.reference_residue else None} for r in annotation.rows if tuple(getattr(r.residue, k) for k in ("model", "chain", "residue_number", "insertion_code")) in paged])
+                annotations=[{**r.model_dump(mode="json"), "reference_file_id":references.get(r.reference_sha256) if r.reference_residue else None} for r in annotation.rows if full_annotations or tuple(getattr(r.residue, k) for k in ("model", "chain", "residue_number", "insertion_code")) in paged])
             registered = "source_registered_not_scientific_approval"
             if any(r.plddt is not None for r in annotation.rows):
                 meta["confidence_status"] = registered

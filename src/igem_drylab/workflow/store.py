@@ -76,6 +76,8 @@ class WorkflowStore:
                     COMMIT;
                 """)
             db.execute("CREATE INDEX IF NOT EXISTS assets_path_project ON file_assets(path,project_id)")
+            if "logical_relative_path" not in {row[1] for row in db.execute("PRAGMA table_info(file_assets)")}:
+                db.execute("ALTER TABLE file_assets ADD COLUMN logical_relative_path TEXT")
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:

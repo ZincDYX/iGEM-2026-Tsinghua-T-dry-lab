@@ -12,6 +12,11 @@ class PublicError(Contract):
 
 
 ERROR_GUIDANCE = {
+    "disclosure_quarantined": ("This original is quarantined by a credential or private-value rule; it has not been exported.", [], ["Review the original locally", "Import a separate scientific file without credentials"]),
+    "invalid_image_source": ("The image could not be decoded in its declared format.", ["files"], ["Check or re-export the original image"]),
+    "image_media_type_mismatch": ("Image bytes do not match the filename format.", ["files"], ["Use the correct PNG or JPEG filename"]),
+    "image_decode_budget_exceeded": ("Image exceeds the pixel budget or has multiple frames.", ["files"], ["Import a single-frame image within the display budget"]),
+    "display_source_missing": ("The registered original is missing.", ["files"], ["Restore or reimport the original"]),
     "iteration_dependency_graph_invalid": (
         "The iteration dependency graph could not be verified. No new project was published.",
         ["scientific_project.evidence_files"],

@@ -90,5 +90,6 @@ async def receive_bundle(request, imports: Path, config_filename: str, publish):
         try:
             return publish(final, config_filename, hashes)
         except BaseException:
-            shutil.rmtree(final)  # Only this newly owned, exact directory.
+            if final.exists():
+                shutil.rmtree(final)  # Only this newly owned, exact directory.
             raise

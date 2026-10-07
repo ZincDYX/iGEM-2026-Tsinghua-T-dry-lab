@@ -3555,7 +3555,7 @@ function validate62(data, { instancePath = "", parentData, parentDataProperty, r
 }
 validate62.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 var ResourcePage = validate71;
-var schema31 = { "additionalProperties": false, "properties": { "kind": { "const": "image", "default": "image", "title": "Kind", "type": "string" }, "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "media_type": { "enum": ["image/png", "image/jpeg"], "title": "Media Type", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "role": { "const": "registered_source", "default": "registered_source", "title": "Role", "type": "string" }, "claim_scope": { "const": "display_only_not_experimental_validation", "default": "display_only_not_experimental_validation", "title": "Claim Scope", "type": "string" } }, "required": ["kind", "identity", "name", "media_type", "byte_count", "role", "claim_scope"], "title": "ImageResource", "type": "object" };
+var schema31 = { "additionalProperties": false, "properties": { "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "logical_relative_path": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Logical Relative Path" }, "status": { "default": "available", "enum": ["available", "unavailable", "quarantined"], "title": "Status", "type": "string" }, "error_code": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Error Code" }, "kind": { "const": "image", "default": "image", "title": "Kind", "type": "string" }, "media_type": { "enum": ["image/png", "image/jpeg"], "title": "Media Type", "type": "string" }, "role": { "const": "registered_source", "default": "registered_source", "title": "Role", "type": "string" }, "claim_scope": { "const": "display_only_not_experimental_validation", "default": "display_only_not_experimental_validation", "title": "Claim Scope", "type": "string" } }, "required": ["identity", "name", "byte_count", "logical_relative_path", "status", "error_code", "kind", "media_type", "role", "claim_scope"], "title": "ImageResource", "type": "object" };
 function validate73(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4025,50 +4025,46 @@ function validate72(data, { instancePath = "", parentData, parentDataProperty, r
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.kind === void 0 && (missing0 = "kind") || data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.media_type === void 0 && (missing0 = "media_type") || data.byte_count === void 0 && (missing0 = "byte_count") || data.role === void 0 && (missing0 = "role") || data.claim_scope === void 0 && (missing0 = "claim_scope")) {
+      if (data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.byte_count === void 0 && (missing0 = "byte_count") || data.logical_relative_path === void 0 && (missing0 = "logical_relative_path") || data.status === void 0 && (missing0 = "status") || data.error_code === void 0 && (missing0 = "error_code") || data.kind === void 0 && (missing0 = "kind") || data.media_type === void 0 && (missing0 = "media_type") || data.role === void 0 && (missing0 = "role") || data.claim_scope === void 0 && (missing0 = "claim_scope")) {
         validate72.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "kind" || key0 === "identity" || key0 === "name" || key0 === "media_type" || key0 === "byte_count" || key0 === "role" || key0 === "claim_scope")) {
+          if (!func1.call(schema31.properties, key0)) {
             validate72.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
           }
         }
         if (_errs1 === errors) {
-          if (data.kind !== void 0) {
-            let data0 = data.kind;
+          if (data.identity !== void 0) {
             const _errs2 = errors;
-            if (typeof data0 !== "string") {
-              validate72.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-              return false;
-            }
-            if ("image" !== data0) {
-              validate72.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "image" }, message: "must be equal to constant" }];
-              return false;
+            if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
+              vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
+              errors = vErrors.length;
             }
             var valid0 = _errs2 === errors;
           } else {
             var valid0 = true;
           }
           if (valid0) {
-            if (data.identity !== void 0) {
-              const _errs4 = errors;
-              if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
-                errors = vErrors.length;
+            if (data.name !== void 0) {
+              const _errs3 = errors;
+              if (typeof data.name !== "string") {
+                validate72.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                return false;
               }
-              var valid0 = _errs4 === errors;
+              var valid0 = _errs3 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.name !== void 0) {
+              if (data.byte_count !== void 0) {
+                let data2 = data.byte_count;
                 const _errs5 = errors;
-                if (typeof data.name !== "string") {
-                  validate72.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                if (!(typeof data2 == "number" && (!(data2 % 1) && !isNaN(data2)))) {
+                  validate72.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
                   return false;
                 }
                 var valid0 = _errs5 === errors;
@@ -4076,64 +4072,195 @@ function validate72(data, { instancePath = "", parentData, parentDataProperty, r
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.media_type !== void 0) {
-                  let data3 = data.media_type;
+                if (data.logical_relative_path !== void 0) {
+                  let data3 = data.logical_relative_path;
                   const _errs7 = errors;
+                  const _errs8 = errors;
+                  let valid1 = false;
+                  const _errs9 = errors;
                   if (typeof data3 !== "string") {
-                    validate72.errors = [{ instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-                    return false;
+                    const err0 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err0];
+                    } else {
+                      vErrors.push(err0);
+                    }
+                    errors++;
                   }
-                  if (!(data3 === "image/png" || data3 === "image/jpeg")) {
-                    validate72.errors = [{ instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/enum", keyword: "enum", params: { allowedValues: schema31.properties.media_type.enum }, message: "must be equal to one of the allowed values" }];
+                  var _valid0 = _errs9 === errors;
+                  valid1 = valid1 || _valid0;
+                  const _errs11 = errors;
+                  if (data3 !== null) {
+                    const err1 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                    if (vErrors === null) {
+                      vErrors = [err1];
+                    } else {
+                      vErrors.push(err1);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs11 === errors;
+                  valid1 = valid1 || _valid0;
+                  if (!valid1) {
+                    const err2 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                    if (vErrors === null) {
+                      vErrors = [err2];
+                    } else {
+                      vErrors.push(err2);
+                    }
+                    errors++;
+                    validate72.errors = vErrors;
                     return false;
+                  } else {
+                    errors = _errs8;
+                    if (vErrors !== null) {
+                      if (_errs8) {
+                        vErrors.length = _errs8;
+                      } else {
+                        vErrors = null;
+                      }
+                    }
                   }
                   var valid0 = _errs7 === errors;
                 } else {
                   var valid0 = true;
                 }
                 if (valid0) {
-                  if (data.byte_count !== void 0) {
-                    let data4 = data.byte_count;
-                    const _errs9 = errors;
-                    if (!(typeof data4 == "number" && (!(data4 % 1) && !isNaN(data4)))) {
-                      validate72.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                  if (data.status !== void 0) {
+                    let data4 = data.status;
+                    const _errs13 = errors;
+                    if (typeof data4 !== "string") {
+                      validate72.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
                       return false;
                     }
-                    var valid0 = _errs9 === errors;
+                    if (!(data4 === "available" || data4 === "unavailable" || data4 === "quarantined")) {
+                      validate72.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema31.properties.status.enum }, message: "must be equal to one of the allowed values" }];
+                      return false;
+                    }
+                    var valid0 = _errs13 === errors;
                   } else {
                     var valid0 = true;
                   }
                   if (valid0) {
-                    if (data.role !== void 0) {
-                      let data5 = data.role;
-                      const _errs11 = errors;
+                    if (data.error_code !== void 0) {
+                      let data5 = data.error_code;
+                      const _errs15 = errors;
+                      const _errs16 = errors;
+                      let valid2 = false;
+                      const _errs17 = errors;
                       if (typeof data5 !== "string") {
-                        validate72.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-                        return false;
+                        const err3 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                        if (vErrors === null) {
+                          vErrors = [err3];
+                        } else {
+                          vErrors.push(err3);
+                        }
+                        errors++;
                       }
-                      if ("registered_source" !== data5) {
-                        validate72.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/const", keyword: "const", params: { allowedValue: "registered_source" }, message: "must be equal to constant" }];
-                        return false;
+                      var _valid1 = _errs17 === errors;
+                      valid2 = valid2 || _valid1;
+                      const _errs19 = errors;
+                      if (data5 !== null) {
+                        const err4 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                        if (vErrors === null) {
+                          vErrors = [err4];
+                        } else {
+                          vErrors.push(err4);
+                        }
+                        errors++;
                       }
-                      var valid0 = _errs11 === errors;
+                      var _valid1 = _errs19 === errors;
+                      valid2 = valid2 || _valid1;
+                      if (!valid2) {
+                        const err5 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                        if (vErrors === null) {
+                          vErrors = [err5];
+                        } else {
+                          vErrors.push(err5);
+                        }
+                        errors++;
+                        validate72.errors = vErrors;
+                        return false;
+                      } else {
+                        errors = _errs16;
+                        if (vErrors !== null) {
+                          if (_errs16) {
+                            vErrors.length = _errs16;
+                          } else {
+                            vErrors = null;
+                          }
+                        }
+                      }
+                      var valid0 = _errs15 === errors;
                     } else {
                       var valid0 = true;
                     }
                     if (valid0) {
-                      if (data.claim_scope !== void 0) {
-                        let data6 = data.claim_scope;
-                        const _errs13 = errors;
+                      if (data.kind !== void 0) {
+                        let data6 = data.kind;
+                        const _errs21 = errors;
                         if (typeof data6 !== "string") {
-                          validate72.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                          validate72.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
                           return false;
                         }
-                        if ("display_only_not_experimental_validation" !== data6) {
-                          validate72.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/const", keyword: "const", params: { allowedValue: "display_only_not_experimental_validation" }, message: "must be equal to constant" }];
+                        if ("image" !== data6) {
+                          validate72.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "image" }, message: "must be equal to constant" }];
                           return false;
                         }
-                        var valid0 = _errs13 === errors;
+                        var valid0 = _errs21 === errors;
                       } else {
                         var valid0 = true;
+                      }
+                      if (valid0) {
+                        if (data.media_type !== void 0) {
+                          let data7 = data.media_type;
+                          const _errs23 = errors;
+                          if (typeof data7 !== "string") {
+                            validate72.errors = [{ instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                            return false;
+                          }
+                          if (!(data7 === "image/png" || data7 === "image/jpeg")) {
+                            validate72.errors = [{ instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/enum", keyword: "enum", params: { allowedValues: schema31.properties.media_type.enum }, message: "must be equal to one of the allowed values" }];
+                            return false;
+                          }
+                          var valid0 = _errs23 === errors;
+                        } else {
+                          var valid0 = true;
+                        }
+                        if (valid0) {
+                          if (data.role !== void 0) {
+                            let data8 = data.role;
+                            const _errs25 = errors;
+                            if (typeof data8 !== "string") {
+                              validate72.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                              return false;
+                            }
+                            if ("registered_source" !== data8) {
+                              validate72.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/const", keyword: "const", params: { allowedValue: "registered_source" }, message: "must be equal to constant" }];
+                              return false;
+                            }
+                            var valid0 = _errs25 === errors;
+                          } else {
+                            var valid0 = true;
+                          }
+                          if (valid0) {
+                            if (data.claim_scope !== void 0) {
+                              let data9 = data.claim_scope;
+                              const _errs27 = errors;
+                              if (typeof data9 !== "string") {
+                                validate72.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                                return false;
+                              }
+                              if ("display_only_not_experimental_validation" !== data9) {
+                                validate72.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/const", keyword: "const", params: { allowedValue: "display_only_not_experimental_validation" }, message: "must be equal to constant" }];
+                                return false;
+                              }
+                              var valid0 = _errs27 === errors;
+                            } else {
+                              var valid0 = true;
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -4152,7 +4279,7 @@ function validate72(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate72.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema33 = { "additionalProperties": false, "properties": { "kind": { "const": "structure", "default": "structure", "title": "Kind", "type": "string" }, "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "format": { "enum": ["pdb", "mmcif"], "title": "Format", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "role": { "const": "registered_source", "default": "registered_source", "title": "Role", "type": "string" }, "claim_scope": { "const": "geometry_only_no_inferred_activity_or_confidence", "default": "geometry_only_no_inferred_activity_or_confidence", "title": "Claim Scope", "type": "string" } }, "required": ["kind", "identity", "name", "format", "byte_count", "role", "claim_scope"], "title": "StructureResource", "type": "object" };
+var schema33 = { "additionalProperties": false, "properties": { "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "logical_relative_path": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Logical Relative Path" }, "status": { "default": "available", "enum": ["available", "unavailable", "quarantined"], "title": "Status", "type": "string" }, "error_code": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Error Code" }, "kind": { "const": "structure", "default": "structure", "title": "Kind", "type": "string" }, "format": { "enum": ["pdb", "mmcif"], "title": "Format", "type": "string" }, "role": { "const": "registered_source", "default": "registered_source", "title": "Role", "type": "string" }, "claim_scope": { "const": "geometry_only_no_inferred_activity_or_confidence", "default": "geometry_only_no_inferred_activity_or_confidence", "title": "Claim Scope", "type": "string" } }, "required": ["identity", "name", "byte_count", "logical_relative_path", "status", "error_code", "kind", "format", "role", "claim_scope"], "title": "StructureResource", "type": "object" };
 function validate76(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4166,50 +4293,46 @@ function validate76(data, { instancePath = "", parentData, parentDataProperty, r
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.kind === void 0 && (missing0 = "kind") || data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.format === void 0 && (missing0 = "format") || data.byte_count === void 0 && (missing0 = "byte_count") || data.role === void 0 && (missing0 = "role") || data.claim_scope === void 0 && (missing0 = "claim_scope")) {
+      if (data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.byte_count === void 0 && (missing0 = "byte_count") || data.logical_relative_path === void 0 && (missing0 = "logical_relative_path") || data.status === void 0 && (missing0 = "status") || data.error_code === void 0 && (missing0 = "error_code") || data.kind === void 0 && (missing0 = "kind") || data.format === void 0 && (missing0 = "format") || data.role === void 0 && (missing0 = "role") || data.claim_scope === void 0 && (missing0 = "claim_scope")) {
         validate76.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "kind" || key0 === "identity" || key0 === "name" || key0 === "format" || key0 === "byte_count" || key0 === "role" || key0 === "claim_scope")) {
+          if (!func1.call(schema33.properties, key0)) {
             validate76.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
           }
         }
         if (_errs1 === errors) {
-          if (data.kind !== void 0) {
-            let data0 = data.kind;
+          if (data.identity !== void 0) {
             const _errs2 = errors;
-            if (typeof data0 !== "string") {
-              validate76.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-              return false;
-            }
-            if ("structure" !== data0) {
-              validate76.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "structure" }, message: "must be equal to constant" }];
-              return false;
+            if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
+              vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
+              errors = vErrors.length;
             }
             var valid0 = _errs2 === errors;
           } else {
             var valid0 = true;
           }
           if (valid0) {
-            if (data.identity !== void 0) {
-              const _errs4 = errors;
-              if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
-                errors = vErrors.length;
+            if (data.name !== void 0) {
+              const _errs3 = errors;
+              if (typeof data.name !== "string") {
+                validate76.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                return false;
               }
-              var valid0 = _errs4 === errors;
+              var valid0 = _errs3 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.name !== void 0) {
+              if (data.byte_count !== void 0) {
+                let data2 = data.byte_count;
                 const _errs5 = errors;
-                if (typeof data.name !== "string") {
-                  validate76.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                if (!(typeof data2 == "number" && (!(data2 % 1) && !isNaN(data2)))) {
+                  validate76.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
                   return false;
                 }
                 var valid0 = _errs5 === errors;
@@ -4217,64 +4340,195 @@ function validate76(data, { instancePath = "", parentData, parentDataProperty, r
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.format !== void 0) {
-                  let data3 = data.format;
+                if (data.logical_relative_path !== void 0) {
+                  let data3 = data.logical_relative_path;
                   const _errs7 = errors;
+                  const _errs8 = errors;
+                  let valid1 = false;
+                  const _errs9 = errors;
                   if (typeof data3 !== "string") {
-                    validate76.errors = [{ instancePath: instancePath + "/format", schemaPath: "#/properties/format/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-                    return false;
+                    const err0 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err0];
+                    } else {
+                      vErrors.push(err0);
+                    }
+                    errors++;
                   }
-                  if (!(data3 === "pdb" || data3 === "mmcif")) {
-                    validate76.errors = [{ instancePath: instancePath + "/format", schemaPath: "#/properties/format/enum", keyword: "enum", params: { allowedValues: schema33.properties.format.enum }, message: "must be equal to one of the allowed values" }];
+                  var _valid0 = _errs9 === errors;
+                  valid1 = valid1 || _valid0;
+                  const _errs11 = errors;
+                  if (data3 !== null) {
+                    const err1 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                    if (vErrors === null) {
+                      vErrors = [err1];
+                    } else {
+                      vErrors.push(err1);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs11 === errors;
+                  valid1 = valid1 || _valid0;
+                  if (!valid1) {
+                    const err2 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                    if (vErrors === null) {
+                      vErrors = [err2];
+                    } else {
+                      vErrors.push(err2);
+                    }
+                    errors++;
+                    validate76.errors = vErrors;
                     return false;
+                  } else {
+                    errors = _errs8;
+                    if (vErrors !== null) {
+                      if (_errs8) {
+                        vErrors.length = _errs8;
+                      } else {
+                        vErrors = null;
+                      }
+                    }
                   }
                   var valid0 = _errs7 === errors;
                 } else {
                   var valid0 = true;
                 }
                 if (valid0) {
-                  if (data.byte_count !== void 0) {
-                    let data4 = data.byte_count;
-                    const _errs9 = errors;
-                    if (!(typeof data4 == "number" && (!(data4 % 1) && !isNaN(data4)))) {
-                      validate76.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                  if (data.status !== void 0) {
+                    let data4 = data.status;
+                    const _errs13 = errors;
+                    if (typeof data4 !== "string") {
+                      validate76.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
                       return false;
                     }
-                    var valid0 = _errs9 === errors;
+                    if (!(data4 === "available" || data4 === "unavailable" || data4 === "quarantined")) {
+                      validate76.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema33.properties.status.enum }, message: "must be equal to one of the allowed values" }];
+                      return false;
+                    }
+                    var valid0 = _errs13 === errors;
                   } else {
                     var valid0 = true;
                   }
                   if (valid0) {
-                    if (data.role !== void 0) {
-                      let data5 = data.role;
-                      const _errs11 = errors;
+                    if (data.error_code !== void 0) {
+                      let data5 = data.error_code;
+                      const _errs15 = errors;
+                      const _errs16 = errors;
+                      let valid2 = false;
+                      const _errs17 = errors;
                       if (typeof data5 !== "string") {
-                        validate76.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-                        return false;
+                        const err3 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                        if (vErrors === null) {
+                          vErrors = [err3];
+                        } else {
+                          vErrors.push(err3);
+                        }
+                        errors++;
                       }
-                      if ("registered_source" !== data5) {
-                        validate76.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/const", keyword: "const", params: { allowedValue: "registered_source" }, message: "must be equal to constant" }];
-                        return false;
+                      var _valid1 = _errs17 === errors;
+                      valid2 = valid2 || _valid1;
+                      const _errs19 = errors;
+                      if (data5 !== null) {
+                        const err4 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                        if (vErrors === null) {
+                          vErrors = [err4];
+                        } else {
+                          vErrors.push(err4);
+                        }
+                        errors++;
                       }
-                      var valid0 = _errs11 === errors;
+                      var _valid1 = _errs19 === errors;
+                      valid2 = valid2 || _valid1;
+                      if (!valid2) {
+                        const err5 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                        if (vErrors === null) {
+                          vErrors = [err5];
+                        } else {
+                          vErrors.push(err5);
+                        }
+                        errors++;
+                        validate76.errors = vErrors;
+                        return false;
+                      } else {
+                        errors = _errs16;
+                        if (vErrors !== null) {
+                          if (_errs16) {
+                            vErrors.length = _errs16;
+                          } else {
+                            vErrors = null;
+                          }
+                        }
+                      }
+                      var valid0 = _errs15 === errors;
                     } else {
                       var valid0 = true;
                     }
                     if (valid0) {
-                      if (data.claim_scope !== void 0) {
-                        let data6 = data.claim_scope;
-                        const _errs13 = errors;
+                      if (data.kind !== void 0) {
+                        let data6 = data.kind;
+                        const _errs21 = errors;
                         if (typeof data6 !== "string") {
-                          validate76.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                          validate76.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
                           return false;
                         }
-                        if ("geometry_only_no_inferred_activity_or_confidence" !== data6) {
-                          validate76.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/const", keyword: "const", params: { allowedValue: "geometry_only_no_inferred_activity_or_confidence" }, message: "must be equal to constant" }];
+                        if ("structure" !== data6) {
+                          validate76.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "structure" }, message: "must be equal to constant" }];
                           return false;
                         }
-                        var valid0 = _errs13 === errors;
+                        var valid0 = _errs21 === errors;
                       } else {
                         var valid0 = true;
+                      }
+                      if (valid0) {
+                        if (data.format !== void 0) {
+                          let data7 = data.format;
+                          const _errs23 = errors;
+                          if (typeof data7 !== "string") {
+                            validate76.errors = [{ instancePath: instancePath + "/format", schemaPath: "#/properties/format/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                            return false;
+                          }
+                          if (!(data7 === "pdb" || data7 === "mmcif")) {
+                            validate76.errors = [{ instancePath: instancePath + "/format", schemaPath: "#/properties/format/enum", keyword: "enum", params: { allowedValues: schema33.properties.format.enum }, message: "must be equal to one of the allowed values" }];
+                            return false;
+                          }
+                          var valid0 = _errs23 === errors;
+                        } else {
+                          var valid0 = true;
+                        }
+                        if (valid0) {
+                          if (data.role !== void 0) {
+                            let data8 = data.role;
+                            const _errs25 = errors;
+                            if (typeof data8 !== "string") {
+                              validate76.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                              return false;
+                            }
+                            if ("registered_source" !== data8) {
+                              validate76.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/const", keyword: "const", params: { allowedValue: "registered_source" }, message: "must be equal to constant" }];
+                              return false;
+                            }
+                            var valid0 = _errs25 === errors;
+                          } else {
+                            var valid0 = true;
+                          }
+                          if (valid0) {
+                            if (data.claim_scope !== void 0) {
+                              let data9 = data.claim_scope;
+                              const _errs27 = errors;
+                              if (typeof data9 !== "string") {
+                                validate76.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                                return false;
+                              }
+                              if ("geometry_only_no_inferred_activity_or_confidence" !== data9) {
+                                validate76.errors = [{ instancePath: instancePath + "/claim_scope", schemaPath: "#/properties/claim_scope/const", keyword: "const", params: { allowedValue: "geometry_only_no_inferred_activity_or_confidence" }, message: "must be equal to constant" }];
+                                return false;
+                              }
+                              var valid0 = _errs27 === errors;
+                            } else {
+                              var valid0 = true;
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -4293,7 +4547,7 @@ function validate76(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate76.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema34 = { "additionalProperties": false, "properties": { "kind": { "const": "series", "default": "series", "title": "Kind", "type": "string" }, "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "result_schema_version": { "default": "m4-prediction-v2", "enum": ["m4-prediction-v2", "display-series-source-v1"], "title": "Result Schema Version", "type": "string" }, "role": { "default": "prediction_contract", "enum": ["prediction_contract", "declared_source_series"], "title": "Role", "type": "string" } }, "required": ["kind", "identity", "name", "byte_count", "result_schema_version", "role"], "title": "SeriesResource", "type": "object" };
+var schema34 = { "additionalProperties": false, "properties": { "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "logical_relative_path": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Logical Relative Path" }, "status": { "default": "available", "enum": ["available", "unavailable", "quarantined"], "title": "Status", "type": "string" }, "error_code": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Error Code" }, "kind": { "const": "series", "default": "series", "title": "Kind", "type": "string" }, "result_schema_version": { "default": "m4-prediction-v2", "enum": ["m4-prediction-v2", "display-series-source-v1"], "title": "Result Schema Version", "type": "string" }, "role": { "default": "prediction_contract", "enum": ["prediction_contract", "declared_source_series"], "title": "Role", "type": "string" } }, "required": ["identity", "name", "byte_count", "logical_relative_path", "status", "error_code", "kind", "result_schema_version", "role"], "title": "SeriesResource", "type": "object" };
 function validate79(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4307,50 +4561,46 @@ function validate79(data, { instancePath = "", parentData, parentDataProperty, r
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.kind === void 0 && (missing0 = "kind") || data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.byte_count === void 0 && (missing0 = "byte_count") || data.result_schema_version === void 0 && (missing0 = "result_schema_version") || data.role === void 0 && (missing0 = "role")) {
+      if (data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.byte_count === void 0 && (missing0 = "byte_count") || data.logical_relative_path === void 0 && (missing0 = "logical_relative_path") || data.status === void 0 && (missing0 = "status") || data.error_code === void 0 && (missing0 = "error_code") || data.kind === void 0 && (missing0 = "kind") || data.result_schema_version === void 0 && (missing0 = "result_schema_version") || data.role === void 0 && (missing0 = "role")) {
         validate79.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "kind" || key0 === "identity" || key0 === "name" || key0 === "byte_count" || key0 === "result_schema_version" || key0 === "role")) {
+          if (!func1.call(schema34.properties, key0)) {
             validate79.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
           }
         }
         if (_errs1 === errors) {
-          if (data.kind !== void 0) {
-            let data0 = data.kind;
+          if (data.identity !== void 0) {
             const _errs2 = errors;
-            if (typeof data0 !== "string") {
-              validate79.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-              return false;
-            }
-            if ("series" !== data0) {
-              validate79.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "series" }, message: "must be equal to constant" }];
-              return false;
+            if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
+              vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
+              errors = vErrors.length;
             }
             var valid0 = _errs2 === errors;
           } else {
             var valid0 = true;
           }
           if (valid0) {
-            if (data.identity !== void 0) {
-              const _errs4 = errors;
-              if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
-                errors = vErrors.length;
+            if (data.name !== void 0) {
+              const _errs3 = errors;
+              if (typeof data.name !== "string") {
+                validate79.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                return false;
               }
-              var valid0 = _errs4 === errors;
+              var valid0 = _errs3 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.name !== void 0) {
+              if (data.byte_count !== void 0) {
+                let data2 = data.byte_count;
                 const _errs5 = errors;
-                if (typeof data.name !== "string") {
-                  validate79.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                if (!(typeof data2 == "number" && (!(data2 % 1) && !isNaN(data2)))) {
+                  validate79.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
                   return false;
                 }
                 var valid0 = _errs5 === errors;
@@ -4358,48 +4608,179 @@ function validate79(data, { instancePath = "", parentData, parentDataProperty, r
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.byte_count !== void 0) {
-                  let data3 = data.byte_count;
+                if (data.logical_relative_path !== void 0) {
+                  let data3 = data.logical_relative_path;
                   const _errs7 = errors;
-                  if (!(typeof data3 == "number" && (!(data3 % 1) && !isNaN(data3)))) {
-                    validate79.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                  const _errs8 = errors;
+                  let valid1 = false;
+                  const _errs9 = errors;
+                  if (typeof data3 !== "string") {
+                    const err0 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err0];
+                    } else {
+                      vErrors.push(err0);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs9 === errors;
+                  valid1 = valid1 || _valid0;
+                  const _errs11 = errors;
+                  if (data3 !== null) {
+                    const err1 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                    if (vErrors === null) {
+                      vErrors = [err1];
+                    } else {
+                      vErrors.push(err1);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs11 === errors;
+                  valid1 = valid1 || _valid0;
+                  if (!valid1) {
+                    const err2 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                    if (vErrors === null) {
+                      vErrors = [err2];
+                    } else {
+                      vErrors.push(err2);
+                    }
+                    errors++;
+                    validate79.errors = vErrors;
                     return false;
+                  } else {
+                    errors = _errs8;
+                    if (vErrors !== null) {
+                      if (_errs8) {
+                        vErrors.length = _errs8;
+                      } else {
+                        vErrors = null;
+                      }
+                    }
                   }
                   var valid0 = _errs7 === errors;
                 } else {
                   var valid0 = true;
                 }
                 if (valid0) {
-                  if (data.result_schema_version !== void 0) {
-                    let data4 = data.result_schema_version;
-                    const _errs9 = errors;
+                  if (data.status !== void 0) {
+                    let data4 = data.status;
+                    const _errs13 = errors;
                     if (typeof data4 !== "string") {
-                      validate79.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                      validate79.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
                       return false;
                     }
-                    if (!(data4 === "m4-prediction-v2" || data4 === "display-series-source-v1")) {
-                      validate79.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/enum", keyword: "enum", params: { allowedValues: schema34.properties.result_schema_version.enum }, message: "must be equal to one of the allowed values" }];
+                    if (!(data4 === "available" || data4 === "unavailable" || data4 === "quarantined")) {
+                      validate79.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema34.properties.status.enum }, message: "must be equal to one of the allowed values" }];
                       return false;
                     }
-                    var valid0 = _errs9 === errors;
+                    var valid0 = _errs13 === errors;
                   } else {
                     var valid0 = true;
                   }
                   if (valid0) {
-                    if (data.role !== void 0) {
-                      let data5 = data.role;
-                      const _errs11 = errors;
+                    if (data.error_code !== void 0) {
+                      let data5 = data.error_code;
+                      const _errs15 = errors;
+                      const _errs16 = errors;
+                      let valid2 = false;
+                      const _errs17 = errors;
                       if (typeof data5 !== "string") {
-                        validate79.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-                        return false;
+                        const err3 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                        if (vErrors === null) {
+                          vErrors = [err3];
+                        } else {
+                          vErrors.push(err3);
+                        }
+                        errors++;
                       }
-                      if (!(data5 === "prediction_contract" || data5 === "declared_source_series")) {
-                        validate79.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/enum", keyword: "enum", params: { allowedValues: schema34.properties.role.enum }, message: "must be equal to one of the allowed values" }];
-                        return false;
+                      var _valid1 = _errs17 === errors;
+                      valid2 = valid2 || _valid1;
+                      const _errs19 = errors;
+                      if (data5 !== null) {
+                        const err4 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                        if (vErrors === null) {
+                          vErrors = [err4];
+                        } else {
+                          vErrors.push(err4);
+                        }
+                        errors++;
                       }
-                      var valid0 = _errs11 === errors;
+                      var _valid1 = _errs19 === errors;
+                      valid2 = valid2 || _valid1;
+                      if (!valid2) {
+                        const err5 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                        if (vErrors === null) {
+                          vErrors = [err5];
+                        } else {
+                          vErrors.push(err5);
+                        }
+                        errors++;
+                        validate79.errors = vErrors;
+                        return false;
+                      } else {
+                        errors = _errs16;
+                        if (vErrors !== null) {
+                          if (_errs16) {
+                            vErrors.length = _errs16;
+                          } else {
+                            vErrors = null;
+                          }
+                        }
+                      }
+                      var valid0 = _errs15 === errors;
                     } else {
                       var valid0 = true;
+                    }
+                    if (valid0) {
+                      if (data.kind !== void 0) {
+                        let data6 = data.kind;
+                        const _errs21 = errors;
+                        if (typeof data6 !== "string") {
+                          validate79.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                          return false;
+                        }
+                        if ("series" !== data6) {
+                          validate79.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "series" }, message: "must be equal to constant" }];
+                          return false;
+                        }
+                        var valid0 = _errs21 === errors;
+                      } else {
+                        var valid0 = true;
+                      }
+                      if (valid0) {
+                        if (data.result_schema_version !== void 0) {
+                          let data7 = data.result_schema_version;
+                          const _errs23 = errors;
+                          if (typeof data7 !== "string") {
+                            validate79.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                            return false;
+                          }
+                          if (!(data7 === "m4-prediction-v2" || data7 === "display-series-source-v1")) {
+                            validate79.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/enum", keyword: "enum", params: { allowedValues: schema34.properties.result_schema_version.enum }, message: "must be equal to one of the allowed values" }];
+                            return false;
+                          }
+                          var valid0 = _errs23 === errors;
+                        } else {
+                          var valid0 = true;
+                        }
+                        if (valid0) {
+                          if (data.role !== void 0) {
+                            let data8 = data.role;
+                            const _errs25 = errors;
+                            if (typeof data8 !== "string") {
+                              validate79.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                              return false;
+                            }
+                            if (!(data8 === "prediction_contract" || data8 === "declared_source_series")) {
+                              validate79.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/enum", keyword: "enum", params: { allowedValues: schema34.properties.role.enum }, message: "must be equal to one of the allowed values" }];
+                              return false;
+                            }
+                            var valid0 = _errs25 === errors;
+                          } else {
+                            var valid0 = true;
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -4417,6 +4798,7 @@ function validate79(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate79.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema35 = { "additionalProperties": false, "properties": { "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "logical_relative_path": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Logical Relative Path" }, "status": { "default": "available", "enum": ["available", "unavailable", "quarantined"], "title": "Status", "type": "string" }, "error_code": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Error Code" }, "kind": { "const": "scan", "default": "scan", "title": "Kind", "type": "string" }, "result_schema_version": { "const": "finite-scaffold-scan-v2", "default": "finite-scaffold-scan-v2", "title": "Result Schema Version", "type": "string" } }, "required": ["identity", "name", "byte_count", "logical_relative_path", "status", "error_code", "kind", "result_schema_version"], "title": "ScanResource", "type": "object" };
 function validate82(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4430,50 +4812,46 @@ function validate82(data, { instancePath = "", parentData, parentDataProperty, r
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.kind === void 0 && (missing0 = "kind") || data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.byte_count === void 0 && (missing0 = "byte_count") || data.result_schema_version === void 0 && (missing0 = "result_schema_version")) {
+      if (data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.byte_count === void 0 && (missing0 = "byte_count") || data.logical_relative_path === void 0 && (missing0 = "logical_relative_path") || data.status === void 0 && (missing0 = "status") || data.error_code === void 0 && (missing0 = "error_code") || data.kind === void 0 && (missing0 = "kind") || data.result_schema_version === void 0 && (missing0 = "result_schema_version")) {
         validate82.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "kind" || key0 === "identity" || key0 === "name" || key0 === "byte_count" || key0 === "result_schema_version")) {
+          if (!(key0 === "identity" || key0 === "name" || key0 === "byte_count" || key0 === "logical_relative_path" || key0 === "status" || key0 === "error_code" || key0 === "kind" || key0 === "result_schema_version")) {
             validate82.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
           }
         }
         if (_errs1 === errors) {
-          if (data.kind !== void 0) {
-            let data0 = data.kind;
+          if (data.identity !== void 0) {
             const _errs2 = errors;
-            if (typeof data0 !== "string") {
-              validate82.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-              return false;
-            }
-            if ("scan" !== data0) {
-              validate82.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "scan" }, message: "must be equal to constant" }];
-              return false;
+            if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
+              vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
+              errors = vErrors.length;
             }
             var valid0 = _errs2 === errors;
           } else {
             var valid0 = true;
           }
           if (valid0) {
-            if (data.identity !== void 0) {
-              const _errs4 = errors;
-              if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
-                errors = vErrors.length;
+            if (data.name !== void 0) {
+              const _errs3 = errors;
+              if (typeof data.name !== "string") {
+                validate82.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                return false;
               }
-              var valid0 = _errs4 === errors;
+              var valid0 = _errs3 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.name !== void 0) {
+              if (data.byte_count !== void 0) {
+                let data2 = data.byte_count;
                 const _errs5 = errors;
-                if (typeof data.name !== "string") {
-                  validate82.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                if (!(typeof data2 == "number" && (!(data2 % 1) && !isNaN(data2)))) {
+                  validate82.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
                   return false;
                 }
                 var valid0 = _errs5 === errors;
@@ -4481,32 +4859,163 @@ function validate82(data, { instancePath = "", parentData, parentDataProperty, r
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.byte_count !== void 0) {
-                  let data3 = data.byte_count;
+                if (data.logical_relative_path !== void 0) {
+                  let data3 = data.logical_relative_path;
                   const _errs7 = errors;
-                  if (!(typeof data3 == "number" && (!(data3 % 1) && !isNaN(data3)))) {
-                    validate82.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                  const _errs8 = errors;
+                  let valid1 = false;
+                  const _errs9 = errors;
+                  if (typeof data3 !== "string") {
+                    const err0 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err0];
+                    } else {
+                      vErrors.push(err0);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs9 === errors;
+                  valid1 = valid1 || _valid0;
+                  const _errs11 = errors;
+                  if (data3 !== null) {
+                    const err1 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                    if (vErrors === null) {
+                      vErrors = [err1];
+                    } else {
+                      vErrors.push(err1);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs11 === errors;
+                  valid1 = valid1 || _valid0;
+                  if (!valid1) {
+                    const err2 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                    if (vErrors === null) {
+                      vErrors = [err2];
+                    } else {
+                      vErrors.push(err2);
+                    }
+                    errors++;
+                    validate82.errors = vErrors;
                     return false;
+                  } else {
+                    errors = _errs8;
+                    if (vErrors !== null) {
+                      if (_errs8) {
+                        vErrors.length = _errs8;
+                      } else {
+                        vErrors = null;
+                      }
+                    }
                   }
                   var valid0 = _errs7 === errors;
                 } else {
                   var valid0 = true;
                 }
                 if (valid0) {
-                  if (data.result_schema_version !== void 0) {
-                    let data4 = data.result_schema_version;
-                    const _errs9 = errors;
+                  if (data.status !== void 0) {
+                    let data4 = data.status;
+                    const _errs13 = errors;
                     if (typeof data4 !== "string") {
-                      validate82.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                      validate82.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
                       return false;
                     }
-                    if ("finite-scaffold-scan-v2" !== data4) {
-                      validate82.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/const", keyword: "const", params: { allowedValue: "finite-scaffold-scan-v2" }, message: "must be equal to constant" }];
+                    if (!(data4 === "available" || data4 === "unavailable" || data4 === "quarantined")) {
+                      validate82.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema35.properties.status.enum }, message: "must be equal to one of the allowed values" }];
                       return false;
                     }
-                    var valid0 = _errs9 === errors;
+                    var valid0 = _errs13 === errors;
                   } else {
                     var valid0 = true;
+                  }
+                  if (valid0) {
+                    if (data.error_code !== void 0) {
+                      let data5 = data.error_code;
+                      const _errs15 = errors;
+                      const _errs16 = errors;
+                      let valid2 = false;
+                      const _errs17 = errors;
+                      if (typeof data5 !== "string") {
+                        const err3 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                        if (vErrors === null) {
+                          vErrors = [err3];
+                        } else {
+                          vErrors.push(err3);
+                        }
+                        errors++;
+                      }
+                      var _valid1 = _errs17 === errors;
+                      valid2 = valid2 || _valid1;
+                      const _errs19 = errors;
+                      if (data5 !== null) {
+                        const err4 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                        if (vErrors === null) {
+                          vErrors = [err4];
+                        } else {
+                          vErrors.push(err4);
+                        }
+                        errors++;
+                      }
+                      var _valid1 = _errs19 === errors;
+                      valid2 = valid2 || _valid1;
+                      if (!valid2) {
+                        const err5 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                        if (vErrors === null) {
+                          vErrors = [err5];
+                        } else {
+                          vErrors.push(err5);
+                        }
+                        errors++;
+                        validate82.errors = vErrors;
+                        return false;
+                      } else {
+                        errors = _errs16;
+                        if (vErrors !== null) {
+                          if (_errs16) {
+                            vErrors.length = _errs16;
+                          } else {
+                            vErrors = null;
+                          }
+                        }
+                      }
+                      var valid0 = _errs15 === errors;
+                    } else {
+                      var valid0 = true;
+                    }
+                    if (valid0) {
+                      if (data.kind !== void 0) {
+                        let data6 = data.kind;
+                        const _errs21 = errors;
+                        if (typeof data6 !== "string") {
+                          validate82.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                          return false;
+                        }
+                        if ("scan" !== data6) {
+                          validate82.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "scan" }, message: "must be equal to constant" }];
+                          return false;
+                        }
+                        var valid0 = _errs21 === errors;
+                      } else {
+                        var valid0 = true;
+                      }
+                      if (valid0) {
+                        if (data.result_schema_version !== void 0) {
+                          let data7 = data.result_schema_version;
+                          const _errs23 = errors;
+                          if (typeof data7 !== "string") {
+                            validate82.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                            return false;
+                          }
+                          if ("finite-scaffold-scan-v2" !== data7) {
+                            validate82.errors = [{ instancePath: instancePath + "/result_schema_version", schemaPath: "#/properties/result_schema_version/const", keyword: "const", params: { allowedValue: "finite-scaffold-scan-v2" }, message: "must be equal to constant" }];
+                            return false;
+                          }
+                          var valid0 = _errs23 === errors;
+                        } else {
+                          var valid0 = true;
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -4523,6 +5032,7 @@ function validate82(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate82.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema36 = { "additionalProperties": false, "properties": { "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "name": { "title": "Name", "type": "string" }, "byte_count": { "title": "Byte Count", "type": "integer" }, "logical_relative_path": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Logical Relative Path" }, "status": { "default": "available", "enum": ["available", "unavailable", "quarantined"], "title": "Status", "type": "string" }, "error_code": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Error Code" }, "kind": { "const": "table", "default": "table", "title": "Kind", "type": "string" }, "media_type": { "title": "Media Type", "type": "string" }, "role": { "const": "registered_source", "default": "registered_source", "title": "Role", "type": "string" } }, "required": ["identity", "name", "byte_count", "logical_relative_path", "status", "error_code", "kind", "media_type", "role"], "title": "TableResource", "type": "object" };
 function validate85(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -4536,50 +5046,46 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.kind === void 0 && (missing0 = "kind") || data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.media_type === void 0 && (missing0 = "media_type") || data.byte_count === void 0 && (missing0 = "byte_count") || data.role === void 0 && (missing0 = "role")) {
+      if (data.identity === void 0 && (missing0 = "identity") || data.name === void 0 && (missing0 = "name") || data.byte_count === void 0 && (missing0 = "byte_count") || data.logical_relative_path === void 0 && (missing0 = "logical_relative_path") || data.status === void 0 && (missing0 = "status") || data.error_code === void 0 && (missing0 = "error_code") || data.kind === void 0 && (missing0 = "kind") || data.media_type === void 0 && (missing0 = "media_type") || data.role === void 0 && (missing0 = "role")) {
         validate85.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "kind" || key0 === "identity" || key0 === "name" || key0 === "media_type" || key0 === "byte_count" || key0 === "role")) {
+          if (!func1.call(schema36.properties, key0)) {
             validate85.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
           }
         }
         if (_errs1 === errors) {
-          if (data.kind !== void 0) {
-            let data0 = data.kind;
+          if (data.identity !== void 0) {
             const _errs2 = errors;
-            if (typeof data0 !== "string") {
-              validate85.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-              return false;
-            }
-            if ("table" !== data0) {
-              validate85.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "table" }, message: "must be equal to constant" }];
-              return false;
+            if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
+              vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
+              errors = vErrors.length;
             }
             var valid0 = _errs2 === errors;
           } else {
             var valid0 = true;
           }
           if (valid0) {
-            if (data.identity !== void 0) {
-              const _errs4 = errors;
-              if (!validate73(data.identity, { instancePath: instancePath + "/identity", parentData: data, parentDataProperty: "identity", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate73.errors : vErrors.concat(validate73.errors);
-                errors = vErrors.length;
+            if (data.name !== void 0) {
+              const _errs3 = errors;
+              if (typeof data.name !== "string") {
+                validate85.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                return false;
               }
-              var valid0 = _errs4 === errors;
+              var valid0 = _errs3 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.name !== void 0) {
+              if (data.byte_count !== void 0) {
+                let data2 = data.byte_count;
                 const _errs5 = errors;
-                if (typeof data.name !== "string") {
-                  validate85.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                if (!(typeof data2 == "number" && (!(data2 % 1) && !isNaN(data2)))) {
+                  validate85.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
                   return false;
                 }
                 var valid0 = _errs5 === errors;
@@ -4587,43 +5093,174 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.media_type !== void 0) {
+                if (data.logical_relative_path !== void 0) {
+                  let data3 = data.logical_relative_path;
                   const _errs7 = errors;
-                  if (typeof data.media_type !== "string") {
-                    validate85.errors = [{ instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                  const _errs8 = errors;
+                  let valid1 = false;
+                  const _errs9 = errors;
+                  if (typeof data3 !== "string") {
+                    const err0 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err0];
+                    } else {
+                      vErrors.push(err0);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs9 === errors;
+                  valid1 = valid1 || _valid0;
+                  const _errs11 = errors;
+                  if (data3 !== null) {
+                    const err1 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                    if (vErrors === null) {
+                      vErrors = [err1];
+                    } else {
+                      vErrors.push(err1);
+                    }
+                    errors++;
+                  }
+                  var _valid0 = _errs11 === errors;
+                  valid1 = valid1 || _valid0;
+                  if (!valid1) {
+                    const err2 = { instancePath: instancePath + "/logical_relative_path", schemaPath: "#/properties/logical_relative_path/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                    if (vErrors === null) {
+                      vErrors = [err2];
+                    } else {
+                      vErrors.push(err2);
+                    }
+                    errors++;
+                    validate85.errors = vErrors;
                     return false;
+                  } else {
+                    errors = _errs8;
+                    if (vErrors !== null) {
+                      if (_errs8) {
+                        vErrors.length = _errs8;
+                      } else {
+                        vErrors = null;
+                      }
+                    }
                   }
                   var valid0 = _errs7 === errors;
                 } else {
                   var valid0 = true;
                 }
                 if (valid0) {
-                  if (data.byte_count !== void 0) {
-                    let data4 = data.byte_count;
-                    const _errs9 = errors;
-                    if (!(typeof data4 == "number" && (!(data4 % 1) && !isNaN(data4)))) {
-                      validate85.errors = [{ instancePath: instancePath + "/byte_count", schemaPath: "#/properties/byte_count/type", keyword: "type", params: { type: "integer" }, message: "must be integer" }];
+                  if (data.status !== void 0) {
+                    let data4 = data.status;
+                    const _errs13 = errors;
+                    if (typeof data4 !== "string") {
+                      validate85.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
                       return false;
                     }
-                    var valid0 = _errs9 === errors;
+                    if (!(data4 === "available" || data4 === "unavailable" || data4 === "quarantined")) {
+                      validate85.errors = [{ instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema36.properties.status.enum }, message: "must be equal to one of the allowed values" }];
+                      return false;
+                    }
+                    var valid0 = _errs13 === errors;
                   } else {
                     var valid0 = true;
                   }
                   if (valid0) {
-                    if (data.role !== void 0) {
-                      let data5 = data.role;
-                      const _errs11 = errors;
+                    if (data.error_code !== void 0) {
+                      let data5 = data.error_code;
+                      const _errs15 = errors;
+                      const _errs16 = errors;
+                      let valid2 = false;
+                      const _errs17 = errors;
                       if (typeof data5 !== "string") {
-                        validate85.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-                        return false;
+                        const err3 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                        if (vErrors === null) {
+                          vErrors = [err3];
+                        } else {
+                          vErrors.push(err3);
+                        }
+                        errors++;
                       }
-                      if ("registered_source" !== data5) {
-                        validate85.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/const", keyword: "const", params: { allowedValue: "registered_source" }, message: "must be equal to constant" }];
-                        return false;
+                      var _valid1 = _errs17 === errors;
+                      valid2 = valid2 || _valid1;
+                      const _errs19 = errors;
+                      if (data5 !== null) {
+                        const err4 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                        if (vErrors === null) {
+                          vErrors = [err4];
+                        } else {
+                          vErrors.push(err4);
+                        }
+                        errors++;
                       }
-                      var valid0 = _errs11 === errors;
+                      var _valid1 = _errs19 === errors;
+                      valid2 = valid2 || _valid1;
+                      if (!valid2) {
+                        const err5 = { instancePath: instancePath + "/error_code", schemaPath: "#/properties/error_code/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                        if (vErrors === null) {
+                          vErrors = [err5];
+                        } else {
+                          vErrors.push(err5);
+                        }
+                        errors++;
+                        validate85.errors = vErrors;
+                        return false;
+                      } else {
+                        errors = _errs16;
+                        if (vErrors !== null) {
+                          if (_errs16) {
+                            vErrors.length = _errs16;
+                          } else {
+                            vErrors = null;
+                          }
+                        }
+                      }
+                      var valid0 = _errs15 === errors;
                     } else {
                       var valid0 = true;
+                    }
+                    if (valid0) {
+                      if (data.kind !== void 0) {
+                        let data6 = data.kind;
+                        const _errs21 = errors;
+                        if (typeof data6 !== "string") {
+                          validate85.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                          return false;
+                        }
+                        if ("table" !== data6) {
+                          validate85.errors = [{ instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/const", keyword: "const", params: { allowedValue: "table" }, message: "must be equal to constant" }];
+                          return false;
+                        }
+                        var valid0 = _errs21 === errors;
+                      } else {
+                        var valid0 = true;
+                      }
+                      if (valid0) {
+                        if (data.media_type !== void 0) {
+                          const _errs23 = errors;
+                          if (typeof data.media_type !== "string") {
+                            validate85.errors = [{ instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                            return false;
+                          }
+                          var valid0 = _errs23 === errors;
+                        } else {
+                          var valid0 = true;
+                        }
+                        if (valid0) {
+                          if (data.role !== void 0) {
+                            let data8 = data.role;
+                            const _errs25 = errors;
+                            if (typeof data8 !== "string") {
+                              validate85.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                              return false;
+                            }
+                            if ("registered_source" !== data8) {
+                              validate85.errors = [{ instancePath: instancePath + "/role", schemaPath: "#/properties/role/const", keyword: "const", params: { allowedValue: "registered_source" }, message: "must be equal to constant" }];
+                              return false;
+                            }
+                            var valid0 = _errs25 === errors;
+                          } else {
+                            var valid0 = true;
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -5923,7 +6560,7 @@ function validate88(data, { instancePath = "", parentData, parentDataProperty, r
 }
 validate88.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 var StructurePage = validate93;
-var schema40 = { "additionalProperties": false, "properties": { "schema_version": { "const": "display-structure-v1", "default": "display-structure-v1", "title": "Schema Version", "type": "string" }, "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "format": { "title": "Format", "type": "string" }, "offset": { "title": "Offset", "type": "integer" }, "total": { "title": "Total", "type": "integer" }, "chains": { "items": { "type": "string" }, "title": "Chains", "type": "array" }, "models": { "items": { "type": "string" }, "title": "Models", "type": "array" }, "residues": { "items": { "$ref": "urn:fusionlab:shared#/$defs/ResidueIdentity" }, "title": "Residues", "type": "array" }, "confidence_status": { "default": "not_registered", "enum": ["not_registered", "source_registered_not_scientific_approval"], "title": "Confidence Status", "type": "string" }, "mapping_status": { "default": "not_registered", "enum": ["not_registered", "source_registered_not_scientific_approval"], "title": "Mapping Status", "type": "string" }, "pocket_status": { "default": "not_registered", "enum": ["not_registered", "source_registered_not_scientific_approval"], "title": "Pocket Status", "type": "string" }, "annotation_file_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation File Id" }, "annotation_sha256": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Sha256" }, "annotation_source_reference": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Source Reference" }, "annotation_source_tool": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Source Tool" }, "annotation_source_tool_version": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Source Tool Version" }, "fusion_sequence_file_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Fusion Sequence File Id" }, "fusion_sequence_file_sha256": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Fusion Sequence File Sha256" }, "fusion_sequence_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Fusion Sequence Id" }, "annotations": { "items": { "$ref": "urn:fusionlab:shared#/$defs/DisplayResidueAnnotation" }, "title": "Annotations", "type": "array" }, "overlays": { "items": { "$ref": "urn:fusionlab:shared#/$defs/DisplayOverlay" }, "title": "Overlays", "type": "array" }, "preview_policy": { "const": "atom_coordinates_only_original_sealed", "default": "atom_coordinates_only_original_sealed", "title": "Preview Policy", "type": "string" } }, "required": ["schema_version", "identity", "format", "offset", "total", "chains", "models", "residues", "confidence_status", "mapping_status", "pocket_status", "annotation_file_id", "annotation_sha256", "annotation_source_reference", "annotation_source_tool", "annotation_source_tool_version", "fusion_sequence_file_id", "fusion_sequence_file_sha256", "fusion_sequence_id", "annotations", "overlays", "preview_policy"], "title": "StructurePage", "type": "object" };
+var schema40 = { "additionalProperties": false, "properties": { "schema_version": { "const": "display-structure-v1", "default": "display-structure-v1", "title": "Schema Version", "type": "string" }, "identity": { "$ref": "urn:fusionlab:shared#/$defs/ResourceIdentity" }, "format": { "title": "Format", "type": "string" }, "offset": { "title": "Offset", "type": "integer" }, "total": { "title": "Total", "type": "integer" }, "chains": { "items": { "type": "string" }, "title": "Chains", "type": "array" }, "models": { "items": { "type": "string" }, "title": "Models", "type": "array" }, "residues": { "items": { "$ref": "urn:fusionlab:shared#/$defs/ResidueIdentity" }, "title": "Residues", "type": "array" }, "confidence_status": { "default": "not_registered", "enum": ["not_registered", "source_registered_not_scientific_approval"], "title": "Confidence Status", "type": "string" }, "mapping_status": { "default": "not_registered", "enum": ["not_registered", "source_registered_not_scientific_approval"], "title": "Mapping Status", "type": "string" }, "pocket_status": { "default": "not_registered", "enum": ["not_registered", "source_registered_not_scientific_approval"], "title": "Pocket Status", "type": "string" }, "annotation_file_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation File Id" }, "annotation_sha256": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Sha256" }, "annotation_source_reference": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Source Reference" }, "annotation_source_tool": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Source Tool" }, "annotation_source_tool_version": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Annotation Source Tool Version" }, "fusion_sequence_file_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Fusion Sequence File Id" }, "fusion_sequence_file_sha256": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Fusion Sequence File Sha256" }, "fusion_sequence_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null, "title": "Fusion Sequence Id" }, "annotations": { "items": { "$ref": "urn:fusionlab:shared#/$defs/DisplayResidueAnnotation" }, "title": "Annotations", "type": "array" }, "annotation_scope": { "default": "residue_page", "enum": ["residue_page", "full_model"], "title": "Annotation Scope", "type": "string" }, "overlays": { "items": { "$ref": "urn:fusionlab:shared#/$defs/DisplayOverlay" }, "title": "Overlays", "type": "array" }, "preview_policy": { "const": "atom_coordinates_only_original_sealed", "default": "atom_coordinates_only_original_sealed", "title": "Preview Policy", "type": "string" } }, "required": ["schema_version", "identity", "format", "offset", "total", "chains", "models", "residues", "confidence_status", "mapping_status", "pocket_status", "annotation_file_id", "annotation_sha256", "annotation_source_reference", "annotation_source_tool", "annotation_source_tool_version", "fusion_sequence_file_id", "fusion_sequence_file_sha256", "fusion_sequence_id", "annotations", "annotation_scope", "overlays", "preview_policy"], "title": "StructurePage", "type": "object" };
 function validate94(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -7025,7 +7662,7 @@ function validate98(data, { instancePath = "", parentData, parentDataProperty, r
 }
 validate98.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 var schema45 = { "additionalProperties": false, "properties": { "reference_sha256": { "pattern": "^[0-9a-f]{64}$", "title": "Reference Sha256", "type": "string" }, "source_reference": { "minLength": 1, "title": "Source Reference", "type": "string" }, "source_tool": { "minLength": 1, "title": "Source Tool", "type": "string" }, "source_tool_version": { "minLength": 1, "title": "Source Tool Version", "type": "string" }, "direction": { "const": "reference_to_target", "title": "Direction", "type": "string" }, "coordinate_unit": { "const": "angstrom", "title": "Coordinate Unit", "type": "string" }, "convention": { "const": "row_major_column_vector_xyz1", "title": "Convention", "type": "string" }, "matrix": { "items": { "items": { "type": "number" }, "type": "array" }, "title": "Matrix", "type": "array" }, "reference_file_id": { "title": "Reference File Id", "type": "string" }, "target_sha256": { "title": "Target Sha256", "type": "string" } }, "required": ["reference_sha256", "source_reference", "source_tool", "source_tool_version", "direction", "coordinate_unit", "convention", "matrix", "reference_file_id", "target_sha256"], "title": "DisplayOverlay", "type": "object" };
-var func14 = require_ucs2length().default;
+var func18 = require_ucs2length().default;
 function validate103(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -7076,7 +7713,7 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
               const _errs4 = errors;
               if (errors === _errs4) {
                 if (typeof data1 === "string") {
-                  if (func14(data1) < 1) {
+                  if (func18(data1) < 1) {
                     validate103.errors = [{ instancePath: instancePath + "/source_reference", schemaPath: "#/properties/source_reference/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                     return false;
                   }
@@ -7095,7 +7732,7 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
                 const _errs6 = errors;
                 if (errors === _errs6) {
                   if (typeof data2 === "string") {
-                    if (func14(data2) < 1) {
+                    if (func18(data2) < 1) {
                       validate103.errors = [{ instancePath: instancePath + "/source_tool", schemaPath: "#/properties/source_tool/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                       return false;
                     }
@@ -7114,7 +7751,7 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
                   const _errs8 = errors;
                   if (errors === _errs8) {
                     if (typeof data3 === "string") {
-                      if (func14(data3) < 1) {
+                      if (func18(data3) < 1) {
                         validate103.errors = [{ instancePath: instancePath + "/source_tool_version", schemaPath: "#/properties/source_tool_version/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                         return false;
                       }
@@ -7275,7 +7912,7 @@ function validate93(data, { instancePath = "", parentData, parentDataProperty, r
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.schema_version === void 0 && (missing0 = "schema_version") || data.identity === void 0 && (missing0 = "identity") || data.format === void 0 && (missing0 = "format") || data.offset === void 0 && (missing0 = "offset") || data.total === void 0 && (missing0 = "total") || data.chains === void 0 && (missing0 = "chains") || data.models === void 0 && (missing0 = "models") || data.residues === void 0 && (missing0 = "residues") || data.confidence_status === void 0 && (missing0 = "confidence_status") || data.mapping_status === void 0 && (missing0 = "mapping_status") || data.pocket_status === void 0 && (missing0 = "pocket_status") || data.annotation_file_id === void 0 && (missing0 = "annotation_file_id") || data.annotation_sha256 === void 0 && (missing0 = "annotation_sha256") || data.annotation_source_reference === void 0 && (missing0 = "annotation_source_reference") || data.annotation_source_tool === void 0 && (missing0 = "annotation_source_tool") || data.annotation_source_tool_version === void 0 && (missing0 = "annotation_source_tool_version") || data.fusion_sequence_file_id === void 0 && (missing0 = "fusion_sequence_file_id") || data.fusion_sequence_file_sha256 === void 0 && (missing0 = "fusion_sequence_file_sha256") || data.fusion_sequence_id === void 0 && (missing0 = "fusion_sequence_id") || data.annotations === void 0 && (missing0 = "annotations") || data.overlays === void 0 && (missing0 = "overlays") || data.preview_policy === void 0 && (missing0 = "preview_policy")) {
+      if (data.schema_version === void 0 && (missing0 = "schema_version") || data.identity === void 0 && (missing0 = "identity") || data.format === void 0 && (missing0 = "format") || data.offset === void 0 && (missing0 = "offset") || data.total === void 0 && (missing0 = "total") || data.chains === void 0 && (missing0 = "chains") || data.models === void 0 && (missing0 = "models") || data.residues === void 0 && (missing0 = "residues") || data.confidence_status === void 0 && (missing0 = "confidence_status") || data.mapping_status === void 0 && (missing0 = "mapping_status") || data.pocket_status === void 0 && (missing0 = "pocket_status") || data.annotation_file_id === void 0 && (missing0 = "annotation_file_id") || data.annotation_sha256 === void 0 && (missing0 = "annotation_sha256") || data.annotation_source_reference === void 0 && (missing0 = "annotation_source_reference") || data.annotation_source_tool === void 0 && (missing0 = "annotation_source_tool") || data.annotation_source_tool_version === void 0 && (missing0 = "annotation_source_tool_version") || data.fusion_sequence_file_id === void 0 && (missing0 = "fusion_sequence_file_id") || data.fusion_sequence_file_sha256 === void 0 && (missing0 = "fusion_sequence_file_sha256") || data.fusion_sequence_id === void 0 && (missing0 = "fusion_sequence_id") || data.annotations === void 0 && (missing0 = "annotations") || data.annotation_scope === void 0 && (missing0 = "annotation_scope") || data.overlays === void 0 && (missing0 = "overlays") || data.preview_policy === void 0 && (missing0 = "preview_policy")) {
         validate93.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
@@ -7942,48 +8579,65 @@ function validate93(data, { instancePath = "", parentData, parentDataProperty, r
                                                   var valid0 = true;
                                                 }
                                                 if (valid0) {
-                                                  if (data.overlays !== void 0) {
-                                                    let data24 = data.overlays;
+                                                  if (data.annotation_scope !== void 0) {
+                                                    let data24 = data.annotation_scope;
                                                     const _errs79 = errors;
-                                                    if (errors === _errs79) {
-                                                      if (Array.isArray(data24)) {
-                                                        var valid13 = true;
-                                                        const len4 = data24.length;
-                                                        for (let i4 = 0; i4 < len4; i4++) {
-                                                          const _errs81 = errors;
-                                                          if (!validate103(data24[i4], { instancePath: instancePath + "/overlays/" + i4, parentData: data24, parentDataProperty: i4, rootData, dynamicAnchors })) {
-                                                            vErrors = vErrors === null ? validate103.errors : vErrors.concat(validate103.errors);
-                                                            errors = vErrors.length;
-                                                          }
-                                                          var valid13 = _errs81 === errors;
-                                                          if (!valid13) {
-                                                            break;
-                                                          }
-                                                        }
-                                                      } else {
-                                                        validate93.errors = [{ instancePath: instancePath + "/overlays", schemaPath: "#/properties/overlays/type", keyword: "type", params: { type: "array" }, message: "must be array" }];
-                                                        return false;
-                                                      }
+                                                    if (typeof data24 !== "string") {
+                                                      validate93.errors = [{ instancePath: instancePath + "/annotation_scope", schemaPath: "#/properties/annotation_scope/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                                                      return false;
+                                                    }
+                                                    if (!(data24 === "residue_page" || data24 === "full_model")) {
+                                                      validate93.errors = [{ instancePath: instancePath + "/annotation_scope", schemaPath: "#/properties/annotation_scope/enum", keyword: "enum", params: { allowedValues: schema40.properties.annotation_scope.enum }, message: "must be equal to one of the allowed values" }];
+                                                      return false;
                                                     }
                                                     var valid0 = _errs79 === errors;
                                                   } else {
                                                     var valid0 = true;
                                                   }
                                                   if (valid0) {
-                                                    if (data.preview_policy !== void 0) {
-                                                      let data26 = data.preview_policy;
-                                                      const _errs82 = errors;
-                                                      if (typeof data26 !== "string") {
-                                                        validate93.errors = [{ instancePath: instancePath + "/preview_policy", schemaPath: "#/properties/preview_policy/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
-                                                        return false;
+                                                    if (data.overlays !== void 0) {
+                                                      let data25 = data.overlays;
+                                                      const _errs81 = errors;
+                                                      if (errors === _errs81) {
+                                                        if (Array.isArray(data25)) {
+                                                          var valid13 = true;
+                                                          const len4 = data25.length;
+                                                          for (let i4 = 0; i4 < len4; i4++) {
+                                                            const _errs83 = errors;
+                                                            if (!validate103(data25[i4], { instancePath: instancePath + "/overlays/" + i4, parentData: data25, parentDataProperty: i4, rootData, dynamicAnchors })) {
+                                                              vErrors = vErrors === null ? validate103.errors : vErrors.concat(validate103.errors);
+                                                              errors = vErrors.length;
+                                                            }
+                                                            var valid13 = _errs83 === errors;
+                                                            if (!valid13) {
+                                                              break;
+                                                            }
+                                                          }
+                                                        } else {
+                                                          validate93.errors = [{ instancePath: instancePath + "/overlays", schemaPath: "#/properties/overlays/type", keyword: "type", params: { type: "array" }, message: "must be array" }];
+                                                          return false;
+                                                        }
                                                       }
-                                                      if ("atom_coordinates_only_original_sealed" !== data26) {
-                                                        validate93.errors = [{ instancePath: instancePath + "/preview_policy", schemaPath: "#/properties/preview_policy/const", keyword: "const", params: { allowedValue: "atom_coordinates_only_original_sealed" }, message: "must be equal to constant" }];
-                                                        return false;
-                                                      }
-                                                      var valid0 = _errs82 === errors;
+                                                      var valid0 = _errs81 === errors;
                                                     } else {
                                                       var valid0 = true;
+                                                    }
+                                                    if (valid0) {
+                                                      if (data.preview_policy !== void 0) {
+                                                        let data27 = data.preview_policy;
+                                                        const _errs84 = errors;
+                                                        if (typeof data27 !== "string") {
+                                                          validate93.errors = [{ instancePath: instancePath + "/preview_policy", schemaPath: "#/properties/preview_policy/type", keyword: "type", params: { type: "string" }, message: "must be string" }];
+                                                          return false;
+                                                        }
+                                                        if ("atom_coordinates_only_original_sealed" !== data27) {
+                                                          validate93.errors = [{ instancePath: instancePath + "/preview_policy", schemaPath: "#/properties/preview_policy/const", keyword: "const", params: { allowedValue: "atom_coordinates_only_original_sealed" }, message: "must be equal to constant" }];
+                                                          return false;
+                                                        }
+                                                        var valid0 = _errs84 === errors;
+                                                      } else {
+                                                        var valid0 = true;
+                                                      }
                                                     }
                                                   }
                                                 }
@@ -8609,7 +9263,7 @@ function validate110(data, { instancePath = "", parentData, parentDataProperty, 
               const _errs4 = errors;
               if (errors === _errs4) {
                 if (typeof data1 === "string") {
-                  if (func14(data1) < 1) {
+                  if (func18(data1) < 1) {
                     validate110.errors = [{ instancePath: instancePath + "/sequence", schemaPath: "#/properties/sequence/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                     return false;
                   }
@@ -15660,7 +16314,7 @@ function validate159(data, { instancePath = "", parentData, parentDataProperty, 
                         const _errs28 = errors;
                         if (errors === _errs28) {
                           if (typeof data7 === "string") {
-                            if (func14(data7) < 1) {
+                            if (func18(data7) < 1) {
                               validate159.errors = [{ instancePath: instancePath + "/source_reference", schemaPath: "#/properties/source_reference/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                               return false;
                             }
@@ -15712,7 +16366,7 @@ function validate159(data, { instancePath = "", parentData, parentDataProperty, 
                             const _errs34 = errors;
                             if (errors === _errs34) {
                               if (typeof data10 === "string") {
-                                if (func14(data10) < 1) {
+                                if (func18(data10) < 1) {
                                   validate159.errors = [{ instancePath: instancePath + "/reviewed_by", schemaPath: "#/properties/reviewed_by/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                                   return false;
                                 }
@@ -15894,7 +16548,7 @@ function validate161(data, { instancePath = "", parentData, parentDataProperty, 
                             const _errs24 = errors;
                             if (errors === _errs24) {
                               if (typeof data10 === "string") {
-                                if (func14(data10) < 1) {
+                                if (func18(data10) < 1) {
                                   validate161.errors = [{ instancePath: instancePath + "/source_reference", schemaPath: "#/properties/source_reference/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                                   return false;
                                 }
@@ -15913,7 +16567,7 @@ function validate161(data, { instancePath = "", parentData, parentDataProperty, 
                               const _errs26 = errors;
                               if (errors === _errs26) {
                                 if (typeof data11 === "string") {
-                                  if (func14(data11) < 1) {
+                                  if (func18(data11) < 1) {
                                     validate161.errors = [{ instancePath: instancePath + "/applicable_domain_reference", schemaPath: "#/properties/applicable_domain_reference/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                                     return false;
                                   }
@@ -15932,7 +16586,7 @@ function validate161(data, { instancePath = "", parentData, parentDataProperty, 
                                 const _errs28 = errors;
                                 if (errors === _errs28) {
                                   if (typeof data12 === "string") {
-                                    if (func14(data12) < 1) {
+                                    if (func18(data12) < 1) {
                                       validate161.errors = [{ instancePath: instancePath + "/reviewed_by", schemaPath: "#/properties/reviewed_by/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                                       return false;
                                     }
@@ -16333,7 +16987,7 @@ function validate164(data, { instancePath = "", parentData, parentDataProperty, 
                 const _errs6 = errors;
                 if (errors === _errs6) {
                   if (typeof data2 === "string") {
-                    if (func14(data2) < 1) {
+                    if (func18(data2) < 1) {
                       validate164.errors = [{ instancePath: instancePath + "/reviewed_by", schemaPath: "#/properties/reviewed_by/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                       return false;
                     }
@@ -16904,7 +17558,7 @@ function validate174(data, { instancePath = "", parentData, parentDataProperty, 
               const _errs4 = errors;
               if (errors === _errs4) {
                 if (typeof data1 === "string") {
-                  if (func14(data1) < 1) {
+                  if (func18(data1) < 1) {
                     validate174.errors = [{ instancePath: instancePath + "/rate_parameter_id", schemaPath: "#/properties/rate_parameter_id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                     return false;
                   }
@@ -16923,7 +17577,7 @@ function validate174(data, { instancePath = "", parentData, parentDataProperty, 
                 const _errs6 = errors;
                 if (errors === _errs6) {
                   if (typeof data2 === "string") {
-                    if (func14(data2) < 1) {
+                    if (func18(data2) < 1) {
                       validate174.errors = [{ instancePath: instancePath + "/intracellular_volume_parameter_id", schemaPath: "#/properties/intracellular_volume_parameter_id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                       return false;
                     }
@@ -16942,7 +17596,7 @@ function validate174(data, { instancePath = "", parentData, parentDataProperty, 
                   const _errs8 = errors;
                   if (errors === _errs8) {
                     if (typeof data3 === "string") {
-                      if (func14(data3) < 1) {
+                      if (func18(data3) < 1) {
                         validate174.errors = [{ instancePath: instancePath + "/extracellular_volume_parameter_id", schemaPath: "#/properties/extracellular_volume_parameter_id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                         return false;
                       }
@@ -19781,7 +20435,7 @@ function validate109(data, { instancePath = "", parentData, parentDataProperty, 
               const _errs4 = errors;
               if (errors === _errs4) {
                 if (typeof data1 === "string") {
-                  if (func14(data1) < 1) {
+                  if (func18(data1) < 1) {
                     validate109.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                     return false;
                   }
@@ -20881,7 +21535,7 @@ function validate193(data, { instancePath = "", parentData, parentDataProperty, 
             const _errs2 = errors;
             if (errors === _errs2) {
               if (typeof data0 === "string") {
-                if (func14(data0) < 1) {
+                if (func18(data0) < 1) {
                   validate193.errors = [{ instancePath: instancePath + "/id", schemaPath: "#/properties/id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                   return false;
                 } else {
@@ -25857,7 +26511,7 @@ function validate252(data, { instancePath = "", parentData, parentDataProperty, 
               const _errs4 = errors;
               if (errors === _errs4) {
                 if (typeof data1 === "string") {
-                  if (func14(data1) < 1) {
+                  if (func18(data1) < 1) {
                     validate252.errors = [{ instancePath: instancePath + "/sequence", schemaPath: "#/properties/sequence/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                     return false;
                   }
@@ -26123,7 +26777,7 @@ function validate251(data, { instancePath = "", parentData, parentDataProperty, 
               const _errs4 = errors;
               if (errors === _errs4) {
                 if (typeof data1 === "string") {
-                  if (func14(data1) < 1) {
+                  if (func18(data1) < 1) {
                     validate251.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                     return false;
                   }
@@ -26704,7 +27358,7 @@ function validate264(data, { instancePath = "", parentData, parentDataProperty, 
               const _errs4 = errors;
               if (errors === _errs4) {
                 if (typeof data1 === "string") {
-                  if (func14(data1) < 1) {
+                  if (func18(data1) < 1) {
                     validate264.errors = [{ instancePath: instancePath + "/name", schemaPath: "#/properties/name/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                     return false;
                   }
@@ -28306,7 +28960,7 @@ function validate280(data, { instancePath = "", parentData, parentDataProperty, 
             const _errs2 = errors;
             if (errors === _errs2) {
               if (typeof data0 === "string") {
-                if (func14(data0) < 1) {
+                if (func18(data0) < 1) {
                   validate280.errors = [{ instancePath: instancePath + "/id", schemaPath: "#/properties/id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" }];
                   return false;
                 } else {
