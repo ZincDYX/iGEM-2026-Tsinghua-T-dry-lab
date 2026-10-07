@@ -96,7 +96,7 @@ class DisclosureBoundary:
         with self.store.connection() as db:
             db.execute("INSERT INTO private_diagnostics VALUES(?,?,?)", (diagnostic_id, type(error).__name__, getattr(error,"private_detail",None) or str(error)))
         from .public_errors import ERROR_GUIDANCE, PublicError
-        message, fields, actions = ERROR_GUIDANCE.get(code, ("操作未完成；请核对输入、证据或工具能力。", [], ["凭诊断 ID 查看私有诊断"]))
+        message, fields, actions = ERROR_GUIDANCE.get(code, ("Operation incomplete. Check inputs, evidence and tool capabilities.", [], ["Use the diagnostic ID to inspect private diagnostics"]))
         files = []
         for name in getattr(error,"logical_files",()):
             if not isinstance(name,str) or PurePosixPath(name).is_absolute() or PureWindowsPath(name).is_absolute() or ".." in Path(name).parts:

@@ -1,3 +1,8 @@
+export function LineagePage(value:unknown):value is import("./LineagePage.generated").LineagePage;
+export function ComparePage(value:unknown):value is import("./ComparePage.generated").ComparePage;
+export function ResourcePage(value:unknown):value is import("./ResourcePage.generated").ResourcePage;
+export function SeriesPage(value:unknown):value is import("./SeriesPage.generated").SeriesPage;
+export function StructurePage(value:unknown):value is import("./StructurePage.generated").StructurePage;
 export function ScientificPrecheckView(value:unknown):value is import("./ScientificPrecheckView.generated").ScientificPrecheckView;
 export function PublicError(value:unknown):value is import("./PublicError.generated").PublicError;
 export function ProjectView(value:unknown):value is import("./ProjectView.generated").ProjectView;

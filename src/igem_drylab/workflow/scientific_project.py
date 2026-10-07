@@ -173,6 +173,6 @@ def stage_tools():
                 "resource_artifacts": [EvidenceFile(path=path,sha256=sha256(path.read_bytes()).hexdigest()).model_dump(mode="json") for path in sorted(artifacts)],
                 "trajectory_refs": trajectory_refs, "output": output.model_dump(mode="json"),
                 "claim_scope": "original_stage_contracts_not_automatic_experimental_validation"}
-        definitions.append(ToolDefinition("project." + stage, stage.upper() + " 原式项目管线", "读取已绑定科学配置和证据，复用确定性 stage。",
+        definitions.append(ToolDefinition("project." + stage, stage.upper() + " original-formula scientific stage", "Read bound scientific inputs/evidence through the deterministic stage.",
             "2", StageInput, handler, "scientific_project", implementation_files=implementation))
     return definitions

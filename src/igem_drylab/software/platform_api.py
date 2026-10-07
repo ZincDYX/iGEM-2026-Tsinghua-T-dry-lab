@@ -11,7 +11,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from Bio import SeqIO
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import Field
 
@@ -100,6 +100,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     boundary = engine.disclosure
     from igem_drylab.workflow.views import PublicReads
     reads = PublicReads(store,boundary)
+    from igem_drylab.workflow.display_resources import DisplayResources
+    resources = DisplayResources(store, boundary)
+    from igem_drylab.workflow.lineage_compare import LineageComparison
+    comparisons = LineageComparison(store, boundary)
     planning = PlanningService(store,boundary,planning_backend,engine)
     if planning_backend is not None:
         private_client = getattr(planning_backend,"client",None)
@@ -265,6 +269,61 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             db.execute("INSERT INTO scientific_bundles VALUES(?,?)", (root.name,str(root)))
         return scientific_preview(ScientificImportRequest(config_path=source))
 
+    @router.post("/scientific-projects/upload-binary")
+    async def scientific_binary(request: Request, config_filename: str):
+        from igem_drylab.workflow.binary_import import receive_bundle
+        def publish(root, filename, hashes):
+            from igem_drylab.workflow.scientific_project import load_scientific_project
+            from igem_drylab.resources import default_config_path
+            science = load_scientific_project(root / filename, allowed_roots=(root, default_config_path("m1_feature_definitions.yaml"), default_config_path("m1_rules_v3.yaml")))
+            from igem_drylab.workflow.scientific_project import EvidenceFile
+            bound = {item.path for item in science.evidence_files}
+            science.evidence_files.extend(EvidenceFile(path=root / name, sha256=digest) for name, digest in hashes.items() if root / name not in bound)
+            science.verify()
+            with store.connection() as db:
+                db.execute("BEGIN IMMEDIATE")
+                db.execute("INSERT INTO scientific_bundles VALUES(?,?)", (root.name, str(root)))
+                result = boundary.scientific(science.model_dump(mode="json"), db=db)
+                # Register extra uploaded display assets without inventing scientific bindings.
+                for logical_name in hashes:
+                    boundary.asset(root / logical_name, db=db)
+            return {"scientific_project": result, "requires_confirmation": True, "dependency_scope": science.dependency_scope}
+        return await receive_bundle(request, data_dir / "imports", config_filename, publish)
+
+    @router.get("/projects/{project_id}/resources")
+    def project_resources(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
+        return resources.catalog(project_id, offset, limit)
+
+    @router.get("/runs/{run_id}/resources")
+    def run_resources(run_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
+        return resources.catalog(project_id, offset, limit, run_id)
+
+    @router.get("/projects/{project_id}/lineage")
+    def project_lineage(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
+        return comparisons.lineage(project_id, offset, limit)
+
+    @router.get("/projects/{project_id}/compare")
+    def compare_runs(project_id: str, left_run_id: str, right_run_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=50), objective: Literal["yield_abs", "productivity"] = "yield_abs"):
+        return comparisons.compare(project_id, left_run_id, right_run_id, offset, limit, objective)
+
+    @router.get("/files/{file_id}/series")
+    def display_series(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=1000), series_id: str | None = None):
+        return resources.series(project_id, file_id, offset, limit, series_id)
+
+    @router.get("/files/{file_id}/image-preview")
+    def display_image(file_id: str, project_id: str):
+        raw = resources.image(project_id, file_id)
+        return Response(raw, media_type="image/png", headers={"X-Preview-SHA256": sha256(raw).hexdigest(), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+    @router.get("/files/{file_id}/structure-metadata")
+    def structure_metadata(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
+        return resources.structure(project_id, file_id, offset, limit)[0]
+
+    @router.get("/files/{file_id}/structure-preview")
+    def structure_preview(file_id: str, project_id: str):
+        _, raw = resources.structure(project_id, file_id)
+        return Response(raw, media_type="text/plain", headers={"X-Preview-SHA256": sha256(raw).hexdigest(), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
     @router.post("/imports/preview")
     def import_preview(request: ImportRequest) -> dict[str, Any]:
         extension = Path(request.filename).suffix.lower()
@@ -326,7 +385,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         project = store.project(request.project_id)
         workflow = recommend(project, request.goal)
         if request.objective:
-            workflow.description += f" 用户任务说明：{request.objective}"
+            workflow.description += f" Original user objective: {request.objective}"
         boundary.check(workflow.model_dump(mode="json"))
         review = planning.custom(project.id,workflow,request.objective,source="manual_compatibility")
         return {"workflow": workflow.model_dump(mode="json"), "source": "validated_template", "requires_confirmation": True,
@@ -407,19 +466,14 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         if row is None or row[0] != project_id:
             raise WorkflowError("file_project_mismatch",status_code=403)
         path = Path(boundary.resolve_asset(file_id,project_id))
-        data = json.loads(path.read_bytes())
-        contract = data.get("prediction_contract") if isinstance(data,dict) else None
-        if not isinstance(contract,dict) or not isinstance(contract.get("time"),list) or not isinstance(contract.get("concentrations"),dict):
-            raise WorkflowError("unsupported_trajectory_contract")
-        time = contract["time"]
-        sliced = {**contract,"time":time[offset:offset+limit],"concentrations":{}}
-        for compartment,species in contract["concentrations"].items():
-            if not isinstance(species,dict): raise WorkflowError("invalid_trajectory_contract")
-            sliced["concentrations"][compartment] = {}
-            for name,values in species.items():
-                if not isinstance(values,list) or len(values) != len(time): raise WorkflowError("invalid_trajectory_contract")
-                sliced["concentrations"][compartment][name] = values[offset:offset+limit]
-        result = {"file_id":file_id,"sha256":row["hash"],"offset":offset,"total":len(time),"prediction_contract":sliced}
+        page = resources.series(project_id, file_id, offset, limit)
+        concentrations = {}
+        for descriptor in page["series"]:
+            concentrations.setdefault(descriptor["compartment"], {})[descriptor["species"]] = page["values"][descriptor["id"]]
+        result = {"file_id": file_id, "sha256": row["hash"], "offset": offset, "total": page["total"], "prediction_contract": {
+            "schema_version": page["result_schema_version"], "model_kind": page["model_kind"], "formula_version": page["formula_version"],
+            "time_unit": page["time_unit"], "concentration_unit": page["series"][0]["unit"] if page["series"] else None,
+            "time": page["time"], "concentrations": concentrations}}
         boundary.check(result)
         return result
 
@@ -452,7 +506,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         # A clone is a newly reviewed plan against the current input revision,
         # not permission to reinterpret the immutable old run.
         return planning.custom(old["project"]["id"],Workflow.model_validate(old["workflow"]),
-            "从旧运行生成新审阅范围；尚未执行。",source="run_clone",previous_review_identity=engine.snapshot_review_identity(old)).model_dump(mode="json")
+            "Review a new scope from a frozen run; not executed.",source="run_clone",previous_review_identity=engine.snapshot_review_identity(old)).model_dump(mode="json")
 
     @router.get("/artifacts/{artifact_id}")
     def artifact(artifact_id: str, project_id: str) -> FileResponse:

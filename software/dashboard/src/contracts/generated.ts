@@ -1,3 +1,8 @@
+export type { LineagePage } from "./LineagePage.generated";
+export type { ComparePage } from "./ComparePage.generated";
+export type { ResourcePage } from "./ResourcePage.generated";
+export type { SeriesPage } from "./SeriesPage.generated";
+export type { StructurePage } from "./StructurePage.generated";
 export type { ScientificPrecheckView } from "./ScientificPrecheckView.generated";
 export type { PublicError } from "./PublicError.generated";
 export type { ProjectView } from "./ProjectView.generated";

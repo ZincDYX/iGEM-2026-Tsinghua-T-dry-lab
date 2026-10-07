@@ -47,4 +47,4 @@ def input_diff(store,boundary,project:Project,run_id:str):
     return {"baseline_run_id":run_id,"baseline_snapshot_sha256":run["snapshot_hash"],"project_id":project.id,"project_revision":project.revision,
         "changed_fields":[".".join(path) for path in changed[:200]],"total_changed_fields":len(changed),
         "affected_nodes":[node.id for node in workflow.nodes if node.id in affected],"reuse_supported":False,
-        "explanation":"按真实 ProjectInput 及下游依赖保守判定；整份科学配置绑定影响该绑定的所有阶段。不推断未经核验的细粒度依赖，不自动复用。文件换项目逻辑 ID 但字节相同不当成数值变更。"}
+        "explanation":"Conservative impact from actual ProjectInput/downstream bindings. No unverified fine-grained dependency inference or automatic reuse; identical content under a new grant is not a numeric change."}

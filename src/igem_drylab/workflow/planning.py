@@ -64,14 +64,14 @@ class PlanningService:
         self.boundary.check({"objective":request.objective})
         identity = str(uuid4())
         result = ProposalView(id=identity,task_id=identity,project_id=project.id,source="validated_template",status="proposed",
-            objective=request.objective,rationale="确定性模板编译；没有调用语言模型。",evidence=[],requested_stages=[],execution_stages=[],
-            reused_artifacts=[],missing_inputs=[],limitations=["提案接受不是参数审批，也不启动计算。","未核验跨运行阶段依赖身份，不自动复用旧科学产物。"],workflow=None,confirmation=None,created_at=now())
+            objective=request.objective,rationale="Template planner; no language model was called.",evidence=[],requested_stages=[],execution_stages=[],
+            reused_artifacts=[],missing_inputs=[],limitations=["Accepting a proposal does not approve parameters or start execution.","Cross-run dependency reuse is not verified; original scientific outputs are not automatically reused."],workflow=None,confirmation=None,created_at=now())
         workflow = None
         if request.mode == "hybrid":
             result.source = "hybrid_semantic_compiler"
             if self.backend is None or not request.external_planning_approved:
                 result.status = "blocked"
-                result.rationale = "未配置私有规划提供者，或尚未同意向该提供者发送目标与公开证据摘要。"
+                result.rationale = "Private planner unavailable or external disclosure consent not granted."
                 result.missing_inputs = ["private_planning_provider_or_explicit_data_permission"]
             else:
                 from igem_drylab.agent.models import AgentTask
@@ -85,7 +85,7 @@ class PlanningService:
                 # not AgentRuntime or a second executor.
                 compiled = self.backend.create_plan(task,context,{"igem.pipeline.plan_stage"})
                 semantic = compiled.diagnostics.get("semantic_decision",{})
-                result.rationale = semantic.get("rationale") or "确定性编译器要求补充输入或证据。"
+                result.rationale = semantic.get("rationale") or "The deterministic compiler requires additional inputs or evidence."
                 result.change_types = list(semantic.get("change_types",[]))
                 result.missing_inputs = list(semantic.get("missing_inputs",[]))
                 result.evidence = [item["sha256"] for item in context.artifact_summaries]
@@ -110,7 +110,7 @@ class PlanningService:
                     workflow.execution_policy.allowed_tools = sorted({node.tool_id for node in workflow.nodes})
                     expanded_stages = [node.id for node in workflow.nodes if node.id not in requested]
                     if expanded_stages:
-                        result.limitations.append("缺少经过核验的可复用前序产物，因此显式补全前置阶段："+", ".join(expanded_stages))
+                        result.limitations.append("No verified reusable predecessor artifacts; dependencies explicitly added: "+", ".join(expanded_stages))
                         constraints = semantic.get("scientific_constraints",[])
                         if "do_not_rerun_unaffected_structural_stages" in constraints:
                             result.status = "blocked"
@@ -136,8 +136,8 @@ class PlanningService:
         project=self.store.project(project_id)
         identity=str(uuid4())
         result=ProposalView(id=identity,task_id=identity,project_id=project_id,source=source,status="proposed",
-            objective=objective,rationale="用户提交的 DAG；已校验图、工具与正式前序来源绑定，尚未接受或执行。",evidence=[],requested_stages=[node.id for node in workflow.nodes],
-            execution_stages=[node.id for node in workflow.nodes],reused_artifacts=[],missing_inputs=[],limitations=["用户 DAG 不自动批准科学参数；同一 durable 执行器仍核验来源与审批。"],
+            objective=objective,rationale="User DAG validated for graph, tools and formal predecessor bindings; not accepted or executed.",evidence=[],requested_stages=[node.id for node in workflow.nodes],
+            execution_stages=[node.id for node in workflow.nodes],reused_artifacts=[],missing_inputs=[],limitations=["User DAGs do not approve scientific parameters; the durable executor verifies provenance and approvals."],
             workflow=workflow,confirmation=plan_binding(project,workflow),created_at=now(),
             review_identity=self.engine.review_identity(project,workflow) if self.engine else None,previous_review_identity=previous_review_identity)
         self.boundary.check(result.model_dump(mode="json"))

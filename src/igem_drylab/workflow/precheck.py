@@ -67,7 +67,7 @@ def precheck(project: Project) -> ScientificPrecheckView:
                             source_kind="reviewed_condition_compatible_parameter_record"))
     return ScientificPrecheckView(project_id=project.id,project_revision=project.revision,
         input_sha256=sha256(canonical(project.model_dump(mode="json")).encode()).hexdigest(),missing=missing,
-        limitations=["仅检查已声明输入与现有参数合同；不是完整候选门控或运行许可。",
-            "构建/条件身份未声明时不能判断候选范围；M3 上游上下文可能进一步收紧需求。",
-            "未登记预测器文件可能由受审阅真实工具作业生成；预检不会调用这些工具。",
-            "未检查完全部科学 gate；空缺项列表也不代表证据充分、实验验证或允许预测。"])
+        limitations=["Declared inputs and existing parameter contracts only; not full candidate gates or execution approval.",
+            "Undeclared construct/condition identities prevent scope checks; upstream M3 context may add requirements.",
+            "A reviewed real tool job may provide predictor evidence; this check does not invoke tools.",
+            "Not all scientific gates are checked. An empty omissions list is not evidence completeness, validation or prediction permission."])

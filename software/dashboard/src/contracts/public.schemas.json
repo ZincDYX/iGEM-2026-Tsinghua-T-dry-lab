@@ -1,4 +1,1449 @@
 {
+  "LineagePage": {
+    "$defs": {
+      "LineageRun": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "snapshot_hash": {
+            "title": "Snapshot Hash",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id",
+          "snapshot_hash",
+          "revision",
+          "status"
+        ],
+        "title": "LineageRun",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "run-lineage-v1",
+        "default": "run-lineage-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/$defs/LineageRun"
+        },
+        "title": "Items",
+        "type": "array"
+      }
+    },
+    "required": [
+      "schema_version",
+      "project_id",
+      "offset",
+      "total",
+      "has_more",
+      "items"
+    ],
+    "title": "LineagePage",
+    "type": "object"
+  },
+  "ComparePage": {
+    "$defs": {
+      "CompareRow": {
+        "additionalProperties": false,
+        "properties": {
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "left": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ComparedValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "right": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ComparedValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comparable": {
+            "title": "Comparable",
+            "type": "boolean"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "metric_definition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Definition"
+          },
+          "metric_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Unit"
+          },
+          "comparison_contract_left": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison Contract Left"
+          },
+          "comparison_contract_right": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison Contract Right"
+          }
+        },
+        "required": [
+          "module",
+          "left",
+          "right",
+          "comparable",
+          "reason_codes",
+          "metric_definition",
+          "metric_unit",
+          "comparison_contract_left",
+          "comparison_contract_right"
+        ],
+        "title": "CompareRow",
+        "type": "object"
+      },
+      "ComparedValue": {
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Id"
+          },
+          "sequence_identity_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence Identity Sha256"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "claim_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Scope"
+          },
+          "numerically_solved": {
+            "title": "Numerically Solved",
+            "type": "boolean"
+          },
+          "evidence_ready": {
+            "title": "Evidence Ready",
+            "type": "boolean"
+          },
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "artifact_sha256": {
+            "title": "Artifact Sha256",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "record_id",
+          "construct_id",
+          "condition_id",
+          "sequence_identity_sha256",
+          "status",
+          "claim_scope",
+          "numerically_solved",
+          "evidence_ready",
+          "artifact_id",
+          "artifact_sha256",
+          "node_id",
+          "attempt",
+          "value"
+        ],
+        "title": "ComparedValue",
+        "type": "object"
+      },
+      "LineageRun": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "snapshot_hash": {
+            "title": "Snapshot Hash",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id",
+          "snapshot_hash",
+          "revision",
+          "status"
+        ],
+        "title": "LineageRun",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "scientific-comparison-v1",
+        "default": "scientific-comparison-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "left": {
+        "$ref": "#/$defs/LineageRun"
+      },
+      "right": {
+        "$ref": "#/$defs/LineageRun"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      },
+      "input_changed_fields": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Input Changed Fields",
+        "type": "array"
+      },
+      "input_diff_truncated": {
+        "title": "Input Diff Truncated",
+        "type": "boolean"
+      },
+      "rows": {
+        "items": {
+          "$ref": "#/$defs/CompareRow"
+        },
+        "title": "Rows",
+        "type": "array"
+      },
+      "ranking_performed": {
+        "const": false,
+        "default": false,
+        "title": "Ranking Performed",
+        "type": "boolean"
+      },
+      "claim_scope": {
+        "const": "record_comparison_not_new_prediction_or_validation",
+        "default": "record_comparison_not_new_prediction_or_validation",
+        "title": "Claim Scope",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "left",
+      "right",
+      "offset",
+      "total",
+      "has_more",
+      "input_changed_fields",
+      "input_diff_truncated",
+      "rows",
+      "ranking_performed",
+      "claim_scope"
+    ],
+    "title": "ComparePage",
+    "type": "object"
+  },
+  "ResourcePage": {
+    "$defs": {
+      "ImageResource": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "image",
+            "default": "image",
+            "title": "Kind",
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/$defs/ResourceIdentity"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "media_type": {
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ],
+            "title": "Media Type",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "role": {
+            "const": "registered_source",
+            "default": "registered_source",
+            "title": "Role",
+            "type": "string"
+          },
+          "claim_scope": {
+            "const": "display_only_not_experimental_validation",
+            "default": "display_only_not_experimental_validation",
+            "title": "Claim Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "identity",
+          "name",
+          "media_type",
+          "byte_count",
+          "role",
+          "claim_scope"
+        ],
+        "title": "ImageResource",
+        "type": "object"
+      },
+      "ResourceIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "snapshot_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Snapshot Hash"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Node Id"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attempt"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Id"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Condition Id"
+          }
+        },
+        "required": [
+          "project_id",
+          "file_id",
+          "source_sha256",
+          "run_id",
+          "snapshot_hash",
+          "node_id",
+          "attempt",
+          "candidate_id",
+          "construct_id",
+          "condition_id"
+        ],
+        "title": "ResourceIdentity",
+        "type": "object"
+      },
+      "SeriesResource": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "series",
+            "default": "series",
+            "title": "Kind",
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/$defs/ResourceIdentity"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "result_schema_version": {
+            "const": "m4-prediction-v2",
+            "default": "m4-prediction-v2",
+            "title": "Result Schema Version",
+            "type": "string"
+          },
+          "role": {
+            "const": "prediction_contract",
+            "default": "prediction_contract",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "identity",
+          "name",
+          "byte_count",
+          "result_schema_version",
+          "role"
+        ],
+        "title": "SeriesResource",
+        "type": "object"
+      },
+      "StructureResource": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "structure",
+            "default": "structure",
+            "title": "Kind",
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/$defs/ResourceIdentity"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "pdb",
+              "mmcif"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "role": {
+            "const": "registered_source",
+            "default": "registered_source",
+            "title": "Role",
+            "type": "string"
+          },
+          "claim_scope": {
+            "const": "geometry_only_no_inferred_activity_or_confidence",
+            "default": "geometry_only_no_inferred_activity_or_confidence",
+            "title": "Claim Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "identity",
+          "name",
+          "format",
+          "byte_count",
+          "role",
+          "claim_scope"
+        ],
+        "title": "StructureResource",
+        "type": "object"
+      },
+      "TableResource": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "table",
+            "default": "table",
+            "title": "Kind",
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/$defs/ResourceIdentity"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "role": {
+            "const": "registered_source",
+            "default": "registered_source",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "identity",
+          "name",
+          "media_type",
+          "byte_count",
+          "role"
+        ],
+        "title": "TableResource",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "display-resource-v1",
+        "default": "display-resource-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Run Id"
+      },
+      "snapshot_hash": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Snapshot Hash"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      },
+      "items": {
+        "items": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageResource"
+            },
+            {
+              "$ref": "#/$defs/StructureResource"
+            },
+            {
+              "$ref": "#/$defs/SeriesResource"
+            },
+            {
+              "$ref": "#/$defs/TableResource"
+            }
+          ]
+        },
+        "title": "Items",
+        "type": "array"
+      }
+    },
+    "required": [
+      "schema_version",
+      "project_id",
+      "run_id",
+      "snapshot_hash",
+      "offset",
+      "total",
+      "has_more",
+      "items"
+    ],
+    "title": "ResourcePage",
+    "type": "object"
+  },
+  "SeriesPage": {
+    "$defs": {
+      "ResourceIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "snapshot_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Snapshot Hash"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Node Id"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attempt"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Id"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Condition Id"
+          }
+        },
+        "required": [
+          "project_id",
+          "file_id",
+          "source_sha256",
+          "run_id",
+          "snapshot_hash",
+          "node_id",
+          "attempt",
+          "candidate_id",
+          "construct_id",
+          "condition_id"
+        ],
+        "title": "ResourceIdentity",
+        "type": "object"
+      },
+      "SeriesDescriptor": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "compartment": {
+            "title": "Compartment",
+            "type": "string"
+          },
+          "species": {
+            "title": "Species",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "compartment",
+          "species",
+          "unit"
+        ],
+        "title": "SeriesDescriptor",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "display-series-v1",
+        "default": "display-series-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "identity": {
+        "$ref": "#/$defs/ResourceIdentity"
+      },
+      "result_schema_version": {
+        "title": "Result Schema Version",
+        "type": "string"
+      },
+      "model_kind": {
+        "title": "Model Kind",
+        "type": "string"
+      },
+      "formula_version": {
+        "title": "Formula Version",
+        "type": "string"
+      },
+      "time_unit": {
+        "title": "Time Unit",
+        "type": "string"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      },
+      "display_policy": {
+        "const": "exact_contiguous_page_no_decimation",
+        "default": "exact_contiguous_page_no_decimation",
+        "title": "Display Policy",
+        "type": "string"
+      },
+      "time": {
+        "items": {
+          "type": "number"
+        },
+        "title": "Time",
+        "type": "array"
+      },
+      "series": {
+        "items": {
+          "$ref": "#/$defs/SeriesDescriptor"
+        },
+        "title": "Series",
+        "type": "array"
+      },
+      "values": {
+        "additionalProperties": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "title": "Values",
+        "type": "object"
+      }
+    },
+    "required": [
+      "schema_version",
+      "identity",
+      "result_schema_version",
+      "model_kind",
+      "formula_version",
+      "time_unit",
+      "offset",
+      "total",
+      "has_more",
+      "display_policy",
+      "time",
+      "series",
+      "values"
+    ],
+    "title": "SeriesPage",
+    "type": "object"
+  },
+  "StructurePage": {
+    "$defs": {
+      "ResidueAnnotation": {
+        "additionalProperties": false,
+        "properties": {
+          "residue": {
+            "$ref": "#/$defs/ResidueIdentity"
+          },
+          "full_fusion_position": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Full Fusion Position"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "enum": [
+                  "enzyme",
+                  "scaffold",
+                  "idr",
+                  "linker",
+                  "ligand_tail",
+                  "tag"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Region"
+          },
+          "reference_residue": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ResidueIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reference_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Sha256"
+          },
+          "pocket": {
+            "default": false,
+            "title": "Pocket",
+            "type": "boolean"
+          },
+          "plddt": {
+            "anyOf": [
+              {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Plddt"
+          }
+        },
+        "required": [
+          "residue",
+          "full_fusion_position",
+          "region",
+          "reference_residue",
+          "reference_sha256",
+          "pocket",
+          "plddt"
+        ],
+        "title": "ResidueAnnotation",
+        "type": "object"
+      },
+      "ResidueIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "chain": {
+            "title": "Chain",
+            "type": "string"
+          },
+          "residue_number": {
+            "title": "Residue Number",
+            "type": "string"
+          },
+          "insertion_code": {
+            "title": "Insertion Code",
+            "type": "string"
+          },
+          "residue_name": {
+            "title": "Residue Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "chain",
+          "residue_number",
+          "insertion_code",
+          "residue_name"
+        ],
+        "title": "ResidueIdentity",
+        "type": "object"
+      },
+      "ResourceIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "snapshot_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Snapshot Hash"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Node Id"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attempt"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Id"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Condition Id"
+          }
+        },
+        "required": [
+          "project_id",
+          "file_id",
+          "source_sha256",
+          "run_id",
+          "snapshot_hash",
+          "node_id",
+          "attempt",
+          "candidate_id",
+          "construct_id",
+          "condition_id"
+        ],
+        "title": "ResourceIdentity",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "display-structure-v1",
+        "default": "display-structure-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "identity": {
+        "$ref": "#/$defs/ResourceIdentity"
+      },
+      "format": {
+        "title": "Format",
+        "type": "string"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "chains": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Chains",
+        "type": "array"
+      },
+      "models": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Models",
+        "type": "array"
+      },
+      "residues": {
+        "items": {
+          "$ref": "#/$defs/ResidueIdentity"
+        },
+        "title": "Residues",
+        "type": "array"
+      },
+      "confidence_status": {
+        "default": "not_registered",
+        "enum": [
+          "not_registered",
+          "source_registered_not_scientific_approval"
+        ],
+        "title": "Confidence Status",
+        "type": "string"
+      },
+      "mapping_status": {
+        "default": "not_registered",
+        "enum": [
+          "not_registered",
+          "source_registered_not_scientific_approval"
+        ],
+        "title": "Mapping Status",
+        "type": "string"
+      },
+      "pocket_status": {
+        "default": "not_registered",
+        "enum": [
+          "not_registered",
+          "source_registered_not_scientific_approval"
+        ],
+        "title": "Pocket Status",
+        "type": "string"
+      },
+      "annotation_file_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Annotation File Id"
+      },
+      "annotation_sha256": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Annotation Sha256"
+      },
+      "annotation_source_reference": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Annotation Source Reference"
+      },
+      "annotation_source_tool": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Annotation Source Tool"
+      },
+      "annotation_source_tool_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Annotation Source Tool Version"
+      },
+      "annotations": {
+        "items": {
+          "$ref": "#/$defs/ResidueAnnotation"
+        },
+        "title": "Annotations",
+        "type": "array"
+      },
+      "preview_policy": {
+        "const": "atom_coordinates_only_original_sealed",
+        "default": "atom_coordinates_only_original_sealed",
+        "title": "Preview Policy",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "identity",
+      "format",
+      "offset",
+      "total",
+      "chains",
+      "models",
+      "residues",
+      "confidence_status",
+      "mapping_status",
+      "pocket_status",
+      "annotation_file_id",
+      "annotation_sha256",
+      "annotation_source_reference",
+      "annotation_source_tool",
+      "annotation_source_tool_version",
+      "annotations",
+      "preview_policy"
+    ],
+    "title": "StructurePage",
+    "type": "object"
+  },
   "ScientificPrecheckView": {
     "$defs": {
       "KnownMissingInput": {

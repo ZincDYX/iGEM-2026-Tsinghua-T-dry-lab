@@ -14,6 +14,8 @@ from igem_drylab.workflow.public_errors import PublicError
 from igem_drylab.workflow.precheck import ScientificPrecheckView
 from igem_drylab.workflow.sequence_index import SequenceIndexView
 from igem_drylab.workflow.sequence_results import SequenceMapView
+from igem_drylab.workflow.display_resources import ResourcePage, SeriesPage, StructurePage
+from igem_drylab.workflow.lineage_compare import LineagePage, ComparePage
 
 
 class AssetIdentity(Contract):
@@ -170,7 +172,7 @@ class PluginInspectionView(Contract):
     capability_requests: list[str]
 
 
-PUBLIC_MODELS = {model.__name__:model for model in (ScientificPrecheckView,PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
+PUBLIC_MODELS = {model.__name__:model for model in (LineagePage, ComparePage, ResourcePage, SeriesPage, StructurePage, ScientificPrecheckView,PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
     NodePage,PlanView,ProposalView,ScientificPreviewView,BindingPreviewView,IterationView,ImportView,ActionView,RunListView,InputDiffView,PluginInspectionView,Workflow)}
 
 
