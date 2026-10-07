@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { ProjectView } from "../contracts/generated";
 import { parsePublic } from "../contracts/validation";
 import { requestJson } from "../api";
+import { ScientificFields, type FieldSchema } from "./ScientificFields";
+import type { InputIssue } from "./PrecheckPanel";
 
 type Scope = NonNullable<ProjectView["scientific_project"]>;
 type Parameter = Scope["config"]["parameters"][number];
@@ -9,10 +11,12 @@ function ParameterValueInput({
   label,
   value,
   onChange,
+  fieldPath,
 }: {
   label: string;
   value: number | string;
   onChange: (value: number | string) => void;
+  fieldPath?: string;
 }) {
   const [numeric, setNumeric] = useState(typeof value === "number");
   return (
@@ -32,6 +36,7 @@ function ParameterValueInput({
         {label}
         <input
           type={numeric ? "number" : "text"}
+          data-input-path={fieldPath}
           step="any"
           value={value}
           onChange={(e) =>
@@ -50,10 +55,14 @@ export function ScientificInputForms({
   project,
   section,
   onChange,
+  schema,
+  inputTarget,
 }: {
   project: ProjectView;
   section: "constructs" | "parameters";
   onChange: (value: ProjectView) => void;
+  schema?: FieldSchema;
+  inputTarget?: InputIssue;
 }) {
   const scope = project.scientific_project;
   const currentProject = useRef(project);
@@ -75,6 +84,56 @@ export function ScientificInputForms({
   const [sourceType, setSourceType] = useState(""),
     [reference, setReference] = useState(""),
     [doi, setDoi] = useState("");
+  const [construct, setConstruct] = useState(""),
+    [condition, setCondition] = useState("");
+  const addPanel = useRef<HTMLDetailsElement>(null),
+    container = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (
+      section !== "parameters" ||
+      !inputTarget?.field_path.endsWith(".parameters") ||
+      !scope
+    )
+      return;
+    const matches = scope.config.parameters.filter(
+      (p) =>
+        p.name === inputTarget.code &&
+        (p.construct_id === null ||
+          p.construct_id === inputTarget.construct_id) &&
+        (p.condition_id === null ||
+          p.condition_id === inputTarget.condition_id),
+    );
+    if (matches.length) {
+      const matchedIds = new Set(matches.map((p) => p.parameter_id));
+      const panels = Array.from(
+        container.current!.querySelectorAll<HTMLElement>(
+          "[data-parameter-name]",
+        ),
+      ).filter((e) => matchedIds.has(e.dataset.parameterId!));
+      panels.forEach((e) => e.scrollIntoView({ block: "center" }));
+      if (panels.length === 1)
+        panels[0]?.querySelector<HTMLInputElement>("input")?.focus();
+      else
+        setError(
+          "Several compatible parameter records match this issue; review their individual source and scope. No record was selected automatically.",
+        );
+    } else {
+      setName(inputTarget.code);
+      setId("");
+      setValue("");
+      setUnit("");
+      setSourceType("");
+      setReference("");
+      setDoi("");
+      setConstruct(inputTarget.construct_id ?? "");
+      setCondition(inputTarget.condition_id ?? "");
+      if (addPanel.current) {
+        addPanel.current.open = true;
+        addPanel.current.scrollIntoView({ block: "center" });
+        addPanel.current.querySelector<HTMLInputElement>("input")?.focus();
+      }
+    }
+  }, [inputTarget, section]);
   if (!scope)
     return (
       <p>
@@ -126,6 +185,8 @@ export function ScientificInputForms({
               source_type: sourceType,
               source_reference: reference || null,
               doi: doi || null,
+              construct_id: construct || null,
+              condition_id: condition || null,
             };
       const record = parsePublic(
         "ScientificRecordView",
@@ -169,7 +230,10 @@ export function ScientificInputForms({
     }
   }
   return (
-    <section id={section === "parameters" ? "input-parameters" : undefined}>
+    <section
+      ref={container}
+      id={section === "parameters" ? "input-parameters" : undefined}
+    >
       {error && <p role="alert">{error}</p>}
       {section === "constructs" ? (
         scope.config.inputs.constructs.map((c, index) => {
@@ -238,48 +302,78 @@ export function ScientificInputForms({
                   />
                 </label>
               )}
-              {c.parts.map((part, i) => (
-                <div key={i}>
-                  <label>
-                    {c.id} part {i + 1} ID
-                    <input
-                      value={part.id}
-                      onChange={(e) =>
-                        update({
-                          parts: c.parts.map((p, j) =>
-                            j === i ? { ...p, id: e.target.value } : p,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    {c.id} part {i + 1} sequence
-                    <input
-                      value={part.sequence ?? ""}
-                      onChange={(e) =>
-                        update({
-                          parts: c.parts.map((p, j) =>
-                            j === i
-                              ? { ...p, sequence: e.target.value || null }
-                              : p,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
-                  <button
-                    disabled={!i}
-                    onClick={() => {
-                      const parts = [...c.parts];
-                      [parts[i - 1], parts[i]] = [parts[i], parts[i - 1]];
-                      update({ parts });
-                    }}
-                  >
-                    Move part up
-                  </button>
-                </div>
-              ))}
+              {!schema &&
+                c.parts.map((part, i) => (
+                  <div key={i}>
+                    <label>
+                      {c.id} part {i + 1} ID
+                      <input
+                        value={part.id}
+                        onChange={(e) =>
+                          update({
+                            parts: c.parts.map((p, j) =>
+                              j === i ? { ...p, id: e.target.value } : p,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      {c.id} part {i + 1} sequence
+                      <input
+                        value={part.sequence ?? ""}
+                        onChange={(e) =>
+                          update({
+                            parts: c.parts.map((p, j) =>
+                              j === i
+                                ? { ...p, sequence: e.target.value || null }
+                                : p,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <button
+                      disabled={!i}
+                      onClick={() => {
+                        const parts = [...c.parts];
+                        [parts[i - 1], parts[i]] = [parts[i], parts[i - 1]];
+                        update({ parts });
+                      }}
+                    >
+                      Move part up
+                    </button>
+                  </div>
+                ))}
+              {schema && (
+                <ScientificFields
+                  schema={{
+                    ...schema.$defs!.ConstructDefinition,
+                    properties: Object.fromEntries(
+                      Object.entries(
+                        schema.$defs!.ConstructDefinition.properties!,
+                      ).filter(
+                        ([key]) =>
+                          ![
+                            "id",
+                            "components",
+                            "fusion_orientation",
+                            "localization_context",
+                            "localization_design_evidence",
+                            "coding_dna",
+                            "sequence_source_ref",
+                            "m1_review",
+                          ].includes(key),
+                      ),
+                    ),
+                  }}
+                  definitions={schema.$defs!}
+                  path={`scientific_project.config.inputs.constructs.${index}`}
+                  value={c}
+                  onChange={(v) => update(v as Partial<typeof c>)}
+                  files={[...project.files, ...scope.evidence_files]}
+                />
+              )}
             </fieldset>
           );
         })
@@ -291,17 +385,68 @@ export function ScientificInputForms({
             flags; scientific approval requires a separate review.
           </p>
           {scope.config.parameters.map((p, i) => (
-            <fieldset key={p.parameter_id}>
+            <fieldset
+              key={p.parameter_id}
+              data-parameter-name={p.name}
+              data-parameter-id={p.parameter_id}
+            >
               <legend>Parameter {p.parameter_id}</legend>
               <p>
                 Review {p.review_status} · version {p.parameter_version} ·
                 reviewer {p.approved_by ?? "Not approved"}
               </p>
               <ParameterValueInput
+                fieldPath={`scientific_project.config.parameters.${i}.value`}
                 label={`${p.parameter_id} value`}
                 value={p.value}
                 onChange={(value) => updateParameter(i, { value })}
               />
+              <label>
+                {p.parameter_id} name
+                <input
+                  value={p.name}
+                  onChange={(e) => updateParameter(i, { name: e.target.value })}
+                />
+              </label>
+              {schema && (
+                <ScientificFields
+                  schema={{
+                    ...schema.$defs!.ParameterRecord,
+                    properties: Object.fromEntries(
+                      Object.entries(
+                        schema.$defs!.ParameterRecord.properties!,
+                      ).filter(
+                        ([key]) =>
+                          ![
+                            "parameter_id",
+                            "name",
+                            "value",
+                            "unit",
+                            "source_type",
+                            "source_reference",
+                            "doi",
+                            "evidence_text",
+                            "evidence_location",
+                            "construct_id",
+                            "condition_id",
+                            "uncertainty",
+                            "review_status",
+                            "approved_by",
+                            "validation_flags",
+                            "parameter_version",
+                            "created_at",
+                            "updated_at",
+                          ].includes(key),
+                      ),
+                    ),
+                  }}
+                  definitions={schema.$defs!}
+                  path={`scientific_project.config.parameters.${i}`}
+                  value={p}
+                  onChange={(v) => updateParameter(i, v as Partial<Parameter>)}
+                  files={[...project.files, ...scope.evidence_files]}
+                />
+              )}
               {(
                 [
                   "unit",
@@ -386,7 +531,7 @@ export function ScientificInputForms({
           ))}
         </>
       )}
-      <details>
+      <details ref={addPanel}>
         <summary>
           Add {section === "constructs" ? "construct" : "parameter"}
         </summary>
@@ -446,6 +591,20 @@ export function ScientificInputForms({
               <label>
                 Parameter DOI
                 <input value={doi} onChange={(e) => setDoi(e.target.value)} />
+              </label>
+              <label>
+                New parameter construct scope
+                <input
+                  value={construct}
+                  onChange={(e) => setConstruct(e.target.value)}
+                />
+              </label>
+              <label>
+                New parameter condition scope
+                <input
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                />
               </label>
             </>
           )}

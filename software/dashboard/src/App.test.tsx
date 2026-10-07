@@ -11,9 +11,22 @@ import * as client from "./workbench/client";
 import type { ProjectView, ProposalView } from "./contracts/generated";
 
 // jsdom has no layout/scroll API; browser/native tests exercise actual scrolling.
-Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+  configurable: true,
+  value: vi.fn(),
+});
 
-vi.mock("./api", () => ({ isDesktop: () => false, backendMode: "local" }));
+vi.mock("./api", () => ({
+  isDesktop: () => false,
+  backendMode: "local",
+  requestJson: vi.fn(async (path: string) => {
+    // Navigation-only stub. Real schema/setup validation is covered via HTTP
+    // and the production browser, not this empty-project App fixture.
+    if (path === "/scientific-projects/form-schema")
+      return { $defs: {}, properties: {} };
+    throw Error("Unexpected App fixture request: " + path);
+  }),
+}));
 vi.mock("./workbench/client", async (importOriginal) => {
   const original = await importOriginal<typeof import("./workbench/client")>();
   return {
@@ -166,18 +179,17 @@ describe("FusionLab scientific workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     expect(await screen.findByText("可审阅分析")).toBeTruthy();
     expect(client.start).not.toHaveBeenCalled();
-    expect(
-      screen.queryByRole("button", { name: "Start run" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start run" })).toBeNull();
     fireEvent.click(
       screen.getByRole("button", {
         name: "Accept proposal (does not start computation)",
       }),
     );
     await vi.waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Start run" }),
-      ).toHaveProperty("disabled", false),
+      expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     expect(client.start).not.toHaveBeenCalled();
     expect(client.propose).toHaveBeenCalledWith(
@@ -225,9 +237,10 @@ describe("FusionLab scientific workbench", () => {
       }),
     );
     await vi.waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Start run" }),
-      ).toHaveProperty("disabled", false),
+      expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     fireEvent.click(
       within(
@@ -238,9 +251,7 @@ describe("FusionLab scientific workbench", () => {
       target: { value: "changed fixture" },
     });
     expect(screen.getByText(/Unsaved changes/)).toBeTruthy();
-    expect(
-      screen.queryByRole("button", { name: "Start run" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start run" })).toBeNull();
     expect(client.start).not.toHaveBeenCalled();
   });
   it("a previous project's slow proposal cannot replace the current project", async () => {

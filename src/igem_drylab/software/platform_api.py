@@ -25,6 +25,7 @@ from igem_drylab.workflow.plugins import PluginManager
 from igem_drylab.workflow.store import WorkflowStore, plan_binding
 from igem_drylab.workflow.planning import PlanningService, ProposalRequest, ProposalDecision
 from igem_drylab.workflow.declared_series import DeclaredColumn, DeclaredSeries, read_columns
+from igem_drylab.workflow.scientific_setup import ScientificSetupRequest
 
 
 class SaveProject(Contract):
@@ -239,6 +240,18 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             if not path.is_relative_to(data_dir / "imports") or not path.is_file() or sha256(path.read_bytes()).hexdigest() != file["sha256"]:
                 raise ValueError("invalid_import_artifact")
         return boundary.project(store.save_project(request.project, request.expected_revision))
+
+    @router.get("/scientific-projects/form-schema")
+    def scientific_form_schema():
+        from igem_drylab.workflow.scientific_setup import form_schema
+        result = form_schema()
+        boundary.check(result)
+        return result
+
+    @router.post("/scientific-projects/create-preview")
+    def scientific_create_preview(request: ScientificSetupRequest):
+        from igem_drylab.workflow.scientific_setup import preview_setup
+        return preview_setup(request, store, boundary)
 
     @router.post("/scientific-projects/preview")
     def scientific_preview(request: ScientificImportRequest) -> dict[str, Any]:

@@ -1,4 +1,5 @@
 import type { ScientificPrecheckView } from "../contracts/generated";
+export type InputIssue = ScientificPrecheckView["missing"][number];
 
 export function InputIssues({
   result,
@@ -7,7 +8,7 @@ export function InputIssues({
 }: {
   result?: ScientificPrecheckView;
   stale: boolean;
-  onLocate: (field: string) => void;
+  onLocate: (issue: InputIssue) => void;
 }) {
   if (!result) return <p>No input check recorded for this project.</p>;
   return (
@@ -33,9 +34,7 @@ export function InputIssues({
               </td>
               <td>
                 {item.field_path}{" "}
-                <button onClick={() => onLocate(item.field_path)}>
-                  Open input
-                </button>
+                <button onClick={() => onLocate(item)}>Open input</button>
               </td>
               <td>
                 {item.construct_id ?? "Not declared"} /{" "}
@@ -73,7 +72,7 @@ export function PrecheckPanel({
   stale: boolean;
   disabled: boolean;
   onCheck: () => void;
-  onLocate: (field: string) => void;
+  onLocate: (issue: InputIssue) => void;
 }) {
   return (
     <section aria-label="Saved scientific input check">

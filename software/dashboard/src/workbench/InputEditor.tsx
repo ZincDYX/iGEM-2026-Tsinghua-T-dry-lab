@@ -9,9 +9,14 @@ import { object, parsePublic } from "../contracts/validation";
 import * as client from "./client";
 import { downloadResource } from "../api";
 import { LazyJson } from "../contracts/LazyJson";
-import { PrecheckPanel } from "./PrecheckPanel";
+import { PrecheckPanel, type InputIssue } from "./PrecheckPanel";
 import { ScientificBundleImporter } from "./ScientificBundleImporter";
 import { ScientificInputForms } from "./ScientificInputForms";
+import {
+  ScientificSetup,
+  ScientificSettings,
+  useScientificSchema,
+} from "./ScientificSetup";
 
 export function InputEditor({
   project,
@@ -25,6 +30,7 @@ export function InputEditor({
   onCheck,
   onLocate,
   onOpenResource,
+  inputTarget,
 }: {
   project: ProjectView;
   busy: boolean;
@@ -35,14 +41,27 @@ export function InputEditor({
   inputCheck?: ScientificPrecheckView;
   checkStale: boolean;
   onCheck: () => void;
-  onLocate: (field: string) => void;
+  onLocate: (issue: InputIssue) => void;
   onOpenResource: (fileId: string) => void;
+  inputTarget?: InputIssue;
 }) {
   const [kind, setKind] = useState("auto");
   const [preview, setPreview] = useState<ImportView>();
   const [scientific, setScientific] = useState<ScientificPreviewView>();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
+  const { schema, error: schemaError } = useScientificSchema();
+  useEffect(() => {
+    if (!inputTarget) return;
+    const target = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-input-path]"),
+    ).find((e) => e.dataset.inputPath === inputTarget.field_path);
+    if (!target) return;
+    for (let p = target.parentElement; p; p = p.parentElement)
+      if (p instanceof HTMLDetailsElement) p.open = true;
+    target.scrollIntoView({ block: "center" });
+    target.focus({ preventScroll: true });
+  }, [inputTarget, schema]);
   const mounted = useRef(true);
   const epoch = useRef(0);
   useEffect(() => {
@@ -156,6 +175,16 @@ export function InputEditor({
           )}
         </section>
         <section id="input-conditions" className="input-section">
+          {!scope && (
+            <ScientificSetup
+              project={project}
+              dirty={dirty}
+              busy={busy || editing}
+              onPreview={setScientific}
+              schema={schema}
+              schemaError={schemaError}
+            />
+          )}
           <ScientificBundleImporter
             busy={busy || editing}
             action={action}
@@ -256,6 +285,13 @@ export function InputEditor({
                 project={project}
                 section="parameters"
                 onChange={change}
+                schema={schema}
+                inputTarget={inputTarget}
+              />
+              <ScientificSettings
+                project={project}
+                onChange={change}
+                schema={schema}
               />
             </>
           ) : (
@@ -270,7 +306,7 @@ export function InputEditor({
           <thead>
             <tr>
               <th>Logical file</th>
-              <th>SHA-256</th>
+              <th>File identity</th>
               <th>Authorized download</th>
             </tr>
           </thead>
@@ -291,7 +327,10 @@ export function InputEditor({
                   >
                     Open resource
                   </button>
-                  <code>{file.sha256}</code>
+                  <details>
+                    <summary>Integrity details</summary>
+                    <code>{file.sha256}</code>
+                  </details>
                 </td>
                 <td>
                   <button
@@ -369,6 +408,8 @@ export function InputEditor({
           project={project}
           section="constructs"
           onChange={change}
+          schema={schema}
+          inputTarget={inputTarget}
         />
         <LazyJson
           value={project.assemblies}

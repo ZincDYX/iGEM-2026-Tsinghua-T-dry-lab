@@ -22,7 +22,7 @@ import { useRun } from "./useRun";
 import { PlanPanel, dependencies, statusLabel } from "./PlanPanel";
 import { AgentPanel } from "./AgentPanel";
 import { InputEditor } from "./InputEditor";
-import { InputIssues } from "./PrecheckPanel";
+import { InputIssues, type InputIssue } from "./PrecheckPanel";
 import { SelectedResult } from "./SelectedResult";
 import { ComparisonPanel } from "./ComparisonPanel";
 import { InputDiffPanel } from "./InputDiffPanel";
@@ -120,6 +120,7 @@ export function WorkspaceShell() {
   const [history, setHistory] = useState<RunListView[]>([]);
   const [proposal, setProposal] = useState<ProposalView>();
   const [goal, setGoal] = useState<Goal>("fusion_screen");
+  const [inputTarget, setInputTarget] = useState<InputIssue>();
   const [objective, setObjective] = useState("");
   const [mode, setMode] = useState<"template" | "hybrid">("template");
   const [permission, setPermission] = useState(false);
@@ -479,7 +480,9 @@ export function WorkspaceShell() {
     project.dirty ||
     editing ||
     projectCheck?.project_revision !== currentProject?.revision;
-  function openInput(field: string) {
+  function openInput(issue: InputIssue) {
+    setInputTarget(issue);
+    const field = issue.field_path;
     const section = field.includes("construct")
       ? "constructs"
       : field.includes("fasta")
@@ -489,9 +492,11 @@ export function WorkspaceShell() {
           : field.includes("condition") ||
               field.includes("experimental_context")
             ? "conditions"
-            : field === "scientific_project" || field.includes("stages.")
-              ? "conditions"
-              : "evidence";
+            : field === "scientific_project"
+              ? "scientific-setup"
+              : field.includes("stages.")
+                ? "model-settings"
+                : "evidence";
     navigateInput(section);
   }
   const style = {
@@ -844,6 +849,7 @@ export function WorkspaceShell() {
                 checkStale={checkStale}
                 onCheck={() => void checkInputs()}
                 onLocate={openInput}
+                inputTarget={inputTarget}
                 onOpenResource={openResource}
               />
             </div>
