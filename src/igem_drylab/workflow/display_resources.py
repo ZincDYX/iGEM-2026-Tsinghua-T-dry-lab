@@ -58,8 +58,8 @@ class SeriesResource(Contract):
     identity: ResourceIdentity
     name: str
     byte_count: int
-    result_schema_version: Literal["m4-prediction-v2"] = "m4-prediction-v2"
-    role: Literal["prediction_contract"] = "prediction_contract"
+    result_schema_version: Literal["m4-prediction-v2", "display-series-source-v1"] = "m4-prediction-v2"
+    role: Literal["prediction_contract", "declared_source_series"] = "prediction_contract"
 
 
 class ScanResource(Contract):
@@ -104,6 +104,8 @@ class SeriesPage(Contract):
     model_kind: str
     formula_version: str
     time_unit: str
+    data_source_sha256: str | None = None
+    source_reference: str | None = None
     offset: int
     total: int
     has_more: bool
@@ -305,6 +307,8 @@ class DisplayResources:
                     data = None
                 if isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
                     items.append(SeriesResource(**common))
+                elif isinstance(data, dict) and data.get("schema_version") == "display-series-source-v1":
+                    items.append(SeriesResource(**common, result_schema_version="display-series-source-v1", role="declared_source_series"))
                 elif isinstance(data, dict) and data.get("schema_version") == "finite-scaffold-scan-v2":
                     items.append(ScanResource(**common))
                 else:
@@ -317,13 +321,27 @@ class DisplayResources:
 
     def series(self, project_id, file_id, offset, limit, series_id=None):
         path, identity, _ = self.source(project_id, file_id)
-        key = (file_id, identity.source_sha256, "display-series-v1")
+        declaration = None
+        target_path = None
+        data_sha = None
+        if path.suffix.lower() == ".json":
+            declared_raw = json.loads(path.read_bytes())
+            if isinstance(declared_raw, dict) and declared_raw.get("schema_version") == "display-series-source-v1":
+                from .declared_series import DeclaredSeries, target
+                declaration = DeclaredSeries.model_validate(declared_raw)
+                target_path, target_identity = target(self, project_id, declaration)
+                data_sha = target_identity.source_sha256
+        key = (file_id, identity.source_sha256, "display-series-v1:" + data_sha if data_sha else "display-series-v1")
         with self.store.connection() as db:
             row = db.execute("SELECT payload FROM display_series_meta WHERE file_id=? AND hash=? AND schema=?", key).fetchone()
         if row is None:
-            data = json.loads(path.read_bytes())
-            contract = data.get("prediction_contract") if isinstance(data, dict) else None
-            if not isinstance(contract, dict) or contract.get("schema_version") != "m4-prediction-v2":
+            if declaration:
+                from .declared_series import read_columns
+                contract = read_columns(target_path, declaration)
+            else:
+                data = json.loads(path.read_bytes())
+                contract = data.get("prediction_contract") if isinstance(data, dict) else None
+            if not isinstance(contract, dict) or contract.get("schema_version") not in {"m4-prediction-v2", "display-series-source-v1"}:
                 raise WorkflowError("unsupported_trajectory_contract")
             time = contract.get("time")
             concentrations = contract.get("concentrations")
@@ -343,7 +361,8 @@ class DisplayResources:
                         raise WorkflowError("invalid_trajectory_contract")
                     identifier = str(len(columns))
                     columns[identifier] = values
-                    descriptors.append(SeriesDescriptor(id=identifier, compartment=compartment, species=name, unit=contract["concentration_unit"]).model_dump())
+                    declared_column = next((c for c in declaration.columns if c.key == name and c.compartment == compartment), None) if declaration else None
+                    descriptors.append(SeriesDescriptor(id=identifier, compartment=compartment, species=declared_column.species if declared_column else name, unit=declared_column.unit if declared_column else contract["concentration_unit"]).model_dump())
             if len(columns) > MAX_SERIES:
                 raise WorkflowError("display_source_budget_exceeded")
             meta = {key: contract[key] for key in ("schema_version", "model_kind", "formula_version", "time_unit")}
@@ -361,7 +380,7 @@ class DisplayResources:
             raise WorkflowError("unknown_registered_series")
         with self.store.connection() as db:
             points = db.execute("SELECT time,values_json FROM display_series_points WHERE file_id=? AND hash=? AND schema=? AND ordinal>=? ORDER BY ordinal LIMIT ?", (*key, offset, limit)).fetchall()
-        result = SeriesPage(identity=identity, result_schema_version=meta["schema_version"], model_kind=meta["model_kind"], formula_version=meta["formula_version"], time_unit=meta["time_unit"], offset=offset, total=meta["total"], has_more=offset + len(points) < meta["total"], time=[p[0] for p in points], series=selected, values={s["id"]: [json.loads(p[1])[s["id"]] for p in points] for s in selected}).model_dump(mode="json")
+        result = SeriesPage(identity=identity, result_schema_version=meta["schema_version"], model_kind=meta["model_kind"], formula_version=meta["formula_version"], time_unit=meta["time_unit"], data_source_sha256=data_sha, source_reference=declaration.source_reference if declaration else None, offset=offset, total=meta["total"], has_more=offset + len(points) < meta["total"], time=[p[0] for p in points], series=selected, values={s["id"]: [json.loads(p[1])[s["id"]] for p in points] for s in selected}).model_dump(mode="json")
         self.boundary.check(result)
         return result
 

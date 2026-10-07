@@ -1147,14 +1147,20 @@
             "type": "integer"
           },
           "result_schema_version": {
-            "const": "m4-prediction-v2",
             "default": "m4-prediction-v2",
+            "enum": [
+              "m4-prediction-v2",
+              "display-series-source-v1"
+            ],
             "title": "Result Schema Version",
             "type": "string"
           },
           "role": {
-            "const": "prediction_contract",
             "default": "prediction_contract",
+            "enum": [
+              "prediction_contract",
+              "declared_source_series"
+            ],
             "title": "Role",
             "type": "string"
           }
@@ -1523,6 +1529,30 @@
         "title": "Time Unit",
         "type": "string"
       },
+      "data_source_sha256": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Data Source Sha256"
+      },
+      "source_reference": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Source Reference"
+      },
       "offset": {
         "title": "Offset",
         "type": "integer"
@@ -1580,6 +1610,8 @@
       "model_kind",
       "formula_version",
       "time_unit",
+      "data_source_sha256",
+      "source_reference",
       "offset",
       "total",
       "has_more",

@@ -15,6 +15,8 @@ export type ResultSchemaVersion = string;
 export type ModelKind = string;
 export type FormulaVersion = string;
 export type TimeUnit = string;
+export type DataSourceSha256 = string | null;
+export type SourceReference = string | null;
 export type Offset = number;
 export type Total = number;
 export type HasMore = boolean;
@@ -33,6 +35,8 @@ export interface SeriesPage {
   model_kind: ModelKind;
   formula_version: FormulaVersion;
   time_unit: TimeUnit;
+  data_source_sha256: DataSourceSha256;
+  source_reference: SourceReference;
   offset: Offset;
   total: Total;
   has_more: HasMore;

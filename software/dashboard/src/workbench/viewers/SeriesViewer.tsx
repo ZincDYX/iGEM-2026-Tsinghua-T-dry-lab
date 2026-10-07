@@ -82,6 +82,14 @@ export function SeriesViewer({
       <p>
         {page.model_kind} · {page.formula_version} · SHA-256{" "}
         {page.identity.source_sha256}
+        {page.data_source_sha256 && (
+          <>
+            {" "}
+            · original data SHA-256 {page.data_source_sha256} · declared source{" "}
+            {page.source_reference}. This is a source display, not a prediction
+            or evidence approval.
+          </>
+        )}
       </p>
       <label>
         Registered series

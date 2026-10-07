@@ -71,3 +71,36 @@ their formulas or tolerances. Its independent analytic regression must run only
 on the server. Local component tests use declared recorded software samples and
 verify zero/null, censor bounds, residuals, units and identity refusal; they do not
 invoke the numerical comparison or a solver.
+
+## Declared CSV/NPZ series
+
+CSV and NPZ can be displayed using a separately registered JSON declaration,
+`display-series-source-v1`. It requires the exact target SHA, explicit original
+time unit, column keys, species labels, compartments, units and missing token.
+There is no header guessing, unit conversion or promotion to a prediction.
+Both declaration and original data retain their own project grants/hash checks
+on every cache read. CSV empty fields and explicitly declared NPZ NaNs map to
+null, never zero. NPZ disables pickle and rejects compressed expansion, oversized
+headers and forged vector shapes before any array allocation.
+
+Example declaration (replace the SHA and source text with actual registered
+source identity; this is not scientific evidence):
+
+```json
+{
+  "schema_version": "display-series-source-v1",
+  "target_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "source_reference": "Original measurement file and method reference",
+  "format": "csv",
+  "time_key": "minutes",
+  "time_unit": "min",
+  "missing_token": "",
+  "columns": [{"key": "signal", "compartment": "extracellular", "species": "13", "unit": "mM"}]
+}
+```
+
+NPZ declarations use `format: npz`, `missing_token: nan`, numeric 1D arrays
+under the declared keys, and supported NPY v1/v2 headers. They are not an arbitrary
+object/structured-array importer. Generic BCIF is still not enabled: a bounded,
+identity-preserving binary decoder needs its own acceptance, rather than exposing
+untrusted compressed input to an unrestricted parser.
