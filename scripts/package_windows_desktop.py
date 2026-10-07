@@ -34,7 +34,7 @@ def main():
     with tarfile.open(args.source_tar) as archive:
         for member in archive.getmembers():
             # Runtime allowlist. Full source/tests/operations stay in the bundle.
-            if not (member.name.startswith("src/") or member.name in {"configs/m1_feature_definitions.yaml", "configs/m1_rules_v3.yaml", "LICENSE", "pyproject.toml"}):
+            if not (member.name.startswith("src/") or member.name in {"configs/m1_feature_definitions.yaml", "configs/m1_rules_v3.yaml", "LICENSE", "pyproject.toml", "software/dashboard/THIRD_PARTY_NOTICES.txt"}):
                 continue
             target = (resources/member.name).resolve()
             if not target.is_relative_to(resources) or not member.isfile():
@@ -58,7 +58,7 @@ def main():
     pth.write_text('\n'.join([stdlib_zip,'.','Lib','Lib/site-packages','Lib/site-packages/win32',
         'Lib/site-packages/win32/lib','Lib/site-packages/Pythonwin','../resources/src','import site','']),encoding='utf-8')
     checked = subprocess.run([str(python/'python.exe'),'-c',
-        'import json,sqlite3,importlib.metadata; import fastapi,uvicorn,numpy,scipy,mcp,igem_drylab.software.desktop_backend; print(json.dumps({d.metadata["Name"]:d.version for d in importlib.metadata.distributions()}))'],
+        'import json,sqlite3,importlib.metadata; import fastapi,uvicorn,numpy,scipy,mcp,PIL.Image,igem_drylab.software.desktop_backend; print(json.dumps({d.metadata["Name"]:d.version for d in importlib.metadata.distributions()}))'],
         cwd=root,capture_output=True,text=True,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','OPENBLAS_NUM_THREADS':'1','OMP_NUM_THREADS':'1','MKL_NUM_THREADS':'1'})
     (root/'runtime-import-check.log').write_text(checked.stdout+'\n'+checked.stderr,encoding='utf-8')
     if checked.returncode: raise RuntimeError('runtime import check failed; see '+str(root/'runtime-import-check.log'))
@@ -77,7 +77,9 @@ def main():
     records = [{'path':p.relative_to(root).as_posix(),'bytes':p.stat().st_size,'sha256':sha256(p.read_bytes()).hexdigest()} for p in files]
     manifest = dict(commit=args.commit,platform='windows-x86_64',default_mode='local',bundled_frontend=True,
         python_archive_sha256=args.python_archive_sha256,source_archive_sha256=sha256(args.source_tar.read_bytes()).hexdigest(),
-        scope='portable_software_package_not_scientific_validation',runtime_allowlist=['src/','configs/m1_feature_definitions.yaml','configs/m1_rules_v3.yaml','LICENSE','pyproject.toml'], files=records,total_bytes=sum(p['bytes'] for p in records))
+        viewer_dependencies={'plotly.js-strict-dist-min':'4.1.2','molstar':'5.13.0','fflate':'0.8.3'},
+        viewer_dependency_scope='direct_viewer_manifest_not_complete_SBOM',
+        scope='portable_software_package_not_scientific_validation',runtime_allowlist=['src/','configs/m1_feature_definitions.yaml','configs/m1_rules_v3.yaml','LICENSE','pyproject.toml','software/dashboard/THIRD_PARTY_NOTICES.txt'], files=records,total_bytes=sum(p['bytes'] for p in records))
     (root/'PACKAGE_MANIFEST.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
     with zipfile.ZipFile(root.with_suffix('.zip'),'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(root.rglob('*')):

@@ -67,6 +67,11 @@ def test_image_original_sealed_metadata_removed_and_no_svg_execution(tmp_path):
     asset = boundary.asset(svg, project_id="a")
     with pytest.raises(WorkflowError, match="unsupported_image_format"):
         display.image("a", asset["id"])
+    mislabeled = tmp_path / "not-jpeg.jpg"
+    mislabeled.write_bytes(before)
+    wrong_type = boundary.asset(mislabeled, project_id="a")
+    with pytest.raises(WorkflowError, match="image_media_type_mismatch"):
+        display.image("a", wrong_type["id"])
 
 
 def test_structure_chain_insertion_identity_not_bfactor_confidence(tmp_path):
@@ -130,7 +135,7 @@ def test_mmcif_coordinate_projection_removes_custom_metadata(tmp_path):
     assert meta["confidence_status"] == "not_registered"
 
 
-@pytest.mark.parametrize("name", ["../escape", "C:/escape", "a\\escape", "/escape", "./escape", "a//escape"])
+@pytest.mark.parametrize("name", ["../escape", "C:/escape", "a\\escape", "/escape", "./escape", "a//escape", "nested/name:stream", "nested/CON.txt", "nested/name."])
 def test_streaming_zip_rejects_paths_and_cleans_only_owned_staging(tmp_path, name):
     import asyncio
     target = BytesIO()

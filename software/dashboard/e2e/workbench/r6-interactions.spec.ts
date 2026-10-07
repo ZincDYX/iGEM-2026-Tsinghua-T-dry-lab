@@ -240,9 +240,7 @@ test("paused UI cancel is terminal and inspector result stays with selected stag
   });
   await page.reload();
   await expect(
-    page
-      .getByRole("button", { name: /M1–M5 scientific pipeline · r/ })
-      .first(),
+    page.getByRole("button", { name: /M1–M5 scientific pipeline · r/ }).first(),
   ).toBeVisible();
   await page
     .getByRole("button", { name: /M1–M5 scientific pipeline · r/ })

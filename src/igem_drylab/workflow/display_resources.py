@@ -233,7 +233,10 @@ class DisplayResources:
             elif extension in {".pdb", ".cif", ".mmcif"}:
                 items.append(StructureResource(**common, format="pdb" if extension == ".pdb" else "mmcif"))
             elif extension == ".json":
-                data = json.loads(path.read_bytes())
+                try:
+                    data = json.loads(path.read_bytes())
+                except json.JSONDecodeError:
+                    data = None
                 if isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
                     items.append(SeriesResource(**common))
                 else:
@@ -301,7 +304,10 @@ class DisplayResources:
             raise WorkflowError("unsupported_image_format")
         try:
             with Image.open(path) as source:
-                if source.format not in {"PNG", "JPEG"} or source.width * source.height > MAX_IMAGE_PIXELS or source.n_frames != 1:
+                expected_format = "PNG" if path.suffix.lower() == ".png" else "JPEG"
+                if source.format != expected_format:
+                    raise WorkflowError("image_media_type_mismatch")
+                if source.width * source.height > MAX_IMAGE_PIXELS or source.n_frames != 1:
                     raise WorkflowError("image_decode_budget_exceeded")
                 # Decode within budget. Export pixels only: EXIF/text/ICC is not public.
                 pixels = source.convert("RGBA")
@@ -395,7 +401,10 @@ class DisplayResources:
             if candidate_path.stat().st_size > MAX_SOURCE_BYTES:
                 continue
             # A dedicated sidecar schema, never a guessed M2 JSON or B-factor.
-            raw = json.loads(candidate_path.read_bytes())
+            try:
+                raw = json.loads(candidate_path.read_bytes())
+            except json.JSONDecodeError:
+                continue
             if not isinstance(raw, dict) or raw.get("schema_version") != "structure-display-annotations-v1" or raw.get("target_sha256") != identity.source_sha256:
                 continue
             self.source(project_id, candidate["id"])

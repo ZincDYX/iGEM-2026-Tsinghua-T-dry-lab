@@ -28,8 +28,9 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   await collect();
   const pdb =
     "MODEL        7\nATOM      1  N   ALA B  12A     11.000  12.000  13.000  1.00 99.00           N\nATOM      2  CA  ALA B  12A     12.000  12.000  13.000  1.00 99.00           C\nATOM      3  C   ALA B  12A     13.000  12.000  13.000  1.00 99.00           C\nENDMDL\nEND\n";
-  files["structures/coordinate-sample.pdb"] = Buffer.from(pdb);
-  const sourceHash = createHash("sha256").update(pdb).digest("hex");
+  const coordinateSource = pdb.replace("ENDMDL", Array.from({length: 105}, (_, i) => `ATOM  ${String(i + 4).padStart(5)}  CA  ALA B${String(i + 20).padStart(4)}      11.000  12.000  13.000  1.00 99.00           C`).join("\n") + "\nENDMDL");
+  files["structures/coordinate-sample.pdb"] = Buffer.from(coordinateSource);
+  const sourceHash = createHash("sha256").update(coordinateSource).digest("hex");
   files["structures/annotations.json"] = Buffer.from(
     JSON.stringify({
       schema_version: "structure-display-annotations-v1",
@@ -177,9 +178,12 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
       ).data.map((t) => ({ x: t.x, y: t.y })),
     ),
   ).toEqual([{ x: [0, 1, 2], y: [0, null, 2] }]);
-  await expect(page.locator(".workspace-content table")).toContainText(
-    "Not recorded",
-  );
+  await expect(
+    page
+      .getByRole("heading", { name: "Registered artifacts" })
+      .locator("..")
+      .locator("table"),
+  ).toContainText("Not recorded");
   await page.locator(".workspace-content tbody tr").last().click();
   await expect(
     page.locator(".workspace-content tbody tr").last(),
@@ -188,10 +192,25 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
     .getByRole("button", { name: "coordinate-sample.pdb · structure" })
     .click();
   await expect(page.locator(".structure-canvas canvas")).toBeVisible();
-  await expect(page.locator(".workspace-content table")).toContainText("12A");
-  await expect(page.locator(".workspace-content table")).toContainText("42");
+  await expect(
+    page
+      .getByRole("heading", { name: "Registered artifacts" })
+      .locator("..")
+      .locator("table"),
+  ).toContainText("12A");
+  await expect(
+    page
+      .getByRole("heading", { name: "Registered artifacts" })
+      .locator("..")
+      .locator("table"),
+  ).toContainText("42");
   await expect(page.locator(".workspace-content")).toContainText(sourceHash);
   await page.getByRole("button", { name: "12A", exact: true }).click();
+  await page.getByRole("button", { name: "Next residues" }).click();
+  await expect(page.getByRole("button", { name: "Previous residues" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "12A", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Previous residues" }).click();
+  await expect(page.getByRole("button", { name: "12A", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("offline-structure.png") });
   await page.getByRole("button", { name: "pixel-sample.png · image" }).click();
   await expect(page.locator(".structure-canvas canvas")).toHaveCount(0);

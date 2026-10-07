@@ -283,3 +283,23 @@ risks:
     units: record_count
     tolerance_basis: exact_binding_conflict_content_omission_page_indices_and_query_index_identity
     expected_faults: [full_project_or_results_in_status, unbounded_history, write_lock_during_preparation, stale_approval_inserted]
+  - risk_id: R7_BINARY_DISPLAY_IDENTITY
+    group: integration
+    test_nodeids: ["tests/test_r7_display_resources.py::test_exact_point_page_whitelist_cache_grant_and_tamper", "tests/test_r7_display_resources.py::test_image_original_sealed_metadata_removed_and_no_svg_execution", "tests/test_r7_display_resources.py::test_structure_chain_insertion_identity_not_bfactor_confidence", "tests/test_r7_display_resources.py::test_structure_annotations_bind_exact_model_chain_insertion_and_reference", "tests/test_r7_display_resources.py::test_mmcif_coordinate_projection_removes_custom_metadata", "tests/test_r7_display_resources.py::test_streaming_zip_rejects_paths_and_cleans_only_owned_staging", "tests/test_r7_display_resources.py::test_stream_budget_before_body_and_symlink_archive", "tests/test_r7_lineage_and_binary_api.py::test_binary_folder_bytes_and_image_grants_survive_preview_save"]
+    requirement_or_formula_source: r6 PR C/D byte-preserving imports and authorized local previews
+    oracle_type: independently declared bytes_pixels_null_zero_residue_ids_and_metadata_markers
+    fixture_scope: software_parser_samples_no_solver_or_biological_parameters
+    formula_version: not_applicable
+    units: original_recorded_units_no_conversion
+    tolerance_basis: exact bytes_SHA_grants_points_model_chain_insertion
+    expected_faults: [text_binary_corruption, Windows_path_normalization_bypass, hash_only_cache_grant, null_to_zero, Bfactor_as_plddt, custom_metadata_in_preview]
+  - risk_id: R7_LINEAGE_FORMAL_COMPARABILITY
+    group: integration
+    test_nodeids: ["tests/test_r7_lineage_and_binary_api.py::test_real_iteration_authorizes_lineage_but_not_strangers_or_text_id_numbers", "tests/test_r7_lineage_and_binary_api.py::test_formal_contract_parser_exact_values_and_incompatibility", "tests/test_r7_lineage_and_binary_api.py::test_batch_alignment_uses_keys_not_record_order"]
+    requirement_or_formula_source: r6 R6-06 PR E and existing F3 contract parser
+    oracle_type: existing_F3_parser_independent_declared_conditions_units_build_hash_and_reversed_order
+    fixture_scope: synthetic_recorded_protocol_samples_no_solver_no_scientific_eligibility_claim
+    formula_version: existing_m4_formula_identity_no_recalculation
+    units: dimensionless_metric_1
+    tolerance_basis: exact_source_identity_refusal_and_original_recorded_value
+    expected_faults: [arbitrary_cross_project_access, ordinal_pairing, text_id_as_build_identity, incompatible_conditions_units_compared, context_identity_mismatch, automatic_ranking]

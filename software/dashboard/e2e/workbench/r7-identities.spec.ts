@@ -206,5 +206,9 @@ test("same-ID proposal never borrows a historical result or controls its run", a
   await expect(
     page.getByRole("heading", { name: "M1 · Scientific project results" }),
   ).toBeVisible();
+  await page
+    .getByRole("tablist", { name: "Inspector tabs" })
+    .getByRole("tab", { name: "Inputs / Evidence" })
+    .click();
   await expect(page.getByLabel("Loaded result identity")).toContainText(runId);
 });

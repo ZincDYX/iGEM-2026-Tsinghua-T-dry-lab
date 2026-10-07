@@ -122,7 +122,7 @@ export function StructureViewer({
     };
   }, [fileId, projectId]);
   useEffect(() => {
-    if (!offset) return;
+    if (!offset && (!meta || meta.offset === 0)) return;
     const controller = new AbortController();
     void requestJson(
       `/files/${encodeURIComponent(fileId)}/structure-metadata?project_id=${encodeURIComponent(projectId)}&offset=${offset}&limit=100`,
@@ -130,17 +130,16 @@ export function StructureViewer({
       controller.signal,
     )
       .then((raw) => {
-        if (!controller.signal.aborted)
-          setMeta((previous) => {
-            const next = parsePublic("StructurePage", raw);
-            if (
-              next.identity.file_id !== fileId ||
-              next.identity.project_id !== projectId ||
-              next.identity.source_sha256 !== previous?.identity.source_sha256
-            )
-              throw new Error("Resource identity changed.");
-            return next;
-          });
+        if (!controller.signal.aborted) {
+          const next = parsePublic("StructurePage", raw);
+          if (
+            next.identity.file_id !== fileId ||
+            next.identity.project_id !== projectId ||
+            next.identity.source_sha256 !== meta?.identity.source_sha256
+          )
+            throw new Error("Resource identity changed.");
+          setMeta(next);
+        }
       })
       .catch(() => {
         if (!controller.signal.aborted) setError("Residue page unavailable.");

@@ -50,6 +50,8 @@ async def receive_bundle(request, imports: Path, config_filename: str, publish):
                     if not name or "\\" in name or PurePosixPath(name).is_absolute() or PureWindowsPath(name).drive or any(p in {"..", ".", ""} for p in name.rstrip("/").split("/")) or stat.S_ISLNK(mode) or (stat.S_IFMT(mode) not in {0, stat.S_IFREG, stat.S_IFDIR}) or item.flag_bits & 1:
                         raise WorkflowError("invalid_upload_identity")
                     folded = name.rstrip("/").casefold()
+                    if any(":" in p or "\x00" in p or p.endswith((".", " ")) or p.split(".", 1)[0].casefold() in {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))} for p in parts):
+                        raise WorkflowError("invalid_upload_identity")
                     if folded in names:
                         raise WorkflowError("invalid_upload_identity")
                     names.add(folded)
