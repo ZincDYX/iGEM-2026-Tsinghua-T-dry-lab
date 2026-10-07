@@ -261,6 +261,41 @@ it("M5 plot covers all original points independently of the 100-row table", asyn
   expect(screen.getAllByRole("row")).toHaveLength(101);
 });
 
+it("M5 later exact plot range preserves original indices, null and zero without changing table identity", async () => {
+  const source = record(),
+    s = source.metabolite_comparisons["13"].display_series;
+  const values = Array.from({ length: 100002 }, (_, i) => i);
+  Object.assign(s, {
+    time: values,
+    observed: values,
+    predicted: values.map(() => 0),
+    residual_observed_minus_predicted: values.map((i) =>
+      i === 100000 ? null : 0,
+    ),
+    censor_mask: values.map(() => "quantified"),
+    uncertainty: null,
+  });
+  render(<M5View record={source} />);
+  await screen.findAllByTestId("plot");
+  const firstIdentity = mocks.plot.mock.calls.at(-1)![0].dataIdentity;
+  fireEvent.click(
+    screen.getByRole("button", { name: "Next comparison plot range" }),
+  );
+  const main = mocks.plot.mock.calls.at(-2)![0];
+  expect(main.data[0].x).toEqual([100000, 100001]);
+  expect(main.data[0].y).toEqual([0, 0]);
+  expect(mocks.plot.mock.calls.at(-1)![0].data[0].y).toEqual([null, 0]);
+  expect(main.data[0].customdata).toEqual([100000, 100001]);
+  expect(main.dataIdentity).not.toBe(firstIdentity);
+  fireEvent.click(screen.getAllByRole("row")[2]);
+  expect(mocks.plot.mock.calls.at(-2)![0].dataIdentity).toBe(main.dataIdentity);
+  expect(screen.getAllByRole("row")).toHaveLength(3);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Previous comparison plot range" }),
+  );
+  expect(mocks.plot.mock.calls.at(-2)![0].data[0].x).toHaveLength(100000);
+});
+
 it("F3 refuses an authorized response with a different source identity", async () => {
   const source = scan();
   source.identity.project_id = "stranger";

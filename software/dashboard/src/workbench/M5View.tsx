@@ -16,7 +16,8 @@ function Comparison({
   comparison: Record<string, unknown>;
 }) {
   const [offset, setOffset] = useState(0),
-    [selected, setSelected] = useState<number>();
+    [selected, setSelected] = useState<number>(),
+    [range, setRange] = useState(0);
   const series = useMemo(() => {
     try {
       return parsePublic("M5ComparisonSeries", comparison.display_series);
@@ -62,6 +63,8 @@ function Comparison({
       selected={selected}
       setOffset={setOffset}
       setSelected={setSelected}
+      range={range}
+      setRange={setRange}
     />
   );
 }
@@ -74,6 +77,8 @@ function RegisteredComparison({
   selected,
   setOffset,
   setSelected,
+  range,
+  setRange,
 }: {
   metabolite: string;
   series: import("../contracts/generated").M5ComparisonSeries;
@@ -82,6 +87,8 @@ function RegisteredComparison({
   selected?: number;
   setOffset: (n: number) => void;
   setSelected: (n: number) => void;
+  range: number;
+  setRange: (n: number) => void;
 }) {
   const indices = Array.from(
     { length: Math.min(100, series.time.length - offset) },
@@ -89,8 +96,11 @@ function RegisteredComparison({
   );
   const plotIndices = useMemo(
     () =>
-      Array.from({ length: Math.min(100000, series.time.length) }, (_, i) => i),
-    [series],
+      Array.from(
+        { length: Math.min(100000, series.time.length - range) },
+        (_, i) => range + i,
+      ),
+    [series, range],
   );
   const data = useMemo<Data[]>(
     () => [
@@ -100,11 +110,13 @@ function RegisteredComparison({
         name: "Recorded aligned prediction",
         x: plotIndices.map((i) => series.time[i]),
         y: plotIndices.map((i) => series.predicted[i]),
+        customdata: plotIndices,
       },
       {
         type: "scatter",
         mode: "markers",
         name: "Quantified observation",
+        customdata: plotIndices,
         x: plotIndices.map((i) => series.time[i]),
         y: plotIndices.map((i) =>
           series.censor_mask[i] === "quantified" ? series.observed[i] : null,
@@ -128,6 +140,7 @@ function RegisteredComparison({
         mode: "markers",
         name: "Censored bound (not quantified)",
         marker: { symbol: "triangle-down-open" },
+        customdata: plotIndices,
         x: plotIndices.map((i) => series.time[i]),
         y: plotIndices.map((i) =>
           series.censor_mask[i] === "below_lod"
@@ -146,6 +159,7 @@ function RegisteredComparison({
         type: "scatter",
         mode: "markers",
         name: "Observed minus predicted (quantified only)",
+        customdata: plotIndices,
         x: plotIndices.map((i) => series.time[i]),
         y: plotIndices.map((i) => series.residual_observed_minus_predicted[i]),
       },
@@ -200,9 +214,9 @@ function RegisteredComparison({
       <Suspense fallback={<p>Loading local comparison plot…</p>}>
         <p>
           {plotIndices.length === series.time.length ? "Complete" : "Partial"}{" "}
-          recorded comparison plot: {plotIndices.length}/{series.time.length}{" "}
-          original points (100,000 point budget). Table pagination does not
-          change plot coverage.
+          recorded comparison plot: {range + 1}–{range + plotIndices.length}/
+          {series.time.length} original points (100,000 point budget). Table
+          pagination does not change plot coverage.
         </p>
         <Plot
           dataIdentity={dataIdentity}
@@ -221,6 +235,30 @@ function RegisteredComparison({
           onPoint={onPoint}
         />
       </Suspense>
+      {series.time.length > 100000 && (
+        <div>
+          <button
+            disabled={range === 0}
+            onClick={() => {
+              const next = Math.max(0, range - 100000);
+              setRange(next);
+              setOffset(next);
+            }}
+          >
+            Previous comparison plot range
+          </button>
+          <button
+            disabled={range + 100000 >= series.time.length}
+            onClick={() => {
+              const next = range + 100000;
+              setRange(next);
+              setOffset(next);
+            }}
+          >
+            Next comparison plot range
+          </button>
+        </div>
+      )}
       <table>
         <thead>
           <tr>
