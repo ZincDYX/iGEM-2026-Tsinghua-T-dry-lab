@@ -6,6 +6,7 @@ export function PlotViewer({
   title,
   xLabel,
   yLabel,
+  zLabel,
   onPoint,
   dataIdentity,
 }: {
@@ -13,6 +14,7 @@ export function PlotViewer({
   title: string;
   xLabel: string;
   yLabel: string;
+  zLabel?: string;
   onPoint?: (index: number) => void;
   dataIdentity: string;
 }) {
@@ -53,7 +55,13 @@ export function PlotViewer({
         return;
       }
       const click = (event: Readonly<import("plotly.js").PlotMouseEvent>) => {
-        if (active) callback.current?.(event.points[0].pointIndex);
+        const point = event.points[0];
+        if (!point || !active) return;
+        const original = (point as unknown as { customdata?: unknown })
+          .customdata;
+        const index =
+          typeof original === "number" ? original : point.pointIndex;
+        if (typeof index === "number") callback.current?.(index);
       };
       chart.on("plotly_click", click);
       dispose = () => {
@@ -81,6 +89,15 @@ export function PlotViewer({
       title: { text: title },
       xaxis: { title: { text: xLabel } },
       yaxis: { title: { text: yLabel } },
+      ...(zLabel
+        ? {
+            scene: {
+              xaxis: { title: { text: xLabel } },
+              yaxis: { title: { text: yLabel } },
+              zaxis: { title: { text: zLabel } },
+            },
+          }
+        : {}),
       uirevision: dataIdentity,
       margin: { t: 45, b: 60, l: 70, r: 20 },
       autosize: true,
@@ -98,7 +115,7 @@ export function PlotViewer({
     return () => {
       active = false;
     };
-  }, [instance, data, title, xLabel, yLabel, dataIdentity]);
+  }, [instance, data, title, xLabel, yLabel, zLabel, dataIdentity]);
   return (
     <section aria-label={title}>
       {error && <p role="alert">{error}</p>}

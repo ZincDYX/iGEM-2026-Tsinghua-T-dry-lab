@@ -400,6 +400,31 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   const colorsBefore = await allColors();
   expect(colorsBefore).toHaveLength(122);
   expect(new Set(colorsBefore)).toEqual(new Set([0x994c62]));
+  await page
+    .getByRole("button", {
+      name: "Select all registered pocket residues (full model)",
+      exact: true,
+    })
+    .click();
+  const batch = await page
+    .locator(".structure-canvas")
+    .evaluate((element: any) => {
+      for (
+        let fiber =
+          element[
+            Object.keys(element).find((k) => k.startsWith("__reactFiber$"))!
+          ];
+        fiber;
+        fiber = fiber.return
+      )
+        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+          const owned = hook.memoizedState?.current;
+          if (owned?.managers?.structure)
+            return owned.managers.structure.selection.stats.elementCount;
+        }
+      throw Error("Actual viewer missing");
+    });
+  expect(batch).toBe(4); // B12A has 3 atoms; registered last-page pocket has 1.
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page
     .getByLabel("Representation", { exact: true })

@@ -8,6 +8,7 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { M5View } from "./M5View";
 import { ScanViewer } from "./viewers/ScanViewer";
+import type { ScanPage } from "../contracts/generated";
 
 // Independent, already-recorded software samples. No scientific stage is run.
 const mocks = vi.hoisted(() => ({ plot: vi.fn(), request: vi.fn() }));
@@ -101,7 +102,7 @@ it("M5 refuses different experiment identity and never reconstructs legacy summa
   expect(mocks.plot).not.toHaveBeenCalled();
 });
 
-function scan() {
+function scan(): ScanPage {
   return {
     schema_version: "display-finite-scan-v1",
     identity: {
@@ -168,6 +169,96 @@ it("F3 shows exact zero/null, units, blocked row and point-table selection witho
   expect(
     screen.getByText(/no synthetic continuous scan or global optimum claim/),
   ).toBeTruthy();
+});
+
+it("F3 3D and heatmap keep exact declared axes, null cells and original row identities", async () => {
+  const source = scan();
+  source.points = [
+    {
+      ...source.points[0],
+      ordinal: 0,
+      site_ratio: 1,
+      dense_oc_dmt_ratio: 0,
+      metric_value: 0,
+    },
+    {
+      ...source.points[0],
+      ordinal: 1,
+      site_ratio: 2,
+      dense_oc_dmt_ratio: 0,
+      metric_value: null,
+    },
+    {
+      ...source.points[0],
+      ordinal: 2,
+      site_ratio: 1,
+      dense_oc_dmt_ratio: 1,
+      metric_value: 2,
+    },
+    {
+      ...source.points[0],
+      ordinal: 3,
+      site_ratio: 2,
+      dense_oc_dmt_ratio: 1,
+      metric_value: 3,
+    },
+  ];
+  source.total = 4;
+  mocks.request.mockResolvedValue(source);
+  render(<ScanViewer projectId="p" fileId="f" />);
+  await screen.findByText(/Complete original scan range/);
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "3d" } });
+  let plot = mocks.plot.mock.calls.at(-1)![0];
+  expect(plot.data[0]).toMatchObject({
+    type: "scatter3d",
+    x: [1, 2, 1, 2],
+    y: [0, 0, 1, 1],
+    z: [0, null, 2, 3],
+    customdata: [0, 1, 2, 3],
+  });
+  fireEvent.change(screen.getByRole("combobox"), {
+    target: { value: "heatmap" },
+  });
+  plot = mocks.plot.mock.calls.at(-1)![0];
+  expect(plot.data[0]).toMatchObject({
+    type: "heatmap",
+    x: [1, 2],
+    y: [0, 1],
+    z: [
+      [0, null],
+      [2, 3],
+    ],
+    customdata: [
+      [0, 1],
+      [2, 3],
+    ],
+    zsmooth: false,
+    connectgaps: false,
+  });
+});
+
+it("M5 plot covers all original points independently of the 100-row table", async () => {
+  const source = record();
+  const s = source.metabolite_comparisons["13"].display_series;
+  const values = Array.from({ length: 201 }, (_, i) => i);
+  Object.assign(s, {
+    time: values,
+    observed: values,
+    predicted: values,
+    residual_observed_minus_predicted: values.map(() => 0),
+    censor_mask: values.map(() => "quantified"),
+    uncertainty: values.map(() => 0.1),
+  });
+  render(<M5View record={source} />);
+  await screen.findAllByTestId("plot");
+  const before = mocks.plot.mock.calls.at(-1)![0].dataIdentity;
+  expect(mocks.plot.mock.calls.at(-2)![0].data[0].x).toEqual(values);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Next comparison points" }),
+  );
+  expect(mocks.plot.mock.calls.at(-1)![0].dataIdentity).toBe(before);
+  expect(mocks.plot.mock.calls.at(-2)![0].data[0].x).toEqual(values);
+  expect(screen.getAllByRole("row")).toHaveLength(101);
 });
 
 it("F3 refuses an authorized response with a different source identity", async () => {

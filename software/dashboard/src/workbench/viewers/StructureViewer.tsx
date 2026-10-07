@@ -279,6 +279,62 @@ export function StructureViewer({
         }),
     });
   }
+  function focusRegistered(kind: "pocket" | "clash") {
+    const owned = plugin.current;
+    if (!owned) return;
+    const modelNumbers = new Map(
+      [...sourceModels.current.values()].map((m) => [m.source, m.number]),
+    );
+    const groups = new Map<
+      string,
+      { model: number; chain: string; residues: string[] }
+    >();
+    for (const annotation of annotationIndex.current.values()) {
+      if (!annotation[kind]) continue;
+      const r = annotation.residue,
+        model = modelNumbers.get(r.model);
+      if (model === undefined) continue;
+      const key = JSON.stringify([model, r.chain]);
+      let group = groups.get(key);
+      if (!group) {
+        group = { model, chain: r.chain, residues: [] };
+        groups.set(key, group);
+      }
+      group.residues.push(Number(r.residue_number) + "|" + r.insertion_code);
+    }
+    if (!groups.size) return;
+    // One indexed membership test per atom, not a complete atom scan per residue.
+    applyStructureInteractivity(owned, {
+      action: ["select", "focus"],
+      expression: (builder) =>
+        builder.struct.combinator.merge(
+          [...groups.values()].map((group) =>
+            builder.struct.generator.atomGroups({
+              "entity-test": builder.core.rel.eq([
+                builder.struct.atomProperty.core.modelIndex(),
+                group.model,
+              ]),
+              "chain-test": builder.core.rel.eq([
+                builder.struct.atomProperty.macromolecular.auth_asym_id(),
+                group.chain,
+              ]),
+              "residue-test": builder.core.set.has([
+                builder.core.type.set(group.residues),
+                builder.core.str.concat([
+                  builder.core.str.concat([
+                    builder.core.type.str([
+                      builder.struct.atomProperty.macromolecular.auth_seq_id(),
+                    ]),
+                    "|",
+                  ]),
+                  builder.struct.atomProperty.macromolecular.pdbx_PDB_ins_code(),
+                ]),
+              ]),
+            }),
+          ),
+        ),
+    });
+  }
   async function display(type: string, mode: string) {
     const owned = plugin.current;
     if (!owned || !meta) return;
@@ -609,6 +665,18 @@ export function StructureViewer({
               ))}
             </select>
           </label>
+          {(["pocket", "clash"] as const).map((kind) => (
+            <button
+              key={kind}
+              disabled={
+                !ready ||
+                ![...annotationIndex.current.values()].some((a) => a[kind])
+              }
+              onClick={() => focusRegistered(kind)}
+            >
+              Select all registered {kind} residues (full model)
+            </button>
+          ))}
           <table>
             <thead>
               <tr>

@@ -17,10 +17,14 @@ function Comparison({
 }) {
   const [offset, setOffset] = useState(0),
     [selected, setSelected] = useState<number>();
-  let series;
-  try {
-    series = parsePublic("M5ComparisonSeries", comparison.display_series);
-  } catch {
+  const series = useMemo(() => {
+    try {
+      return parsePublic("M5ComparisonSeries", comparison.display_series);
+    } catch {
+      return undefined;
+    }
+  }, [comparison.display_series]);
+  if (!series) {
     return (
       <p>
         No registered aligned series for {metabolite}; old summary retained. No
@@ -83,28 +87,33 @@ function RegisteredComparison({
     { length: Math.min(100, series.time.length - offset) },
     (_, i) => offset + i,
   );
+  const plotIndices = useMemo(
+    () =>
+      Array.from({ length: Math.min(100000, series.time.length) }, (_, i) => i),
+    [series],
+  );
   const data = useMemo<Data[]>(
     () => [
       {
         type: "scatter",
         mode: "markers",
         name: "Recorded aligned prediction",
-        x: indices.map((i) => series.time[i]),
-        y: indices.map((i) => series.predicted[i]),
+        x: plotIndices.map((i) => series.time[i]),
+        y: plotIndices.map((i) => series.predicted[i]),
       },
       {
         type: "scatter",
         mode: "markers",
         name: "Quantified observation",
-        x: indices.map((i) => series.time[i]),
-        y: indices.map((i) =>
+        x: plotIndices.map((i) => series.time[i]),
+        y: plotIndices.map((i) =>
           series.censor_mask[i] === "quantified" ? series.observed[i] : null,
         ),
         ...(series.uncertainty && series.uncertainty_type
           ? {
               error_y: {
                 type: "data" as const,
-                array: indices.map((i) =>
+                array: plotIndices.map((i) =>
                   series.censor_mask[i] === "quantified"
                     ? series.uncertainty![i]
                     : 0,
@@ -119,8 +128,8 @@ function RegisteredComparison({
         mode: "markers",
         name: "Censored bound (not quantified)",
         marker: { symbol: "triangle-down-open" },
-        x: indices.map((i) => series.time[i]),
-        y: indices.map((i) =>
+        x: plotIndices.map((i) => series.time[i]),
+        y: plotIndices.map((i) =>
           series.censor_mask[i] === "below_lod"
             ? series.lod
             : series.censor_mask[i] === "below_loq"
@@ -129,7 +138,7 @@ function RegisteredComparison({
         ),
       },
     ],
-    [series, offset],
+    [series, plotIndices],
   );
   const residuals = useMemo<Data[]>(
     () => [
@@ -137,33 +146,38 @@ function RegisteredComparison({
         type: "scatter",
         mode: "markers",
         name: "Observed minus predicted (quantified only)",
-        x: indices.map((i) => series.time[i]),
-        y: indices.map((i) => series.residual_observed_minus_predicted[i]),
+        x: plotIndices.map((i) => series.time[i]),
+        y: plotIndices.map((i) => series.residual_observed_minus_predicted[i]),
       },
     ],
-    [series, offset],
+    [series, plotIndices],
   );
   const onPoint = useMemo(
-    () => (index: number) => setSelected(offset + index),
-    [offset, setSelected],
+    () => (index: number) => {
+      setSelected(index);
+      setOffset(Math.floor(index / 100) * 100);
+    },
+    [setOffset, setSelected],
   );
-  // Page values identify this immutable recorded comparison, not its selected
-  // point. Source and prediction changes reset the view; selections do not.
-  const dataIdentity = JSON.stringify([
-    series.experiment_id,
-    series.construct_id,
-    series.condition_id,
-    series.replicate_id,
-    series.raw_data_sha256,
-    metabolite,
-    offset,
-    indices.map((i) => [
-      series.time[i],
-      series.observed[i],
-      series.predicted[i],
-      series.residual_observed_minus_predicted[i],
-    ]),
-  ]);
+  // Source values identify the comparison, not table pagination or selection.
+  const dataIdentity = useMemo(
+    () =>
+      JSON.stringify([
+        series.experiment_id,
+        series.construct_id,
+        series.condition_id,
+        series.replicate_id,
+        series.raw_data_sha256,
+        metabolite,
+        plotIndices.map((i) => [
+          series.time[i],
+          series.observed[i],
+          series.predicted[i],
+          series.residual_observed_minus_predicted[i],
+        ]),
+      ]),
+    [series, metabolite, plotIndices],
+  );
   return (
     <section aria-label={`M5 recorded comparison ${metabolite}`}>
       <h3>M5 {metabolite}: registered comparison</h3>
@@ -184,6 +198,12 @@ function RegisteredComparison({
         coverage is not inferred). Censored bounds are not exact observations.
       </p>
       <Suspense fallback={<p>Loading local comparison plot…</p>}>
+        <p>
+          {plotIndices.length === series.time.length ? "Complete" : "Partial"}{" "}
+          recorded comparison plot: {plotIndices.length}/{series.time.length}{" "}
+          original points (100,000 point budget). Table pagination does not
+          change plot coverage.
+        </p>
         <Plot
           dataIdentity={dataIdentity}
           data={data}

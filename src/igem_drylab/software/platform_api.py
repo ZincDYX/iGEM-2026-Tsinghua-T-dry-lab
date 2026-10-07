@@ -400,9 +400,9 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             raise WorkflowError("unsupported_display_import")
         raw = bytearray()
         async for chunk in request.stream():
-            raw.extend(chunk)
-            if len(raw) > 20_000_000:
+            if len(raw) + len(chunk) > 20_000_000:
                 raise WorkflowError("display_source_budget_exceeded", status_code=413)
+            raw.extend(chunk)
         from igem_drylab.workflow.disclosure import check_import_content
         check_import_content(filename, bytes(raw))
         boundary.check_bytes(bytes(raw))
