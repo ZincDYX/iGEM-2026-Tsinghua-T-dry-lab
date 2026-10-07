@@ -13,6 +13,9 @@ const Structure = lazy(() =>
     default: m.StructureViewer,
   })),
 );
+const Scan = lazy(() =>
+  import("./viewers/ScanViewer").then((m) => ({ default: m.ScanViewer })),
+);
 
 export function ResourceBrowser({
   projectId,
@@ -83,7 +86,7 @@ export function ResourceBrowser({
       <label>
         Resource type
         <select value={kind} onChange={(e) => setKind(e.target.value)}>
-          {["all", "image", "series", "structure", "table"].map((k) => (
+          {["all", "image", "series", "scan", "structure", "table"].map((k) => (
             <option key={k}>{k}</option>
           ))}
         </select>
@@ -136,6 +139,8 @@ export function ResourceBrowser({
               <Series projectId={projectId} fileId={selected} />
             ) : resource.kind === "structure" ? (
               <Structure projectId={projectId} fileId={selected} />
+            ) : resource.kind === "scan" ? (
+              <Scan projectId={projectId} fileId={selected} />
             ) : (
               <p>
                 No active-content viewer. Use authorized original download or

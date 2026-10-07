@@ -62,6 +62,14 @@ class SeriesResource(Contract):
     role: Literal["prediction_contract"] = "prediction_contract"
 
 
+class ScanResource(Contract):
+    kind: Literal["scan"] = "scan"
+    identity: ResourceIdentity
+    name: str
+    byte_count: int
+    result_schema_version: Literal["finite-scaffold-scan-v2"] = "finite-scaffold-scan-v2"
+
+
 class TableResource(Contract):
     kind: Literal["table"] = "table"
     identity: ResourceIdentity
@@ -79,7 +87,7 @@ class ResourcePage(Contract):
     offset: int
     total: int
     has_more: bool
-    items: list[ImageResource | StructureResource | SeriesResource | TableResource] = Field(discriminator=None)
+    items: list[ImageResource | StructureResource | SeriesResource | ScanResource | TableResource] = Field(discriminator=None)
 
 
 class SeriesDescriptor(Contract):
@@ -297,6 +305,8 @@ class DisplayResources:
                     data = None
                 if isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
                     items.append(SeriesResource(**common))
+                elif isinstance(data, dict) and data.get("schema_version") == "finite-scaffold-scan-v2":
+                    items.append(ScanResource(**common))
                 else:
                     items.append(TableResource(**common, media_type="application/json"))
             else:

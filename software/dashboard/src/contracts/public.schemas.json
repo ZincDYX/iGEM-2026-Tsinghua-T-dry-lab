@@ -1,4 +1,526 @@
 {
+  "ScanPage": {
+    "$defs": {
+      "ResourceIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "source_sha256": {
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "snapshot_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Snapshot Hash"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Node Id"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attempt"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Id"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Condition Id"
+          }
+        },
+        "required": [
+          "project_id",
+          "file_id",
+          "source_sha256",
+          "run_id",
+          "snapshot_hash",
+          "node_id",
+          "attempt",
+          "candidate_id",
+          "construct_id",
+          "condition_id"
+        ],
+        "title": "ResourceIdentity",
+        "type": "object"
+      },
+      "ScanPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "candidate_id": {
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "site_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Ratio"
+          },
+          "dense_oc_dmt_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dense Oc Dmt Ratio"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "feasible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feasible"
+          },
+          "metric_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Value"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ordinal",
+          "candidate_id",
+          "site_ratio",
+          "dense_oc_dmt_ratio",
+          "status",
+          "feasible",
+          "metric_value",
+          "reason_codes"
+        ],
+        "title": "ScanPoint",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "display-finite-scan-v1",
+        "default": "display-finite-scan-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "identity": {
+        "$ref": "#/$defs/ResourceIdentity"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      },
+      "decision_id": {
+        "title": "Decision Id",
+        "type": "string"
+      },
+      "decision_scope": {
+        "title": "Decision Scope",
+        "type": "string"
+      },
+      "objective": {
+        "title": "Objective",
+        "type": "string"
+      },
+      "metric_definition": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Metric Definition"
+      },
+      "metric_unit": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Metric Unit"
+      },
+      "comparison_contract": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Comparison Contract"
+      },
+      "points": {
+        "items": {
+          "$ref": "#/$defs/ScanPoint"
+        },
+        "title": "Points",
+        "type": "array"
+      },
+      "ranking_performed": {
+        "const": false,
+        "default": false,
+        "title": "Ranking Performed",
+        "type": "boolean"
+      },
+      "claim_scope": {
+        "const": "source_reported_scan_not_execution_or_parameter_approval",
+        "default": "source_reported_scan_not_execution_or_parameter_approval",
+        "title": "Claim Scope",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "identity",
+      "offset",
+      "total",
+      "has_more",
+      "decision_id",
+      "decision_scope",
+      "objective",
+      "metric_definition",
+      "metric_unit",
+      "comparison_contract",
+      "points",
+      "ranking_performed",
+      "claim_scope"
+    ],
+    "title": "ScanPage",
+    "type": "object"
+  },
+  "M5ComparisonSeries": {
+    "additionalProperties": false,
+    "description": "Persist the values already aligned by the existing comparison, not a replay.",
+    "properties": {
+      "schema_version": {
+        "const": "m5-comparison-series-v1",
+        "default": "m5-comparison-series-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "experiment_id": {
+        "title": "Experiment Id",
+        "type": "string"
+      },
+      "construct_id": {
+        "title": "Construct Id",
+        "type": "string"
+      },
+      "condition_id": {
+        "title": "Condition Id",
+        "type": "string"
+      },
+      "replicate_id": {
+        "title": "Replicate Id",
+        "type": "string"
+      },
+      "raw_data_sha256": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Raw Data Sha256"
+      },
+      "compartment": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Compartment"
+      },
+      "concentration_basis": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Concentration Basis"
+      },
+      "time_unit": {
+        "const": "h",
+        "default": "h",
+        "title": "Time Unit",
+        "type": "string"
+      },
+      "concentration_unit": {
+        "const": "uM",
+        "default": "uM",
+        "title": "Concentration Unit",
+        "type": "string"
+      },
+      "source_time_unit": {
+        "title": "Source Time Unit",
+        "type": "string"
+      },
+      "source_concentration_unit": {
+        "title": "Source Concentration Unit",
+        "type": "string"
+      },
+      "comparison_adapter": {
+        "enum": [
+          "prediction_contract",
+          "legacy_trajectory"
+        ],
+        "title": "Comparison Adapter",
+        "type": "string"
+      },
+      "time": {
+        "items": {
+          "type": "number"
+        },
+        "title": "Time",
+        "type": "array"
+      },
+      "observed": {
+        "items": {
+          "type": "number"
+        },
+        "title": "Observed",
+        "type": "array"
+      },
+      "predicted": {
+        "items": {
+          "type": "number"
+        },
+        "title": "Predicted",
+        "type": "array"
+      },
+      "residual_observed_minus_predicted": {
+        "items": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": "Residual Observed Minus Predicted",
+        "type": "array"
+      },
+      "censor_mask": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Censor Mask",
+        "type": "array"
+      },
+      "lod": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Lod"
+      },
+      "loq": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Loq"
+      },
+      "observation_kind": {
+        "title": "Observation Kind",
+        "type": "string"
+      },
+      "uncertainty": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Uncertainty"
+      },
+      "uncertainty_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Uncertainty Type"
+      },
+      "parameter_approval": {
+        "const": "not_granted_by_display",
+        "default": "not_granted_by_display",
+        "title": "Parameter Approval",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "experiment_id",
+      "construct_id",
+      "condition_id",
+      "replicate_id",
+      "raw_data_sha256",
+      "compartment",
+      "concentration_basis",
+      "time_unit",
+      "concentration_unit",
+      "source_time_unit",
+      "source_concentration_unit",
+      "comparison_adapter",
+      "time",
+      "observed",
+      "predicted",
+      "residual_observed_minus_predicted",
+      "censor_mask",
+      "lod",
+      "loq",
+      "observation_kind",
+      "uncertainty",
+      "uncertainty_type",
+      "parameter_approval"
+    ],
+    "title": "M5ComparisonSeries",
+    "type": "object"
+  },
   "LineagePage": {
     "$defs": {
       "LineageRun": {
@@ -567,6 +1089,43 @@
         "title": "ResourceIdentity",
         "type": "object"
       },
+      "ScanResource": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "scan",
+            "default": "scan",
+            "title": "Kind",
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/$defs/ResourceIdentity"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "result_schema_version": {
+            "const": "finite-scaffold-scan-v2",
+            "default": "finite-scaffold-scan-v2",
+            "title": "Result Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "identity",
+          "name",
+          "byte_count",
+          "result_schema_version"
+        ],
+        "title": "ScanResource",
+        "type": "object"
+      },
       "SeriesResource": {
         "additionalProperties": false,
         "properties": {
@@ -764,6 +1323,9 @@
             },
             {
               "$ref": "#/$defs/SeriesResource"
+            },
+            {
+              "$ref": "#/$defs/ScanResource"
             },
             {
               "$ref": "#/$defs/TableResource"

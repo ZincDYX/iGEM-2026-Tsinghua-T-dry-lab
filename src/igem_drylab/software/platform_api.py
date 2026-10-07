@@ -310,6 +310,11 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def display_series(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=1000), series_id: str | None = None):
         return resources.series(project_id, file_id, offset, limit, series_id)
 
+    @router.get("/files/{file_id}/scan")
+    def display_scan(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
+        from igem_drylab.workflow.scan_display import scan_page
+        return scan_page(resources, project_id, file_id, offset, limit)
+
     @router.get("/files/{file_id}/image-preview")
     def display_image(file_id: str, project_id: str):
         raw = resources.image(project_id, file_id)

@@ -48,3 +48,26 @@ The generated public validators were rebuilt and production build passed.
 Primary sources: [AJV release](https://github.com/ajv-validator/ajv/releases/tag/v8.18.0),
 [source-map-js repair](https://github.com/7rulnik/source-map-js/releases/tag/v1.2.2),
 [Molstar transform API](https://molstar.org/docs/plugin/superposition/).
+
+## F3 and M5 registered result views
+
+F3 reads the existing finite-scaffold-scan-v2 output with project/hash checks,
+bounded pages and the original DesignComparisonContract. Incompatible conditions,
+missing evidence or missing metrics remain null with explicit reasons. Source order
+is preserved; neither backend adapter nor viewer executes a scan or ranking.
+Source-reported eligibility is not proof that uploaded records were actually computed.
+
+M5 now persists the values already canonicalized and aligned by the existing
+comparison, including original units, construct/condition/replicate identities,
+censor masks, LOD/LOQ, source uncertainties and quantified-only residuals.
+The display uses exact recorded markers, not a new interpolation or fit.
+Legacy summaries without these arrays are not reconstructed; legacy prediction
+adapters remain explicitly non-formal. A parameter confidence interval is not
+displayed as a prediction confidence band or interpreted as parameter approval.
+
+The seven previously frozen scientific core files remain untouched. The M5
+comparison file is extended to persist its existing operations, without replacing
+their formulas or tolerances. Its independent analytic regression must run only
+on the server. Local component tests use declared recorded software samples and
+verify zero/null, censor bounds, residuals, units and identity refusal; they do not
+invoke the numerical comparison or a solver.

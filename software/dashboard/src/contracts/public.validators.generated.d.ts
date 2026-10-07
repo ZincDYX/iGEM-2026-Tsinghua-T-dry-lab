@@ -1,3 +1,5 @@
+export function ScanPage(value:unknown):value is import("./ScanPage.generated").ScanPage;
+export function M5ComparisonSeries(value:unknown):value is import("./M5ComparisonSeries.generated").M5ComparisonSeries;
 export function LineagePage(value:unknown):value is import("./LineagePage.generated").LineagePage;
 export function ComparePage(value:unknown):value is import("./ComparePage.generated").ComparePage;
 export function ResourcePage(value:unknown):value is import("./ResourcePage.generated").ResourcePage;

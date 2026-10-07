@@ -5,12 +5,42 @@ import json
 from pathlib import Path
 
 import numpy as np
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 
 from .fit import FitResult, fit_scale_parameter
 from .models import WetLabResult
 from .canonical import canonicalize_metabolite
 from igem_drylab.prediction import observe_prediction
+
+
+class M5ComparisonSeries(BaseModel):
+    """Persist the values already aligned by the existing comparison, not a replay."""
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    schema_version: Literal["m5-comparison-series-v1"] = "m5-comparison-series-v1"
+    experiment_id: str
+    construct_id: str
+    condition_id: str
+    replicate_id: str
+    raw_data_sha256: str | None
+    compartment: str | None
+    concentration_basis: str | None
+    time_unit: Literal["h"] = "h"
+    concentration_unit: Literal["uM"] = "uM"
+    source_time_unit: str
+    source_concentration_unit: str
+    comparison_adapter: Literal["prediction_contract", "legacy_trajectory"]
+    time: list[float]
+    observed: list[float]
+    predicted: list[float]
+    residual_observed_minus_predicted: list[float | None]
+    censor_mask: list[str]
+    lod: float | None
+    loq: float | None
+    observation_kind: str
+    uncertainty: list[float] | None
+    uncertainty_type: str | None
+    parameter_approval: Literal["not_granted_by_display"] = "not_granted_by_display"
 
 
 class MetaboliteComparison(BaseModel):
@@ -27,6 +57,7 @@ class MetaboliteComparison(BaseModel):
     censor_mask: list[str] = Field(default_factory=list)
     comparison_status: str
     fit: FitResult | None = None
+    display_series: M5ComparisonSeries | None = None
 
 
 def _censor_mask(values: list[float], lod: float | None, loq: float | None) -> list[str]:
@@ -86,9 +117,21 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
             continue
         predicted_all = np.interp(observed_time, time, predicted_series[metabolite])
         mask = canonical.censor_mask
+        display_series = M5ComparisonSeries(
+            experiment_id=result.experiment_id,construct_id=result.construct_id,
+            condition_id=result.condition_id,replicate_id=result.replicate_id,
+            raw_data_sha256=result.raw_data_sha256,compartment=result.measurement_compartment,
+            concentration_basis=result.concentration_basis,source_time_unit=result.metabolite_time_unit,
+            source_concentration_unit=result.metabolite_concentration_unit,
+            comparison_adapter="prediction_contract" if contract else "legacy_trajectory",
+            time=observed_time.tolist(),observed=list(observed),predicted=predicted_all.tolist(),
+            residual_observed_minus_predicted=[float(observed[i]-predicted_all[i]) if mask[i]=="quantified" else None for i in range(len(observed))],
+            censor_mask=mask,lod=lod,loq=loq,observation_kind=result.observation_kind,
+            uncertainty=canonical.uncertainty_uM,uncertainty_type=canonical.uncertainty_type,
+        )
         selected = [index for index, flag in enumerate(mask) if flag == "quantified"]
         if not selected:
-            comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, censor_mask=mask, comparison_status="all_observations_censored")
+            comparisons[metabolite] = MetaboliteComparison(metabolite_id=metabolite, censor_mask=mask, comparison_status="all_observations_censored", display_series=display_series)
             continue
         predicted = predicted_all[selected]
         measured = np.asarray([observed[index] for index in selected], dtype=float)
@@ -110,5 +153,6 @@ def compare_prediction(trajectory_path: Path, result: WetLabResult) -> dict[str,
             censor_mask=mask,
             comparison_status="trajectory_aligned" if len(selected) >= 2 else "endpoint_only",
             fit=fit,
+            display_series=display_series,
         )
     return comparisons

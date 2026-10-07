@@ -1,3 +1,5 @@
+export type { ScanPage } from "./ScanPage.generated";
+export type { M5ComparisonSeries } from "./M5ComparisonSeries.generated";
 export type { LineagePage } from "./LineagePage.generated";
 export type { ComparePage } from "./ComparePage.generated";
 export type { ResourcePage } from "./ResourcePage.generated";

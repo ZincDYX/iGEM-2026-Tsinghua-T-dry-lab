@@ -11,6 +11,7 @@ import { LazyJson } from "./contracts/LazyJson";
 import { M1Matrix, M2Metrics } from "./workbench/ScreenResultTables";
 import { MissingEvidence } from "./workbench/MissingEvidence";
 import { M3View, M4View, SequencePlot } from "./workbench/StageViews";
+import { M5View } from "./workbench/M5View";
 import { lazy, Suspense } from "react";
 import { messages } from "./workbench/messages.en";
 const Series = lazy(() =>
@@ -229,6 +230,7 @@ function StageResult({
       )}
       {module === "M5" && (
         <>
+          <M5View record={record} />
           <p>
             QC：{show(record.qc_flags)} · Fit candidate (not automatically
             approved): {show(record.fitted_parameter_candidate)} · Fit warnings:{" "}

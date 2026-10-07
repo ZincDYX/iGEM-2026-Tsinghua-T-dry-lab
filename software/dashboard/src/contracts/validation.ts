@@ -1,58 +1,10 @@
 import * as validators from "./public.validators.generated.js";
-import type {
-  ProjectView,
-  ProjectSummaryView,
-  RunSummaryView,
-  RuntimeInfoView,
-  EventPage,
-  NodePage,
-  PlanView,
-  ProposalView,
-  ScientificPreviewView,
-  BindingPreviewView,
-  IterationView,
-  ImportView,
-  ActionView,
-  Workflow,
-} from "./generated";
-import type { RunListView } from "./generated";
-import type {
-  InputDiffView,
-  PluginInspectionView,
-  ScientificPrecheckView,
-} from "./generated";
 
-import type {
-  ResourcePage,
-  SeriesPage,
-  StructurePage,
-  LineagePage,
-  ComparePage,
-} from "./generated";
+// Infer the public types from generated type predicates: the schema registry
+// is authoritative, so a second handwritten list cannot drift behind it.
+type Validated<F> = F extends (value: unknown) => value is infer T ? T : never;
 export type Protocol = {
-  ResourcePage: ResourcePage;
-  SeriesPage: SeriesPage;
-  StructurePage: StructurePage;
-  LineagePage: LineagePage;
-  ComparePage: ComparePage;
-  ProjectView: ProjectView;
-  ProjectSummaryView: ProjectSummaryView;
-  RunSummaryView: RunSummaryView;
-  RuntimeInfoView: RuntimeInfoView;
-  EventPage: EventPage;
-  NodePage: NodePage;
-  PlanView: PlanView;
-  ProposalView: ProposalView;
-  ScientificPreviewView: ScientificPreviewView;
-  ScientificPrecheckView: ScientificPrecheckView;
-  BindingPreviewView: BindingPreviewView;
-  IterationView: IterationView;
-  ImportView: ImportView;
-  ActionView: ActionView;
-  Workflow: Workflow;
-  RunListView: RunListView;
-  InputDiffView: InputDiffView;
-  PluginInspectionView: PluginInspectionView;
+  [K in keyof typeof validators]: Validated<(typeof validators)[K]>;
 };
 export function parsePublic<K extends keyof Protocol>(
   name: K,

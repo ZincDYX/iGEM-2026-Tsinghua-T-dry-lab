@@ -34,12 +34,16 @@ export type Name2 = string;
 export type ByteCount2 = number;
 export type ResultSchemaVersion = "m4-prediction-v2";
 export type Role2 = "prediction_contract";
-export type Kind3 = "table";
+export type Kind3 = "scan";
 export type Name3 = string;
-export type MediaType1 = string;
 export type ByteCount3 = number;
+export type ResultSchemaVersion1 = "finite-scaffold-scan-v2";
+export type Kind4 = "table";
+export type Name4 = string;
+export type MediaType1 = string;
+export type ByteCount4 = number;
 export type Role3 = "registered_source";
-export type Items = (ImageResource | StructureResource | SeriesResource | TableResource)[];
+export type Items = (ImageResource | StructureResource | SeriesResource | ScanResource | TableResource)[];
 
 export interface ResourcePage {
   schema_version: SchemaVersion;
@@ -89,11 +93,18 @@ export interface SeriesResource {
   result_schema_version: ResultSchemaVersion;
   role: Role2;
 }
-export interface TableResource {
+export interface ScanResource {
   kind: Kind3;
   identity: ResourceIdentity;
   name: Name3;
-  media_type: MediaType1;
   byte_count: ByteCount3;
+  result_schema_version: ResultSchemaVersion1;
+}
+export interface TableResource {
+  kind: Kind4;
+  identity: ResourceIdentity;
+  name: Name4;
+  media_type: MediaType1;
+  byte_count: ByteCount4;
   role: Role3;
 }

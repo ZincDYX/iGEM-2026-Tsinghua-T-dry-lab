@@ -1,6 +1,26 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R8_F3_SCAN_DISPLAY
+    group: integration
+    test_nodeids: ["tests/test_r8_scan_display.py::test_exact_scan_points_contract_gate_pagination_and_grants"]
+    requirement_or_formula_source: r6 registered F3 scan views; existing DesignComparisonContract
+    oracle_type: independently_declared_zero_and_incompatible_pH_row
+    fixture_scope: software_parser_no_scan_solver_or_biological_validation
+    formula_version: source_contract_only
+    units: original_metric_unit
+    tolerance_basis: exact_zero_null_ordinals_grants_and_SHA
+    expected_faults: [null_to_zero, incompatible_condition_plotted, source_order_reranked, private_config_path_disclosed]
+  - risk_id: R8_M5_PERSISTED_ALIGNMENT
+    group: reference_reproduction
+    test_nodeids: ["tests/test_r8_m5_series_reproduction.py::test_saved_m5_alignment_units_censoring_and_existing_summary"]
+    requirement_or_formula_source: existing M5 canonicalization interpolation censoring and endpoint comparison
+    oracle_type: independent_linear_analytic_reference_and_fixed_min_mM_conversion
+    fixture_scope: server_only_synthetic_analytic_reference_not_biology
+    formula_version: existing_M5_unchanged_operations
+    units: h; uM
+    tolerance_basis: exact_time_prediction_censor_masks_and_residuals; 1e-12_unit_conversion_roundoff
+    expected_faults: [source_units_mixed, censored_value_plotted_as_exact, residual_null_to_zero, legacy_adapter_as_formal_verification]
   - risk_id: R8_REGISTERED_STRUCTURE_TRANSFORM
     group: integration
     test_nodeids: ["tests/test_r8_registered_overlay.py::test_original_overlay_matrix_is_source_bound_authorized_and_not_recomputed", "tests/test_r8_registered_overlay.py::test_overlay_rejects_scale_reflection_and_projective_matrices"]
