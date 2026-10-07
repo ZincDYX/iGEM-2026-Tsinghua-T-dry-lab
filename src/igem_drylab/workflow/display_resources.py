@@ -184,6 +184,18 @@ class DisplayResources:
                   file_id TEXT NOT NULL, hash TEXT NOT NULL, schema TEXT NOT NULL,
                   ordinal INTEGER NOT NULL, time REAL NOT NULL, values_json TEXT NOT NULL,
                   PRIMARY KEY(file_id,hash,schema,ordinal));
+                CREATE TABLE IF NOT EXISTS display_structure_meta(
+                  file_id TEXT NOT NULL, hash TEXT NOT NULL, schema TEXT NOT NULL,
+                  payload TEXT NOT NULL, preview BLOB NOT NULL,
+                  PRIMARY KEY(file_id,hash,schema));
+                CREATE TABLE IF NOT EXISTS display_structure_residues(
+                  file_id TEXT NOT NULL, hash TEXT NOT NULL, schema TEXT NOT NULL,
+                  ordinal INTEGER NOT NULL, payload TEXT NOT NULL,
+                  PRIMARY KEY(file_id,hash,schema,ordinal));
+                CREATE INDEX IF NOT EXISTS display_structure_residue_identity
+                  ON display_structure_residues(file_id,hash,schema,
+                    json_extract(payload,'$.model'),json_extract(payload,'$.chain'),
+                    json_extract(payload,'$.residue_number'),json_extract(payload,'$.insertion_code'));
             """)
 
     def source(self, project_id, file_id):
@@ -331,8 +343,7 @@ class DisplayResources:
         self.boundary.check_bytes(raw)
         return raw
 
-    def structure(self, project_id, file_id, offset=0, limit=100, *, annotations=True):
-        path, identity, _ = self.source(project_id, file_id)
+    def _parse_coordinates(self, path, identity, offset, limit):
         extension = path.suffix.lower()
         residues = {}
         lines = []
@@ -398,6 +409,28 @@ class DisplayResources:
             raise WorkflowError("disclosure_quarantined", status_code=403)
         values = list(residues.values())
         meta = StructurePage(identity=identity, format=format_name, offset=offset, total=len(values), chains=sorted({r["chain"] for r in values}), models=list(dict.fromkeys(r["model"] for r in values)), residues=values[offset:offset + limit]).model_dump(mode="json")
+        return meta, preview
+
+    def structure(self, project_id, file_id, offset=0, limit=100, *, annotations=True):
+        path, identity, _ = self.source(project_id, file_id)
+        # Original SHA and project grant have already been checked, even on hits.
+        key = (file_id, identity.source_sha256, "coordinate-index-v1")
+        with self.store.connection() as db:
+            cached = db.execute("SELECT payload,preview FROM display_structure_meta WHERE file_id=? AND hash=? AND schema=?", key).fetchone()
+        if cached is None:
+            whole, preview = self._parse_coordinates(path, identity, 0, 200_000)
+            facts = {k: whole[k] for k in ("format", "total", "chains", "models")}
+            with self.store.connection() as db:
+                db.execute("BEGIN IMMEDIATE")
+                if not db.execute("SELECT 1 FROM display_structure_meta WHERE file_id=? AND hash=? AND schema=?", key).fetchone():
+                    db.executemany("INSERT INTO display_structure_residues VALUES(?,?,?,?,?)", ((*key, i, json.dumps(row)) for i, row in enumerate(whole["residues"])))
+                    db.execute("INSERT INTO display_structure_meta VALUES(?,?,?,?,?)", (*key, json.dumps(facts), preview))
+                cached = db.execute("SELECT payload,preview FROM display_structure_meta WHERE file_id=? AND hash=? AND schema=?", key).fetchone()
+        with self.store.connection() as db:
+            page = db.execute("SELECT payload FROM display_structure_residues WHERE file_id=? AND hash=? AND schema=? AND ordinal>=? ORDER BY ordinal LIMIT ?", (*key, offset, limit)).fetchall()
+        meta = StructurePage(identity=identity, offset=offset, residues=[json.loads(row[0]) for row in page], **json.loads(cached["payload"])).model_dump(mode="json")
+        preview = bytes(cached["preview"])
+        # Sidecars remain independently hash-bound and checked on every read.
         if not annotations:
             self.boundary.check(meta)
             return meta, preview
@@ -435,7 +468,13 @@ class DisplayResources:
             for entry in annotation.rows:
                 residue = entry.residue
                 key = (residue.model, residue.chain, residue.residue_number, residue.insertion_code)
-                if key in seen or key not in residues or residues[key]["residue_name"] != residue.residue_name:
+                with self.store.connection() as db:
+                    actual = db.execute("""SELECT payload FROM display_structure_residues
+                        WHERE file_id=? AND hash=? AND schema=?
+                        AND json_extract(payload,'$.model')=? AND json_extract(payload,'$.chain')=?
+                        AND json_extract(payload,'$.residue_number')=? AND json_extract(payload,'$.insertion_code')=?""",
+                        (file_id, identity.source_sha256, "coordinate-index-v1", *key)).fetchone()
+                if key in seen or actual is None or json.loads(actual[0])["residue_name"] != residue.residue_name:
                     raise WorkflowError("structure_annotation_identity_mismatch")
                 seen.add(key)
                 if entry.full_fusion_position is not None:

@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R8_COORDINATE_CACHE_IDENTITY
+    group: integration
+    test_nodeids: ["tests/test_r8_coordinate_cache.py::test_coordinate_pages_reuse_index_but_never_skip_grants_or_original_hash"]
+    requirement_or_formula_source: r6 bounded projection pages and grant-before-cache
+    oracle_type: fixed_two_residue_source_parser_fail_on_second_read
+    fixture_scope: software_coordinates_no_scientific_handler
+    formula_version: not_applicable
+    units: source_angstrom_no_conversion
+    tolerance_basis: exact_page_identity_bytes_and_rejection
+    expected_faults: [reparse_on_every_page, cross_project_cache_bypass, stale_original_used]
   - risk_id: R7_ITERATION_DEPENDENCY_CLOSURE
     group: platform
     test_nodeids:
