@@ -67,6 +67,12 @@ class ScanResource(DisplayResource):
     result_schema_version: Literal["finite-scaffold-scan-v2"] = "finite-scaffold-scan-v2"
 
 
+class M5Resource(DisplayResource):
+    kind: Literal["m5"] = "m5"
+    result_schema_version: Literal["m5-comparison-series-v1"] = "m5-comparison-series-v1"
+    claim_scope: Literal["recorded_alignment_not_parameter_or_experimental_approval"] = "recorded_alignment_not_parameter_or_experimental_approval"
+
+
 class TableResource(DisplayResource):
     kind: Literal["table"] = "table"
     media_type: str
@@ -81,7 +87,7 @@ class ResourcePage(Contract):
     offset: int
     total: int
     has_more: bool
-    items: list[ImageResource | StructureResource | SeriesResource | ScanResource | TableResource] = Field(discriminator=None)
+    items: list[ImageResource | StructureResource | SeriesResource | ScanResource | M5Resource | TableResource] = Field(discriminator=None)
 
 
 class SeriesDescriptor(Contract):
@@ -317,11 +323,29 @@ class DisplayResources:
                     items.append(SeriesResource(**common, result_schema_version="display-series-source-v1", role="declared_source_series"))
                 elif isinstance(data, dict) and data.get("schema_version") == "finite-scaffold-scan-v2":
                     items.append(ScanResource(**common))
+                elif isinstance(data, dict) and data.get("schema_version") == "m5-comparison-series-v1":
+                    items.append(M5Resource(**common))
                 else:
                     items.append(TableResource(**common, media_type="application/json"))
             else:
                 items.append(TableResource(**common, media_type="text/plain"))
         result = ResourcePage(project_id=project_id, run_id=run_id, snapshot_hash=snapshot, offset=offset, total=len(rows), has_more=offset + limit < len(rows), items=items).model_dump(mode="json")
+        self.boundary.check(result)
+        return result
+
+    def m5(self, project_id, file_id):
+        from igem_drylab.wetlab.comparison import M5ComparisonSeries
+        path, _, _ = self.source(project_id, file_id)
+        raw = self.boundary.check_original(path)
+        if not isinstance(raw, dict) or not set(M5ComparisonSeries.model_fields).issubset(raw):
+            raise WorkflowError('unsupported_recorded_m5_contract')
+        series = M5ComparisonSeries.model_validate(raw, strict=True)
+        columns = (series.observed, series.predicted, series.residual_observed_minus_predicted, series.censor_mask)
+        if any(len(v) != len(series.time) for v in columns) or (series.uncertainty is not None and len(series.uncertainty) != len(series.time)):
+            raise WorkflowError('m5_recorded_series_length_mismatch')
+        # Read exactly persisted aligned values, including null residuals. No
+        # interpolation, fitting, unit conversion, censoring or approval here.
+        result = series.model_dump(mode='json')
         self.boundary.check(result)
         return result
 

@@ -55,10 +55,18 @@ export type ByteCount4 = number;
 export type LogicalRelativePath4 = string | null;
 export type Status4 = "available" | "unavailable" | "quarantined";
 export type ErrorCode4 = string | null;
-export type Kind4 = "table";
+export type Kind4 = "m5";
+export type ResultSchemaVersion2 = "m5-comparison-series-v1";
+export type ClaimScope2 = "recorded_alignment_not_parameter_or_experimental_approval";
+export type Name5 = string;
+export type ByteCount5 = number;
+export type LogicalRelativePath5 = string | null;
+export type Status5 = "available" | "unavailable" | "quarantined";
+export type ErrorCode5 = string | null;
+export type Kind5 = "table";
 export type MediaType1 = string;
 export type Role3 = "registered_source";
-export type Items = (ImageResource | StructureResource | SeriesResource | ScanResource | TableResource)[];
+export type Items = (ImageResource | StructureResource | SeriesResource | ScanResource | M5Resource | TableResource)[];
 
 export interface ResourcePage {
   schema_version: SchemaVersion;
@@ -127,7 +135,7 @@ export interface ScanResource {
   kind: Kind3;
   result_schema_version: ResultSchemaVersion1;
 }
-export interface TableResource {
+export interface M5Resource {
   identity: ResourceIdentity;
   name: Name4;
   byte_count: ByteCount4;
@@ -135,6 +143,17 @@ export interface TableResource {
   status: Status4;
   error_code: ErrorCode4;
   kind: Kind4;
+  result_schema_version: ResultSchemaVersion2;
+  claim_scope: ClaimScope2;
+}
+export interface TableResource {
+  identity: ResourceIdentity;
+  name: Name5;
+  byte_count: ByteCount5;
+  logical_relative_path: LogicalRelativePath5;
+  status: Status5;
+  error_code: ErrorCode5;
+  kind: Kind5;
   media_type: MediaType1;
   role: Role3;
 }

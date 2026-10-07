@@ -1,6 +1,26 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R11_EXPLICIT_SCIENTIFIC_SETUP
+    group: integration
+    test_nodeids: ["tests/test_r11_scientific_setup.py::test_blank_scientific_project_from_explicit_fields_without_yaml_and_original_bindings", "tests/test_r11_scientific_setup.py::test_scientific_creation_is_not_an_authorization_or_default_shortcut", "tests/test_r11_scientific_setup.py::test_malformed_nested_form_values_are_validation_errors_without_mutation"]
+    requirement_or_formula_source: r8 remaining explicit no-YAML creation and original configuration contract
+    oracle_type: actual_HTTP_SQLite_file_grants_original_bytes_and_independent_blank_controls
+    fixture_scope: software_configuration_only_no_solver_no_biological_validation
+    formula_version: not_applicable_no_formula_changed
+    units: user_declared_not_inferred
+    tolerance_basis: exact_no_approval_no_jobs_revision_and_file_grant_refusal
+    expected_faults: [implicit_model_decisions, cross_project_file_grant, approval_on_preview, malformed_nested_values_as_server_error]
+  - risk_id: R11_RECORDED_M5_SOURCE
+    group: integration
+    test_nodeids: ["tests/test_r11_m5_resource.py::test_original_alignment_routes_without_recomputation_or_approval", "tests/test_r11_m5_resource.py::test_invalid_alignment_is_not_repaired_or_approved_by_display"]
+    requirement_or_formula_source: persisted m5-comparison-series-v1 original comparison contract
+    oracle_type: independent_recorded_null_zero_residual_bytes_and_actual_HTTP_grants
+    fixture_scope: software_display_only_no_scientific_comparison_executed
+    formula_version: not_applicable_no_formula_changed
+    units: exact_recorded_h_and_uM_no_conversion
+    tolerance_basis: exact_source_values_and_refusal_without_repair
+    expected_faults: [residual_regenerated, missing_unit_defaulted, legacy_summary_as_series, display_grants_approval]
   - risk_id: R10_ORDINARY_IMPORT_EXACT_MAPPING
     group: integration
     test_nodeids: ["tests/test_r10_ordinary_imports.py::test_empty_project_table_mapping_full_overview_and_original_indices", "tests/test_r10_ordinary_imports.py::test_invalid_tables_rejected_before_grants", "tests/test_r10_ordinary_imports.py::test_bad_numeric_mapping_does_not_publish_declaration", "tests/test_r10_ordinary_imports.py::test_json_role_is_explicit_and_binary_import_original_is_exact", "tests/test_r10_ordinary_imports.py::test_typed_record_preview_enforces_units_provenance_and_no_approval", "tests/test_r10_ordinary_imports.py::test_overview_cell_budget_reports_exact_partial_coverage"]

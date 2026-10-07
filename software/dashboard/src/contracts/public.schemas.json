@@ -1949,6 +1949,87 @@
         "title": "ImageResource",
         "type": "object"
       },
+      "M5Resource": {
+        "additionalProperties": false,
+        "properties": {
+          "identity": {
+            "$ref": "#/$defs/ResourceIdentity"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "byte_count": {
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "logical_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Logical Relative Path"
+          },
+          "status": {
+            "default": "available",
+            "enum": [
+              "available",
+              "unavailable",
+              "quarantined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          },
+          "kind": {
+            "const": "m5",
+            "default": "m5",
+            "title": "Kind",
+            "type": "string"
+          },
+          "result_schema_version": {
+            "const": "m5-comparison-series-v1",
+            "default": "m5-comparison-series-v1",
+            "title": "Result Schema Version",
+            "type": "string"
+          },
+          "claim_scope": {
+            "const": "recorded_alignment_not_parameter_or_experimental_approval",
+            "default": "recorded_alignment_not_parameter_or_experimental_approval",
+            "title": "Claim Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity",
+          "name",
+          "byte_count",
+          "logical_relative_path",
+          "status",
+          "error_code",
+          "kind",
+          "result_schema_version",
+          "claim_scope"
+        ],
+        "title": "M5Resource",
+        "type": "object"
+      },
       "ResourceIdentity": {
         "additionalProperties": false,
         "properties": {
@@ -2455,6 +2536,9 @@
             },
             {
               "$ref": "#/$defs/ScanResource"
+            },
+            {
+              "$ref": "#/$defs/M5Resource"
             },
             {
               "$ref": "#/$defs/TableResource"

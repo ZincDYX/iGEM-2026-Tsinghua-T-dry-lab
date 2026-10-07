@@ -16,6 +16,9 @@ const Structure = lazy(() =>
 const Scan = lazy(() =>
   import("./viewers/ScanViewer").then((m) => ({ default: m.ScanViewer })),
 );
+const M5 = lazy(() =>
+  import("./viewers/M5Viewer").then((m) => ({ default: m.M5Viewer })),
+);
 const Table = lazy(() =>
   import("./viewers/TableViewer").then((m) => ({ default: m.TableViewer })),
 );
@@ -130,9 +133,11 @@ export function ResourceBrowser({
       <label>
         Resource type
         <select value={kind} onChange={(e) => setKind(e.target.value)}>
-          {["all", "image", "series", "scan", "structure", "table"].map((k) => (
-            <option key={k}>{k}</option>
-          ))}
+          {["all", "image", "series", "scan", "m5", "structure", "table"].map(
+            (k) => (
+              <option key={k}>{k}</option>
+            ),
+          )}
         </select>
       </label>
       <ul>
@@ -201,6 +206,8 @@ export function ResourceBrowser({
               <Structure projectId={projectId} fileId={selected} />
             ) : resource.kind === "scan" ? (
               <Scan projectId={projectId} fileId={selected} />
+            ) : resource.kind === "m5" ? (
+              <M5 projectId={projectId} fileId={selected} />
             ) : (
               <Table
                 projectId={projectId}

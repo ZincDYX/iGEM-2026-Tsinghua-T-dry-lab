@@ -431,6 +431,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         from igem_drylab.workflow.scan_display import scan_page
         return scan_page(resources, project_id, file_id, offset, limit)
 
+    @router.get('/files/{file_id}/m5-comparison')
+    def display_m5(file_id: str, project_id: str):
+        return resources.m5(project_id, file_id)
+
     @router.get("/files/{file_id}/image-preview")
     def display_image(file_id: str, project_id: str):
         raw = resources.image(project_id, file_id)
