@@ -4,6 +4,10 @@ Reproducible dry-lab software for the Tsinghua-T iGEM 2026 glabridin project. Th
 
 > **Project status:** ready for a small, human-reviewed `evidence.jsonl` pilot. The default workflow is deterministic and local. Optional external tools and LLM APIs are explicit opt-ins.
 
+FusionLab workbench: [r9 review fixes and remaining scope](docs/r9_review_fixes_20261007.md).
+This is the first correctness batch, not completion of the import/forms/whole-range
+visualization work or a new Windows-native release.
+
 ## What this repository does
 
 The maintained workflow is intentionally conservative:
