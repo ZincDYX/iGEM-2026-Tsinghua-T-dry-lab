@@ -395,7 +395,10 @@ export function WorkspaceShell() {
     requestAnimationFrame(() => {
       const target = document.getElementById(`input-${section}`);
       if (!target) return;
-      const details = target.querySelector("details");
+      const details =
+        target instanceof HTMLDetailsElement
+          ? target
+          : target.querySelector("details");
       if (details) details.open = true;
       target.scrollIntoView({ block: "start" });
       target

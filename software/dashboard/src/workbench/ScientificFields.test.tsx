@@ -3,6 +3,26 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { ScientificFields, type FieldSchema } from "./ScientificFields";
 afterEach(cleanup);
+it("a missing nullable declaration is an exact navigation target, not an invented value", () => {
+  const { container } = render(
+    <ScientificFields
+      schema={{ anyOf: [{ type: "number" }, { type: "null" }] }}
+      definitions={{}}
+      value={null}
+      onChange={() => {
+        throw Error("Navigation supplied a value");
+      }}
+      path="config.missing"
+      files={[]}
+    />,
+  );
+  const target = container.querySelector(
+    '[data-input-path="config.missing"]',
+  ) as HTMLInputElement;
+  expect(target.type).toBe("checkbox");
+  expect(target.checked).toBe(false);
+  expect(screen.queryByRole("spinbutton")).toBeNull();
+});
 it("preserves explicit array order and adds blank numbers, not zero or objects", () => {
   function View() {
     const [v, set] = useState<unknown>([2, 3]);

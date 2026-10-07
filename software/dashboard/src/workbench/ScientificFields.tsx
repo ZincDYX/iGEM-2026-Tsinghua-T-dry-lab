@@ -86,7 +86,7 @@ export function ScientificFields({
         </div>
       ));
     return (
-      <fieldset>
+      <fieldset data-input-path={path} tabIndex={-1}>
         <legend>{path}</legend>
         {fields(entries.filter(([key]) => schema.required?.includes(key)))}
         <details>
@@ -99,7 +99,7 @@ export function ScientificFields({
   if (schema.type === "array") {
     const rows = (value ?? []) as unknown[];
     return (
-      <details>
+      <details data-input-path={path} tabIndex={-1}>
         <summary>
           {path} ({rows.length})
         </summary>
@@ -153,7 +153,7 @@ export function ScientificFields({
           ? schema.additionalProperties
           : {};
     return (
-      <details>
+      <details data-input-path={path} tabIndex={-1}>
         <summary>
           {path} ({Object.keys(rows).length} entries)
         </summary>
@@ -281,6 +281,9 @@ function UnionField(
         <label>
           <input
             type="checkbox"
+            data-input-path={
+              value === null || value === undefined ? path : undefined
+            }
             checked={value !== null && value !== undefined}
             onChange={(e) =>
               onChange(
