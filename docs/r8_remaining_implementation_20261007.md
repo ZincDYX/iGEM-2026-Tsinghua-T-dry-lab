@@ -104,3 +104,23 @@ under the declared keys, and supported NPY v1/v2 headers. They are not an arbitr
 object/structured-array importer. Generic BCIF is still not enabled: a bounded,
 identity-preserving binary decoder needs its own acceptance, rather than exposing
 untrusted compressed input to an unrestricted parser.
+
+## Release dependency inventory and dated advisory queries
+
+`scripts/release_inventory.py` produces a CycloneDX 1.6 component inventory from
+actual pnpm license output, Windows-target-filtered locked Cargo metadata and
+the exact Python site-packages selected for packaging. It strips local paths,
+retains declared license metadata and does not invent dependency graph edges or
+claim every development component is shipped/reachable. Unknown license metadata
+is not assigned an invented license. Full license compliance/legal review,
+bundled native library analysis and Windows/WebView2 security remain separate.
+
+Optional OSV batch queries send only public ecosystem/name/version tuples.
+The 2026-10-07 inventory has 631 components; this query returned no registered
+advisory matches. pnpm audit independently found no listed frontend advisories
+after the two patches. Neither check is a guarantee of universal vulnerability
+absence or proof of exploitability. The desktop packaging script can include the
+dated inventory and report, and requires their commit to match the package.
+
+Primary sources: [CycloneDX specification](https://cyclonedx.org/specification/overview/),
+[OSV querybatch](https://google.github.io/osv.dev/post-v1-querybatch/).

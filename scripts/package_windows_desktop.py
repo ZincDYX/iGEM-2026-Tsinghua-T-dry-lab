@@ -20,6 +20,8 @@ def main():
     parser.add_argument('--site-packages',type=Path,required=True)
     parser.add_argument('--stdlib',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--release-inventory',type=Path,
+                        help='Optional directory with dated CycloneDX component inventory and OSV report')
     args = parser.parse_args()
     for path in (args.exe,args.source_tar,args.python_archive):
         if not path.is_file(): raise FileNotFoundError(path)
@@ -63,6 +65,15 @@ def main():
     (root/'runtime-import-check.log').write_text(checked.stdout+'\n'+checked.stderr,encoding='utf-8')
     if checked.returncode: raise RuntimeError('runtime import check failed; see '+str(root/'runtime-import-check.log'))
     (root/'runtime-dependencies.json').write_text(checked.stdout,encoding='utf-8')
+    if args.release_inventory:
+        inventory = args.release_inventory.resolve()
+        for name in ('SBOM.cdx.json', 'OSV-audit.json'):
+            source = inventory/name
+            if not source.is_file(): raise FileNotFoundError(source)
+            report = json.loads(source.read_text(encoding='utf-8'))
+            commit = report['metadata']['component']['version'] if name == 'SBOM.cdx.json' else report['commit']
+            if commit != args.commit: raise ValueError('release_inventory_commit_mismatch')
+            shutil.copy2(source,root/name)
     (root/'使用说明.txt').write_text(
         'FusionLab Windows x64 便携版\n\n解压完整目录后双击 FusionLab.exe；不要单独移动 exe。\n'
         '默认使用随包 Python 后台、本机 SQLite，前端资源内置；不默认连接任何服务器。\n'
@@ -79,6 +90,7 @@ def main():
         python_archive_sha256=args.python_archive_sha256,source_archive_sha256=sha256(args.source_tar.read_bytes()).hexdigest(),
         viewer_dependencies={'plotly.js-strict-dist-min':'4.1.2','molstar':'5.13.0','fflate':'0.8.3'},
         viewer_dependency_scope='direct_viewer_manifest_not_complete_SBOM',
+        release_inventory_scope='dated_component_inventory_not_binary_reachability_or_license_compliance' if args.release_inventory else 'not_provided',
         scope='portable_software_package_not_scientific_validation',runtime_allowlist=['src/','configs/m1_feature_definitions.yaml','configs/m1_rules_v3.yaml','LICENSE','pyproject.toml','software/dashboard/THIRD_PARTY_NOTICES.txt'], files=records,total_bytes=sum(p['bytes'] for p in records))
     (root/'PACKAGE_MANIFEST.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
     with zipfile.ZipFile(root.with_suffix('.zip'),'w',compression=zipfile.ZIP_DEFLATED) as archive:
