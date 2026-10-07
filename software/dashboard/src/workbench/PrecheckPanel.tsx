@@ -52,7 +52,6 @@ export function InputIssues({
       )}
       <details>
         <summary>Check scope and provenance</summary>
-        <p>Input SHA-256 {result.input_sha256}</p>
         {result.limitations.map((text) => (
           <p key={text}>{text}</p>
         ))}

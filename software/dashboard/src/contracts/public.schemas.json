@@ -1468,6 +1468,16 @@
             "title": "Project Id",
             "type": "string"
           },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
           "run_id": {
             "title": "Run Id",
             "type": "string"
@@ -1487,6 +1497,8 @@
         },
         "required": [
           "project_id",
+          "name",
+          "created_at",
           "run_id",
           "snapshot_hash",
           "revision",
@@ -1756,6 +1768,16 @@
             "title": "Project Id",
             "type": "string"
           },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
           "run_id": {
             "title": "Run Id",
             "type": "string"
@@ -1775,6 +1797,8 @@
         },
         "required": [
           "project_id",
+          "name",
+          "created_at",
           "run_id",
           "snapshot_hash",
           "revision",
@@ -7360,6 +7384,11 @@
         "title": "Id",
         "type": "string"
       },
+      "name": {
+        "default": "",
+        "title": "Name",
+        "type": "string"
+      },
       "project_id": {
         "title": "Project Id",
         "type": "string"
@@ -7439,6 +7468,7 @@
     },
     "required": [
       "id",
+      "name",
       "project_id",
       "status",
       "snapshot_hash",

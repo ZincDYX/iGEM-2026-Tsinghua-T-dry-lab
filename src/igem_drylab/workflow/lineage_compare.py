@@ -13,6 +13,8 @@ from .display_resources import digest_file
 
 class LineageRun(Contract):
     project_id: str
+    name: str = ""
+    created_at: str = ""
     run_id: str
     snapshot_hash: str
     revision: int
@@ -99,7 +101,7 @@ class LineageComparison:
 
     @staticmethod
     def identity(run):
-        return LineageRun(project_id=run["project_id"], run_id=run["id"], snapshot_hash=run["snapshot_hash"], revision=run["snapshot"]["project"]["revision"], status=run["status"])
+        return LineageRun(project_id=run["project_id"], name=run["snapshot"]["project"]["name"], created_at=run["created_at"], run_id=run["id"], snapshot_hash=run["snapshot_hash"], revision=run["snapshot"]["project"]["revision"], status=run["status"])
 
     def lineage(self, project_id, offset, limit):
         family = self.family(project_id)

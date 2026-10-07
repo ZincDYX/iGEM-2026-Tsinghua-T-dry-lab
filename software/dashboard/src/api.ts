@@ -47,7 +47,6 @@ export class PublicApiError extends Error {
         ...detail.field_paths.map((value) => `Field: ${value}`),
         ...detail.logical_files.map((value) => `File: ${value}`),
         ...detail.actions,
-        `Diagnostic ID：${detail.diagnostic_id}`,
       ].join("\n"),
     );
   }

@@ -40,6 +40,7 @@ class NodeStateView(Contract):
 
 class RunSummaryView(Contract):
     id: str
+    name: str = ""
     project_id: str
     status: str
     snapshot_hash: str
@@ -78,7 +79,7 @@ class PublicReads:
     def summary(self, run_id: str):
         with self.store.connection() as db:
             db.execute("BEGIN")
-            row = db.execute("SELECT id,project_id,status,snapshot_hash,created_at,updated_at,control,heartbeat,json_extract(snapshot,'$.project.revision') AS project_revision,json_extract(snapshot,'$.workflow') AS workflow,json_extract(snapshot,'$.tools') AS tools FROM runs WHERE id=?", (run_id,)).fetchone()
+            row = db.execute("SELECT id,project_id,status,snapshot_hash,created_at,updated_at,control,heartbeat,json_extract(snapshot,'$.project.name') AS name,json_extract(snapshot,'$.project.revision') AS project_revision,json_extract(snapshot,'$.workflow') AS workflow,json_extract(snapshot,'$.tools') AS tools FROM runs WHERE id=?", (run_id,)).fetchone()
             if row is None: raise KeyError(run_id)
             result = dict(row)
             workflow = json.loads(result["workflow"])

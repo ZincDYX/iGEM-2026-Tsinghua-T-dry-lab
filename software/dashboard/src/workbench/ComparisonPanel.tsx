@@ -11,6 +11,7 @@ import { LazyJson } from "../contracts/LazyJson";
 
 export function ComparisonPanel({
   current,
+  history,
 }: {
   history: RunListView[];
   current?: RunSummaryView;
@@ -91,8 +92,12 @@ export function ComparisonPanel({
             .filter((r) => r.run_id !== current?.id)
             .map((r) => (
               <option key={r.run_id} value={r.run_id}>
-                {r.project_id} · r{r.revision} · {r.status} ·{" "}
-                {r.run_id.slice(0, 8)}
+                {r.name ||
+                  history.find((item) => item.id === r.run_id)?.name ||
+                  "Related run"}{" "}
+                · Inputs {r.revision} · {r.status}
+                {r.created_at &&
+                  ` · ${new Date(r.created_at).toLocaleString()}`}
               </option>
             ))}
         </select>
@@ -113,9 +118,12 @@ export function ComparisonPanel({
       {page && (
         <>
           <p>
-            Left {page.left.run_id} / {page.left.snapshot_hash}
+            {page.left.name ||
+              history.find((item) => item.id === page.left.run_id)?.name ||
+              "Related run"}{" "}
+            · Inputs {page.left.revision}
             <br />
-            Right {page.right.run_id} / {page.right.snapshot_hash}
+            {current?.name ?? "Current run"} · Inputs {page.right.revision}
           </p>
           <h3>Changed input fields</h3>
           <ul>
@@ -142,8 +150,9 @@ export function ComparisonPanel({
                   <td>
                     {r.left?.record_id ?? "Missing"}
                     <br />
-                    {r.left?.sequence_identity_sha256 ??
-                      "Sequence identity not registered"}
+                    {r.left?.sequence_identity_sha256
+                      ? "Sequence registered"
+                      : "Sequence not registered"}
                     <br />
                     {r.left?.status} / evidence{" "}
                     {String(r.left?.evidence_ready ?? false)}
@@ -151,8 +160,9 @@ export function ComparisonPanel({
                   <td>
                     {r.right?.record_id ?? "Missing"}
                     <br />
-                    {r.right?.sequence_identity_sha256 ??
-                      "Sequence identity not registered"}
+                    {r.right?.sequence_identity_sha256
+                      ? "Sequence registered"
+                      : "Sequence not registered"}
                     <br />
                     {r.right?.status} / evidence{" "}
                     {String(r.right?.evidence_ready ?? false)}

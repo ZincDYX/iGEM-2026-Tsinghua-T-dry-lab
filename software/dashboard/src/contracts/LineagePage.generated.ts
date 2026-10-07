@@ -6,6 +6,8 @@ export type Offset = number;
 export type Total = number;
 export type HasMore = boolean;
 export type ProjectId1 = string;
+export type Name = string;
+export type CreatedAt = string;
 export type RunId = string;
 export type SnapshotHash = string;
 export type Revision = number;
@@ -22,6 +24,8 @@ export interface LineagePage {
 }
 export interface LineageRun {
   project_id: ProjectId1;
+  name: Name;
+  created_at: CreatedAt;
   run_id: RunId;
   snapshot_hash: SnapshotHash;
   revision: Revision;

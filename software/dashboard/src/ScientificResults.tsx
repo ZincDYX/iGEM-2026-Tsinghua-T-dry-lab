@@ -161,12 +161,7 @@ function StageResult({
         missing={record.missing_inputs}
         status={record.status}
       />
-      <p>
-        Formula {show(record.formula_version)} · Parameter identity{" "}
-        {show(record.parameter_ids)} · Source grades{" "}
-        {show(record.provenance_summary)}; job completion does not upgrade
-        experimental validation.
-      </p>
+      <p>Sources: {show(record.provenance_summary)}</p>
       {["M1", "M2"].includes(module) && (
         <p>
           Sequence/Static geometry/negative screens do not establish
@@ -232,9 +227,11 @@ function StageResult({
         <>
           <M5View record={record} />
           <p>
-            QC：{show(record.qc_flags)} · Fit candidate (not automatically
-            approved): {show(record.fitted_parameter_candidate)} · Fit warnings:{" "}
-            {show(record.fit_warnings)}
+            QC：{show(record.qc_flags)} · Fit candidate:{" "}
+            {record.fitted_parameter_candidate
+              ? "Recorded; review required"
+              : "None"}{" "}
+            · Fit warnings: {show(record.fit_warnings)}
           </p>
           <LazyJson
             value={record}
@@ -277,8 +274,8 @@ function NodeResult({
           {show(sequence.protparam.theoretical_pi)}
         </p>
         <p>
-          Sequence SHA-256 {show(sequence.features.sequence_sha256)}; computed
-          metrics, not activity/assembly experimental evidence.
+          Sequence statistics; activity and assembly are not experimentally
+          assessed.
         </p>
         <LazyJson value={output} />
       </section>
@@ -452,8 +449,6 @@ export function ResultComparison({ runs }: { runs: ResultRun[] }) {
           <thead>
             <tr>
               <th>Record</th>
-              <th>Previous sequence SHA-256</th>
-              <th>Current sequence SHA-256</th>
               <th>Difference</th>
               <th>Molecular weight Da</th>
             </tr>
@@ -467,8 +462,6 @@ export function ResultComparison({ runs }: { runs: ResultRun[] }) {
               return (
                 <tr key={id}>
                   <td>{id}</td>
-                  <td>{ah}</td>
-                  <td>{bh}</td>
                   <td>
                     {ah === bh
                       ? "Same sequence; conditions still require checking"

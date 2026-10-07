@@ -19,7 +19,7 @@ export function LocalSettings({
       <h2>Local layout and capabilities</h2>
       <p>
         Drag separators, use arrow keys, or double-click to reset. Layout stays
-        local, outside scientific inputs/approval hash。
+        local and do not change scientific inputs.
       </p>
       <label>
         Table density

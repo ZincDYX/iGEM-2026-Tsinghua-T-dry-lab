@@ -1,6 +1,7 @@
 /* Generated from public Pydantic contracts. Do not edit. */
 
 export type Id = string;
+export type Name = string;
 export type ProjectId = string;
 export type Status = string;
 export type SnapshotHash = string;
@@ -12,7 +13,7 @@ export type StateVersion = number;
 export type EventCursor = number;
 export type ProjectRevision = number;
 export type Id1 = string;
-export type Name = string;
+export type Name1 = string;
 export type Description = string;
 export type Version = string;
 /**
@@ -56,12 +57,13 @@ export type Id4 = string;
 export type RunId = string;
 export type NodeId1 = string;
 export type Hash = string;
-export type Name1 = string;
+export type Name2 = string;
 export type Upstream = string[];
 export type Artifacts = ArtifactView[];
 
 export interface RunSummaryView {
   id: Id;
+  name: Name;
   project_id: ProjectId;
   status: Status;
   snapshot_hash: SnapshotHash;
@@ -79,7 +81,7 @@ export interface RunSummaryView {
 }
 export interface Workflow {
   id: Id1;
-  name: Name;
+  name: Name1;
   description: Description;
   version: Version;
   nodes: Nodes;
@@ -155,7 +157,7 @@ export interface ArtifactView {
   run_id: RunId;
   node_id: NodeId1;
   hash: Hash;
-  name: Name1;
+  name: Name2;
   upstream: Upstream;
   metadata: Metadata;
 }

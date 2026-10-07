@@ -145,10 +145,6 @@ export function InputEditor({
               <p>
                 Preview: {preview.kind} · {preview.file.name}
               </p>
-              <details>
-                <summary>File provenance</summary>
-                <p>SHA-256 {preview.file.sha256}</p>
-              </details>
               <LazyJson value={preview.patch} />
               <button
                 disabled={busy}
@@ -306,8 +302,8 @@ export function InputEditor({
           <thead>
             <tr>
               <th>Logical file</th>
-              <th>File identity</th>
-              <th>Authorized download</th>
+              <th>Open</th>
+              <th>Download</th>
             </tr>
           </thead>
           <tbody>
@@ -327,10 +323,6 @@ export function InputEditor({
                   >
                     Open resource
                   </button>
-                  <details>
-                    <summary>Integrity details</summary>
-                    <code>{file.sha256}</code>
-                  </details>
                 </td>
                 <td>
                   <button

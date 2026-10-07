@@ -2,6 +2,8 @@
 
 export type SchemaVersion = "scientific-comparison-v1";
 export type ProjectId = string;
+export type Name = string;
+export type CreatedAt = string;
 export type RunId = string;
 export type SnapshotHash = string;
 export type Revision = number;
@@ -54,6 +56,8 @@ export interface ComparePage {
 }
 export interface LineageRun {
   project_id: ProjectId;
+  name: Name;
+  created_at: CreatedAt;
   run_id: RunId;
   snapshot_hash: SnapshotHash;
   revision: Revision;

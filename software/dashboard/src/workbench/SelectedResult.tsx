@@ -40,15 +40,9 @@ export function SelectedResult({
   return (
     <section>
       <p>
-        Run {run.id} · Frozen input revision {run.project_revision} · artifact
-        SHA-256 {show(data.artifact?.hash)}
+        {run.name} · Saved inputs {run.project_revision}
       </p>
-      {data.node.error && (
-        <p role="alert">
-          {show(data.node.error.code)} · {show(data.node.error.message)} ·
-          Diagnostic {show(data.node.error.diagnostic_id)}
-        </p>
-      )}
+      {data.node.error && <p role="alert">{show(data.node.error.message)}</p>}
       {data.sequence_map ? (
         <SequenceMapTable
           key={`${run.id}:${selected}:${offset}`}
@@ -101,9 +95,9 @@ export function SelectedResult({
         </button>
       )}
       {onOpenResource &&
-        [...files].map((id) => (
+        [...files].map((id, index) => (
           <button key={id} onClick={() => onOpenResource(id)}>
-            Open registered stage resource {id}
+            Open stage resource {index + 1}
           </button>
         ))}
     </section>

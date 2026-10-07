@@ -51,7 +51,7 @@ function setup() {
     screen.getByText("Model controls and additional input declarations"),
   );
   fireEvent.click(
-    screen.getByText("scientific_project.config.inputs.construct_records (2)"),
+    screen.getByText("Construct records (2)"),
   );
   return { project, change };
 }
@@ -80,7 +80,7 @@ it("reordering existing records preserves reviews associated with their identiti
   const { change } = setup();
   fireEvent.click(
     screen.getByText(
-      "Move scientific_project.config.inputs.construct_records 2 up",
+      "Move Construct records 2 up",
     ),
   );
   expect(

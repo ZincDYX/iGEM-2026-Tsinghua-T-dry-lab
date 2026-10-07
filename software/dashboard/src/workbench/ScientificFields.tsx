@@ -1,6 +1,14 @@
 import type { ProjectView } from "../contracts/generated";
 type AssetIdentity = ProjectView["files"][number];
 import { useState } from "react";
+import { readableData } from "../contracts/LazyJson";
+
+function fieldLabel(path: string, schema: FieldSchema = {}) {
+  if (schema.title) return schema.title;
+  const key = path.split(".").at(-1)!;
+  if (/^\d+$/.test(key)) return `Record ${Number(key) + 1}`;
+  return key.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
 
 // One small editor for less-common fields and initial setup. The backend's
 // existing Pydantic schema supplies choices/types; it never supplies form values.
@@ -38,14 +46,16 @@ export function ScientificFields({
   path: string;
   files: AssetIdentity[];
 }) {
+  const label = fieldLabel(path, schema);
+  if (/(?:^|[._])(?:sha256|hash)$|_sha256$/.test(path)) return null;
   if (schema.readOnly)
     return (
       <p>
-        {path}:{" "}
+        {label}:{" "}
         <output aria-label={path}>
           {value === undefined || value === null
             ? "Not recorded"
-            : JSON.stringify(value)}
+            : readableData(value)}
         </output>
       </p>
     );
@@ -70,7 +80,6 @@ export function ScientificFields({
     const fields = (rows: typeof entries) =>
       rows.map(([key, child]) => (
         <div key={key}>
-          {schema.required?.includes(key) && <small>Required: {key}</small>}
           <ScientificFields
             {...{ definitions, files }}
             schema={child}
@@ -87,10 +96,10 @@ export function ScientificFields({
       ));
     return (
       <fieldset data-input-path={path} tabIndex={-1}>
-        <legend>{path}</legend>
+        <legend>{label}</legend>
         {fields(entries.filter(([key]) => schema.required?.includes(key)))}
         <details>
-          <summary>Additional {path} fields</summary>
+          <summary>Additional {label} fields</summary>
           {fields(entries.filter(([key]) => !schema.required?.includes(key)))}
         </details>
       </fieldset>
@@ -101,7 +110,7 @@ export function ScientificFields({
     return (
       <details data-input-path={path} tabIndex={-1}>
         <summary>
-          {path} ({rows.length})
+          {label} ({rows.length})
         </summary>
         {rows.map((v, i) => (
           <div key={i}>
@@ -115,7 +124,7 @@ export function ScientificFields({
               }
             />
             <button onClick={() => onChange(rows.filter((_, j) => j !== i))}>
-              Remove {path} {i + 1}
+              Remove {label} {i + 1}
             </button>
             <button
               disabled={i === 0}
@@ -125,7 +134,7 @@ export function ScientificFields({
                 onChange(next);
               }}
             >
-              Move {path} {i + 1} up
+              Move {label} {i + 1} up
             </button>
           </div>
         ))}
@@ -141,7 +150,7 @@ export function ScientificFields({
             ])
           }
         >
-          Add {path} item
+          Add {label} item
         </button>
       </details>
     );
@@ -155,7 +164,7 @@ export function ScientificFields({
     return (
       <details data-input-path={path} tabIndex={-1}>
         <summary>
-          {path} ({Object.keys(rows).length} entries)
+          {label} ({Object.keys(rows).length} entries)
         </summary>
         {Object.entries(rows).map(([key, v]) => (
           <div key={key}>
@@ -173,7 +182,7 @@ export function ScientificFields({
                 onChange(next);
               }}
             >
-              Remove {path}.{key}
+              Remove {label}: {key}
             </button>
           </div>
         ))}
@@ -198,7 +207,7 @@ export function ScientificFields({
       (schema.const !== undefined ? [schema.const] : [true, false]);
     return (
       <label>
-        {path}
+        {label}
         <select
           {...attributes}
           value={value === undefined || value === null ? "" : String(value)}
@@ -223,7 +232,7 @@ export function ScientificFields({
   if (schema.format === "path")
     return (
       <label>
-        {path}
+        {label}
         <select
           {...attributes}
           value={String(value ?? "")}
@@ -240,7 +249,7 @@ export function ScientificFields({
     );
   return (
     <label>
-      {path}
+      {label}
       <input
         {...attributes}
         type={
@@ -297,12 +306,12 @@ function UnionField(
               )
             }
           />
-          Declare {path}
+          Declare {fieldLabel(path)}
         </label>
       )}
       {choices.length > 1 && (
         <label>
-          {path} value type
+          {fieldLabel(path)} value type
           <select
             value={mode >= 0 ? mode : 0}
             onChange={(e) => {
@@ -344,7 +353,7 @@ function ArbitraryField(
   return (
     <div>
       <label>
-        {path} explicit value type
+        {fieldLabel(path)} explicit value type
         <select
           value={type}
           onChange={(e) => {
@@ -392,7 +401,7 @@ function DictionaryKey({
   return (
     <div>
       <label>
-        {path} new key
+        {fieldLabel(path)} new key
         <input value={key} onChange={(e) => setKey(e.target.value)} />
       </label>
       <button
@@ -402,7 +411,7 @@ function DictionaryKey({
           setKey("");
         }}
       >
-        Add {path} entry
+        Add {fieldLabel(path)} entry
       </button>
     </div>
   );

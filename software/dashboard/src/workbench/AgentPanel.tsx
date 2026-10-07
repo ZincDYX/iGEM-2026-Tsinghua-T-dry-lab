@@ -128,18 +128,7 @@ export function AgentPanel(props: {
                 "No proposal-reported omissions; scientific stage gates recheck"}
             </dd>
           </dl>
-          <h4>Evidence identities</h4>
-          {p.evidence.length ? (
-            <ul>
-              {p.evidence.map((hash) => (
-                <li key={hash}>
-                  <code>{hash}</code>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No additional evidence cited.</p>
-          )}
+          <p>{p.evidence.length} additional evidence references</p>
           <ul>
             {p.limitations.map((line, i) => (
               <li key={i}>{line}</li>
@@ -157,9 +146,8 @@ export function AgentPanel(props: {
           )}
           {p.confirmation && (
             <p className="subtle">
-              Project revision {p.confirmation.project_revision} · Inputs{" "}
-              {p.confirmation.project_input_sha256.slice(0, 12)} · Workflow{" "}
-              {p.confirmation.workflow_sha256.slice(0, 12)}
+              Proposal checked against saved inputs{" "}
+              {p.confirmation.project_revision}
             </p>
           )}
           <button

@@ -16,6 +16,7 @@ function run(
 ): RunSummaryView {
   return {
     id,
+    name: "Recorded software run",
     project_id: projectId,
     status: "succeeded",
     snapshot_hash: "snapshot",

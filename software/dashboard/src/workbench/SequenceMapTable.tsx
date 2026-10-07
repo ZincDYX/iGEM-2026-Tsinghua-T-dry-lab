@@ -23,9 +23,6 @@ export function SequenceMapTable({
         Statistics, not a biological prediction. {value.total_count} registered
         children; page starts at {value.offset + 1}.
       </p>
-      <p>
-        Frozen run {value.run_id} / snapshot {value.snapshot_hash}
-      </p>
       <label>
         Filter this page
         <input
@@ -38,7 +35,6 @@ export function SequenceMapTable({
         <thead>
           <tr>
             <th>Sequence / child</th>
-            <th>SHA-256</th>
             <th>Job status / issue</th>
             <th>Length</th>
             <th>Molecular weight (Da)</th>
@@ -56,9 +52,6 @@ export function SequenceMapTable({
                   </button>
                 </td>
                 <td>
-                  <code>{row.sequence_sha256 ?? "Not available"}</code>
-                </td>
-                <td>
                   {row.status} / {row.issue ?? "Verified identity"}
                 </td>
                 <td>{show(metrics?.features.length)}</td>
@@ -72,7 +65,7 @@ export function SequenceMapTable({
       {!value.rows.length && (
         <p>No registered children on this page. No values were generated.</p>
       )}
-      <LazyJson value={value.tool_identity} label="Tool identity" />
+      <LazyJson value={value.tool_identity} label="Calculation method" />
       <LazyJson value={value} label="Data and provenance" />
     </section>
   );

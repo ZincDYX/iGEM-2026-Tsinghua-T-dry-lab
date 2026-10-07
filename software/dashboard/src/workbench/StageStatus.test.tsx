@@ -28,6 +28,7 @@ it("keeps job completion separate from missing evidence and revision-bound prech
   };
   const run: RunSummaryView = {
     id: "run",
+    name: "Recorded software run",
     project_id: "p",
     status: "succeeded",
     snapshot_hash: "s",

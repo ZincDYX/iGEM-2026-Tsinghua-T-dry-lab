@@ -19,7 +19,7 @@ export function PluginPanel({
       <h2>Trusted plugins</h2>
       <p>
         Uses current workspace authorization; venv isolates dependencies, not
-        file/network permissions. Pinned source hash does not prove safe code.
+        file/network permissions. Install only code you trust.
       </p>
       <label>
         Public GitHub repository
@@ -61,10 +61,7 @@ export function PluginPanel({
       </button>
       {inspection && (
         <>
-          <LazyJson
-            value={inspection}
-            label="License, capabilities and source  hash"
-          />
+          <LazyJson value={inspection} label="License and capabilities" />
           <label>
             <input
               type="checkbox"

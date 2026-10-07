@@ -63,6 +63,13 @@ describe("original twelve-record sequence map display", () => {
     const select = vi.fn();
     render(<SequenceMapTable value={recordedPage()} onSelect={select} />);
     expect(screen.getAllByRole("row")).toHaveLength(13);
+    expect(screen.queryByText("SHA-256")).toBeNull();
+    expect(screen.queryByText("b".repeat(64))).toBeNull();
+    expect(
+      screen.queryByText(
+        evidence.node.output.items[0].features.sequence_sha256,
+      ),
+    ).toBeNull();
     const first = screen.getByRole("button", {
       name: "FUSN_1_214_from_wetlab_snapgene",
     });

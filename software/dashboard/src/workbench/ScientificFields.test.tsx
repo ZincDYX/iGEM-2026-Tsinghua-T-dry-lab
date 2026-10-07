@@ -3,6 +3,21 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { ScientificFields, type FieldSchema } from "./ScientificFields";
 afterEach(cleanup);
+it("uses field labels and leaves technical identities out of the editable form", () => {
+  const change = () => { throw Error("Display changed scientific input"); };
+  const { container } = render(<ScientificFields
+    schema={{ type: "object", properties: {
+      concentration: { type: "number", title: "Measured concentration" },
+      source_sha256: { type: "string" },
+    }, required: ["concentration", "source_sha256"] }} definitions={{}}
+    value={{ concentration: 0, source_sha256: "b".repeat(64) }} onChange={change}
+    path="scientific_project.config.inputs.measurement" files={[]} />);
+  expect(container.textContent).toContain("Measured concentration");
+  expect(container.textContent).not.toContain("scientific_project.config");
+  expect(container.textContent).not.toContain("source_sha256");
+  expect(container.textContent).not.toContain("b".repeat(64));
+  expect(screen.getByRole("spinbutton").getAttribute("value")).toBe("0");
+});
 it("a missing nullable declaration is an exact navigation target, not an invented value", () => {
   const { container } = render(
     <ScientificFields
@@ -41,10 +56,10 @@ it("preserves explicit array order and adds blank numbers, not zero or objects",
     );
   }
   render(<View />);
-  fireEvent.click(screen.getByText("parts (2)"));
-  fireEvent.click(screen.getByText("Move parts 2 up"));
+  fireEvent.click(screen.getByText("Parts (2)"));
+  fireEvent.click(screen.getByText("Move Parts 2 up"));
   expect(screen.getByRole("status").textContent).toBe("[3,2]");
-  fireEvent.click(screen.getByText("Add parts item"));
+  fireEvent.click(screen.getByText("Add Parts item"));
   expect(screen.getByRole("status").textContent).toBe('[3,2,""]');
 });
 it("displays protected review metadata without an editable approval control", () => {
@@ -126,7 +141,7 @@ it("union numeric mode survives clearing without interpreting a blank as zero", 
     );
   }
   render(<View />);
-  fireEvent.change(screen.getByLabelText("condition value type"), {
+  fireEvent.change(screen.getByLabelText("Condition value type"), {
     target: { value: "1" },
   });
   expect((screen.getByLabelText("condition") as HTMLInputElement).type).toBe(

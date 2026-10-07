@@ -534,7 +534,7 @@ export function StructureViewer({
     <section>
       <p>
         Coordinate-only view. B-factor is not pLDDT. Confidence,
-        fusion/reference mapping and pockets are shown only from a hash-bound
+        fusion/reference mapping and pockets are shown only from a linked
         annotation source. No inferred overlays or activity claims.
       </p>
       {error && <p role="alert">{error}</p>}
@@ -614,18 +614,12 @@ export function StructureViewer({
             </button>
             <p>
               Source {overlay.source_reference} · {overlay.source_tool}{" "}
-              {overlay.source_tool_version} · reference SHA-256{" "}
-              {overlay.reference_sha256}. Original reference-to-target matrix
-              (angstrom); no alignment fitted here.
+              {overlay.source_tool_version} · Recorded reference overlay (Å).
             </p>
           </section>
         ))}
       {meta && (
         <>
-          <details>
-            <summary>Coordinate provenance</summary>
-            <p>Source SHA-256 {meta.identity.source_sha256}</p>
-          </details>
           <p>
             Mapping: {meta.mapping_status}; pocket: {meta.pocket_status};
             confidence: {meta.confidence_status}.
@@ -636,13 +630,9 @@ export function StructureViewer({
               <p>
                 {meta.annotation_source_reference} ·{" "}
                 {meta.annotation_source_tool}{" "}
-                {meta.annotation_source_tool_version} ·{" "}
-                {meta.annotation_file_id} · SHA-256 {meta.annotation_sha256}
+                {meta.annotation_source_tool_version}
               </p>
-              <p>
-                Fusion FASTA {meta.fusion_sequence_id ?? "Not registered"} ·
-                SHA-256 {meta.fusion_sequence_file_sha256 ?? "Not registered"}
-              </p>
+              <p>Fusion FASTA {meta.fusion_sequence_id ?? "Not registered"}</p>
               <p>
                 Registered display source, not scientific approval. Reference
                 coordinates are not automatically aligned.
@@ -728,7 +718,7 @@ export function StructureViewer({
                     </td>
                     <td>
                       {annotation?.reference_residue
-                        ? `${annotation.reference_residue.model}:${annotation.reference_residue.chain}:${annotation.reference_residue.residue_number}${annotation.reference_residue.insertion_code} · ${annotation.reference_sha256}`
+                        ? `${annotation.reference_residue.model}:${annotation.reference_residue.chain}:${annotation.reference_residue.residue_number}${annotation.reference_residue.insertion_code}`
                         : "Not registered"}
                     </td>
                     <td>

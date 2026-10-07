@@ -612,9 +612,7 @@ export function WorkspaceShell() {
           ]}
         />
         <span className="workspace-state">
-          {info
-            ? `Local workspace ${info.workspace_id.slice(0, 8)}`
-            : "Connecting to backend"}
+          {info ? "Local workspace" : "Connecting to backend"}
         </span>
       </header>
       <div className="workbench-toolbar" aria-label="Project and run controls">
@@ -778,7 +776,8 @@ export function WorkspaceShell() {
                   setTab("results");
                 }}
               >
-                {value.node_id} · {value.hash.slice(0, 10)}
+                {run.workflow.nodes.find((node) => node.id === value.node_id)
+                  ?.label ?? "Stage result"}
               </button>
             ))}
           </>
@@ -863,9 +862,9 @@ export function WorkspaceShell() {
             <>
               <p aria-label="Selection context">
                 {selection?.kind === "proposal-node"
-                  ? `Draft proposal ${selection.proposalId}; no result exists for this proposal.`
+                  ? "Draft proposal; no computed result yet."
                   : runSelected
-                    ? `Frozen run ${run?.id} / snapshot ${run?.snapshot_hash}`
+                    ? `${run?.name} · Saved inputs ${run?.project_revision}`
                     : "Select a proposal or a frozen run."}
               </p>
               <PlanPanel
@@ -1126,9 +1125,9 @@ export function WorkspaceShell() {
               <h2>Selected object / Source</h2>
               <p>
                 {selection?.kind === "proposal-node"
-                  ? `Draft proposal ${selection.proposalId}; planned inputs only, no computed result.`
+                  ? "Draft proposal; planned inputs only."
                   : runSelected
-                    ? `Frozen run ${run?.id}`
+                    ? run?.name
                     : "No selected run result."}
               </p>
               <p>{node?.label ?? "No stage selected"}</p>
@@ -1148,7 +1147,7 @@ export function WorkspaceShell() {
                         ? proposal?.review_identity
                         : run?.tools[node.tool_id]
                     }
-                    label="Tool version / Implementation hash and review identity"
+                    label="Calculation method and version"
                   />
                 </>
               )}
@@ -1173,7 +1172,7 @@ export function WorkspaceShell() {
               />
               <p aria-label="Loaded result identity">
                 {nodeData
-                  ? `Loaded: ${run?.id} / ${nodeData.node.id} / attempt ${nodeData.node.attempts} / ${nodeData.artifact?.hash ?? "No artifact yet"} / page ${nodeData.offset}`
+                  ? `Loaded: ${node?.label ?? "Stage result"} · attempt ${nodeData.node.attempts} · candidate page ${Math.floor(nodeData.offset / 20) + 1}`
                   : "Selected result not loaded; other stage values are not shown."}
               </p>
               <LazyJson
@@ -1263,7 +1262,7 @@ export function WorkspaceShell() {
                   {run && (
                     <tr>
                       <td>
-                        {run.id} / r{run.project_revision}
+                        {run.name} · Inputs {run.project_revision}
                       </td>
                       <td>{statusLabel(run.status)}</td>
                       <td>{run.control ?? "None"}</td>

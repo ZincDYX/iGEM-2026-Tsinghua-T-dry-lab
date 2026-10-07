@@ -198,25 +198,21 @@ function RegisteredComparison({
       <p>
         {series.experiment_id} · construct {series.construct_id} · condition{" "}
         {series.condition_id} · replicate {series.replicate_id} ·{" "}
-        {show(series.compartment)} / {show(series.concentration_basis)} · raw
-        SHA-256 {show(series.raw_data_sha256)}.{" "}
+        {show(series.compartment)} / {show(series.concentration_basis)} ·{" "}
         {show(comparison.comparison_status)}
       </p>
       <p>
         Exact recorded aligned points, {offset + 1}–{offset + indices.length}/
-        {series.time.length}. No interpolation, normalization or fit executed in
-        this view. Adapter {series.comparison_adapter}; legacy adapters are not
-        formal condition verification. Original units {series.source_time_unit}/
-        {series.source_concentration_unit}; registered canonical units h/uM.
-        Uncertainty: {show(series.uncertainty_type)} (source magnitude; CI
-        coverage is not inferred). Censored bounds are not exact observations.
+        {series.time.length}. Original units {series.source_time_unit}/
+        {series.source_concentration_unit}; display units h/uM. Uncertainty:{" "}
+        {show(series.uncertainty_type)} (source magnitude; CI coverage is not
+        inferred). Censored bounds are not exact observations.
       </p>
       <Suspense fallback={<p>Loading local comparison plot…</p>}>
         <p>
           {plotIndices.length === series.time.length ? "Complete" : "Partial"}{" "}
           recorded comparison plot: {range + 1}–{range + plotIndices.length}/
-          {series.time.length} original points (100,000 point budget). Table
-          pagination does not change plot coverage.
+          {series.time.length} original points.
         </p>
         <Plot
           dataIdentity={dataIdentity}

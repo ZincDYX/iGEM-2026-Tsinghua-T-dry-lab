@@ -63,10 +63,7 @@ export function M2Metrics({ record }: { record: Record<string, unknown> }) {
   ];
   return (
     <>
-      <p>
-        Reference identity: {show(record.reference_structure_id)} · Original
-        file SHA-256 {show(record.reference_artifact_sha256)}
-      </p>
+      <p>Reference structure: {show(record.reference_structure_id)}</p>
       <p>
         Structure source {show(record.structure_source_tool)} /{" "}
         {show(record.structure_source_tool_version)} · Negative screen{" "}

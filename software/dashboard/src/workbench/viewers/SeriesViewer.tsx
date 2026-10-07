@@ -125,9 +125,7 @@ export function SeriesViewer({
       <details>
         <summary>Series provenance</summary>
         <p>
-          {page.model_kind} · {page.formula_version} · SHA-256{" "}
-          {page.identity.source_sha256} · {page.data_source_sha256} ·{" "}
-          {page.source_reference}. Source display, not evidence approval.
+          {page.model_kind} · {page.source_reference ?? "Source file"}
         </p>
       </details>
       <label>
@@ -187,8 +185,7 @@ export function SeriesViewer({
               ? "Complete recorded range"
               : "Partial recorded range"}
             : {overview.offset + 1}–{overview.offset + overview.time.length} /{" "}
-            {overview.total} points. No interpolation, decimation, unit
-            conversion, error bands or null-to-zero substitution.
+            {overview.total} points.
           </p>
           <Suspense fallback={<p>Loading local plot renderer…</p>}>
             <Plot

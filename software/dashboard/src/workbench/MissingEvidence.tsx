@@ -15,7 +15,7 @@ const stageGuidance: Record<
     source:
       "Structure/reference files, residue mappings, SASA / geometry inputs and tool versions",
     condition:
-      " and  M1 construct and sequence  hash  must match; Q1–Q4 confidence/rejection gates remain active",
+      "The construct and sequence must match M1; confidence checks still apply",
     next: "Resolve upstream omissions, then attach structure evidence of the same identity.",
   },
   M3: {

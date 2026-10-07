@@ -190,13 +190,6 @@ export function ResourceBrowser({
             {resource.logical_relative_path ?? resource.name} ·{" "}
             {resource.byte_count} bytes · Verified
           </p>
-          <details>
-            <summary>Provenance</summary>
-            <p>
-              {resource.identity.file_id} · SHA-256{" "}
-              {resource.identity.source_sha256}
-            </p>
-          </details>
           <Suspense fallback={<p>Loading local viewer…</p>}>
             {resource.kind === "image" ? (
               <Image projectId={projectId} fileId={selected} />

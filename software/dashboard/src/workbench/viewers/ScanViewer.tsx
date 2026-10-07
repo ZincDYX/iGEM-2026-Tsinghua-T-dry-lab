@@ -147,12 +147,7 @@ export function ScanViewer({
         <>
           <details>
             <summary>Scan provenance</summary>
-            <p>
-              Decision {page.decision_id} · {page.decision_scope} · SHA-256{" "}
-              {page.identity.source_sha256}. Source report, not
-              execution/parameter approval. Backend source-contract gates apply;
-              no solver, ranking or interpolation.
-            </p>
+            <p>{page.decision_scope}</p>
           </details>
           <label>
             Recorded scan display
