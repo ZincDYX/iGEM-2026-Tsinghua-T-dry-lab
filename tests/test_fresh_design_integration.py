@@ -75,3 +75,16 @@ def test_actual_finite_scan_creates_new_M2_geometry_M3_distribution_and_M4_flux(
     assert dense[0]!=dense[1]
     assert out['scaffold_scan'][0]['metrics']['productivity']!=out['scaffold_scan'][1]['metrics']['productivity']
     assert out['design_decision']['r_target'] is None
+    # SERVER ONLY: the real fresh-pipeline report traverses the same existing
+    # public projection as stage exports; no handwritten scan/display report.
+    from test_r7_display_resources import environment
+    from igem_drylab.workflow.scan_display import scan_page
+    _, boundary, resources = environment(tmp_path / 'display')
+    public_report = tmp_path / 'actual-scan-public.json'
+    public_report.write_text(json.dumps(boundary.tree(out, project_id='a')))
+    asset = boundary.asset(public_report, project_id='a')
+    page = scan_page(resources, 'a', asset['id'], 0, 100)
+    assert page['total'] == 2 and [p['site_ratio'] for p in page['points']] == [1, 2]
+    assert all(p['metric_value'] is None and 'source_scope_not_formal' in p['reason_codes'] for p in page['points'])
+    assert resources.catalog('a', file_id=asset['id'])['items'][0]['status'] == 'available'
+    assert page['ranking_performed'] is False

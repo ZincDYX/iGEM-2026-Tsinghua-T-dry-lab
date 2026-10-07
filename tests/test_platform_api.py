@@ -38,4 +38,7 @@ def test_import_confirm_execute_and_reopen_local_database(tmp_path: Path) -> Non
 def test_duplicate_fasta_and_invalid_pathway_are_rejected(tmp_path: Path) -> None:
     client = TestClient(create_app(data_dir=tmp_path, deployment_mode="development"))
     assert client.post("/api/platform/imports/preview", json={"filename": "duplicate.fa", "content": ">x\nMAG\n>x\nMSG\n"}).status_code == 422
-    assert client.post("/api/platform/imports/preview", json={"filename": "invalid.json", "content": "{\"id\": \"fake\"}"}).status_code == 422
+    assert client.post("/api/platform/imports/preview", json={"filename": "invalid.json", "content": "{\"id\": \"fake\"}", "input_kind": "pathway"}).status_code == 422
+    generic = client.post("/api/platform/imports/preview", json={"filename": "configuration.json", "content": "{\"id\": \"fake\"}"})
+    assert generic.status_code == 200
+    assert generic.json()["kind"] == "configuration_display_only" and generic.json()["patch"] == {}
