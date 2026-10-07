@@ -22,8 +22,12 @@ authored English strings; user inputs and original evidence text are retained.
   reset, original pocket/clash selection and authorized reference coordinates
   are available. Annotation coloring covers the current page and leaves unknown
   residues gray; the declared continuous pLDDT display scale is not an approval
-  threshold. Reference coordinates are independent unless an original transform
-  is registered: no automatic alignment or invented assembly. WebGL failure retains
+  threshold. Reference coordinates are independent; an original-transform overlay
+  adapter is not implemented. No automatic alignment or invented assembly is claimed.
+  Source model IDs are bound to parsed trajectory frame identities: Mol* can
+  renumber PDB models internally. Both residue focus and annotation colors use
+  this explicit mapping, not equality of source and viewer model numbers.
+  WebGL failure retains
   residue tables and original download. Plots, React roots, GPU contexts and
   blob URLs are disposed on resource change/unmount.
 - Authorized lineage comparison is paginated/batched and displays source

@@ -222,6 +222,24 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
   ).toContainText("42");
   await expect(page.locator(".workspace-content")).toContainText(sourceHash);
   await page.getByRole("button", { name: "12A", exact: true }).click();
+  const selectedAtoms = await page
+    .locator(".structure-canvas")
+    .evaluate((element) => {
+      const node = element as any;
+      let fiber =
+        node[Object.keys(node).find((key) => key.startsWith("__reactFiber$"))!];
+      for (; fiber; fiber = fiber.return) {
+        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+          const owned = hook.memoizedState?.current;
+          if (owned?.managers?.structure)
+            return owned.managers.structure.selection.elementCount();
+        }
+      }
+      throw Error("Actual viewer context missing");
+    });
+  // Source model 7 is internally numbered 1; selecting must still target only
+  // the three atoms of chain B / residue 12 / insertion A, not all 108 atoms.
+  expect(selectedAtoms).toBe(3);
   await page
     .getByLabel("Representation", { exact: true })
     .selectOption("ball-and-stick");
@@ -232,9 +250,44 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
     .getByLabel("Color source", { exact: true })
     .selectOption("confidence");
   await expect(page.getByLabel("Color source", { exact: true })).toBeEnabled();
+  const actualColor = await page
+    .locator(".structure-canvas")
+    .evaluate((element) => {
+      const node = element as any;
+      let fiber =
+        node[Object.keys(node).find((key) => key.startsWith("__reactFiber$"))!];
+      for (; fiber; fiber = fiber.return) {
+        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+          const owned = hook.memoizedState?.current;
+          if (!owned?.managers?.structure) continue;
+          const component =
+            owned.managers.structure.hierarchy.current.structures[0]
+              .components[0];
+          const structure = component.cell.obj.data,
+            unit = structure.units[0];
+          const location = {
+            kind: "element-location",
+            structure,
+            unit,
+            element: unit.elements[0],
+          };
+          return component.representations[0].cell.obj.data.repr.theme.color.color(
+            location,
+          );
+        }
+      }
+      throw Error("Actual viewer context missing");
+    });
+  // Independent fixed RGB oracle for the declared 0..100 linear display scale
+  // at the registered value 42. Gray or the B-factor 99 cannot pass.
+  expect(actualColor).toBe(0x994c62);
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await page.getByLabel("Representation", {exact:true}).selectOption("molecular-surface");
-  await expect(page.getByLabel("Representation", {exact:true})).toBeEnabled();
+  await page
+    .getByLabel("Representation", { exact: true })
+    .selectOption("molecular-surface");
+  await expect(
+    page.getByLabel("Representation", { exact: true }),
+  ).toBeEnabled();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByRole("button", { name: "Reset structure view" }).click();
   await page.getByRole("button", { name: "Next residues" }).click();

@@ -9,6 +9,7 @@ import type { PluginUIContext } from "molstar/lib/mol-plugin-ui/context";
 import {
   StructureElement,
   StructureProperties,
+  Model,
 } from "molstar/lib/mol-model/structure";
 import { ColorTheme } from "molstar/lib/mol-theme/color";
 import { Color } from "molstar/lib/mol-util/color";
@@ -29,6 +30,9 @@ export function StructureViewer({
 }) {
   const root = useRef<HTMLDivElement>(null);
   const plugin = useRef<PluginUIContext | undefined>(undefined);
+  const sourceModels = useRef(
+    new Map<string, { source: string; number: number }>(),
+  );
   const [meta, setMeta] = useState<StructurePage>();
   const [error, setError] = useState("");
   const [chain, setChain] = useState("");
@@ -47,6 +51,7 @@ export function StructureViewer({
     setReady(false);
     setReference(undefined);
     setOffset(0);
+    sourceModels.current.clear();
     async function load() {
       const [raw, response] = await Promise.all([
         requestJson(
@@ -114,12 +119,29 @@ export function StructureViewer({
         source,
         metadata.format as "pdb" | "mmcif",
       );
+      if (trajectory.obj?.data.frameCount !== metadata.models.length)
+        throw new Error("Coordinate model identity differs from metadata.");
       await owned.builders.structure.hierarchy.applyPreset(
         trajectory,
         "all-models",
         { representationPreset: "polymer-and-ligand" },
       );
       if (controller.signal.aborted) return;
+      // PDB model numbers are renumbered by Mol*. Bind parsed frame identity
+      // to the original, source-ordered metadata instead of equating numbers.
+      for (const structure of owned.managers.structure.hierarchy.current
+        .structures) {
+        for (const model of structure.cell.obj!.data.models) {
+          const sourceModel =
+            metadata.models[Model.TrajectoryInfo.get(model).index];
+          if (sourceModel === undefined)
+            throw new Error("Unknown coordinate model.");
+          sourceModels.current.set(model.id, {
+            source: sourceModel,
+            number: model.modelNum,
+          });
+        }
+      }
       setMeta(metadata);
       setChain(metadata.chains[0] ?? "");
       setReady(true);
@@ -172,6 +194,13 @@ export function StructureViewer({
     model?: string,
   ) {
     if (!plugin.current) return;
+    const modelNumber =
+      model === undefined
+        ? undefined
+        : [...sourceModels.current.values()].find(
+            (value) => value.source === model,
+          )?.number;
+    if (model !== undefined && modelNumber === undefined) return;
     applyStructureInteractivity(plugin.current, {
       action: ["select", "focus"],
       expression: (builder) =>
@@ -180,7 +209,7 @@ export function StructureViewer({
             ? {
                 "entity-test": builder.core.rel.eq([
                   builder.struct.atomProperty.core.modelIndex(),
-                  meta?.models.indexOf(model),
+                  modelNumber,
                 ]),
               }
             : {}),
@@ -228,7 +257,8 @@ export function StructureViewer({
           if (!StructureElement.Location.is(location)) return Color(0xaaaaaa);
           const annotation = meta.annotations.find(
             (a) =>
-              a.residue.model === String(location.unit.model.modelNum) &&
+              a.residue.model ===
+                sourceModels.current.get(location.unit.model.id)?.source &&
               a.residue.chain ===
                 StructureProperties.chain.auth_asym_id(location) &&
               a.residue.residue_number ===
