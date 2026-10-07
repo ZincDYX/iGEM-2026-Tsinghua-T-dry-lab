@@ -176,7 +176,7 @@ export function WorkspaceShell() {
     }
   }
   function invalidate() {
-    ++planGeneration.current;
+    planController.invalidate();
     setProposal(undefined);
     setSelection(undefined);
   }
@@ -442,7 +442,6 @@ export function WorkspaceShell() {
     editing ||
     projectCheck?.project_revision !== currentProject?.revision;
   function openInput(field: string) {
-    setTab("inputs");
     const section = field.includes("construct")
       ? "constructs"
       : field.includes("fasta")
@@ -450,11 +449,7 @@ export function WorkspaceShell() {
         : field.includes("condition")
           ? "conditions"
           : "evidence";
-    requestAnimationFrame(() =>
-      document
-        .getElementById(`input-${section}`)
-        ?.scrollIntoView({ block: "start" }),
-    );
+    navigateInput(section);
   }
   const style = {
     "--left-width": `${layout.left}px`,
@@ -747,7 +742,10 @@ export function WorkspaceShell() {
       />
       <main className="workspace-center">
         <Tabs
-          values={tabs}
+          values={tabs.filter(
+            (item) =>
+              !["settings", "plugins"].includes(item.id) || item.id === tab,
+          )}
           selected={tab}
           label="Workspace documents"
           onChange={(id) => {
