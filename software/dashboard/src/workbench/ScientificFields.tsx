@@ -3,7 +3,7 @@ type AssetIdentity = ProjectView["files"][number];
 import { useState } from "react";
 import { readableData } from "../contracts/LazyJson";
 
-function fieldLabel(path: string, schema: FieldSchema = {}) {
+export function fieldLabel(path: string, schema: FieldSchema = {}) {
   if (schema.title) return schema.title;
   const key = path.split(".").at(-1)!;
   if (/^\d+$/.test(key)) return `Record ${Number(key) + 1}`;

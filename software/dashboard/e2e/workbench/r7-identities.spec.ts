@@ -168,7 +168,7 @@ test("same-ID proposal never borrows a historical result or controls its run", a
     .getByRole("tab", { name: "Inputs / Evidence" })
     .click();
   await expect(page.getByLabel("Loaded result identity")).toContainText(
-    `/ ${"m1"} / attempt 1`,
+    "M1 original-formula pipeline and evidence gates · attempt 1",
   );
   await page
     .getByRole("tablist", { name: "Inspector tabs" })
@@ -181,6 +181,7 @@ test("same-ID proposal never borrows a historical result or controls its run", a
     "Draft proposal",
   );
   await page
+    .getByRole("tabpanel")
     .getByRole("button", {
       name: "M1 original-formula pipeline and evidence gates",
       exact: true,
@@ -210,5 +211,10 @@ test("same-ID proposal never borrows a historical result or controls its run", a
     .getByRole("tablist", { name: "Inspector tabs" })
     .getByRole("tab", { name: "Inputs / Evidence" })
     .click();
-  await expect(page.getByLabel("Loaded result identity")).toContainText(runId);
+  await expect(page.getByLabel("Loaded result identity")).toContainText(
+    "M1 original-formula pipeline and evidence gates · attempt 1",
+  );
+  await expect(page.getByLabel("Loaded result identity")).not.toContainText(
+    runId,
+  );
 });

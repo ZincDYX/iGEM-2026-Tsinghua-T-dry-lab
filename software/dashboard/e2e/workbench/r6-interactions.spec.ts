@@ -248,6 +248,7 @@ test("paused UI cancel is terminal and inspector result stays with selected stag
     .click();
   await expect(page.locator(".document-status")).toContainText("Job completed");
   await page
+    .getByRole("tabpanel")
     .getByRole("button", {
       name: "M4 original-formula pipeline and evidence gates",
       exact: true,
@@ -265,6 +266,7 @@ test("paused UI cancel is terminal and inspector result stays with selected stag
     .getByRole("tab", { name: "Workflow" })
     .click();
   await page
+    .getByRole("tabpanel")
     .getByRole("button", {
       name: "M1 original-formula pipeline and evidence gates",
       exact: true,
@@ -275,7 +277,7 @@ test("paused UI cancel is terminal and inspector result stays with selected stag
     .getByRole("tab", { name: "Inputs / Evidence" })
     .click();
   await expect(page.getByLabel("Loaded result identity")).toContainText(
-    "/ m1 / attempt 1",
+    "M1 original-formula pipeline and evidence gates · attempt 1",
   );
   await page
     .locator(".workspace-inspector")

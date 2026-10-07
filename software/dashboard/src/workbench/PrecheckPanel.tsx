@@ -1,4 +1,5 @@
 import type { ScientificPrecheckView } from "../contracts/generated";
+import { fieldLabel } from "./ScientificFields";
 export type InputIssue = ScientificPrecheckView["missing"][number];
 
 export function InputIssues({
@@ -33,7 +34,7 @@ export function InputIssues({
                 {item.stage} / {item.code}
               </td>
               <td>
-                {item.field_path}{" "}
+                {fieldLabel(item.field_path)}{" "}
                 <button onClick={() => onLocate(item)}>Open input</button>
               </td>
               <td>
@@ -41,7 +42,10 @@ export function InputIssues({
                 {item.condition_id ?? "Not declared"}
               </td>
               <td>
-                {item.source_kind} / {item.reason_codes.join(", ")}
+                {item.source_kind.replaceAll("_", " ")} /{" "}
+                {item.reason_codes
+                  .map((code) => code.replaceAll("_", " "))
+                  .join(", ")}
               </td>
             </tr>
           ))}

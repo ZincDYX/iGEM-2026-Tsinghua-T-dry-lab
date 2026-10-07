@@ -111,6 +111,7 @@ test("authenticated real HTTP compiler/ledger/handlers, staged control, provenan
   }
   await expect(page.locator(".document-status")).toContainText("Job completed");
   await page
+    .getByRole("tabpanel")
     .getByRole("button", {
       name: "M4 original-formula pipeline and evidence gates",
       exact: true,

@@ -304,7 +304,7 @@ test("authorized original bytes, offline Plotly exact null/zero and actual Molst
       .locator("..")
       .locator("table"),
   ).toContainText("42");
-  await expect(page.locator(".workspace-content")).toContainText(sourceHash);
+  await expect(page.locator(".workspace-content")).not.toContainText(sourceHash);
   await page.getByRole("button", { name: "12A", exact: true }).click();
   const selectedAtoms = await page
     .locator(".structure-canvas")
