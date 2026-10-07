@@ -48,7 +48,27 @@ def test_software_fixture_workflow_blocks_external_network(tmp_path,monkeypatch)
     # display sidecar. This fixture remains synthetic and assumption-based.
     from igem_drylab.wetlab.comparison import M5ComparisonSeries
     feedback = json.loads((manifest.run_dir / "m5_wetlab_feedback" / "feedback.json").read_text())
-    series = M5ComparisonSeries.model_validate(feedback[0]["metabolite_comparisons"]["15"]["display_series"])
-    assert (series.experiment_id, series.construct_id, series.condition_id, series.replicate_id) == ("e", "M1-FTH1-pgl3_3x_ggggs", "c", "1")
+    assert feedback[0]["metabolite_comparisons"] == {}
+    assert "unmatched_condition" in feedback[0]["notes"]
+    # A second, explicitly matched software measurement binds the actual
+    # emitted construct/condition; do not alter or waive the unmatched input.
+    from hashlib import sha256
+    from igem_drylab.pipeline.models import M4ReactionPrediction
+    from igem_drylab.pipeline.stages import run_m5
+    predictions = [M4ReactionPrediction.model_validate(row) for row in json.loads(manifest.stages[3].json_file.read_text())]
+    prediction = predictions[0]
+    assert prediction.candidate_context is not None
+    original_wetlab = wetlab.read_bytes()
+    original_trajectory_hash = sha256(prediction.trajectory_artifact.read_bytes()).hexdigest()
+    matched = tmp_path / "matched-software-measurement.json"
+    matched.write_text(json.dumps([{"experiment_id": "SOFTWARE_MATCHED_ROUTE", "construct_id": prediction.candidate_context.construct_id,
+        "condition_id": prediction.condition_id, "replicate_id": "1", "metabolite_time": [0, 1],
+        "metabolite_concentration_unit": "uM", "metabolites": {"15": [0, 1]}, "control_available": True, "biological_replicate_count": 2}]))
+    config.stages.m5_feedback.wetlab_results_file = matched
+    matched_records, _ = run_m5(config, tmp_path / "matched-m5-output", predictions)
+    series = M5ComparisonSeries.model_validate(matched_records[0].metabolite_comparisons["15"]["display_series"])
+    assert (series.experiment_id, series.construct_id, series.condition_id, series.replicate_id) == ("SOFTWARE_MATCHED_ROUTE", prediction.candidate_context.construct_id, prediction.condition_id, "1")
     assert series.time == [0, 1] and series.observed == [0, 1]
     assert series.parameter_approval == "not_granted_by_display"
+    assert wetlab.read_bytes() == original_wetlab
+    assert sha256(prediction.trajectory_artifact.read_bytes()).hexdigest() == original_trajectory_hash
