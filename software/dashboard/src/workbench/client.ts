@@ -1,4 +1,4 @@
-import { requestJson } from "../api";
+import { requestJson, requestBinary } from "../api";
 import { parsePublic, parseList } from "../contracts/validation";
 import type { Protocol } from "../contracts/validation";
 import type {
@@ -145,12 +145,25 @@ export const uploadScientific = (
     config_filename: configFilename,
     files,
   });
-export const importFile = async (file: File, inputKind: string) =>
-  read("ImportView", "/imports/preview", {
+export const importFile = async (file: File, inputKind: string) => {
+  if (file.size > 20_000_000)
+    throw new Error("Import exceeds the 20 MB source budget.");
+  if (/\.(png|jpe?g|pdb|cif|mmcif)$/i.test(file.name))
+    return parsePublic(
+      "ImportView",
+      await (
+        await requestBinary(
+          `/imports/display-file?filename=${encodeURIComponent(file.name)}`,
+          file,
+        )
+      ).json(),
+    );
+  return read("ImportView", "/imports/preview", {
     filename: file.name,
     content: await file.text(),
     input_kind: inputKind,
   });
+};
 export const bindMeasurement = (id: string, revision: number, fileId: string) =>
   read("BindingPreviewView", "/scientific-projects/bind-measurement", {
     project_id: id,

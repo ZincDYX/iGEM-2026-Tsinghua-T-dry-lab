@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import type { ResourcePage } from "../contracts/generated";
+import type { ResourcePage, ImportView } from "../contracts/generated";
 import { requestJson, downloadResource } from "../api";
 import { parsePublic } from "../contracts/validation";
 const Image = lazy(() =>
@@ -16,13 +16,24 @@ const Structure = lazy(() =>
 const Scan = lazy(() =>
   import("./viewers/ScanViewer").then((m) => ({ default: m.ScanViewer })),
 );
+const Table = lazy(() =>
+  import("./viewers/TableViewer").then((m) => ({ default: m.TableViewer })),
+);
 
 export function ResourceBrowser({
   projectId,
   runId,
+  revision,
+  initialFileId,
+  initialRunScope,
+  onRegistered,
 }: {
   projectId: string;
   runId?: string;
+  revision: number;
+  initialFileId?: string;
+  initialRunScope?: boolean;
+  onRegistered: (value: ImportView) => void;
 }) {
   const [scope, setScope] = useState("project");
   const activeRun = scope === "run" ? runId : undefined;
@@ -31,11 +42,38 @@ export function ResourceBrowser({
   const [selected, setSelected] = useState("");
   const [kind, setKind] = useState("all");
   const [error, setError] = useState("");
+  const [requestedResource, setRequestedResource] =
+    useState<ResourcePage["items"][number]>();
+  useEffect(() => {
+    setScope(initialRunScope ? "run" : "project");
+    setOffset(0);
+  }, [initialFileId, initialRunScope]);
+  useEffect(() => {
+    if (!initialFileId) return;
+    const controller = new AbortController();
+    setRequestedResource(undefined);
+    void requestJson(
+      `/files/${encodeURIComponent(initialFileId)}/resource?project_id=${encodeURIComponent(projectId)}${initialRunScope && runId ? `&run_id=${encodeURIComponent(runId)}` : ""}`,
+      undefined,
+      controller.signal,
+    )
+      .then((raw) => {
+        const value = parsePublic("ResourcePage", raw);
+        if (!controller.signal.aborted) {
+          setRequestedResource(value.items[0]);
+          setSelected(initialFileId);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setError("Requested resource unavailable in this project/run.");
+      });
+    return () => controller.abort();
+  }, [initialFileId, initialRunScope, projectId, runId]);
   useEffect(() => {
     const controller = new AbortController();
     setPage(undefined);
     setError("");
-    setSelected("");
     const path = activeRun
       ? `/runs/${encodeURIComponent(activeRun!)}/resources?project_id=${encodeURIComponent(projectId)}&offset=${offset}`
       : `/projects/${encodeURIComponent(projectId)}/resources?offset=${offset}`;
@@ -58,8 +96,12 @@ export function ResourceBrowser({
           );
       });
     return () => controller.abort();
-  }, [projectId, activeRun, offset]);
-  const resource = page?.items.find((r) => r.identity.file_id === selected);
+  }, [projectId, activeRun, offset, revision]);
+  const resource =
+    page?.items.find((r) => r.identity.file_id === selected) ??
+    (requestedResource?.identity.file_id === selected
+      ? requestedResource
+      : undefined);
   return (
     <section>
       <h2>Registered artifacts</h2>
@@ -74,6 +116,8 @@ export function ResourceBrowser({
           value={scope}
           onChange={(e) => {
             setOffset(0);
+            setSelected("");
+            setRequestedResource(undefined);
             setScope(e.target.value);
           }}
         >
@@ -158,10 +202,12 @@ export function ResourceBrowser({
             ) : resource.kind === "scan" ? (
               <Scan projectId={projectId} fileId={selected} />
             ) : (
-              <p>
-                No active-content viewer. Use authorized original download or
-                the stage table.
-              </p>
+              <Table
+                projectId={projectId}
+                fileId={selected}
+                revision={revision}
+                onRegistered={onRegistered}
+              />
             )}
           </Suspense>
           <button

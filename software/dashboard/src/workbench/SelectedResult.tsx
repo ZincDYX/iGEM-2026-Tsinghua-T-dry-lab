@@ -13,6 +13,7 @@ export function SelectedResult({
   onOffset,
   onSelect,
   action,
+  onOpenResource,
 }: {
   run: RunSummaryView;
   selected: string;
@@ -22,10 +23,20 @@ export function SelectedResult({
   onOffset: (value: number) => void;
   onSelect: (id: string) => void;
   action: (job: () => Promise<unknown>) => Promise<void>;
+  onOpenResource?: (fileId: string) => void;
 }) {
   if (error) return <p role="alert">{error}</p>;
   if (!selected) return <p>Select a stage in Workflow or Results.</p>;
   if (!data) return <p>Loading selected stage…</p>;
+  const files = new Set<string>();
+  function visit(value: unknown) {
+    if (typeof value === "string" && value.startsWith("asset:"))
+      files.add(value.slice(6));
+    else if (Array.isArray(value)) value.forEach(visit);
+    else if (value && typeof value === "object")
+      Object.values(value).forEach(visit);
+  }
+  visit(data.node.output);
   return (
     <section>
       <p>
@@ -89,6 +100,12 @@ export function SelectedResult({
           Authorized scientific export (not original artifact bytes)
         </button>
       )}
+      {onOpenResource &&
+        [...files].map((id) => (
+          <button key={id} onClick={() => onOpenResource(id)}>
+            Open registered stage resource {id}
+          </button>
+        ))}
     </section>
   );
 }

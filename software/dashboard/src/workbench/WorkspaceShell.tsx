@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -124,6 +125,13 @@ export function WorkspaceShell() {
   const [permission, setPermission] = useState(false);
   const [policy, setPolicy] = useState<ExecutionPolicy>(client.defaultPolicy);
   const [tab, setTab] = useState<Tab>("plan");
+  const [resourceFile, setResourceFile] = useState<string>();
+  const [resourceRunScope, setResourceRunScope] = useState(false);
+  const [resourcesVisited, setResourcesVisited] = useState(false);
+  const resourceReturn = useRef<{ tab: Tab; scroll: number }>({
+    tab: "plan",
+    scroll: 0,
+  });
   const [inspector, setInspector] = useState("agent");
   const [bottom, setBottom] = useState("queue");
   const [selection, setSelection] = useState<Selection>();
@@ -204,12 +212,16 @@ export function WorkspaceShell() {
       clearTimeout(timer);
     };
   }, [!!executing, infoRefresh, fail]);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Reset project-scoped commands before the new project's controls are interactive.
     invalidate();
     setSelection(undefined);
     setEditing(false);
     setHistory([]);
     setPolicy(client.defaultPolicy());
+    setResourceFile(undefined);
+    setResourceRunScope(false);
+    setResourcesVisited(false);
     goalChosen.current = false;
     setRunId(
       currentProject
@@ -379,11 +391,37 @@ export function WorkspaceShell() {
   }
   function navigateInput(section: string) {
     setTab("inputs");
-    requestAnimationFrame(() =>
-      document
-        .getElementById(`input-${section}`)
-        ?.scrollIntoView({ block: "start" }),
-    );
+    requestAnimationFrame(() => {
+      const target = document.getElementById(`input-${section}`);
+      if (!target) return;
+      const details = target.querySelector("details");
+      if (details) details.open = true;
+      target.scrollIntoView({ block: "start" });
+      target
+        .querySelector<HTMLInputElement>(
+          "input:not([disabled]),select:not([disabled])",
+        )
+        ?.focus({ preventScroll: true });
+    });
+  }
+  useEffect(() => {
+    if (tab === "artifacts") setResourcesVisited(true);
+  }, [tab]);
+  function openResource(fileId: string, fromRun = false) {
+    resourceReturn.current = {
+      tab,
+      scroll: document.querySelector(".workspace-content")?.scrollTop ?? 0,
+    };
+    setResourceFile(fileId);
+    setResourceRunScope(fromRun);
+    setTab("artifacts");
+  }
+  function returnFromResource() {
+    setTab(resourceReturn.current.tab);
+    requestAnimationFrame(() => {
+      const content = document.querySelector(".workspace-content");
+      if (content) content.scrollTop = resourceReturn.current.scroll;
+    });
   }
   function createIteration() {
     if (
@@ -446,9 +484,14 @@ export function WorkspaceShell() {
       ? "constructs"
       : field.includes("fasta")
         ? "sequences"
-        : field.includes("condition")
-          ? "conditions"
-          : "evidence";
+        : field.includes("parameter")
+          ? "parameters"
+          : field.includes("condition") ||
+              field.includes("experimental_context")
+            ? "conditions"
+            : field === "scientific_project" || field.includes("stages.")
+              ? "conditions"
+              : "evidence";
     navigateInput(section);
   }
   const style = {
@@ -801,6 +844,7 @@ export function WorkspaceShell() {
                 checkStale={checkStale}
                 onCheck={() => void checkInputs()}
                 onLocate={openInput}
+                onOpenResource={openResource}
               />
             </div>
           ) : tab === "inputs" ? (
@@ -947,6 +991,7 @@ export function WorkspaceShell() {
                     error={result.error}
                     offset={result.offset}
                     onOffset={result.setOffset}
+                    onOpenResource={(id) => openResource(id, true)}
                     onSelect={selectRun}
                     action={action}
                   />
@@ -963,12 +1008,29 @@ export function WorkspaceShell() {
           {tab === "compare" && (
             <ComparisonPanel history={history} current={run} />
           )}
-          {tab === "artifacts" && currentProject && (
-            <ResourceBrowser
-              key={`${currentProject.id}:${run?.id ?? "inputs"}`}
-              projectId={currentProject.id}
-              runId={run?.id}
-            />
+          {currentProject && (tab === "artifacts" || resourcesVisited) && (
+            <div hidden={tab !== "artifacts"}>
+              <ResourceBrowser
+                key={`${currentProject.id}:${run?.id ?? "inputs"}`}
+                projectId={currentProject.id}
+                runId={run?.id}
+                revision={currentProject.revision}
+                initialFileId={resourceFile}
+                initialRunScope={resourceRunScope}
+                onRegistered={(value) => {
+                  project.edit({
+                    ...currentProject,
+                    files: [...currentProject.files, value.file],
+                  });
+                  invalidate();
+                  setResourceFile(value.file.id);
+                  setResourceRunScope(false);
+                }}
+              />
+            </div>
+          )}
+          {tab === "artifacts" && (
+            <button onClick={returnFromResource}>Return to source</button>
           )}
           {(tab === "settings" || tab === "plugins" || tab === "artifacts") && (
             <button onClick={() => setTab("plan")}>Back to Workflow</button>

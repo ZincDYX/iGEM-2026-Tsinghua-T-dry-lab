@@ -11,6 +11,7 @@ import { downloadResource } from "../api";
 import { LazyJson } from "../contracts/LazyJson";
 import { PrecheckPanel } from "./PrecheckPanel";
 import { ScientificBundleImporter } from "./ScientificBundleImporter";
+import { ScientificInputForms } from "./ScientificInputForms";
 
 export function InputEditor({
   project,
@@ -23,6 +24,7 @@ export function InputEditor({
   checkStale,
   onCheck,
   onLocate,
+  onOpenResource,
 }: {
   project: ProjectView;
   busy: boolean;
@@ -34,6 +36,7 @@ export function InputEditor({
   checkStale: boolean;
   onCheck: () => void;
   onLocate: (field: string) => void;
+  onOpenResource: (fileId: string) => void;
 }) {
   const [kind, setKind] = useState("auto");
   const [preview, setPreview] = useState<ImportView>();
@@ -95,7 +98,9 @@ export function InputEditor({
                 setPreview(undefined);
               }}
             >
-              <option value="auto">Sequence / data table / pathway JSON</option>
+              <option value="auto">
+                Sequence / table / display-only JSON / image / structure
+              </option>
               <option value="pathway">pathway JSON</option>
               <option value="wetlab">WetLabResult Measurements JSON</option>
             </select>
@@ -103,7 +108,7 @@ export function InputEditor({
           <input
             aria-label="Import data file"
             type="file"
-            accept=".fasta,.fa,.faa,.gb,.gbk,.json,.csv,.tsv"
+            accept=".fasta,.fa,.faa,.gb,.gbk,.genbank,.json,.csv,.tsv,.png,.jpg,.jpeg,.pdb,.cif,.mmcif"
             disabled={busy}
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -247,9 +252,10 @@ export function InputEditor({
                 {scope.config.stages.m4_reaction.unit_mode} · Missing values
                 remain absent.
               </p>
-              <LazyJson
-                value={scope.config.parameters}
-                label="Parameter provenance and existing approvals (read-only)"
+              <ScientificInputForms
+                project={project}
+                section="parameters"
+                onChange={change}
               />
             </>
           ) : (
@@ -269,30 +275,40 @@ export function InputEditor({
             </tr>
           </thead>
           <tbody>
-            {[...project.files, ...(scope?.evidence_files ?? [])].map(
-              (file, i) => (
-                <tr key={`${file.id}-${i}`}>
-                  <td>{file.name}</td>
-                  <td>
-                    <code>{file.sha256}</code>
-                  </td>
-                  <td>
-                    <button
-                      onClick={() =>
-                        void action(() =>
-                          downloadResource(
-                            `/files/${encodeURIComponent(file.id)}?project_id=${encodeURIComponent(project.id)}`,
-                            file.name,
-                          ),
-                        )
-                      }
-                    >
-                      Original file
-                    </button>
-                  </td>
-                </tr>
-              ),
-            )}
+            {[
+              ...new Map(
+                [...project.files, ...(scope?.evidence_files ?? [])].map(
+                  (file) => [file.id, file],
+                ),
+              ).values(),
+            ].map((file, i) => (
+              <tr key={`${file.id}-${i}`}>
+                <td>{file.name}</td>
+                <td>
+                  <button
+                    disabled={dirty}
+                    onClick={() => onOpenResource(file.id)}
+                  >
+                    Open resource
+                  </button>
+                  <code>{file.sha256}</code>
+                </td>
+                <td>
+                  <button
+                    onClick={() =>
+                      void action(() =>
+                        downloadResource(
+                          `/files/${encodeURIComponent(file.id)}?project_id=${encodeURIComponent(project.id)}`,
+                          file.name,
+                        ),
+                      )
+                    }
+                  >
+                    Original file
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
         <h3>Measurements and M5</h3>
@@ -349,9 +365,10 @@ export function InputEditor({
         />
         <LazyJson value={project.sequences} label="Sequences and roles" />
         <h3 id="input-constructs">Constructs and assembly declarations</h3>
-        <LazyJson
-          value={scope?.config.inputs.constructs}
-          label="Registered scientific constructs"
+        <ScientificInputForms
+          project={project}
+          section="constructs"
+          onChange={change}
         />
         <LazyJson
           value={project.assemblies}
