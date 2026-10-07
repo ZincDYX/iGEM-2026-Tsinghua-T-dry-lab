@@ -6105,6 +6105,17 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "scientific_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ScientificStageSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -6113,7 +6124,8 @@
           "status",
           "attempts",
           "tool_id",
-          "label"
+          "label",
+          "scientific_summary"
         ],
         "title": "NodeStateView",
         "type": "object"
@@ -6148,6 +6160,60 @@
           "kind",
           "path"
         ]
+      },
+      "ScientificStageSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "record_count": {
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "status_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Status Counts",
+            "type": "object"
+          },
+          "numerically_solved_count": {
+            "title": "Numerically Solved Count",
+            "type": "integer"
+          },
+          "evidence_ready_count": {
+            "title": "Evidence Ready Count",
+            "type": "integer"
+          },
+          "missing_input_count": {
+            "title": "Missing Input Count",
+            "type": "integer"
+          },
+          "claim_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Scope"
+          }
+        },
+        "required": [
+          "module",
+          "record_count",
+          "status_counts",
+          "numerically_solved_count",
+          "evidence_ready_count",
+          "missing_input_count",
+          "claim_scope"
+        ],
+        "title": "ScientificStageSummary",
+        "type": "object"
       },
       "Workflow": {
         "additionalProperties": false,

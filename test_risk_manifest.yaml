@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R9_SCIENTIFIC_STATUS_PROJECTION
+    group: platform
+    test_nodeids: ["tests/test_r9_stage_summary.py::test_job_success_never_promotes_missing_scientific_evidence"]
+    requirement_or_formula_source: r8 review R8-11 execution and scientific dimensions
+    oracle_type: fixed_1000_missing_records_independent_dimension_counts_and_geometry_rejection
+    fixture_scope: software_record_projection_without_stage_execution
+    formula_version: no_scientific_recalculation
+    units: record_counts_not_yield
+    tolerance_basis: exact_counts_and_original_statuses
+    expected_faults: [job_success_as_evidence_approval, collapsed_scientific_boolean, trajectory_in_summary]
   - risk_id: R9_REVIEW_CORRECTNESS
     group: platform
     test_nodeids: ["tests/test_r9_review_boundaries.py::test_extra_credentials_quarantined_before_grants_and_original_export", "tests/test_r9_review_boundaries.py::test_original_names_survive_content_dedup_and_old_schema", "tests/test_r9_review_boundaries.py::test_single_frame_images_exif_orientation_pixels_and_original_bytes", "tests/test_r9_review_boundaries.py::test_catalog_isolates_missing_tampered_budget_and_credentials", "tests/test_r9_review_boundaries.py::test_full_annotation_index_independent_of_residue_page_and_cached_identity"]

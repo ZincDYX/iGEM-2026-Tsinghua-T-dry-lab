@@ -236,10 +236,6 @@ class DisplayResources:
                   file_id TEXT NOT NULL, hash TEXT NOT NULL, schema TEXT NOT NULL,
                   ordinal INTEGER NOT NULL, payload TEXT NOT NULL,
                   PRIMARY KEY(file_id,hash,schema,ordinal));
-                CREATE INDEX IF NOT EXISTS display_structure_residue_identity
-                  ON display_structure_residues(file_id,hash,schema,
-                    json_extract(payload,'$.model'),json_extract(payload,'$.chain'),
-                    json_extract(payload,'$.residue_number'),json_extract(payload,'$.insertion_code'));
             """)
 
     def source(self, project_id, file_id):
@@ -545,16 +541,18 @@ class DisplayResources:
                     raise WorkflowError("structure_reference_not_authorized", status_code=403)
                 self.structure(project_id, reference_id, limit=1, annotations=False)
             fusion_sequence = None
+            sequence_file_id = None
             if any(r.full_fusion_position is not None for r in annotation.rows):
                 from Bio import SeqIO
                 sequence_file_id = references.get(annotation.fusion_sequence_file_sha256)
                 if not sequence_file_id or not annotation.fusion_sequence_id:
                     raise WorkflowError("structure_sequence_mapping_not_authorized", status_code=403)
                 sequence_path, _, _ = self.source(project_id, sequence_file_id)
-                matching = [str(r.seq).upper() for r in SeqIO.parse(sequence_path, "fasta") if r.id == annotation.fusion_sequence_id]
-                if len(matching) != 1:
-                    raise WorkflowError("structure_sequence_mapping_identity_mismatch")
-                fusion_sequence = matching[0]
+                if cached_annotations is None:
+                    matching = [str(r.seq).upper() for r in SeqIO.parse(sequence_path, "fasta") if r.id == annotation.fusion_sequence_id]
+                    if len(matching) != 1:
+                        raise WorkflowError("structure_sequence_mapping_identity_mismatch")
+                    fusion_sequence = matching[0]
             seen = set()
             dependency_hashes = {r.reference_sha256 for r in annotation.rows if r.reference_residue is not None}
             for digest in dependency_hashes:
@@ -603,9 +601,9 @@ class DisplayResources:
                 target_sha256=identity.source_sha256).model_dump(mode="json") for overlay in annotation.overlays]
             paged = {tuple(r[k] for k in ("model", "chain", "residue_number", "insertion_code")) for r in meta["residues"]}
             meta.update(annotation_file_id=candidate["id"], annotation_sha256=candidate["hash"], annotation_source_reference=annotation.source_reference,
-                fusion_sequence_file_id=references.get(annotation.fusion_sequence_file_sha256) if fusion_sequence is not None else None,
-                fusion_sequence_file_sha256=annotation.fusion_sequence_file_sha256 if fusion_sequence is not None else None,
-                fusion_sequence_id=annotation.fusion_sequence_id if fusion_sequence is not None else None,
+                fusion_sequence_file_id=sequence_file_id,
+                fusion_sequence_file_sha256=annotation.fusion_sequence_file_sha256 if sequence_file_id is not None else None,
+                fusion_sequence_id=annotation.fusion_sequence_id if sequence_file_id is not None else None,
                 annotation_source_tool=annotation.source_tool, annotation_source_tool_version=annotation.source_tool_version,
                 annotations=[{**r.model_dump(mode="json"), "reference_file_id":references.get(r.reference_sha256) if r.reference_residue else None} for r in annotation.rows if full_annotations or tuple(getattr(r.residue, k) for k in ("model", "chain", "residue_number", "insertion_code")) in paged])
             registered = "source_registered_not_scientific_approval"

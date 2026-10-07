@@ -345,7 +345,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.get("/files/{file_id}/structure-preview")
     def structure_preview(file_id: str, project_id: str):
-        _, raw = resources.structure(project_id, file_id)
+        _, raw = resources.structure(project_id, file_id, annotations=False)
         return Response(raw, media_type="text/plain", headers={"X-Preview-SHA256": sha256(raw).hexdigest(), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
     @router.post("/imports/preview")

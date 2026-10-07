@@ -45,6 +45,12 @@ export type Status1 = string;
 export type Attempts = number;
 export type ToolId1 = string | null;
 export type Label1 = string;
+export type Module = string;
+export type RecordCount = number;
+export type NumericallySolvedCount = number;
+export type EvidenceReadyCount = number;
+export type MissingInputCount = number;
+export type ClaimScope = string | null;
 export type Nodes1 = NodeStateView[];
 export type Id4 = string;
 export type RunId = string;
@@ -130,6 +136,19 @@ export interface NodeStateView {
   attempts: Attempts;
   tool_id: ToolId1;
   label: Label1;
+  scientific_summary: ScientificStageSummary | null;
+}
+export interface ScientificStageSummary {
+  module: Module;
+  record_count: RecordCount;
+  status_counts: StatusCounts;
+  numerically_solved_count: NumericallySolvedCount;
+  evidence_ready_count: EvidenceReadyCount;
+  missing_input_count: MissingInputCount;
+  claim_scope: ClaimScope;
+}
+export interface StatusCounts {
+  [k: string]: number;
 }
 export interface ArtifactView {
   id: Id4;

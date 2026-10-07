@@ -18,6 +18,16 @@ class ProjectSummaryView(Contract):
     scientific_sequence_index_status: str
 
 
+class ScientificStageSummary(Contract):
+    module: str
+    record_count: int
+    status_counts: dict[str, int]
+    numerically_solved_count: int
+    evidence_ready_count: int
+    missing_input_count: int
+    claim_scope: str | None
+
+
 class NodeStateView(Contract):
     id: str
     parent_id: str | None
@@ -25,6 +35,7 @@ class NodeStateView(Contract):
     attempts: int
     tool_id: str | None
     label: str
+    scientific_summary: ScientificStageSummary | None = None
 
 
 class RunSummaryView(Contract):
@@ -76,9 +87,22 @@ class PublicReads:
             result["tools"] = {key:{field:value[field] for field in ("version","runtime","plugin_hash","implementation_sha256")} for key,value in json.loads(result["tools"]).items()}
             result["event_cursor"] = result["state_version"] = db.execute("SELECT COALESCE(MAX(seq),0) FROM events WHERE run_id=?", (run_id,)).fetchone()[0]
             result["nodes"] = []
-            for node in db.execute("SELECT id,parent_id,status,attempts FROM nodes WHERE run_id=? ORDER BY rowid", (run_id,)):
+            for node in db.execute("SELECT id,parent_id,status,attempts,json_extract(output,'$.schema_version') AS output_schema,json_extract(output,'$.module') AS module,json_extract(output,'$.claim_scope') AS claim_scope FROM nodes WHERE run_id=? ORDER BY rowid", (run_id,)):
                 definition = definitions.get(node["parent_id"] or node["id"],{})
-                result["nodes"].append({**dict(node),"tool_id":definition.get("tool_id"),"label":definition.get("label",node["id"])})
+                scientific = None
+                if node["output_schema"] in {"scientific-stage-v1", "scientific-stage-v2"} and definition.get("tool_id") == "project." + str(node["module"]):
+                    # Aggregate existing record dimensions in SQLite; do not load
+                    # trajectories, infer approvals or recompute scientific gates.
+                    counts = db.execute("""SELECT COUNT(*) AS record_count,
+                        COALESCE(SUM(json_extract(value,'$.numerically_solved')=1),0) AS numerically_solved_count,
+                        COALESCE(SUM(json_extract(value,'$.evidence_ready')=1),0) AS evidence_ready_count,
+                        COALESCE(SUM(json_array_length(value,'$.missing_inputs')),0) AS missing_input_count
+                        FROM nodes,json_each(nodes.output,'$.records') WHERE run_id=? AND nodes.id=?""", (run_id,node["id"])).fetchone()
+                    statuses = db.execute("""SELECT json_extract(value,'$.status') AS status,COUNT(*) AS count
+                        FROM nodes,json_each(nodes.output,'$.records') WHERE run_id=? AND nodes.id=?
+                        GROUP BY json_extract(value,'$.status')""", (run_id,node["id"])).fetchall()
+                    scientific = ScientificStageSummary(module=node["module"], claim_scope=node["claim_scope"], status_counts={str(r["status"]):r["count"] for r in statuses}, **dict(counts)).model_dump(mode="json")
+                result["nodes"].append({**{k:node[k] for k in ("id","parent_id","status","attempts")},"tool_id":definition.get("tool_id"),"label":definition.get("label",node["id"]), "scientific_summary":scientific})
             result["artifacts"] = [{**dict(row),"upstream":json.loads(row["upstream"]),"metadata":json.loads(row["metadata"]),"name":"result.json"}
                 for row in db.execute("SELECT id,run_id,node_id,hash,upstream,metadata FROM artifacts WHERE run_id=?",(run_id,))]
         result = RunSummaryView.model_validate(result).model_dump(mode="json")
