@@ -9,20 +9,30 @@ try {
     $env:FUSIONLAB_DATA_DIR = $desktopData
     $desktopProcess = Start-Process -FilePath $desktopExecutable -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
     $deadline = [DateTime]::UtcNow.AddSeconds(25)
-    $ready = $null
+    $ready = $false
+    $backendPid = $null
     while ([DateTime]::UtcNow -lt $deadline -and !$desktopProcess.HasExited) {
-        $ready = Get-ChildItem -LiteralPath $desktopData -Filter 'backend-*.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($ready) { break }
-        Start-Sleep -Milliseconds 100
+        # Startup now uses the parent IPC pipe, not a backend-*.json file.
+        # Inspect only this owned desktop's child and its actual loopback API.
+        $child = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.ParentProcessId -eq $desktopProcess.Id } | Select-Object -First 1
+        if ($child) {
+            $backendPid = [int]$child.ProcessId
+            $socket = Get-NetTCPConnection -State Listen -OwningProcess $backendPid -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($socket) {
+                if ($socket.LocalAddress -ne '127.0.0.1') { throw 'Backend must bind loopback.' }
+                try {
+                    $response = Invoke-WebRequest -Uri ('http://127.0.0.1:' + $socket.LocalPort + '/api/platform/info') -SkipHttpErrorCheck -TimeoutSec 2
+                    if ($response.StatusCode -ne 401) { throw 'Native session authentication was not enforced.' }
+                    $ready = $true
+                    break
+                } catch [System.Net.Http.HttpRequestException] { }
+                  catch [System.Threading.Tasks.TaskCanceledException] { }
+            }
+        }
+        Start-Sleep -Milliseconds 300
         $desktopProcess.Refresh()
     }
-    if (!$ready) { throw 'Native desktop did not create backend readiness file; inspect backend.log.' }
-    $connection = Get-Content -LiteralPath $ready.FullName -Raw | ConvertFrom-Json
-    $uri = [Uri]$connection.url
-    if ($uri.Host -ne '127.0.0.1') { throw 'Backend must bind loopback.' }
-    $response = Invoke-WebRequest -Uri ($connection.url + '/api/platform/info') -SkipHttpErrorCheck
-    if ($response.StatusCode -ne 401) { throw 'Native session authentication was not enforced.' }
-    $backendPid = (Get-NetTCPConnection -LocalPort $uri.Port -State Listen).OwningProcess
+    if (!$ready) { throw 'Owned native backend API did not become ready; inspect backend.log.' }
     $desktopProcess.Kill()
     $desktopProcess.WaitForExit()
     $deadline = [DateTime]::UtcNow.AddSeconds(5)
