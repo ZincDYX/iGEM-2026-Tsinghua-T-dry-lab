@@ -226,8 +226,8 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             name="mpipi",
             capability="optional coarse-grained phase-behaviour simulation",
             route="optional_local",
-            official_url="https://github.com/QUVA-Lab/Mpipi-Recharged",
-            notes="Optional M1/M2 evidence only; environment and model version must be recorded.",
+            official_url="https://doi.org/10.1038/s43588-021-00155-3",
+            notes="Original Mpipi method; verify its code and conditions before enabling. Mpipi-Recharged is a distinct variant, not an automatic substitution. Optional M1/M2 evidence only.",
         ),
         ExternalToolSpec(
             name="fuzdrop",
