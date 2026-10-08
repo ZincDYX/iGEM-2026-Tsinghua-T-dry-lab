@@ -5036,12 +5036,26 @@
             ],
             "default": null,
             "title": "Structure Metrics File"
+          },
+          "region_assessments_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Region Assessments File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
-          "structure_metrics_file"
+          "structure_metrics_file",
+          "region_assessments_file"
         ]
       },
       "M3Config": {
@@ -10498,12 +10512,26 @@
             ],
             "default": null,
             "title": "Structure Metrics File"
+          },
+          "region_assessments_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Region Assessments File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
-          "structure_metrics_file"
+          "structure_metrics_file",
+          "region_assessments_file"
         ]
       },
       "M3Config": {
@@ -13593,12 +13621,26 @@
             ],
             "default": null,
             "title": "Structure Metrics File"
+          },
+          "region_assessments_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Region Assessments File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
-          "structure_metrics_file"
+          "structure_metrics_file",
+          "region_assessments_file"
         ]
       },
       "M3Config": {
@@ -16851,12 +16893,26 @@
             ],
             "default": null,
             "title": "Structure Metrics File"
+          },
+          "region_assessments_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Region Assessments File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
-          "structure_metrics_file"
+          "structure_metrics_file",
+          "region_assessments_file"
         ]
       },
       "M3Config": {

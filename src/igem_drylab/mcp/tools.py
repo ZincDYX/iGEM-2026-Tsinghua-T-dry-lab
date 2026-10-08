@@ -26,6 +26,7 @@ from igem_drylab.parsers.structure_prediction import parse_structure_prediction_
 from igem_drylab.scoring.m2_structure import M2StructureMetrics, score_m2_structure
 from igem_drylab.scoring.m2_site_geometry import M2SiteGeometryInput, analyse_site_cooccupancy
 from igem_drylab.structure_metrics import aligned_ca_rmsds, count_inter_module_clashes, tail_pocket_min_distance
+from igem_drylab.region_assessment import RegionAssessmentInput, assess_regions
 from igem_drylab.scoring.m4_reaction import (
     DockingPenalty,
     compute_docking_penalty,
@@ -475,6 +476,10 @@ def scoring_m2_structure(arguments: JsonObject) -> McpToolResult:
 def m2_site_cooccupancy(arguments: JsonObject) -> McpToolResult:
     result = analyse_site_cooccupancy(M2SiteGeometryInput.model_validate(arguments))
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
+
+
+def m2_assess_regions(arguments: JsonObject) -> McpToolResult:
+    return McpToolResult.ok({"ok": True, "result": assess_regions(RegionAssessmentInput.model_validate(arguments))})
 
 
 def m3_solve_equilibrium(arguments: JsonObject) -> McpToolResult:
@@ -1681,6 +1686,12 @@ ELSEVIER_FETCH_ARTICLE_TEXT_TOOL = McpTool(
     ),
 )
 
+M2_ASSESS_REGIONS_TOOL = McpTool(name="igem.m2.assess_regions", title="Assess actual full-length model regions",
+    description="Exact ColabFold pairing, region confidence, same-conformation FreeSASA exposure and genuine interdomain PAE; no automatic M2 approval.",
+    input_schema=RegionAssessmentInput.model_json_schema(),
+    output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True))
+
+
 TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (PIPELINE_VALIDATE_TOOL, pipeline_validate),
     (PIPELINE_RUN_TOOL, pipeline_run),
@@ -1703,6 +1714,7 @@ TOOL_BINDINGS: list[tuple[McpTool, ToolHandler]] = [
     (SCORING_POCKET_SASA_TOOL, scoring_pocket_sasa),
     (M2_CALCULATE_GEOMETRY_TOOL, m2_calculate_geometry),
     (M2_SITE_COOCCUPANCY_TOOL, m2_site_cooccupancy),
+    (M2_ASSESS_REGIONS_TOOL, m2_assess_regions),
     (M3_SOLVE_EQUILIBRIUM_TOOL, m3_solve_equilibrium),
     (M4_SOLVE_STEADY_STATE_TOOL, m4_solve_steady_state),
     (M4_ANALYZE_STEADY_STATE_TOOL, m4_analyze_steady_state),

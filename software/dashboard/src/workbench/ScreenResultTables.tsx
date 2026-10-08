@@ -1,4 +1,5 @@
 import { show } from "../contracts/resultAdapters";
+import { object } from "../contracts/validation";
 
 export function M1Matrix({ records }: { records: Record<string, unknown>[] }) {
   return (
@@ -88,6 +89,65 @@ export function M2Metrics({ record }: { record: Record<string, unknown> }) {
         Missing metrics: {show(record.missing_metrics)} · Volume method:{" "}
         {show(record.volume_method)}
       </p>
+      {Array.isArray(record.region_observations) &&
+        record.region_observations.filter(object).map((model, index) => (
+          <section key={index}>
+            <h3>
+              Predicted region observations · model {show(model.model_rank)}
+            </h3>
+            <p>
+              Diagnostic only. Isolated SASA uses the same model conformation,
+              not an experimental free peptide. No burial verdict or M2
+              acceptance is inferred.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Region</th>
+                  <th>pLDDT mean</th>
+                  <th>Confidence</th>
+                  <th>Context SASA (Å²)</th>
+                  <th>SASA retention</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.isArray(model.regions) &&
+                  model.regions.filter(object).map((region) => (
+                    <tr key={String(region.name)}>
+                      <td>{show(region.name)}</td>
+                      <td>{show(region.mean_plddt)}</td>
+                      <td>{show(region.confidence_gate)}</td>
+                      <td>{show(region.context_sasa_angstrom2)}</td>
+                      <td>{show(region.sasa_retention)}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            <p>
+              Low-confidence/flexible ligand and linker geometry is
+              reference-only.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Region pair</th>
+                  <th>Actual interdomain PAE (Å)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.isArray(model.interdomain_pae) &&
+                  model.interdomain_pae.filter(object).map((pair, i) => (
+                    <tr key={i}>
+                      <td>
+                        {show(pair.first)} ↔ {show(pair.second)}
+                      </td>
+                      <td>{show(pair.mean_interdomain_pae_angstrom)}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
     </>
   );
 }

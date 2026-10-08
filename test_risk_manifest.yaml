@@ -1,6 +1,46 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R16_JPRED_REMOTE_RETRY
+    group: integration
+    test_nodeids: ["tests/test_jpred_job_protocol.py::test_retry_fetches_saved_job_without_second_submission"]
+    requirement_or_formula_source: original JPred REST job identity and durable workflow retry
+    oracle_type: independently_declared_subprocess_protocol_with_failure_then_next_attempt
+    fixture_scope: protocol_fixture_not_genuine_predictor_output
+    formula_version: unchanged_M1_secondary_structure_rule
+    units: remote_job_count_and_CHE_states
+    tolerance_basis: exactly_one_submission_same_job_next_attempt_original_full_sequence
+    expected_faults: [job_id_lost_between_attempts, duplicate_remote_submission, client_exit_zero_as_prediction, wrong_companion_sequence]
+  - risk_id: R16_PSCORE_RAW_PROTOCOL
+    group: data_contract
+    test_nodeids: ["tests/test_pscore_output_protocol.py::test_original_global_score_is_read_without_repairing_raw_table"]
+    requirement_or_formula_source: unmodified author PScore raw global output and exact sequence binding
+    oracle_type: independently_declared_protocol_text_and_tamper_negative_controls
+    fixture_scope: protocol_fixture_not_real_predictor_or_biological_validation
+    formula_version: unchanged_author_predictor
+    units: dimensionless_author_PScore_not_probability
+    tolerance_basis: exact_declared_global_value_and_unchanged_raw_bytes
+    expected_faults: [raw_table_silently_repaired, wrong_sequence_score_reused, changed_output_accepted, score_as_formal_ranking]
+  - risk_id: R16_REGION_CONFIDENCE_SASA
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_region_assessment.py::test_regions_use_actual_blocks_not_global_PAE", "tests/test_region_assessment.py::test_real_FreeSASA_isolated_selected_atoms", "tests/test_region_assessment.py::test_diagnostic_regions_survive_blocked_M1_without_promoting_M2"]
+    requirement_or_formula_source: M2 V2 Q2 and explicit interdomain PAE
+    oracle_type: independent_manual_block_means_and_real_FreeSASA_direct_entry
+    fixture_scope: synthetic_identity_and_geometric_fixture_not_project_biological_validation
+    formula_version: unchanged_m2_v2_2026_09_27
+    units: angstrom_squared_and_angstrom_and_plddt_0_100
+    tolerance_basis: exact_PAE_block_values_and_same_library_independent_input
+    expected_faults: [global_PAE_as_interdomain, incomplete_selection, flexible_ligand_as_burial_verdict]
+  - risk_id: R16_M1_DURABLE_METHOD_PATH
+    group: integration
+    test_nodeids: ["tests/test_m1_method_workflow.py::test_original_method_fanout_cheap_veto_and_persistent_missing_evidence", "tests/test_m1_method_workflow.py::test_m1_screen_rejects_unregistered_file_bearing_observations"]
+    requirement_or_formula_source: M1 V3 cheap veto before external predictions and existing durable ledger
+    oracle_type: actual_DAG_fanout_SQLite_reopen_and_unconfigured_negative_control
+    fixture_scope: protocol_fixtures_no_genuine_predictor_claim
+    formula_version: unchanged_m1_v3_2026_09_27
+    units: residues_and_recorded_states
+    tolerance_basis: exact_states_lengths_and_registered_predecessor_binding
+    expected_faults: [expensive_job_after_cheap_veto, missing_evidence_pass, arbitrary_browser_file_observations, lost_results_after_restart]
   - risk_id: R11_EXPLICIT_SCIENTIFIC_SETUP
     group: integration
     test_nodeids: ["tests/test_r11_scientific_setup.py::test_blank_scientific_project_from_explicit_fields_without_yaml_and_original_bindings", "tests/test_r11_scientific_setup.py::test_scientific_creation_is_not_an_authorization_or_default_shortcut", "tests/test_r11_scientific_setup.py::test_malformed_nested_form_values_are_validation_errors_without_mutation"]

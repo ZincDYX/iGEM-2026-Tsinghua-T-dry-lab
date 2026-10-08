@@ -180,6 +180,7 @@ export type RulesFile = string;
 export type PredictorEvidenceFile = string | null;
 export type RequireExternalEvidenceInRealMode = boolean;
 export type StructureMetricsFile = string | null;
+export type RegionAssessmentsFile = string | null;
 export type PhiSource = "measured" | "lever_rule" | "compare";
 export type TargetEnzymeRatioParameter = string | null;
 export type DesignDecisionId = string | null;
@@ -583,6 +584,7 @@ export interface M1Config {
 }
 export interface M2Config {
   structure_metrics_file: StructureMetricsFile;
+  region_assessments_file: RegionAssessmentsFile;
 }
 export interface M3Config {
   phi_source: PhiSource;

@@ -18457,13 +18457,13 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.structure_metrics_file === void 0 && (missing0 = "structure_metrics_file")) {
+      if (data.structure_metrics_file === void 0 && (missing0 = "structure_metrics_file") || data.region_assessments_file === void 0 && (missing0 = "region_assessments_file")) {
         validate163.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "structure_metrics_file")) {
+          if (!(key0 === "structure_metrics_file" || key0 === "region_assessments_file")) {
             validate163.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
@@ -18472,6 +18472,7 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
         if (_errs1 === errors) {
           if (data.structure_metrics_file !== void 0) {
             let data0 = data.structure_metrics_file;
+            const _errs2 = errors;
             const _errs3 = errors;
             let valid1 = false;
             const _errs4 = errors;
@@ -18531,6 +18532,78 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
                   vErrors = null;
                 }
               }
+            }
+            var valid0 = _errs2 === errors;
+          } else {
+            var valid0 = true;
+          }
+          if (valid0) {
+            if (data.region_assessments_file !== void 0) {
+              let data1 = data.region_assessments_file;
+              const _errs8 = errors;
+              const _errs9 = errors;
+              let valid2 = false;
+              const _errs10 = errors;
+              if (errors === _errs10) {
+                if (errors === _errs10) {
+                  if (typeof data1 === "string") {
+                    if (!formats4.test(data1)) {
+                      const err4 = { instancePath: instancePath + "/region_assessments_file", schemaPath: "#/properties/region_assessments_file/anyOf/0/format", keyword: "format", params: { format: "path" }, message: 'must match format "path"' };
+                      if (vErrors === null) {
+                        vErrors = [err4];
+                      } else {
+                        vErrors.push(err4);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err5 = { instancePath: instancePath + "/region_assessments_file", schemaPath: "#/properties/region_assessments_file/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err5];
+                    } else {
+                      vErrors.push(err5);
+                    }
+                    errors++;
+                  }
+                }
+              }
+              var _valid1 = _errs10 === errors;
+              valid2 = valid2 || _valid1;
+              const _errs12 = errors;
+              if (data1 !== null) {
+                const err6 = { instancePath: instancePath + "/region_assessments_file", schemaPath: "#/properties/region_assessments_file/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                if (vErrors === null) {
+                  vErrors = [err6];
+                } else {
+                  vErrors.push(err6);
+                }
+                errors++;
+              }
+              var _valid1 = _errs12 === errors;
+              valid2 = valid2 || _valid1;
+              if (!valid2) {
+                const err7 = { instancePath: instancePath + "/region_assessments_file", schemaPath: "#/properties/region_assessments_file/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                if (vErrors === null) {
+                  vErrors = [err7];
+                } else {
+                  vErrors.push(err7);
+                }
+                errors++;
+                validate163.errors = vErrors;
+                return false;
+              } else {
+                errors = _errs9;
+                if (vErrors !== null) {
+                  if (_errs9) {
+                    vErrors.length = _errs9;
+                  } else {
+                    vErrors = null;
+                  }
+                }
+              }
+              var valid0 = _errs8 === errors;
+            } else {
+              var valid0 = true;
             }
           }
         }

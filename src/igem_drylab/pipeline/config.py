@@ -175,6 +175,7 @@ class M1Config(StrictScientificConfig):
 
 class M2Config(StrictScientificConfig):
     structure_metrics_file: Path | None = None
+    region_assessments_file: Path | None = None
 
 
 class AuthorNativeEnzymeScales(StrictScientificConfig):
@@ -544,6 +545,7 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         config.stages.m2_fusion.structure_metrics_file,
         base_dir,
     )  # type: ignore[assignment]
+    config.stages.m2_fusion.region_assessments_file = _resolve_path(config.stages.m2_fusion.region_assessments_file, base_dir)
     config.stages.m4_reaction.reaction_network_file = _resolve_path(config.stages.m4_reaction.reaction_network_file, base_dir)  # type: ignore[assignment]
     if config.stages.m4_reaction.absence_evidence:
         config.stages.m4_reaction.absence_evidence.artifact = _resolve_path(config.stages.m4_reaction.absence_evidence.artifact,base_dir)
@@ -556,7 +558,7 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         ]
         required_files.extend(item.sdf for item in config.inputs.ligands if item.sdf is not None)
         required_files.extend(item.structure_pdb for item in [*config.inputs.enzymes, *config.inputs.scaffolds] if item.structure_pdb is not None)
-        required_files.extend([config.stages.m2_fusion.structure_metrics_file, config.stages.m5_feedback.wetlab_results_file])
+        required_files.extend([config.stages.m2_fusion.structure_metrics_file, config.stages.m2_fusion.region_assessments_file, config.stages.m5_feedback.wetlab_results_file])
         required_files.append(config.stages.m4_reaction.reaction_network_file)
         missing = [str(item) for item in required_files if item is not None and not item.exists()]
         if missing:

@@ -68,6 +68,7 @@ class M2FusionAssessment(ScientificResult):
     candidate_id: str
     construct_id: str
     construct_definition: dict[str, Any]
+    region_observations: list[dict[str, Any]] = Field(default_factory=list)
     enzyme_sequence_sha256: dict[str, str] = Field(default_factory=dict)
     structure_model: str | None = None
     structure_source_tool: str | None = None

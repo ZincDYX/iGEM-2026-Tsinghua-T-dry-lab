@@ -223,6 +223,22 @@ def _read_fasta_sequences(path: Path) -> dict[str, str]:
 def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) -> tuple[list[M2FusionAssessment], StageOutput]:
     """Report observed structural negative-screen metrics; never fill absent metrics."""
     stage_dir = run_dir / "m2_structure_screen"
+    observations = []
+    if config.stages.m2_fusion.region_assessments_file:
+        from igem_drylab.region_assessment import assess_regions, load_region_requests
+        requests = load_region_requests(config.stages.m2_fusion.region_assessments_file)
+        known = {row.construct_id: row for row in candidates}
+        for request in requests:
+            candidate = known.get(request.candidate_id)
+            if candidate is None or sha256(request.sequence.encode()).hexdigest() != candidate.full_sequence_sha256:
+                raise ValueError("M2_region_request_does_not_match_registered_M1_construct")
+            # Diagnostic observations may be generated for a blocked baseline,
+            # but never alter the unchanged formal M1 prerequisite below.
+            observation = assess_regions(request)
+            observation["M1_eligibility"] = candidate.eligibility
+            observations.append(observation)
+        stage_dir.mkdir(parents=True, exist_ok=True)
+        (stage_dir / "region_observations.json").write_text(json.dumps(observations, indent=2), encoding="utf-8")
     metrics = load_m2_structure_metrics(config.stages.m2_fusion.structure_metrics_file) if config.stages.m2_fusion.structure_metrics_file else {}
     assessments: list[M2FusionAssessment] = []
     for candidate in candidates:
@@ -307,6 +323,8 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             recommended_for_m3=scored.recommended_for_m3, threshold_origin=scored.threshold_origin, notes="; ".join(scored.reasons),
         ))
     _append_design_assessments(config, candidates, metrics, assessments)
+    for assessment in assessments:
+        assessment.region_observations = [row for row in observations if row["candidate_id"] == assessment.construct_id]
     write_models(stage_dir, "fusion_assessments", assessments)
     return assessments, _stage_output("m2_structure_screen", stage_dir, "fusion_assessments", len(assessments))
 

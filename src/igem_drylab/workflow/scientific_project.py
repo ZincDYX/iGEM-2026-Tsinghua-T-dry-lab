@@ -52,6 +52,15 @@ def input_paths(config: ProjectConfig, allowed_roots: tuple[Path, ...] | None = 
             raise WorkflowError("scientific_file_outside_authorized_workspace")
     for path in paths:
         authorize(path)
+    region_file = config.stages.m2_fusion.region_assessments_file
+    if region_file and region_file.is_file():
+        from igem_drylab.region_assessment import load_region_requests
+        from igem_drylab.parsers.structure_prediction import parse_structure_prediction_output
+        for request in load_region_requests(region_file):
+            authorize(request.confidence_file)
+            prediction = parse_structure_prediction_output(request.confidence_file, candidate_id=request.candidate_id)
+            authorize(prediction.model_file)
+            paths.update((request.confidence_file, prediction.model_file))
     metrics_file = config.stages.m2_fusion.structure_metrics_file
     if metrics_file and metrics_file.is_file():
         for row in load_m2_structure_metrics(metrics_file).values():
@@ -163,6 +172,10 @@ def stage_tools():
             serialized = [row.model_dump(mode="json") for row in records]
             trajectory_refs = {}
             artifacts = {output.json_file, output.csv_file}
+            if stage == "m2":
+                region_output = output.directory / "region_observations.json"
+                if region_output.is_file():
+                    artifacts.add(region_output)
             if stage == "m4":
                 for row in records:
                     if row.trajectory_artifact and row.trajectory_artifact.is_file():
