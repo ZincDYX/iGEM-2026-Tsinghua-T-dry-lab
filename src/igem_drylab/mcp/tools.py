@@ -340,6 +340,7 @@ def m1_parse_secondary_structure(arguments: JsonObject) -> McpToolResult:
         tool_name=tool_name,  # type: ignore[arg-type]
         tool_version=_require_str(arguments, "tool_version"),
         input_sha256=_require_str(arguments, "input_sha256"),
+        sequence_file=Path(arguments["sequence_file"]) if arguments.get("sequence_file") else None,
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
@@ -449,8 +450,8 @@ def multichain_expand_fth1_arms(arguments: JsonObject) -> McpToolResult:
 
 def scoring_pocket_sasa(arguments: JsonObject) -> McpToolResult:
     residues = arguments.get("residues")
-    if not isinstance(residues, list) or not all(isinstance(item, int) for item in residues):
-        raise ValueError("Argument 'residues' must be a list of integers")
+    if not isinstance(residues, list) or not all(isinstance(item, (int, str)) for item in residues):
+        raise ValueError("Argument 'residues' must be author residue identifiers")
     result = compute_pocket_sasa_retention(
         model_pdb=_optional_path(arguments, "model_pdb"),
         reference_pdb=_optional_path(arguments, "reference_pdb"),
@@ -461,6 +462,7 @@ def scoring_pocket_sasa(arguments: JsonObject) -> McpToolResult:
         threshold_loss_fraction=float(arguments.get("threshold_loss_fraction", 0.30)),
         model_configuration_hash=arguments.get("model_configuration_hash") if isinstance(arguments.get("model_configuration_hash"), str) else None,
         reference_configuration_hash=arguments.get("reference_configuration_hash") if isinstance(arguments.get("reference_configuration_hash"), str) else None,
+        **{name: arguments[name] for name in ("model_id", "reference_model_id", "model_altloc", "reference_altloc", "residue_mapping") if name in arguments},
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
@@ -494,8 +496,8 @@ def m2_calculate_geometry(arguments: JsonObject) -> McpToolResult:
     pocket_residues = arguments.get("pocket_residues")
     tail_residues = arguments.get("tail_residues")
     for name, value in (("core_residues", core_residues), ("pocket_residues", pocket_residues)):
-        if not isinstance(value, list) or not value or not all(isinstance(item, int) for item in value):
-            raise ValueError(f"{name} must be a non-empty list of residue integers")
+        if not isinstance(value, list) or not value or not all(isinstance(item, (int, str)) for item in value):
+            raise ValueError(f"{name} must be a non-empty list of author residue identifiers")
     model_pdb = Path(_require_str(arguments, "model_pdb"))
     reference_chain = _require_str(arguments, "reference_chain")
     model_chain = _require_str(arguments, "model_chain")
@@ -511,6 +513,7 @@ def m2_calculate_geometry(arguments: JsonObject) -> McpToolResult:
         pocket_residues=pocket_residues,
         core_residue_mapping=core_mapping,
         pocket_residue_mapping=pocket_mapping,
+        **{name: arguments[name] for name in ("model_id", "reference_model_id", "model_altloc", "reference_altloc") if name in arguments},
     )
     result.update(
         formula_version="m2-v2-2026-09-27",
@@ -518,13 +521,15 @@ def m2_calculate_geometry(arguments: JsonObject) -> McpToolResult:
         model_pdb_sha256=sha256(model_pdb.read_bytes()).hexdigest(),
     )
     if tail_residues is not None:
-        if not isinstance(tail_residues, list) or not tail_residues or not all(isinstance(item, int) for item in tail_residues):
-            raise ValueError("tail_residues must be a non-empty list of residue integers")
+        if not isinstance(tail_residues, list) or not tail_residues or not all(isinstance(item, (int, str)) for item in tail_residues):
+            raise ValueError("tail_residues must be a non-empty list of author residue identifiers")
         result["tail_pocket_min_distance_angstrom"] = tail_pocket_min_distance(
             model_pdb,
             chain=model_chain,
             tail_residues=tail_residues,
-            pocket_residues=pocket_residues,
+            pocket_residues=[pair[1] for pair in pocket_mapping] if pocket_mapping else pocket_residues,
+            model_id=arguments.get("model_id"),
+            altloc=arguments.get("model_altloc"),
         )
     first_residues = arguments.get("first_module_residues")
     second_residues = arguments.get("second_module_residues")
@@ -541,24 +546,26 @@ def m2_calculate_geometry(arguments: JsonObject) -> McpToolResult:
                 second_chain=arguments.get("second_module_chain", model_chain),
                 second_residues=second_residues,
                 cutoff_angstrom=float(arguments["clash_cutoff_angstrom"]),
+                model_id=arguments.get("model_id"),
+                altloc=arguments.get("model_altloc"),
             )
         )
     return McpToolResult.ok({"ok": True, "result": result})
 
 
-def _parse_residue_mapping(value: object, name: str) -> list[tuple[int, int]] | None:
+def _parse_residue_mapping(value: object, name: str) -> list[tuple[int | str, int | str]] | None:
     if value is None:
         return None
     if not isinstance(value, list) or not value:
         raise ValueError(f"{name} must be a non-empty list")
-    pairs: list[tuple[int, int]] = []
+    pairs: list[tuple[int | str, int | str]] = []
     for item in value:
         if not isinstance(item, dict):
             raise ValueError(f"each {name} item must be an object")
         reference_residue = item.get("reference_residue")
         model_residue = item.get("model_residue")
-        if not isinstance(reference_residue, int) or not isinstance(model_residue, int):
-            raise ValueError(f"each {name} item requires integer reference_residue and model_residue")
+        if not isinstance(reference_residue, (int, str)) or not isinstance(model_residue, (int, str)):
+            raise ValueError(f"each {name} item requires author reference_residue and model_residue identifiers")
         pairs.append((reference_residue, model_residue))
     return pairs
 
@@ -567,6 +574,7 @@ def parser_structure_prediction(arguments: JsonObject) -> McpToolResult:
     result = parse_structure_prediction_output(
         Path(_require_str(arguments, "path")),
         candidate_id=arguments.get("candidate_id") if isinstance(arguments.get("candidate_id"), str) else None,
+        model_rank=_optional_int(arguments, "model_rank", 1, minimum=1),
     )
     return McpToolResult.ok({"ok": True, "result": result.model_dump(mode="json")})
 
@@ -1171,7 +1179,7 @@ M1_SCREEN_SEQUENCE_TOOL = McpTool(
             "sequence": {"type": "string"},
             "sequence_kind": {
                 "type": "string",
-                "enum": ["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"],
+                "enum": ["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "full_fusion"],
             },
             "localization_context": {"type": "string", "enum": ["cytosolic", "er_anchored"]},
             "feature_definitions_file": {"type": "string"},
@@ -1214,12 +1222,26 @@ M1_PARSE_SECONDARY_STRUCTURE_TOOL = McpTool(
         {
             "path": {"type": "string"},
             "tool_name": {"type": "string", "enum": ["PSIPRED", "JPred"]},
+            "sequence_file": {"type": "string"},
             "tool_version": {"type": "string"},
             "input_sha256": {"type": "string"},
         },
         ["path", "tool_name", "tool_version", "input_sha256"],
     ),
     output_schema=_schema({"ok": {"type": "boolean"}, "result": {"type": "object"}}, additional_properties=True),
+)
+
+_AUTHOR_RESIDUE_SCHEMA = {"type": ["integer", "string"]}
+_STRUCTURE_SCOPE_FIELDS = {
+    "model_id": {"type": "integer"},
+    "reference_model_id": {"type": "integer"},
+    "model_altloc": {"type": "string", "minLength": 1, "maxLength": 1},
+    "reference_altloc": {"type": "string", "minLength": 1, "maxLength": 1},
+}
+_SASA_SELECTION_SCHEMA = _schema(
+    {"model_id": {"type": "integer"}, "chain": {"type": "string"},
+     "residue": {"type": "integer"}, "insertion": {"type": "string", "maxLength": 1}},
+    ["chain", "residue"],
 )
 
 SCORING_POCKET_SASA_TOOL = McpTool(
@@ -1233,7 +1255,10 @@ SCORING_POCKET_SASA_TOOL = McpTool(
             "model_pdb": {"type": "string"},
             "reference_pdb": {"type": "string"},
             "chain": {"type": "string"},
-            "residues": {"type": "array", "items": {"type": "integer"}},
+            "residues": {"type": "array", "items": _AUTHOR_RESIDUE_SCHEMA},
+            **_STRUCTURE_SCOPE_FIELDS,
+            "residue_mapping": {"type": "array", "minItems": 1, "items": _schema(
+                {"model": _SASA_SELECTION_SCHEMA, "reference": _SASA_SELECTION_SCHEMA}, ["model", "reference"])},
             "threshold_loss_fraction": {"type": "number"},
             "model_configuration_hash": {"type": "string"},
             "reference_configuration_hash": {"type": "string"},
@@ -1256,13 +1281,14 @@ M2_CALCULATE_GEOMETRY_TOOL = McpTool(
             "model_pdb": {"type": "string"},
             "reference_chain": {"type": "string"},
             "model_chain": {"type": "string"},
-            "core_residues": {"type": "array", "items": {"type": "integer"}, "minItems": 3},
-            "pocket_residues": {"type": "array", "items": {"type": "integer"}, "minItems": 1},
+            "core_residues": {"type": "array", "items": _AUTHOR_RESIDUE_SCHEMA, "minItems": 3},
+            "pocket_residues": {"type": "array", "items": _AUTHOR_RESIDUE_SCHEMA, "minItems": 1},
+            **_STRUCTURE_SCOPE_FIELDS,
             "core_residue_mapping": {
                 "type": "array",
                 "minItems": 3,
                 "items": _schema(
-                    {"reference_residue": {"type": "integer"}, "model_residue": {"type": "integer"}},
+                    {"reference_residue": _AUTHOR_RESIDUE_SCHEMA, "model_residue": _AUTHOR_RESIDUE_SCHEMA},
                     ["reference_residue", "model_residue"],
                 ),
             },
@@ -1270,15 +1296,15 @@ M2_CALCULATE_GEOMETRY_TOOL = McpTool(
                 "type": "array",
                 "minItems": 1,
                 "items": _schema(
-                    {"reference_residue": {"type": "integer"}, "model_residue": {"type": "integer"}},
+                    {"reference_residue": _AUTHOR_RESIDUE_SCHEMA, "model_residue": _AUTHOR_RESIDUE_SCHEMA},
                     ["reference_residue", "model_residue"],
                 ),
             },
-            "tail_residues": {"type": "array", "items": {"type": "integer"}, "minItems": 1},
+            "tail_residues": {"type": "array", "items": _AUTHOR_RESIDUE_SCHEMA, "minItems": 1},
             "first_module_chain": {"type": "string"},
-            "first_module_residues": {"type": "array", "items": {"type": "integer"}},
+            "first_module_residues": {"type": "array", "items": _AUTHOR_RESIDUE_SCHEMA},
             "second_module_chain": {"type": "string"},
-            "second_module_residues": {"type": "array", "items": {"type": "integer"}},
+            "second_module_residues": {"type": "array", "items": _AUTHOR_RESIDUE_SCHEMA},
             "clash_cutoff_angstrom": {"type": "number", "exclusiveMinimum": 0},
         },
         ["reference_pdb", "model_pdb", "reference_chain", "model_chain", "core_residues", "pocket_residues"],
@@ -1420,6 +1446,7 @@ PARSER_STRUCTURE_PREDICTION_TOOL = McpTool(
         {
             "path": {"type": "string"},
             "candidate_id": {"type": "string"},
+            "model_rank": {"type": "integer", "minimum": 1},
         },
         ["path"],
     ),

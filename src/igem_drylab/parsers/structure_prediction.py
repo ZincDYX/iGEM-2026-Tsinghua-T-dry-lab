@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -25,9 +26,12 @@ class StructurePredictionSummary(BaseModel):
     chain_pair_iptm: list[list[float]] | None = None
     chain_pair_pae_min: list[list[float]] | None = None
     raw_keys: list[str] = Field(default_factory=list)
+    model_rank: int | None = None
+    model_name: str | None = None
+    residue_count: int | None = None
 
 
-def parse_structure_prediction_output(path: Path, *, candidate_id: str | None = None) -> StructurePredictionSummary:
+def parse_structure_prediction_output(path: Path, *, candidate_id: str | None = None, model_rank: int = 1) -> StructurePredictionSummary:
     """Parse common ColabFold, AF3, Boltz, Chai, and ABCFold confidence outputs.
 
     ABCFold is an orchestrator, so this parser scans its output directory for
@@ -35,8 +39,24 @@ def parse_structure_prediction_output(path: Path, *, candidate_id: str | None = 
     """
     path = Path(path)
     if path.is_file():
+        match = _COLABFOLD_SCORES.fullmatch(path.name)
+        if match:
+            if candidate_id is not None and candidate_id != match["candidate"]:
+                raise ValueError("ColabFold candidate does not match confidence filename")
+            return _parse_colabfold_scores(path, match)
         return _parse_single_file(path, candidate_id=candidate_id or path.stem)
     files = [item for item in path.rglob("*") if item.is_file()]
+    colabfold_scores = [(item, match) for item in files if (match := _COLABFOLD_SCORES.fullmatch(item.name))]
+    if colabfold_scores:
+        candidates = {match["candidate"] for _, match in colabfold_scores}
+        if candidate_id is None:
+            if len(candidates) != 1:
+                raise ValueError(f"multiple ColabFold candidates {sorted(candidates)}; select candidate_id explicitly")
+            candidate_id = next(iter(candidates))
+        selected = [(item, match) for item, match in colabfold_scores if match["candidate"] == candidate_id and int(match["rank"]) == model_rank]
+        if len(selected) != 1:
+            raise ValueError("select exactly one ColabFold candidate/rank/seed output")
+        return _parse_colabfold_scores(*selected[0])
     colabfold_ranking = _pick_colabfold_ranking(files)
     confidence_json = _pick_confidence_json(files)
     scores_npz = _pick_npz(files, prefixes=("scores",))
@@ -61,6 +81,37 @@ def parse_structure_prediction_output(path: Path, *, candidate_id: str | None = 
         summary = _parse_scores_npz(scores_npz, candidate_id=candidate_id or path.name)
         return summary.model_copy(update={"model_file": model_file, "pae_file": pae_npz, "plddt_file": plddt_npz})
     raise ValueError(f"No supported structure prediction confidence output found under {path}")
+
+
+_COLABFOLD_SCORES = re.compile(r"(?P<candidate>.+)_scores_rank_(?P<rank>\d+)_(?P<model>.+_seed_\d+)\.json")
+
+
+def parse_colabfold_models(path: Path, *, candidate_id: str) -> list[StructurePredictionSummary]:
+    ranks = sorted({int(match["rank"]) for file in path.rglob("*.json")
+        if (match := _COLABFOLD_SCORES.fullmatch(file.name)) and match["candidate"] == candidate_id})
+    if not ranks:
+        raise ValueError("no ColabFold models for declared candidate")
+    return [parse_structure_prediction_output(path, candidate_id=candidate_id, model_rank=rank) for rank in ranks]
+
+
+def _parse_colabfold_scores(path: Path, match: re.Match) -> StructurePredictionSummary:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    scores = np.asarray(payload["plddt"], dtype=float)
+    if scores.ndim != 1 or not scores.size or not np.all(np.isfinite(scores)) or np.any((scores < 0) | (scores > 100)):
+        raise ValueError("ColabFold pLDDT must be a finite per-residue array in [0,100]")
+    pae = payload.get("pae")
+    if pae is not None:
+        matrix = np.asarray(pae, dtype=float)
+        if matrix.shape != (scores.size, scores.size) or not np.all(np.isfinite(matrix)) or np.any(matrix < 0):
+            raise ValueError("ColabFold PAE dimensions/values do not match pLDDT residues")
+    model = path.with_name(f'{match["candidate"]}_unrelaxed_rank_{match["rank"]}_{match["model"]}.pdb')
+    if not model.is_file():
+        raise ValueError("ColabFold confidence has no exactly matching unrelaxed coordinate file")
+    return StructurePredictionSummary(candidate_id=match["candidate"], source="colabfold_af2_ptm",
+        model_file=model, confidence_file=path, plddt_file=path, pae_file=path if pae is not None else None,
+        mean_plddt=float(scores.mean()), ptm=payload.get("ptm"), iptm=payload.get("iptm"),
+        model_rank=int(match["rank"]), model_name=match["model"], residue_count=int(scores.size),
+        raw_keys=sorted(payload))
 
 
 def _parse_single_file(path: Path, *, candidate_id: str) -> StructurePredictionSummary:

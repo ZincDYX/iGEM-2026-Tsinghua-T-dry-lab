@@ -65,17 +65,15 @@ def m1_validate_construct_sequence(
     forbidden_restriction_sites: dict[str, str] | None = None,
     require_sequence_evidence: bool = True,
 ) -> dict[str, Any]:
-    return _call_local(
-        "igem.m1.validate_construct_sequence",
-        {
+    arguments = {
             "construct_id": construct_id,
             "ordered_part_ids": ordered_part_ids,
             "part_sequences": part_sequences,
             "coding_dna": coding_dna,
             "forbidden_restriction_sites": forbidden_restriction_sites,
             "require_sequence_evidence": require_sequence_evidence,
-        },
-    )
+        }
+    return _call_local("igem.m1.validate_construct_sequence", {key: value for key, value in arguments.items() if value is not None})
 
 
 @server.tool(
@@ -117,7 +115,7 @@ def m1_parse_seg(path: str, tool_version: str, input_sha256: str, expected_lengt
 )
 def m1_screen_sequence(
     sequence: str,
-    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"],
+    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "full_fusion"],
     localization_context: Literal["cytosolic", "er_anchored"] = "cytosolic",
     feature_definitions_file: str | None = None,
     rules_file: str | None = None,
@@ -147,7 +145,7 @@ def m1_screen_sequence(
         arguments["feature_definitions_file"] = feature_definitions_file
     if rules_file is not None:
         arguments["rules_file"] = rules_file
-    return _call_local("igem.m1.screen_sequence", arguments)
+    return _call_local("igem.m1.screen_sequence", {key: value for key, value in arguments.items() if value is not None})
 
 
 @server.tool(
@@ -184,15 +182,17 @@ def m1_parse_secondary_structure(
     tool_name: Literal["PSIPRED", "JPred"],
     tool_version: str,
     input_sha256: str,
+    sequence_file: str | None = None,
 ) -> dict[str, Any]:
+    arguments = {
+        "path": path, "tool_name": tool_name, "tool_version": tool_version,
+        "input_sha256": input_sha256,
+    }
+    if sequence_file is not None:
+        arguments["sequence_file"] = sequence_file
     return _call_local(
         "igem.m1.parse_secondary_structure",
-        {
-            "path": path,
-            "tool_name": tool_name,
-            "tool_version": tool_version,
-            "input_sha256": input_sha256,
-        },
+        arguments,
     )
 
 
@@ -210,16 +210,20 @@ def m2_calculate_geometry(
     model_pdb: str,
     reference_chain: str,
     model_chain: str,
-    core_residues: list[int],
-    pocket_residues: list[int],
-    core_residue_mapping: list[dict[str, int]] | None = None,
-    pocket_residue_mapping: list[dict[str, int]] | None = None,
-    tail_residues: list[int] | None = None,
+    core_residues: list[int | str],
+    pocket_residues: list[int | str],
+    core_residue_mapping: list[dict[str, int | str]] | None = None,
+    pocket_residue_mapping: list[dict[str, int | str]] | None = None,
+    tail_residues: list[int | str] | None = None,
     first_module_chain: str | None = None,
-    first_module_residues: list[int] | None = None,
+    first_module_residues: list[int | str] | None = None,
     second_module_chain: str | None = None,
-    second_module_residues: list[int] | None = None,
+    second_module_residues: list[int | str] | None = None,
     clash_cutoff_angstrom: float | None = None,
+    reference_model_id: int | None = None,
+    model_id: int | None = None,
+    reference_altloc: str | None = None,
+    model_altloc: str | None = None,
 ) -> dict[str, Any]:
     arguments: dict[str, Any] = {
         "reference_pdb": reference_pdb,
@@ -238,6 +242,10 @@ def m2_calculate_geometry(
         "second_module_chain": second_module_chain,
         "second_module_residues": second_module_residues,
         "clash_cutoff_angstrom": clash_cutoff_angstrom,
+        "reference_model_id": reference_model_id,
+        "model_id": model_id,
+        "reference_altloc": reference_altloc,
+        "model_altloc": model_altloc,
     }
     arguments.update({key: value for key, value in optional.items() if value is not None})
     return _call_local("igem.m2.calculate_geometry", arguments)
@@ -277,7 +285,7 @@ def m2_site_cooccupancy(graph: dict[str, Any]) -> dict[str, Any]:
 )
 def m2_pocket_sasa(
     chain: str,
-    residues: list[int],
+    residues: list[int | str],
     model_json: str | None = None,
     reference_json: str | None = None,
     model_pdb: str | None = None,
@@ -285,6 +293,11 @@ def m2_pocket_sasa(
     threshold_loss_fraction: float = 0.30,
     model_configuration_hash: str | None = None,
     reference_configuration_hash: str | None = None,
+    reference_model_id: int | None = None,
+    model_id: int | None = None,
+    reference_altloc: str | None = None,
+    model_altloc: str | None = None,
+    residue_mapping: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     arguments: dict[str, Any] = {
         "chain": chain,
@@ -298,9 +311,14 @@ def m2_pocket_sasa(
         "reference_json": reference_json,
         "model_pdb": model_pdb,
         "reference_pdb": reference_pdb,
+        "reference_model_id": reference_model_id,
+        "model_id": model_id,
+        "reference_altloc": reference_altloc,
+        "model_altloc": model_altloc,
+        "residue_mapping": residue_mapping,
     }
     arguments.update({key: value for key, value in optional.items() if value is not None})
-    return _call_local("igem.scoring.pocket_sasa", arguments)
+    return _call_local("igem.scoring.pocket_sasa", {key: value for key, value in arguments.items() if value is not None})
 
 
 @server.tool(
@@ -309,8 +327,8 @@ def m2_pocket_sasa(
     description="Parse version-specific ColabFold/AF3/ABCFold/Boltz/Chai confidence artifacts without inventing missing metrics.",
     structured_output=True,
 )
-def m2_parse_structure_prediction(path: str, candidate_id: str | None = None) -> dict[str, Any]:
-    arguments: dict[str, Any] = {"path": path}
+def m2_parse_structure_prediction(path: str, candidate_id: str | None = None, model_rank: int = 1) -> dict[str, Any]:
+    arguments: dict[str, Any] = {"path": path, "model_rank": model_rank}
     if candidate_id is not None:
         arguments["candidate_id"] = candidate_id
     return _call_local("igem.parsers.structure_prediction", arguments)
