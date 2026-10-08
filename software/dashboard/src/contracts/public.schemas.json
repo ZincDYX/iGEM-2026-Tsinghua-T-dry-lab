@@ -18998,6 +18998,84 @@
     "title": "PluginInspectionView",
     "type": "object"
   },
+  "PredictionToolView": {
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "not_configured",
+          "configured_unverified",
+          "available",
+          "failed"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Version"
+      },
+      "last_real_check": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Last Real Check"
+      },
+      "latest_file_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Latest File Id"
+      },
+      "source_reference": {
+        "title": "Source Reference",
+        "type": "string"
+      },
+      "location": {
+        "const": "connected_backend",
+        "default": "connected_backend",
+        "title": "Location",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "status",
+      "version",
+      "last_real_check",
+      "latest_file_id",
+      "source_reference",
+      "location"
+    ],
+    "title": "PredictionToolView",
+    "type": "object"
+  },
   "Workflow": {
     "$defs": {
       "ExecutionPolicy": {

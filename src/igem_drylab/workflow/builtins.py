@@ -73,6 +73,9 @@ def builtin_tools() -> WorkflowTools:
     from .scientific_project import stage_tools
     for tool in stage_tools():
         tools.register(tool)
+    from .sequence_predictions import sequence_prediction_tools
+    for tool in sequence_prediction_tools():
+        tools.register(tool)
     return tools
 
 

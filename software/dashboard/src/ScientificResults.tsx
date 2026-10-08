@@ -14,6 +14,7 @@ import { M3View, M4View, SequencePlot } from "./workbench/StageViews";
 import { M5View } from "./workbench/M5View";
 import { lazy, Suspense } from "react";
 import { messages } from "./workbench/messages.en";
+import { PredictionResult } from "./workbench/PredictionResult";
 const Series = lazy(() =>
   import("./workbench/viewers/SeriesViewer").then((m) => ({
     default: m.SeriesViewer,
@@ -257,6 +258,8 @@ function NodeResult({
 }) {
   const tool = nodeTool(run, node);
   const output = node.output;
+  if (object(output) && output.schema_version === "sequence-prediction-v1")
+    return <PredictionResult output={output} />;
   const records = stageRecords(tool, output);
   if (records && object(output))
     return (

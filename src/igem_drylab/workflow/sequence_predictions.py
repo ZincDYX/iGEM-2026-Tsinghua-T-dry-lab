@@ -1,0 +1,102 @@
+"""Persist real sequence-tool jobs using the existing private runtime adapter.
+
+These are diagnostic tool tasks, not automatic approval of M1 or M2. The
+workflow owns snapshots/recovery; tool deployment settings never come from
+node inputs, Agent prose or the browser.
+"""
+from hashlib import sha256
+import json
+from pathlib import Path
+
+from igem_drylab.constructs.linker_features import parse_iupred2a_output, parse_seg_fasta
+from igem_drylab.parsers.structure_prediction import parse_colabfold_models
+from igem_drylab.pipeline.adapters import create_tool_adapter
+from igem_drylab.pipeline.config import ToolConfig
+from .models import Contract, SequenceRecord
+from .tools import NodeContext, ToolDefinition
+
+
+class SequencePredictionInput(Contract):
+    item: SequenceRecord
+
+
+def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeContext) -> dict:
+    sequence = payload.item.sequence
+    digest = sha256(sequence.encode()).hexdigest()
+    config = ToolConfig.model_validate(context.runtime_tools.get(tool, {}))
+    adapter = create_tool_adapter(tool, config)
+    result = dict(schema_version="sequence-prediction-v1", candidate_id=payload.item.id,
+        tool_input_id="sequence_input",
+        tool=tool, input_sequence_sha256=digest, sequence_length=len(sequence),
+        tool_status="not_configured", parse_status="not_run", outputs={}, parsed=None,
+        scientific_status="diagnostic_not_formal_M1_M2_acceptance")
+    if not adapter.is_available():
+        result["blocker"] = "Configure an authorized external route in the private backend runtime profile."
+        return result
+    source = context.work_dir / "input.fasta"
+    # Keep arbitrary user labels out of external-tool argv and output paths.
+    # The fixed IO identifier is explicitly mapped to the original candidate;
+    # the full biological sequence and its identity are unchanged.
+    source.write_text(f">sequence_input\n{sequence}\n", encoding="utf-8")
+    output_dir = context.work_dir / "prediction"
+    run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
+        input_files={"sequence": source}, timeout_seconds=7200)
+    result["tool_status"] = run.status
+    if run.status != "succeeded":
+        result["blocker"] = "External tool did not complete; its private execution record is retained."
+        return result
+    parsed = None
+    if tool == "colabfold":
+        from Bio.PDB import PDBParser
+        from Bio.SeqUtils import seq1
+        summaries = parse_colabfold_models(output_dir, candidate_id="sequence_input")
+        for row in summaries:
+            model = PDBParser(QUIET=True).get_structure(payload.item.id, row.model_file)
+            observed = "".join(seq1(residue.resname) for residue in next(model.get_models()).get_residues() if residue.id[0] == " ")
+            if observed != sequence or row.residue_count != len(sequence):
+                raise ValueError("predicted structure does not match complete input sequence")
+        parsed = [row.model_copy(update={"candidate_id": payload.item.id}).model_dump(mode="json") for row in summaries]
+        result["outputs"] = {f"model_{row['model_rank']}": row["model_file"] for row in parsed}
+        result["outputs"].update({f"confidence_{row['model_rank']}": row["confidence_file"] for row in parsed})
+    else:
+        output = output_dir / ("iupred2a.txt" if tool == "iupred2a" else "seg.fasta")
+        if not output.is_file():
+            output.write_text(run.stdout, encoding="utf-8")
+        result["outputs"] = {"raw_output": str(output)}
+        if tool == "iupred2a":
+            record = output.with_suffix(".run.json")
+            if not record.is_file():
+                result["parse_status"] = "blocked"
+                result["blocker"] = "IUPred route must produce a versioned execution record, for example igem_drylab.iupred_runner."
+                return result
+            version = json.loads(record.read_text())["tool_version"]
+            parsed = parse_iupred2a_output(output, tool_version=version, input_sha256=digest).model_dump(mode="json")
+        else:
+            version = config.verified_version
+            if not version:
+                result["parse_status"] = "blocked"
+                result["blocker"] = "Backend deployment has not recorded the actual SEG version."
+                return result
+            output.with_suffix(".run.json").write_text(json.dumps(dict(tool_name="SEG", tool_version=version,
+                input_sha256=digest, output_sha256=sha256(output.read_bytes()).hexdigest(), origin="automated",
+                command=run.argv, returncode=run.return_code)), encoding="utf-8")
+            parsed = parse_seg_fasta(output, tool_version=version, input_sha256=digest,
+                expected_length=len(sequence)).model_dump(mode="json")
+    result.update(parse_status="succeeded", parsed=parsed)
+    return result
+
+
+def sequence_prediction_tools():
+    # Distinct resource declarations share a single adapter/parser path.
+    def handler(tool):
+        def invoke(payload, context):
+            return predict_sequence(tool, payload, context)
+        return invoke
+    implementation = (Path(__file__), Path(__file__).parents[1] / "pipeline/adapters.py",
+        Path(__file__).parents[1] / "constructs/linker_features.py",
+        Path(__file__).parents[1] / "parsers/structure_prediction.py")
+    return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
+        "1", SequencePredictionInput, handler(name), "scientific_project",
+        implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu")
+        for name, label in (("iupred2a", "IUPred2 disorder prediction"), ("seg", "SEG low-complexity prediction"),
+                            ("colabfold", "ColabFold enzyme / fusion prediction"))]

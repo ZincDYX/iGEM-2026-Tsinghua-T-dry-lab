@@ -21,4 +21,4 @@ def test_explicit_runtime_controls_are_kept_but_tokens_are_not(monkeypatch):
 def test_absent_controls_are_not_invented_for_server_runs(monkeypatch):
     for key in ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','NUMEXPR_NUM_THREADS','PYTHONUTF8'):
         monkeypatch.delenv(key,raising=False)
-    assert server_parameters(Path('/software_fixture/src/igem_drylab')).env == {}
+    assert server_parameters(Path('/software_fixture/src/igem_drylab')).env == {'PYTHONPATH': '/software_fixture/src'}

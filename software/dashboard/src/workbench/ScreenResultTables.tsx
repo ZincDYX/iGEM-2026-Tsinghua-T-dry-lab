@@ -10,7 +10,6 @@ export function M1Matrix({ records }: { records: Record<string, unknown>[] }) {
             <th>linker / IDR (distinct categories)</th>
             <th>Original rule verdict / Eligibility</th>
             <th>Original risk / Missing predictor evidence</th>
-            <th>Recorded engineering priority score</th>
           </tr>
         </thead>
         <tbody>
@@ -29,7 +28,6 @@ export function M1Matrix({ records }: { records: Record<string, unknown>[] }) {
                 {show(row.screen_flags)} /{" "}
                 {show(row.missing_predictor_evidence)}
               </td>
-              <td>{show(row.engineering_priority_score)}</td>
             </tr>
           ))}
         </tbody>
@@ -52,7 +50,7 @@ export function M2Metrics({ record }: { record: Record<string, unknown> }) {
       "Tail-to-pocket minimum distance (Å)",
     ],
     ["clash_count", "clash count"],
-    ["clash_cutoff_angstrom", "Original  clash Truncation (Å)"],
+    ["clash_cutoff_angstrom", "Heavy-atom clash cutoff (Å)"],
     ["s_sh3", "SH3 site count"],
     ["s_pdz", "PDZ site count"],
     ["site_count_basis", "Site-count basis"],

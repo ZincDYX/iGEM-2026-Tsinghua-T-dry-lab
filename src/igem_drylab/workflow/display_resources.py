@@ -242,6 +242,9 @@ class DisplayResources:
                   file_id TEXT NOT NULL, hash TEXT NOT NULL, schema TEXT NOT NULL,
                   ordinal INTEGER NOT NULL, payload TEXT NOT NULL,
                   PRIMARY KEY(file_id,hash,schema,ordinal));
+                CREATE TABLE IF NOT EXISTS display_resource_kinds(
+                  file_id TEXT NOT NULL, hash TEXT NOT NULL, kind TEXT NOT NULL,
+                  PRIMARY KEY(file_id,hash));
             """)
 
     def source(self, project_id, file_id):
@@ -261,7 +264,7 @@ class DisplayResources:
         identity = ResourceIdentity(project_id=project_id, file_id=file_id, source_sha256=row["hash"])
         return path, identity, row["name"]
 
-    def catalog(self, project_id, offset=0, limit=50, run_id=None, file_id=None):
+    def catalog(self, project_id, offset=0, limit=50, run_id=None, file_id=None, kind=None):
         self.store.project(project_id)
         snapshot = None
         allowed = None
@@ -294,6 +297,10 @@ class DisplayResources:
             rows = [row for row in rows if row["id"] in allowed]
         if file_id is not None:
             rows = [row for row in rows if row["id"] == file_id]
+        if kind is not None:
+            if kind not in {"image", "structure", "series", "scan", "m5", "table"}:
+                raise WorkflowError("unsupported_resource_kind")
+            rows = [row for row in rows if self._catalog_kind(project_id, row) == kind]
         items = []
         for row in rows[offset:offset + limit]:
             path = Path(row["path"])
@@ -332,6 +339,37 @@ class DisplayResources:
         result = ResourcePage(project_id=project_id, run_id=run_id, snapshot_hash=snapshot, offset=offset, total=len(rows), has_more=offset + limit < len(rows), items=items).model_dump(mode="json")
         self.boundary.check(result)
         return result
+
+    def _catalog_kind(self, project_id, row):
+        extension = Path(row["path"]).suffix.lower()
+        if extension in {".png", ".jpg", ".jpeg"}:
+            return "image"
+        if extension in {".pdb", ".cif", ".mmcif", ".bcif"}:
+            return "structure"
+        if extension != ".json":
+            return "table"
+        # The grant and sealed source are checked before even a cached type is
+        # returned. Only classification is indexed, never private payloads.
+        try:
+            path, identity, _ = self.source(project_id, row["id"])
+            with self.store.connection() as db:
+                cached = db.execute("SELECT kind FROM display_resource_kinds WHERE file_id=? AND hash=?",
+                    (row["id"], identity.source_sha256)).fetchone()
+            if cached is not None:
+                return cached[0]
+            data = self.boundary.check_original(path)
+        except (WorkflowError, OSError, ValueError, UnicodeError):
+            return "table"
+        schema = data.get("schema_version") if isinstance(data, dict) else None
+        prediction = data.get("prediction_contract") if isinstance(data, dict) else None
+        kind = {"display-series-source-v1": "series", "finite-scaffold-scan-v2": "scan",
+                "m5-comparison-series-v1": "m5"}.get(schema, "table")
+        if isinstance(prediction, dict) and prediction.get("schema_version") == "m4-prediction-v2":
+            kind = "series"
+        with self.store.connection() as db:
+            db.execute("INSERT OR REPLACE INTO display_resource_kinds VALUES(?,?,?)",
+                (row["id"], identity.source_sha256, kind))
+        return kind
 
     def m5(self, project_id, file_id):
         from igem_drylab.wetlab.comparison import M5ComparisonSeries

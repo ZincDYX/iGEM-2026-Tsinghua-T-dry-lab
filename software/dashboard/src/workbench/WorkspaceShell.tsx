@@ -39,6 +39,7 @@ import { ResourceBrowser } from "./ResourceBrowser";
 import { WorkbenchMenus } from "./WorkbenchMenus";
 import { primaryCommand, commandLabels } from "./workbenchCommands";
 import { usePlanController } from "./usePlanController";
+import { PredictionTools } from "./PredictionTools";
 
 type Tab =
   | "plan"
@@ -47,6 +48,7 @@ type Tab =
   | "compare"
   | "settings"
   | "plugins"
+  | "tools"
   | "artifacts";
 const tabs: { id: Tab; label: string }[] = [
   { id: "inputs", label: "Inputs" },
@@ -56,6 +58,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "artifacts", label: "Resources" },
   { id: "settings", label: "Settings" },
   { id: "plugins", label: "Plugins" },
+  { id: "tools", label: "Prediction tools" },
 ];
 function Tabs({
   values,
@@ -561,6 +564,11 @@ export function WorkspaceShell() {
             },
           ]}
           tools={[
+            {
+              label: "Prediction tools",
+              disabled: !currentProject,
+              action: () => setTab("tools"),
+            },
             { label: "Settings", action: () => setTab("settings") },
             { label: "Trusted plugins", action: () => setTab("plugins") },
             {
@@ -1023,6 +1031,7 @@ export function WorkspaceShell() {
                 projectId={currentProject.id}
                 runId={run?.id}
                 revision={currentProject.revision}
+                active={tab === "artifacts"}
                 initialFileId={resourceFile}
                 initialRunScope={resourceRunScope}
                 onRegistered={(value) => {
@@ -1052,6 +1061,15 @@ export function WorkspaceShell() {
             />
           )}
           {tab === "plugins" && <PluginPanel busy={busy} action={action} />}
+          {tab === "tools" && currentProject && (
+            <PredictionTools
+              key={currentProject.id}
+              project={currentProject}
+              busy={busy}
+              onPlan={(workflow) => void importWorkflow(async () => workflow).then(() => setTab("plan"))}
+              onOpenResource={(id) => openResource(id, false)}
+            />
+          )}
         </div>
       </main>
       {inspectorOpen && !view.narrow && (

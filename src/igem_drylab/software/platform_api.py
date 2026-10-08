@@ -108,7 +108,7 @@ class GithubPluginRequest(Contract):
     commit: str
 
 
-def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_backend=None, workflow_tools=None) -> APIRouter:
+def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_backend=None, workflow_tools=None, runtime_tools=None) -> APIRouter:
     data_dir = data_dir.resolve()
     store = WorkflowStore(data_dir / "platform.sqlite3")
     tools = workflow_tools if workflow_tools is not None else builtin_tools()
@@ -116,6 +116,11 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     from igem_drylab.workflow.scheduler import RunDispatcher
     dispatcher = RunDispatcher(engine)
     boundary = engine.disclosure
+    backend_profile = None
+    if runtime_tools is not None:
+        from igem_drylab.workflow.runtime_profiles import RuntimeProfiles
+        backend_profile = RuntimeProfiles(store).install("backend-configured-tools", runtime_tools)
+        boundary.register_runtime(runtime_tools)
     from igem_drylab.workflow.views import PublicReads
     reads = PublicReads(store,boundary)
     from igem_drylab.workflow.display_resources import DisplayResources
@@ -228,6 +233,11 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def save_project(request: SaveProject) -> dict[str, Any]:
         boundary.check(request.project.model_dump(mode="json"))
         request.project = boundary.private_project(request.project)
+        if backend_profile is not None:
+            try:
+                store.project(request.project.id)
+            except KeyError:
+                request.project.runtime_profile_ref = backend_profile["id"]
         if request.project.scientific_project is not None:
             from igem_drylab.workflow.scientific_project import ScientificProject
             ScientificProject.model_validate(request.project.scientific_project).verify()
@@ -336,12 +346,14 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         return await receive_bundle(request, data_dir / "imports", config_filename, publish)
 
     @router.get("/projects/{project_id}/resources")
-    def project_resources(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
-        return resources.catalog(project_id, offset, limit)
+    def project_resources(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),
+                          kind: Literal["image", "structure", "series", "scan", "m5", "table"] | None = None):
+        return resources.catalog(project_id, offset, limit, kind=kind)
 
     @router.get("/runs/{run_id}/resources")
-    def run_resources(run_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
-        return resources.catalog(project_id, offset, limit, run_id)
+    def run_resources(run_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),
+                      kind: Literal["image", "structure", "series", "scan", "m5", "table"] | None = None):
+        return resources.catalog(project_id, offset, limit, run_id, kind=kind)
 
     @router.get("/projects/{project_id}/lineage")
     def project_lineage(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
@@ -692,6 +704,44 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         result=[{key:item[key] for key in ("id","name","description","version","capability","runtime","plugin_hash","idempotent","resource")} for item in tools.list()]
         boundary.check(result)
         return result
+
+    @router.get("/projects/{project_id}/prediction-tools")
+    def prediction_tool_list(project_id: str):
+        from igem_drylab.software.public_contracts import PredictionToolView
+        from igem_drylab.workflow.runtime_profiles import RuntimeProfiles
+        from igem_drylab.pipeline.adapters import create_tool_adapter
+        from igem_drylab.pipeline.config import ToolConfig
+        from igem_drylab.external_tools import tool_spec
+        project = store.project(project_id)
+        profile, private = RuntimeProfiles(store).get(project.runtime_profile_ref) if project.runtime_profile_ref else (None, {})
+        with store.connection() as db:
+            last = db.execute("""SELECT n.output,r.updated_at FROM nodes n JOIN runs r ON n.run_id=r.id
+                WHERE r.project_id=? AND json_extract(n.output,'$.schema_version')='sequence-prediction-v1'
+                AND json_extract(r.snapshot,'$.runtime_profile.hash')=? ORDER BY r.updated_at DESC""",
+                (project_id, profile["hash"] if profile else None)).fetchall()
+        rows = []
+        for name in ("iupred2a", "seg", "colabfold"):
+            config = ToolConfig.model_validate(private.get(name, {}))
+            adapter = create_tool_adapter(name, config)
+            executed = next(((json.loads(row["output"]), row["updated_at"]) for row in last if json.loads(row["output"]).get("tool") == name), None)
+            status = "configured_unverified" if adapter.is_available() else "not_configured"
+            latest_file, checked = None, None
+            if executed:
+                output, checked = executed
+                if output["tool_status"] == "succeeded" and output["parse_status"] == "succeeded":
+                    status = "available"
+                elif output["tool_status"] not in {"succeeded", "not_configured"}:
+                    status = "failed"
+                paths = list(output.get("outputs", {}).values())
+                if paths:
+                    with store.connection() as db:
+                        asset = db.execute("SELECT id FROM file_assets WHERE project_id=? AND path=?", (project_id, paths[0])).fetchone()
+                    latest_file = asset[0] if asset else None
+            rows.append(PredictionToolView(id="prediction." + name, name=tools.get("prediction." + name).name,
+                status=status, version=config.verified_version, last_real_check=checked,
+                latest_file_id=latest_file, source_reference=tool_spec(name).official_url).model_dump(mode="json"))
+        boundary.check(rows)
+        return rows
 
     @router.get("/plugins")
     def plugin_list() -> list[dict[str, Any]]:

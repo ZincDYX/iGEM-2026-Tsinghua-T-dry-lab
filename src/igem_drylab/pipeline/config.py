@@ -160,6 +160,7 @@ class ToolConfig(BaseModel):
     repo_path: Path | None = None
     command: str | None = None
     deployment_paths: list[Path] = Field(default_factory=list)
+    verified_version: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
 

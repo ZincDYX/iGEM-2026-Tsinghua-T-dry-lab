@@ -183,8 +183,19 @@ class PluginInspectionView(Contract):
     capability_requests: list[str]
 
 
+class PredictionToolView(Contract):
+    id: str
+    name: str
+    status: Literal["not_configured", "configured_unverified", "available", "failed"]
+    version: str | None
+    last_real_check: str | None
+    latest_file_id: str | None
+    source_reference: str
+    location: Literal["connected_backend"] = "connected_backend"
+
+
 PUBLIC_MODELS = {model.__name__:model for model in (ScientificRecordView, TablePage, ScanPage, M5ComparisonSeries, LineagePage, ComparePage, ResourcePage, SeriesPage, StructurePage, ScientificPrecheckView,PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
-    NodePage,PlanView,ProposalView,ScientificPreviewView,BindingPreviewView,IterationView,ImportView,ActionView,RunListView,InputDiffView,PluginInspectionView,Workflow)}
+    NodePage,PlanView,ProposalView,ScientificPreviewView,BindingPreviewView,IterationView,ImportView,ActionView,RunListView,InputDiffView,PluginInspectionView,PredictionToolView,Workflow)}
 
 
 def public_schemas():

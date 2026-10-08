@@ -25,4 +25,5 @@ export function ActionView(value:unknown):value is import("./ActionView.generate
 export function RunListView(value:unknown):value is import("./RunListView.generated").RunListView;
 export function InputDiffView(value:unknown):value is import("./InputDiffView.generated").InputDiffView;
 export function PluginInspectionView(value:unknown):value is import("./PluginInspectionView.generated").PluginInspectionView;
+export function PredictionToolView(value:unknown):value is import("./PredictionToolView.generated").PredictionToolView;
 export function Workflow(value:unknown):value is import("./Workflow.generated").Workflow;
