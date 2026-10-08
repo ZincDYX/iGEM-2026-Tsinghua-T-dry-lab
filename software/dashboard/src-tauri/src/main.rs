@@ -24,7 +24,6 @@ struct BackendInfo {
 struct Backend {
     child: Mutex<Child>,
     info: BackendInfo,
-    cleanup_file: Option<PathBuf>,
     #[cfg(windows)]
     _job: WindowsJob,
 }
@@ -82,9 +81,6 @@ impl Drop for Backend {
         if let Ok(child) = self.child.get_mut() {
             let _ = child.kill();
             let _ = child.wait();
-        }
-        if let Some(path) = &self.cleanup_file {
-            let _ = fs::remove_file(path);
         }
         // On Windows dropping the job handle also terminates plugin/MCP children.
     }
@@ -226,7 +222,6 @@ fn launch(
             }
             .into(),
         },
-        cleanup_file: None,
         #[cfg(windows)]
         _job: job,
     };
