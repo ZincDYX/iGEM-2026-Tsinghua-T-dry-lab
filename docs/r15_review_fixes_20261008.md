@@ -59,7 +59,9 @@ ColabFold 1.6.2，AF2-PTM，公开 MMseqs2 MSA，5 models、3 recycles、1 seed�
 
 完整精度在 m2_decisions.csv 和原 JSON 中保存。2PDZ 15 个单模型的 FreeSASA 结果只用于真实工具和格式检验。2FHA assembly 的 24 个蛋白 label chain/auth 身份单独核验；模板与本项目 FTH1 存在已知序列差异，不默认为同一融合装配。
 
-OC 的 I293/T295→ΔN I262/T264 及 DMT N303 是功能锚点，**不是完整口袋**。pocket_definition.json 标记 needs_review；core RMSD、pocket SASA retention、interdomain PAE、docking affinity、体积/共占据/动态参数不冒充已计算。Meeko 0.7.1 和 Vina 1.2.7 仅确认安装，缺审核后的 receptor/cofactor/protonation/box 等条件，未运行真实 docking。
+OC 的 I293/T295→ΔN I262/T264 及 DMT N303 是功能锚点，**不是完整口袋**。pocket_definition.json 标记 needs_review；core RMSD、pocket SASA retention、interdomain PAE、docking affinity、体积/共占据/动态参数不冒充已计算。缺审核后的 receptor/cofactor/protonation/box 等条件，未运行本项目 OC/DMT docking。
+
+另做了与项目结论严格分开的 [Meeko/Vina 官方 1IEP 教程](https://autodock-vina.readthedocs.io/en/latest/docking_basic.html) 部署检查：Meeko 0.7.1、官方 Vina 1.2.7 Linux CLI 经真实 stdio MCP 完成受体准备、配体准备、对接、SDF 导出；6 个真实姿态解析成功，best score -13.25 kcal/mol。教程原文件固定在上游提交 3c65c0b3e6c2c1d183f6a175ecb65e3c5ba91645；使用其 box/center/exhaustiveness，seed 42 只作为例子的重现控制，不是项目生物学参数。初次真实 Meeko 调用发现 RDKit/Gemmi/ProDy 缺失，保留失败记录后补齐 RDKit 2025.9.6、Gemmi 0.7.5。ProDy 2.6.1 的 pyparsing 3.1.1 使用工具专用 overlay，未降级共享 pyparsing、NumPy、ColabFold。安装后 pip check 及真实 FreeSASA 10 项复验通过。此分数没有写入 OC/DMT 的空 docking 字段，不能据它声称本项目口袋或活性验证完成。
 
 原生窗口又独立运行一次 DMT PDZ 的五模型预测，rank 1 mean pLDDT = 88.50836842105264。这与批处理值不完全相同；两份 MSA 的有效序列行比较相同，不能将差异解释为 MSA 内容变化。尚未完成 GPU 确定性/随机 key 逐项定位，**不确定原因，不声称位级复现**。两次完整输入/模型长度均相符；native IUPred 的全部 214 个分数与批处理逐位相等。
 
@@ -113,7 +115,7 @@ X01 筛选改为后端先 kind 过滤再分页，>50 混合资源、完整 total
 
 旧版两次本机 backend startup 超时、第三次及最终可比较组成功；失败原因尚未充分定位，不能推断由新版代码解决。一次早期测量脚本用了不正确的 canvas selector，原记录保留但不作为 canvas 结论；最终两组都改用实际 structure-canvas 并验证可见 canvas = 1。详细原始 samples/phase/proof 和限制见验收证据包，native_profile.csv 只是整理后的摘要。
 
-声明部署大小：服务器 13,666,416,437 B + 本机去重已安装文件 912,318,582 B = **14,578,735,019 B < 15,000,000,000 B**。同时保留不去重路径上界 15,165,684,656 B，不能隐瞒 PNPM alias/hardlink 重复计数差异。范围包括选定工具/环境/模型缓存、当前及保留服务器 runtime、本机依赖和当前 portable；不包括非活动发布压缩档/科学输出/无关构建工具链，也不等于整机空间。原生测试临时实例已结束；旧发布和服务器旧 runtime 可回退，未删除用户输入。
+最终声明部署大小（含新补齐的 docking 依赖）：服务器 14,002,050,609 B + 本机去重已安装文件 912,318,612 B = **14,914,369,221 B < 15,000,000,000 B**，余量约 85.6 MB。同时保留不去重路径上界 15,501,318,858 B，不能隐瞒 PNPM alias/hardlink 重复计数差异。范围包括选定工具/环境/模型缓存、当前及保留服务器 runtime、本机依赖和当前 portable；不包括非活动发布压缩档/科学输出/无关构建工具链，也不等于整机空间。原生测试临时实例已结束；旧发布和服务器旧 runtime 可回退，未删除用户输入。此前未补 docking 依赖的 14.58 GB 记录不再作为最终预算。
 
 ## 交付与可追溯性
 
@@ -122,6 +124,7 @@ X01 筛选改为后端先 kind 过滤再分页，>50 混合资源、完整 total
 - 发布清单 633 个组件，OSV 查询的日期/范围单独记录，未检出匹配 advisory 不等于证明永远安全或许可证全部满足。
 - FusionLab-r15-real-M1-M2-frozen-evidence.zip：原始科学输出、核验输入、分开的 m1_part_screens/m1_fusion_screens 和 needs_review pocket_definition。JSON/日志中私有部署路径为标明的公开投影，原始未脱敏记录保留在服务器；manifest 分别记录源/交付文件，不冒充完全原始字节。
 - FusionLab-r15-native-real-artifacts.zip：实际 native 发起的 IUPred/ColabFold 原文件与重复运行比对。
+- FusionLab-r15-official-docking-smoke.zip：官方示例原输入、真实执行/解析/导出、来源及依赖失败记录；它不是项目 docking 数据。
 - m1_features.csv（11 行）、m1_decisions.csv（11 行）、m2_decisions.csv（25 行）、tool_readiness.csv（29 类工具）、native_profile.csv；所有缺失科学数值留空/null。
 - source_links.md：逐文件下载来源、原文/论文、作者数据、真实执行工具的官方来源及未执行工具入口；不是把安装页面当作真实完成证明。
 - 验收证据包：最终/失败测试记录、真实 native screenshots、restart/lifecycle、两版 profile 原始数据、包身份和预算范围。
