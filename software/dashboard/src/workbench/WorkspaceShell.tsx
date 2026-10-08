@@ -612,7 +612,7 @@ export function WorkspaceShell() {
           ]}
         />
         <span className="workspace-state">
-          {info ? "Local workspace" : "Connecting to backend"}
+          {info ? "Connected workspace" : "Connecting to backend"}
         </span>
       </header>
       <div className="workbench-toolbar" aria-label="Project and run controls">
