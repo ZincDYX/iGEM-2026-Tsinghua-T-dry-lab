@@ -12,6 +12,7 @@ import { LazyJson } from "../contracts/LazyJson";
 import { PrecheckPanel, type InputIssue } from "./PrecheckPanel";
 import { ScientificBundleImporter } from "./ScientificBundleImporter";
 import { ScientificInputForms } from "./ScientificInputForms";
+import { StructureAnnotationLinker } from "./StructureAnnotationLinker";
 import {
   ScientificSetup,
   ScientificSettings,
@@ -153,7 +154,11 @@ export function InputEditor({
                   const draft = parsePublic("ProjectView", {
                     ...project,
                     ...patch,
-                    files: [...project.files, preview.file],
+                    files: project.files.some(
+                      (file) => file.id === preview.file.id,
+                    )
+                      ? project.files
+                      : [...project.files, preview.file],
                     datasets: Array.isArray(patch.datasets)
                       ? [...project.datasets, ...patch.datasets]
                       : project.datasets,
@@ -169,6 +174,13 @@ export function InputEditor({
               </button>
             </div>
           )}
+          <StructureAnnotationLinker
+            key={project.id}
+            project={project}
+            disabled={busy || dirty}
+            action={action}
+            onPreview={setPreview}
+          />
         </section>
         <section id="input-conditions" className="input-section">
           {!scope && (

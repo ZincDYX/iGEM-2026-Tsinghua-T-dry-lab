@@ -510,6 +510,56 @@ class DisplayResources:
         meta = StructurePage(identity=identity, format=format_name, offset=offset, total=len(values), chains=sorted({r["chain"] for r in values}), models=list(dict.fromkeys(r["model"] for r in values)), residues=values[offset:offset + limit]).model_dump(mode="json")
         return meta, preview
 
+    def validate_annotation(self, project_id, file_id, annotation):
+        """One validator for imported sidecars and explicit file-binding drafts."""
+        _, identity, _ = self.source(project_id, file_id)
+        if annotation.target_sha256 != identity.source_sha256:
+            raise WorkflowError("structure_annotation_identity_mismatch")
+        self.boundary.check(annotation.model_dump(mode="json"))
+        with self.store.connection() as db:
+            references = {r["hash"]: r["id"] for r in db.execute("SELECT id,hash FROM file_assets WHERE project_id=?", (project_id,))}
+        def reference(digest):
+            if digest not in references:
+                raise WorkflowError("structure_reference_not_authorized", status_code=403)
+            result, _ = self.structure(project_id, references[digest], limit=200_000, annotations=False)
+            return result["residues"]
+        for overlay in annotation.overlays:
+            reference(overlay.reference_sha256)
+        fusion_sequence = None
+        if any(r.full_fusion_position is not None for r in annotation.rows):
+            from Bio import SeqIO
+            sequence_file_id = references.get(annotation.fusion_sequence_file_sha256)
+            if not sequence_file_id or not annotation.fusion_sequence_id:
+                raise WorkflowError("structure_sequence_mapping_not_authorized", status_code=403)
+            sequence_path, _, _ = self.source(project_id, sequence_file_id)
+            matching = [str(r.seq).upper() for r in SeqIO.parse(sequence_path, "fasta") if r.id == annotation.fusion_sequence_id]
+            if len(matching) != 1:
+                raise WorkflowError("structure_sequence_mapping_identity_mismatch")
+            fusion_sequence = matching[0]
+        target, _ = self.structure(project_id, file_id, limit=200_000, annotations=False)
+        actual_residues = {tuple(r[k] for k in ("model", "chain", "residue_number", "insertion_code")): r for r in target["residues"]}
+        seen, reference_residues = set(), {}
+        for entry in annotation.rows:
+            residue = entry.residue
+            key = (residue.model, residue.chain, residue.residue_number, residue.insertion_code)
+            actual = actual_residues.get(key)
+            if key in seen or actual is None or actual["residue_name"] != residue.residue_name:
+                raise WorkflowError("structure_annotation_identity_mismatch")
+            seen.add(key)
+            if entry.full_fusion_position is not None:
+                from Bio.Data.IUPACData import protein_letters_3to1
+                position = entry.full_fusion_position - 1
+                amino_acid = protein_letters_3to1.get(residue.residue_name.title())
+                if position >= len(fusion_sequence) or amino_acid is None or fusion_sequence[position] != amino_acid:
+                    raise WorkflowError("structure_sequence_mapping_identity_mismatch")
+            if entry.plddt is not None and (annotation.confidence_semantics != "plddt" or not annotation.source_tool or not annotation.source_tool_version):
+                raise WorkflowError("structure_confidence_semantics_missing")
+            if entry.reference_residue is not None:
+                if entry.reference_sha256 not in reference_residues:
+                    reference_residues[entry.reference_sha256] = reference(entry.reference_sha256)
+                if entry.reference_residue.model_dump() not in reference_residues[entry.reference_sha256]:
+                    raise WorkflowError("structure_annotation_identity_mismatch")
+
     def structure(self, project_id, file_id, offset=0, limit=100, *, annotations=True, full_annotations=False):
         path, identity, _ = self.source(project_id, file_id)
         # Original SHA and project grant have already been checked, even on hits.
@@ -536,7 +586,6 @@ class DisplayResources:
         with self.store.connection() as db:
             candidates = db.execute("SELECT id,hash,path FROM file_assets WHERE project_id=? AND name LIKE '%.json'", (project_id,)).fetchall()
             references = {r["hash"]: r["id"] for r in db.execute("SELECT id,hash FROM file_assets WHERE project_id=?", (project_id,))}
-        reference_residues = {}
         found = []
         cache_key = (project_id, file_id, identity.source_sha256, tuple((r["id"], r["hash"]) for r in candidates), tuple(references.items()))
         cached_annotations = self._annotation_cache.get(cache_key)
@@ -555,58 +604,27 @@ class DisplayResources:
                 continue
             self.source(project_id, candidate["id"])
             annotation = StructureAnnotations.model_validate(raw) if cached_annotations is None else next(a for c, a in cached_annotations if c["id"] == candidate["id"])
-            self.boundary.check(annotation.model_dump(mode="json"))
-            for overlay in annotation.overlays:
+            if cached_annotations is None:
+                self.validate_annotation(project_id, file_id, annotation)
+            else:
+                self.boundary.check(annotation.model_dump(mode="json"))
+            for overlay in annotation.overlays if cached_annotations is not None else []:
                 reference_id = references.get(overlay.reference_sha256)
                 if reference_id is None:
                     raise WorkflowError("structure_reference_not_authorized", status_code=403)
                 self.structure(project_id, reference_id, limit=1, annotations=False)
-            fusion_sequence = None
             sequence_file_id = None
             if any(r.full_fusion_position is not None for r in annotation.rows):
-                from Bio import SeqIO
                 sequence_file_id = references.get(annotation.fusion_sequence_file_sha256)
                 if not sequence_file_id or not annotation.fusion_sequence_id:
                     raise WorkflowError("structure_sequence_mapping_not_authorized", status_code=403)
-                sequence_path, _, _ = self.source(project_id, sequence_file_id)
-                if cached_annotations is None:
-                    matching = [str(r.seq).upper() for r in SeqIO.parse(sequence_path, "fasta") if r.id == annotation.fusion_sequence_id]
-                    if len(matching) != 1:
-                        raise WorkflowError("structure_sequence_mapping_identity_mismatch")
-                    fusion_sequence = matching[0]
-            seen = set()
+                if cached_annotations is not None:
+                    self.source(project_id, sequence_file_id)
             dependency_hashes = {r.reference_sha256 for r in annotation.rows if r.reference_residue is not None}
-            for digest in dependency_hashes:
+            for digest in dependency_hashes if cached_annotations is not None else []:
                 if digest not in references:
                     raise WorkflowError("structure_reference_not_authorized", status_code=403)
                 self.source(project_id, references[digest])
-            with self.store.connection() as db:
-                coordinate_rows = db.execute("SELECT payload FROM display_structure_residues WHERE file_id=? AND hash=? AND schema=?", (file_id, identity.source_sha256, "coordinate-index-v1")).fetchall() if cached_annotations is None else []
-            actual_residues = {tuple(r[k] for k in ("model", "chain", "residue_number", "insertion_code")): r for row in coordinate_rows for r in [json.loads(row[0])]}
-            for entry in annotation.rows if cached_annotations is None else []:
-                residue = entry.residue
-                key = (residue.model, residue.chain, residue.residue_number, residue.insertion_code)
-                actual = actual_residues.get(key)
-                if key in seen or actual is None or actual["residue_name"] != residue.residue_name:
-                    raise WorkflowError("structure_annotation_identity_mismatch")
-                seen.add(key)
-                if entry.full_fusion_position is not None:
-                    from Bio.Data.IUPACData import protein_letters_3to1
-                    position = entry.full_fusion_position - 1
-                    amino_acid = protein_letters_3to1.get(residue.residue_name.title())
-                    if position >= len(fusion_sequence) or amino_acid is None or fusion_sequence[position] != amino_acid:
-                        raise WorkflowError("structure_sequence_mapping_identity_mismatch")
-                if entry.plddt is not None and (annotation.confidence_semantics != "plddt" or not annotation.source_tool or not annotation.source_tool_version):
-                    raise WorkflowError("structure_confidence_semantics_missing")
-                if entry.reference_residue is not None:
-                    reference_id = references.get(entry.reference_sha256)
-                    if reference_id is None:
-                        raise WorkflowError("structure_reference_not_authorized", status_code=403)
-                    if reference_id not in reference_residues:
-                        reference_meta, _ = self.structure(project_id, reference_id, limit=200_000, annotations=False)
-                        reference_residues[reference_id] = reference_meta["residues"]
-                    if entry.reference_residue.model_dump() not in reference_residues[reference_id]:
-                        raise WorkflowError("structure_annotation_identity_mismatch")
             found.append((candidate, annotation))
         if len(found) > 1:
             raise WorkflowError("ambiguous_structure_annotations")

@@ -26,6 +26,7 @@ from igem_drylab.workflow.store import WorkflowStore, plan_binding
 from igem_drylab.workflow.planning import PlanningService, ProposalRequest, ProposalDecision
 from igem_drylab.workflow.declared_series import DeclaredColumn, DeclaredSeries, read_columns
 from igem_drylab.workflow.scientific_setup import ScientificSetupRequest
+from igem_drylab.workflow.annotation_binding import AnnotationBindingRequest, bind_annotation
 
 
 class SaveProject(Contract):
@@ -425,6 +426,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         source.write_bytes(raw)
         file = boundary.asset(source, fresh=True, logical_name=filename)
         return {"kind": "display_only", "patch": {}, "file": file}
+
+    @router.post("/imports/structure-annotations")
+    def annotation_binding(request: AnnotationBindingRequest):
+        return bind_annotation(request, resources, data_dir)
 
     @router.get("/files/{file_id}/scan")
     def display_scan(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=10000)):

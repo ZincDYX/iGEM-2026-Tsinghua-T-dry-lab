@@ -12,6 +12,9 @@ class PublicError(Contract):
 
 
 ERROR_GUIDANCE = {
+    "annotation_requires_json": ("Choose an imported annotation JSON file.", ["files"], ["Import and save the source file first"]),
+    "annotation_binding_conflict": ("An existing source binding contradicts the selected file; nothing was rebound.", ["files"], ["Check the selected files and the original annotation source"]),
+    "structure_annotations_already_linked": ("This structure already has a different linked annotation source.", ["files"], ["Preserve the existing source; use a new project for a changed annotation set"]),
     "disclosure_quarantined": ("This original is quarantined by a credential or private-value rule; it has not been exported.", [], ["Review the original locally", "Import a separate scientific file without credentials"]),
     "invalid_image_source": ("The image could not be decoded in its declared format.", ["files"], ["Check or re-export the original image"]),
     "image_media_type_mismatch": ("Image bytes do not match the filename format.", ["files"], ["Use the correct PNG or JPEG filename"]),

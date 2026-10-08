@@ -170,6 +170,15 @@ export const bindMeasurement = (id: string, revision: number, fileId: string) =>
     expected_revision: revision,
     file_id: fileId,
   });
+export const linkStructureAnnotations = (value: {
+  project_id: string;
+  expected_revision: number;
+  source_file_id: string;
+  target_file_id: string;
+  reference_file_id: string | null;
+  sequence_file_id: string | null;
+  sequence_id: string | null;
+}) => read("ImportView", "/imports/structure-annotations", value);
 export const iteration = (id: string) =>
   read("IterationView", `/runs/${encodeURIComponent(id)}/iteration`, {});
 export const review = (id: string, workflow: Workflow) =>
