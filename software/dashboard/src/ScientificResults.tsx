@@ -15,6 +15,7 @@ import { M5View } from "./workbench/M5View";
 import { lazy, Suspense } from "react";
 import { messages } from "./workbench/messages.en";
 import { PredictionResult } from "./workbench/PredictionResult";
+import { M1MethodResult } from "./workbench/M1MethodResult";
 const Series = lazy(() =>
   import("./workbench/viewers/SeriesViewer").then((m) => ({
     default: m.SeriesViewer,
@@ -258,6 +259,8 @@ function NodeResult({
 }) {
   const tool = nodeTool(run, node);
   const output = node.output;
+  if (object(output) && output.schema_version === "m1-method-check-v1")
+    return <M1MethodResult output={output} />;
   if (object(output) && output.schema_version === "sequence-prediction-v1")
     return <PredictionResult output={output} />;
   const records = stageRecords(tool, output);

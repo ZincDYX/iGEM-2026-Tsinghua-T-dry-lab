@@ -17,7 +17,8 @@ def test_private_backend_tools_bind_new_project_but_do_not_leak_settings(tmp_pat
         assert app.state.platform_store.project("p").runtime_profile_ref == "backend-configured-tools"
         rows = client.get("/api/platform/projects/p/prediction-tools", headers=headers)
         assert rows.status_code == 200
-        assert len(rows.json()) == 3
+        assert len(rows.json()) == 5
+        assert rows.json()[3]["id"] == "prediction.pscore"
         assert rows.json()[1]["version"] == "PROTOCOL_VERSION"
         assert "PRIVATE_" not in rows.text
         assert rows.json()[1]["status"] == "not_configured"  # Presence of configuration != callable tool.

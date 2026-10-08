@@ -76,13 +76,21 @@ def builtin_tools() -> WorkflowTools:
     from .sequence_predictions import sequence_prediction_tools
     for tool in sequence_prediction_tools():
         tools.register(tool)
+    from .m1_checks import m1_check_tools
+    for tool in m1_check_tools():
+        tools.register(tool)
     return tools
 
 
-Goal = Literal["fusion_screen", "assembly_review", "pathway_simulation", "scientific_pipeline"]
+Goal = Literal["fusion_screen", "assembly_review", "pathway_simulation", "scientific_pipeline", "m1_sequence_checks"]
 
 
 def recommend(project: Project, goal: Goal) -> Workflow:
+    if goal == "m1_sequence_checks":
+        if not project.sequences:
+            raise ValueError("upload_and_confirm_sequences_first")
+        from .m1_checks import m1_workflow
+        return m1_workflow()
     if goal == "scientific_pipeline":
         from .scientific_project import ScientificProject
         if project.scientific_project is None:

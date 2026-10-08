@@ -42,7 +42,8 @@ export function AgentPanel(props: {
               value === "fusion_screen" ||
               value === "assembly_review" ||
               value === "pathway_simulation" ||
-              value === "scientific_pipeline"
+              value === "scientific_pipeline" ||
+              value === "m1_sequence_checks"
             )
               props.onGoal(value);
           }}
@@ -54,6 +55,9 @@ export function AgentPanel(props: {
           </option>
           <option value="scientific_pipeline">
             M1–M5 Original-formula scientific pipeline
+          </option>
+          <option value="m1_sequence_checks">
+            M1 sequence checks — real tools and missing steps
           </option>
         </select>
       </label>

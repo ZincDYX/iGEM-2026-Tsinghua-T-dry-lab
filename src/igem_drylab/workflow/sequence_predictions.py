@@ -7,8 +7,9 @@ node inputs, Agent prose or the browser.
 from hashlib import sha256
 import json
 from pathlib import Path
+from pydantic import Field
 
-from igem_drylab.constructs.linker_features import parse_iupred2a_output, parse_seg_fasta
+from igem_drylab.constructs.linker_features import parse_iupred2a_output, parse_seg_fasta, parse_secondary_structure_output
 from igem_drylab.parsers.structure_prediction import parse_colabfold_models
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline.config import ToolConfig
@@ -18,6 +19,7 @@ from .tools import NodeContext, ToolDefinition
 
 class SequencePredictionInput(Contract):
     item: SequenceRecord
+    prechecks: list[dict] = Field(default_factory=list)
 
 
 def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeContext) -> dict:
@@ -30,8 +32,21 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         tool=tool, input_sequence_sha256=digest, sequence_length=len(sequence),
         tool_status="not_configured", parse_status="not_run", outputs={}, parsed=None,
         scientific_status="diagnostic_not_formal_M1_M2_acceptance")
+    if payload.prechecks:
+        matching = [row for row in payload.prechecks if row.get("candidate_id") == payload.item.id]
+        if len(matching) != 1 or matching[0].get("input_sequence_sha256") != digest:
+            raise ValueError("prediction_precheck_sequence_identity_mismatch")
+        if not matching[0].get("eligible_for_tools"):
+            result.update(tool_status="not_eligible", blocker="M1 cheap veto, explicit role missing, or full-fusion-specific tools required.")
+            return result
     if not adapter.is_available():
         result["blocker"] = "Configure an authorized external route in the private backend runtime profile."
+        return result
+    if tool == "pscore" and len(sequence) < 140:
+        result.update(tool_status="not_eligible", blocker="Original PScore requires at least 140 residues; no padding or sequence repetition is allowed.")
+        return result
+    if tool == "jpred" and not 20 <= len(sequence) <= 800:
+        result.update(tool_status="not_eligible", blocker="JPred requires 20–800 residues; the original sequence is not padded or cropped.")
         return result
     source = context.work_dir / "input.fasta"
     # Keep arbitrary user labels out of external-tool argv and output paths.
@@ -40,6 +55,7 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
     source.write_text(f">sequence_input\n{sequence}\n", encoding="utf-8")
     output_dir = context.work_dir / "prediction"
     run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
+        job_state=context.work_dir.parent / "remote-job.json",
         input_files={"sequence": source}, timeout_seconds=7200)
     result["tool_status"] = run.status
     if run.status != "succeeded":
@@ -58,6 +74,17 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         parsed = [row.model_copy(update={"candidate_id": payload.item.id}).model_dump(mode="json") for row in summaries]
         result["outputs"] = {f"model_{row['model_rank']}": row["model_file"] for row in parsed}
         result["outputs"].update({f"confidence_{row['model_rank']}": row["confidence_file"] for row in parsed})
+    elif tool == "jpred":
+        evidence = json.loads((output_dir / "secondary.json").read_text())
+        output = Path(evidence["source_file"])
+        parsed = parse_secondary_structure_output(output, tool_name="JPred", tool_version=evidence["tool_version"],
+            input_sha256=digest, sequence_file=Path(evidence["sequence_file"])).model_dump(mode="json")
+        result["outputs"] = {"raw_output": str(output), "sequence_companion": evidence["sequence_file"]}
+    elif tool == "pscore":
+        from igem_drylab.pscore_runner import parse_pscore_output
+        output = output_dir / "pscore.txt"
+        parsed = parse_pscore_output(output, sequence=sequence)
+        result["outputs"] = {"raw_output": str(output)}
     else:
         output = output_dir / ("iupred2a.txt" if tool == "iupred2a" else "seg.fasta")
         if not output.is_file():
@@ -94,9 +121,12 @@ def sequence_prediction_tools():
         return invoke
     implementation = (Path(__file__), Path(__file__).parents[1] / "pipeline/adapters.py",
         Path(__file__).parents[1] / "constructs/linker_features.py",
-        Path(__file__).parents[1] / "parsers/structure_prediction.py")
+        Path(__file__).parents[1] / "parsers/structure_prediction.py",
+        Path(__file__).parents[1] / "pscore_runner.py", Path(__file__).parents[1] / "jpred_runner.py")
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
         implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu")
         for name, label in (("iupred2a", "IUPred2 disorder prediction"), ("seg", "SEG low-complexity prediction"),
-                            ("colabfold", "ColabFold enzyme / fusion prediction"))]
+                            ("colabfold", "ColabFold enzyme / fusion prediction"),
+                            ("pscore", "Original PScore — diagnostic LLPS propensity"),
+                            ("jpred", "JPred — exact-sequence secondary structure"))]

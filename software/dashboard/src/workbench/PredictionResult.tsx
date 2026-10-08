@@ -40,6 +40,15 @@ export function PredictionResult({
         {show(output.parse_status)}.
       </p>
       {typeof output.blocker === "string" && <p>{output.blocker}</p>}
+      {parsed && typeof parsed.pscore === "number" && (
+        <>
+          <p>
+            Original PScore: {show(parsed.pscore)}. This is not a
+            phase-separation probability or consensus ranking.
+          </p>
+          <p>{show(parsed.interpretation)}</p>
+        </>
+      )}
       <p>
         Diagnostic output, not formal M1/M2 acceptance. Pocket, activity and
         assembly conclusions require their separate evidence-gated analyses.
@@ -67,6 +76,13 @@ export function PredictionResult({
           Low-complexity fraction: {show(parsed.low_complexity_fraction)}.
           Masked positions:{" "}
           {parsed.low_complexity_positions.join(", ") || "None recorded"}.
+        </p>
+      )}
+      {parsed && typeof parsed.states === "string" && (
+        <p>
+          Predicted α/β fraction: {show(parsed.ss_fraction)}. Longest structured
+          run: {show(parsed.longest_ss_run)} residues. Original C/H/E sequence:{" "}
+          {parsed.states}. This is not experimental secondary structure.
         </p>
       )}
       {!!models.length && (

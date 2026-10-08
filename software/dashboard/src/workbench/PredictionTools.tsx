@@ -102,7 +102,11 @@ export function PredictionTools({
                   }[row.status]
                 }
               </td>
-              <td>{row.version ?? "Not recorded"}</td>
+              <td>
+                {row.version && /^[0-9a-f]{40}$/.test(row.version)
+                  ? "Author source revision recorded in backend"
+                  : (row.version ?? "Not recorded")}
+              </td>
               <td>{row.last_real_check ?? "Not run"}</td>
               <td>
                 <button

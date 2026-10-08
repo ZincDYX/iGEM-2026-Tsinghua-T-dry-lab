@@ -166,4 +166,4 @@ export interface RuntimeInfo {
   agent_backend: string;
   supported_rate_laws: string[];
 }
-export type Goal = "fusion_screen" | "assembly_review" | "pathway_simulation" | "scientific_pipeline";
+export type Goal = "fusion_screen" | "assembly_review" | "pathway_simulation" | "scientific_pipeline" | "m1_sequence_checks";

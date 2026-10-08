@@ -244,6 +244,11 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             notes="Optional only; no formal route is claimed until a stable supported API is verified.",
         ),
         ExternalToolSpec(
+            name="pscore", capability="Original PScore LLPS propensity cross-check", route="optional_local",
+            formal_stage="M1", official_url="https://github.com/haocai1992/PScore-online",
+            notes="Unmodified author implementation and lookup data; educational/research license. Cropped IDRs and artificial fusions are extrapolations, not validated probabilities.",
+        ),
+        ExternalToolSpec(
             name="abcfold",
             capability="optional structure-prediction orchestration",
             route="optional_local",

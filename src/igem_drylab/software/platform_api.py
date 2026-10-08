@@ -720,7 +720,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
                 AND json_extract(r.snapshot,'$.runtime_profile.hash')=? ORDER BY r.updated_at DESC""",
                 (project_id, profile["hash"] if profile else None)).fetchall()
         rows = []
-        for name in ("iupred2a", "seg", "colabfold"):
+        for name in ("iupred2a", "seg", "colabfold", "pscore", "jpred"):
             config = ToolConfig.model_validate(private.get(name, {}))
             adapter = create_tool_adapter(name, config)
             executed = next(((json.loads(row["output"]), row["updated_at"]) for row in last if json.loads(row["output"]).get("tool") == name), None)
@@ -730,7 +730,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
                 output, checked = executed
                 if output["tool_status"] == "succeeded" and output["parse_status"] == "succeeded":
                     status = "available"
-                elif output["tool_status"] not in {"succeeded", "not_configured"}:
+                elif output["tool_status"] not in {"succeeded", "not_configured", "not_eligible"}:
                     status = "failed"
                 paths = list(output.get("outputs", {}).values())
                 if paths:

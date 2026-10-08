@@ -448,7 +448,37 @@ export function InputEditor({
           value={scope?.sequence_index}
           label="Read-only scientific FASTA index"
         />
-        <LazyJson value={project.sequences} label="Sequences and roles" />
+        {project.sequences.map((sequence, index) => (
+          <label key={sequence.id}>
+            {sequence.id} ({sequence.sequence.length} aa): M1 role
+            <select
+              aria-label={`M1 role for ${sequence.id}`}
+              value={sequence.role}
+              onChange={(event) =>
+                change({
+                  ...project,
+                  sequences: project.sequences.map((row, i) =>
+                    i === index ? { ...row, role: event.target.value } : row,
+                  ),
+                })
+              }
+            >
+              <option value={sequence.role} hidden>
+                {sequence.role} — current role
+              </option>
+              <option value="idr">IDR fragment</option>
+              <option value="enzyme_ligand_linker">Enzyme–ligand linker</option>
+              <option value="scaffold_linker">Scaffold linker</option>
+              <option value="rigid_linker">Rigid linker</option>
+              <option value="full_fusion">Complete fusion protein</option>
+            </select>
+          </label>
+        ))}
+        <p>
+          Roles are explicit inputs, not inferred from names. Save before
+          planning M1 checks.
+        </p>
+        <LazyJson value={project.sequences} label="Original sequences" />
         <h3 id="input-constructs">Constructs and assembly declarations</h3>
         <ScientificInputForms
           project={project}
