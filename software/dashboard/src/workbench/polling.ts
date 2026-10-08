@@ -22,17 +22,22 @@ export function pollVersioned<
     try {
       const value = await options.load(controller.signal);
       if (controller.signal.aborted) return;
-      if (value.state_version >= version) {
+      if (value.state_version > version) {
         version = value.state_version;
         options.accept(value);
-        if (stopped.has(value.status)) return;
       }
+      if (value.state_version >= version && stopped.has(value.status)) return;
     } catch (reason) {
       if (controller.signal.aborted) return;
       options.fail(reason);
     }
     if (!controller.signal.aborted)
-      timer = setTimeout(next, options.interval ?? 1200);
+      timer = setTimeout(
+        next,
+        document.hidden
+          ? Math.max(options.interval ?? 1200, 5000)
+          : (options.interval ?? 1200),
+      );
   }
   void next();
   return () => {

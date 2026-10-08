@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Workflow } from "../contracts/generated";
 import * as client from "./client";
 
@@ -15,6 +15,13 @@ export function WorkflowImporter({
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const readEpoch = useRef(0);
+  useEffect(
+    () => () => {
+      ++readEpoch.current;
+    },
+    [],
+  );
   return (
     <section>
       <h3>Import custom DAG</h3>
@@ -29,6 +36,7 @@ export function WorkflowImporter({
           value={text}
           disabled={busy}
           onChange={(e) => {
+            ++readEpoch.current;
             setText(e.target.value);
             onEdit();
           }}
@@ -43,13 +51,19 @@ export function WorkflowImporter({
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
+            const stamp = ++readEpoch.current;
             setError("");
             onEdit();
             if (file)
               void file
                 .text()
-                .then(setText)
-                .catch(() => setError("Workflow file read failed"));
+                .then((value) => {
+                  if (stamp === readEpoch.current) setText(value);
+                })
+                .catch(() => {
+                  if (stamp === readEpoch.current)
+                    setError("Workflow file read failed");
+                });
           }}
         />
       </label>

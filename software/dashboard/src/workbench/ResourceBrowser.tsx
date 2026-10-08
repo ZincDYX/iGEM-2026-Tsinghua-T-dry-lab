@@ -30,6 +30,7 @@ export function ResourceBrowser({
   initialFileId,
   initialRunScope,
   onRegistered,
+  active = true,
 }: {
   projectId: string;
   runId?: string;
@@ -37,6 +38,7 @@ export function ResourceBrowser({
   initialFileId?: string;
   initialRunScope?: boolean;
   onRegistered: (value: ImportView) => void;
+  active?: boolean;
 }) {
   const [scope, setScope] = useState("project");
   const activeRun = scope === "run" ? runId : undefined;
@@ -80,7 +82,11 @@ export function ResourceBrowser({
     const path = activeRun
       ? `/runs/${encodeURIComponent(activeRun!)}/resources?project_id=${encodeURIComponent(projectId)}&offset=${offset}`
       : `/projects/${encodeURIComponent(projectId)}/resources?offset=${offset}`;
-    void requestJson(path, undefined, controller.signal)
+    void requestJson(
+      path + (kind === "all" ? "" : `&kind=${encodeURIComponent(kind)}`),
+      undefined,
+      controller.signal,
+    )
       .then((raw) => {
         if (!controller.signal.aborted) {
           const value = parsePublic("ResourcePage", raw);
@@ -99,7 +105,7 @@ export function ResourceBrowser({
           );
       });
     return () => controller.abort();
-  }, [projectId, activeRun, offset, revision]);
+  }, [projectId, activeRun, offset, revision, kind]);
   const resource =
     page?.items.find((r) => r.identity.file_id === selected) ??
     (requestedResource?.identity.file_id === selected
@@ -110,7 +116,7 @@ export function ResourceBrowser({
       <h2>Registered artifacts</h2>
       <p>
         Only registered, authorized resources. No example plots or structures.
-        Filters apply to this page.
+        Type filters apply to the complete authorized catalogue.
       </p>
       {error && <p role="alert">{error}</p>}
       <label>
@@ -132,7 +138,13 @@ export function ResourceBrowser({
       </label>
       <label>
         Resource type
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+        <select
+          value={kind}
+          onChange={(e) => {
+            setKind(e.target.value);
+            setOffset(0);
+          }}
+        >
           {["all", "image", "series", "scan", "m5", "structure", "table"].map(
             (k) => (
               <option key={k}>{k}</option>
@@ -141,24 +153,22 @@ export function ResourceBrowser({
         </select>
       </label>
       <ul>
-        {page?.items
-          .filter((r) => kind === "all" || kind === r.kind)
-          .map((r) => (
-            <li key={r.identity.file_id}>
-              <button
-                disabled={r.status !== "available"}
-                onClick={() => setSelected(r.identity.file_id)}
-              >
-                {r.name} · {r.kind}
-              </button>
-              {r.status !== "available" && (
-                <span>
-                  {" "}
-                  {r.status} · {r.error_code}
-                </span>
-              )}
-            </li>
-          ))}
+        {page?.items.map((r) => (
+          <li key={r.identity.file_id}>
+            <button
+              disabled={r.status !== "available"}
+              onClick={() => setSelected(r.identity.file_id)}
+            >
+              {r.name} · {r.kind}
+            </button>
+            {r.status !== "available" && (
+              <span>
+                {" "}
+                {r.status} · {r.error_code}
+              </span>
+            )}
+          </li>
+        ))}
       </ul>
       {page && (
         <>
@@ -181,7 +191,7 @@ export function ResourceBrowser({
           </span>
         </>
       )}
-      {resource && (
+      {active && resource && (
         <section
           key={`${projectId}:${selected}:${resource.identity.source_sha256}`}
         >

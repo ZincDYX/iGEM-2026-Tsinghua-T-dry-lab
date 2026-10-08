@@ -14,6 +14,12 @@ import { ScientificBundleImporter } from "./ScientificBundleImporter";
 import { ScientificInputForms } from "./ScientificInputForms";
 import { StructureAnnotationLinker } from "./StructureAnnotationLinker";
 import {
+  importedSequences,
+  sequenceConflicts,
+  mergeImportDraft,
+  type ConflictChoice,
+} from "./importDraft";
+import {
   ScientificSetup,
   ScientificSettings,
   useScientificSchema,
@@ -51,6 +57,9 @@ export function InputEditor({
   const [scientific, setScientific] = useState<ScientificPreviewView>();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
+  const [conflictChoices, setConflictChoices] = useState<
+    Record<string, ConflictChoice>
+  >({});
   const { schema, error: schemaError } = useScientificSchema();
   useEffect(() => {
     if (!inputTarget) return;
@@ -82,6 +91,8 @@ export function InputEditor({
     onEditing(true);
   }
   const scope = project.scientific_project;
+  const incomingSequences = preview ? importedSequences(project, preview) : [];
+  const conflicts = sequenceConflicts(project, incomingSequences);
   return (
     <section aria-label="Project inputs and evidence">
       <header className="panel-heading">
@@ -133,7 +144,9 @@ export function InputEditor({
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
-              const stamp = epoch.current;
+              const stamp = ++epoch.current;
+              setPreview(undefined);
+              setConflictChoices({});
               void action(async () => {
                 const value = await client.importFile(file, kind);
                 if (mounted.current && stamp === epoch.current)
@@ -146,23 +159,52 @@ export function InputEditor({
               <p>
                 Preview: {preview.kind} · {preview.file.name}
               </p>
-              <LazyJson value={preview.patch} />
+              {incomingSequences.length > 0 ? (
+                <>
+                  <p>
+                    {incomingSequences.length} sequences. New identifiers are
+                    appended; existing sequences are retained unless you select
+                    Replace.
+                  </p>
+                  {conflicts.map((sequence) => (
+                    <label key={sequence.id}>
+                      Conflicting sequence: {sequence.id}
+                      <select
+                        aria-label={`Resolve sequence ${sequence.id}`}
+                        value={conflictChoices[sequence.id] ?? ""}
+                        onChange={(e) =>
+                          setConflictChoices({
+                            ...conflictChoices,
+                            [sequence.id]: e.target.value as ConflictChoice,
+                          })
+                        }
+                      >
+                        <option value="" disabled>
+                          Choose an action
+                        </option>
+                        <option value="keep">Keep existing</option>
+                        <option value="replace">Replace in draft</option>
+                        <option value="separate">
+                          Import as separate sequence
+                        </option>
+                      </select>
+                    </label>
+                  ))}
+                </>
+              ) : (
+                <LazyJson value={preview.patch} />
+              )}
               <button
-                disabled={busy}
+                disabled={
+                  busy ||
+                  conflicts.some((sequence) => !conflictChoices[sequence.id])
+                }
                 onClick={() => {
-                  const patch = preview.patch;
-                  const draft = parsePublic("ProjectView", {
-                    ...project,
-                    ...patch,
-                    files: project.files.some(
-                      (file) => file.id === preview.file.id,
-                    )
-                      ? project.files
-                      : [...project.files, preview.file],
-                    datasets: Array.isArray(patch.datasets)
-                      ? [...project.datasets, ...patch.datasets]
-                      : project.datasets,
-                  });
+                  const draft = mergeImportDraft(
+                    project,
+                    preview,
+                    conflictChoices,
+                  );
                   change(draft);
                   setPreview(undefined);
                 }}

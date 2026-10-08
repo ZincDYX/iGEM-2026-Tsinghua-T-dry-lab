@@ -64,7 +64,13 @@ export function PlotViewer({
         if (typeof index === "number") callback.current?.(index);
       };
       chart.on("plotly_click", click);
+      const observer = new ResizeObserver(() => {
+        if (active && target.isConnected && target.clientWidth > 0)
+          void plotly.Plots.resize(target);
+      });
+      observer.observe(target);
       dispose = () => {
+        observer.disconnect();
         chart.removeAllListeners("plotly_click");
         plotly.purge(target);
       };

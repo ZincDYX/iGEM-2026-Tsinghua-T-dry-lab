@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { requestJson } from "../../api";
 import { parsePublic } from "../../contracts/validation";
 import type { SeriesPage } from "../../contracts/generated";
+import { displayEnvelope } from "./displayEnvelope";
 const Plot = lazy(() =>
   import("./PlotViewer").then((m) => ({ default: m.PlotViewer })),
 );
@@ -93,18 +94,27 @@ export function SeriesViewer({
   }, [fileId, projectId, seriesKey, rangeOffset]);
   const data = useMemo(
     () =>
-      overview?.series.map((s) => ({
-        type: "scatter" as const,
-        mode: "lines+markers" as const,
-        x: overview.time,
-        y: overview.values[s.id],
-        name: s.compartment + " / " + s.species,
-        connectgaps: false,
-        selectedpoints:
-          point === undefined ? undefined : [point - overview.offset],
-        selected: { marker: { opacity: 1, size: 12 } },
-        unselected: { marker: { opacity: 0.5 } },
-      })) ?? [],
+      overview?.series.map((s) => {
+        const indices = displayEnvelope(
+          overview.values[s.id],
+          4000,
+          point === undefined ? undefined : point - overview.offset,
+        );
+        const selectedIndex =
+          point === undefined ? -1 : indices.indexOf(point - overview.offset);
+        return {
+          type: "scatter" as const,
+          mode: "lines" as const,
+          x: indices.map((i) => overview.time[i]),
+          y: indices.map((i) => overview.values[s.id][i]),
+          customdata: indices,
+          name: s.compartment + " / " + s.species,
+          connectgaps: false,
+          selectedpoints: selectedIndex < 0 ? undefined : [selectedIndex],
+          selected: { marker: { opacity: 1, size: 12 } },
+          unselected: { marker: { opacity: 0.5 } },
+        };
+      }) ?? [],
     [overview, point],
   );
   if (!page)
@@ -187,6 +197,13 @@ export function SeriesViewer({
             : {overview.offset + 1}–{overview.offset + overview.time.length} /{" "}
             {overview.total} points.
           </p>
+          {overview.time.length > 4000 && (
+            <p>
+              Display-only min/max envelope; gap boundaries and original row
+              indices are retained. Tables and downloads contain the original
+              points.
+            </p>
+          )}
           <Suspense fallback={<p>Loading local plot renderer…</p>}>
             <Plot
               dataIdentity={[

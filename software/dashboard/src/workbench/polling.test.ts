@@ -1,5 +1,12 @@
-import { expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { pollVersioned } from "./polling";
+beforeEach(() => {
+  vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 it("does not overlap slow requests, rejects old versions and stops terminal polling", async () => {
   vi.useFakeTimers();
@@ -45,4 +52,19 @@ it("an identity switch aborts and discards the previous request", async () => {
   finish({ state_version: 9, status: "running" });
   await Promise.resolve();
   expect(accept).not.toHaveBeenCalled();
+});
+
+it("deduplicates unchanged versions without missing a later terminal update", async () => {
+  vi.useFakeTimers();
+  const load = vi
+    .fn()
+    .mockResolvedValueOnce({ state_version: 1, status: "running" })
+    .mockResolvedValueOnce({ state_version: 1, status: "running" })
+    .mockResolvedValue({ state_version: 2, status: "succeeded" });
+  const accept = vi.fn();
+  const stop = pollVersioned({ load, accept, fail: vi.fn(), interval: 10 });
+  await vi.advanceTimersByTimeAsync(100);
+  expect(load).toHaveBeenCalledTimes(3);
+  expect(accept).toHaveBeenCalledTimes(2);
+  stop();
 });
