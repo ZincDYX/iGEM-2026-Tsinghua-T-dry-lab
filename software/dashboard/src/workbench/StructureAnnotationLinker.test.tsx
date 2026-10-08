@@ -55,7 +55,9 @@ it("sends explicit file choices, not user-entered hashes, and requires sequence 
     <StructureAnnotationLinker
       project={project()}
       disabled={false}
-      action={async (job) => job()}
+      action={async (job) => {
+        await job();
+      }}
       onPreview={onPreview}
     />,
   );
@@ -99,7 +101,9 @@ it("does not enable file binding for unsaved or busy inputs", () => {
     <StructureAnnotationLinker
       project={project()}
       disabled={true}
-      action={async (job) => job()}
+      action={async (job) => {
+        await job();
+      }}
       onPreview={() => {
         throw Error("unexpected binding");
       }}
