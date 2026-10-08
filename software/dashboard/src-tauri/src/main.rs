@@ -11,10 +11,8 @@ use std::{
     time::Duration,
 };
 use tauri::Manager;
-#[cfg(test)]
-mod remote;
 mod settings;
-use settings::{DesktopSettings, Mode};
+use settings::{DesktopSettings, Mode, SettingsInput, SettingsView};
 
 #[derive(Clone, Serialize)]
 struct BackendInfo {
@@ -102,28 +100,29 @@ fn backend_info(connection: tauri::State<'_, Connection>) -> Result<BackendInfo,
 }
 
 #[tauri::command]
-fn desktop_settings(connection: tauri::State<'_, Connection>) -> Result<DesktopSettings, String> {
-    DesktopSettings::load(&connection.settings_path).map(|mut settings| {
-        settings.ssh_host.clear();
-        settings.remote_port = 8780;
-        settings
-    }).map_err(|_| "desktop_settings_unavailable".to_string())
+fn desktop_settings(connection: tauri::State<'_, Connection>) -> Result<SettingsView, String> {
+    DesktopSettings::load(&connection.settings_path)
+        .map(|settings| settings.view())
+        .map_err(|_| "desktop_settings_unavailable".to_string())
 }
 #[tauri::command]
 fn save_desktop_settings(
     connection: tauri::State<'_, Connection>,
-    settings: DesktopSettings,
+    settings: SettingsInput,
 ) -> Result<(), String> {
-    if settings.mode == Mode::Ssh {
-        return Err("remote_authenticated_session_unavailable".into());
-    }
     let mut private = DesktopSettings::load(&connection.settings_path)
         .map_err(|_| "desktop_settings_unavailable")?;
-    private.mode = Mode::Local;
-    private.save(&connection.settings_path).map_err(|_| "desktop_settings_save_failed".into())
+    private.update(settings)?;
+    private
+        .save(&connection.settings_path)
+        .map_err(|_| "desktop_settings_save_failed".into())
 }
 
-fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
+fn launch(
+    app: &tauri::App,
+    settings: &DesktopSettings,
+) -> Result<Backend, Box<dyn std::error::Error>> {
+    settings.validate()?;
     let root = std::env::var_os("FUSIONLAB_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
@@ -169,13 +168,29 @@ fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>>
     let token = uuid::Uuid::new_v4().to_string();
     let mut command = Command::new(python);
     command
-        .args(["-B", "-m", "igem_drylab.software.desktop_backend", "--data-dir"])
+        .args([
+            "-B",
+            "-m",
+            "igem_drylab.software.desktop_backend",
+            "--data-dir",
+        ])
         .arg(&data)
         .env("FUSIONLAB_SESSION_TOKEN", &token)
         .current_dir(root)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::from(fs::File::create(data.join("backend.log"))?));
+    // Frontend receives only a loopback session, never the upstream token.
+    command
+        .env_remove("FUSIONLAB_HTTPS_API_URL")
+        .env_remove("FUSIONLAB_HTTPS_ACCESS_TOKEN")
+        .env_remove("FUSIONLAB_HTTPS_CA_FILE");
+    if settings.mode == Mode::Https {
+        command
+            .env("FUSIONLAB_HTTPS_API_URL", &settings.api_url)
+            .env("FUSIONLAB_HTTPS_ACCESS_TOKEN", settings.access_token()?)
+            .env("FUSIONLAB_HTTPS_CA_FILE", &settings.ca_file);
+    }
     // Avoid BLAS oversubscription across the backend and MCP/plugin processes.
     // This is a runtime resource default, not a different scientific equation.
     for key in ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"] {
@@ -204,7 +219,12 @@ fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>>
         info: BackendInfo {
             url: String::new(),
             token,
-            mode: "local".into(),
+            mode: if settings.mode == Mode::Https {
+                "https"
+            } else {
+                "local"
+            }
+            .into(),
         },
         cleanup_file: None,
         #[cfg(windows)]
@@ -216,26 +236,25 @@ fn launch_local(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>>
         let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
         let _ = sender.send(result);
     });
-    let line = receiver.recv_timeout(Duration::from_secs(20)).map_err(|error| {
-        format!("Python backend startup failed ({error}); inspect {}", data.join("backend.log").display())
-    })??;
+    let line = receiver
+        .recv_timeout(Duration::from_secs(20))
+        .map_err(|error| {
+            format!(
+                "Python backend startup failed ({error}); inspect {}",
+                data.join("backend.log").display()
+            )
+        })??;
     let content: serde_json::Value = serde_json::from_str(&line).map_err(|error| {
-        format!("Invalid Python startup message ({error}); inspect {}", data.join("backend.log").display())
+        format!(
+            "Invalid Python startup message ({error}); inspect {}",
+            data.join("backend.log").display()
+        )
     })?;
-    backend.info.url = content["url"].as_str().ok_or("invalid backend ready message")?.to_owned();
+    backend.info.url = content["url"]
+        .as_str()
+        .ok_or("invalid backend ready message")?
+        .to_owned();
     Ok(backend)
-}
-
-fn launch(
-    app: &tauri::App,
-    settings: &DesktopSettings,
-) -> Result<Backend, Box<dyn std::error::Error>> {
-    if settings.mode == Mode::Local {
-        return launch_local(app);
-    }
-    // SSH transport alone is not API identity. Fail before creating any tunnel
-    // until a maintained, restricted remote-session provider is configured.
-    Err("remote_authenticated_session_unavailable".into())
 }
 
 fn main() {
@@ -258,7 +277,10 @@ fn main() {
                 .and_then(|settings| launch(app, &settings).map_err(|error| error.to_string()))
                 .map_err(|error| {
                     let id = uuid::Uuid::new_v4();
-                    let _ = fs::write(directory.join(format!("private-diagnostic-{id}.log")), error);
+                    let _ = fs::write(
+                        directory.join(format!("private-diagnostic-{id}.log")),
+                        error,
+                    );
                     format!("desktop_backend_startup_failed:{id}")
                 });
             app.manage(Connection {

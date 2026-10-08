@@ -26,7 +26,7 @@ test("empty project creates bound scientific configuration through real forms, n
                 mode: "local",
               } as T;
             if (command === "desktop_settings")
-              return { mode: "local", ssh_host: "", remote_port: 8780 } as T;
+              return { mode: "local", api_url: "", ca_file: "", has_access_token: false } as T;
             throw Error("UNSUPPORTED_SOFTWARE_BRIDGE");
           },
         },

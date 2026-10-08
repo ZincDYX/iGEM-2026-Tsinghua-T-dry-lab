@@ -77,12 +77,13 @@ def main():
     (root/'使用说明.txt').write_text(
         'FusionLab Windows x64 便携版\n\n解压完整目录后双击 FusionLab.exe；不要单独移动 exe。\n'
         '默认使用随包 Python 后台、本机 SQLite，前端资源内置；不默认连接任何服务器。\n'
-        '可选远程模式尚缺受控认证会话提供者，当前明确禁用；不能通过关闭 API 认证来连接。\n'
+        '可选远程模式：Settings 中填写兼容 FusionLab 的 HTTPS API 基地址及访问令牌，保存后重启。\n'
         '本地用户数据与连接设置在 Windows 用户应用数据目录，不在程序源码中。\n'
         '关闭窗口结束本地后台/插件子进程；不管理或关闭任何远程后台。\n'
         '需要 Microsoft WebView2 Runtime。该便携版未做商业代码签名。\n'
         '许可预测器、GPU 模型权重、作者私有数据不随包提供；相关作业缺工具或数据时必须明确阻断。\n'
-        '受控远程 API 会话尚未配置；SSH 桌面模式明确阻断，不会尝试匿名连接。\n'
+        '令牌由 Windows 用户级 DPAPI 加密保存，不返回前端；HTTPS 校验证书和主机名，不尝试匿名连接。\n'
+        '私有 CA 可在连接设置中指定 PEM 文件；留空使用系统信任。远程模式不迁移本机项目。\n'
         '默认本地可启动不代表全部外部工具已安装或真实项目已实验验证。\n',encoding='utf-8')
     files = [p for p in sorted(root.rglob('*')) if p.is_file()]
     records = [{'path':p.relative_to(root).as_posix(),'bytes':p.stat().st_size,'sha256':sha256(p.read_bytes()).hexdigest()} for p in files]

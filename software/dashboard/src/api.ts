@@ -3,7 +3,7 @@ import type { PublicError } from "./contracts/generated";
 export let baseUrl =
   import.meta.env.VITE_DASHBOARD_API_URL ?? "http://127.0.0.1:8780";
 let sessionToken = "";
-export let backendMode: "local" | "ssh" = "local";
+export let backendMode: "local" | "https" = "local";
 declare global {
   interface Window {
     __TAURI__?: {
@@ -15,7 +15,7 @@ declare global {
 }
 const connection = window.__TAURI__
   ? window.__TAURI__.core
-      .invoke<{ url: string; token: string; mode: "local" | "ssh" }>(
+      .invoke<{ url: string; token: string; mode: "local" | "https" }>(
         "backend_info",
       )
       .then((info) => {
@@ -30,15 +30,19 @@ const connection = window.__TAURI__
       })
   : Promise.resolve();
 export interface DesktopSettings {
-  mode: "local" | "ssh";
-  ssh_host: string;
-  remote_port: number;
+  mode: "local" | "https";
+  api_url: string;
+  ca_file: string;
+  has_access_token: boolean;
 }
 export const isDesktop = () => Boolean(window.__TAURI__);
 export const getDesktopSettings = () =>
   window.__TAURI__!.core.invoke<DesktopSettings>("desktop_settings");
-export const saveDesktopSettings = (settings: DesktopSettings) =>
-  window.__TAURI__!.core.invoke<void>("save_desktop_settings", { settings });
+export const saveDesktopSettings = (
+  settings: Omit<DesktopSettings, "has_access_token"> & {
+    access_token?: string;
+  },
+) => window.__TAURI__!.core.invoke<void>("save_desktop_settings", { settings });
 export class PublicApiError extends Error {
   constructor(public readonly detail: PublicError) {
     super(

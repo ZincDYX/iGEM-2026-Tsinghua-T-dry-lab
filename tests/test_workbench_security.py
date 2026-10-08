@@ -33,7 +33,7 @@ def test_production_authentication_is_required_and_query_tokens_do_not_authentic
     assert info.status_code == 200
     assert "data_dir" not in info.json()
     assert info.json()["protocol_version"] == "2"
-    assert info.json()["remote_desktop_authenticated_session"] is False
+    assert info.json()["remote_desktop_authenticated_session"] is True
 
 
 def test_http_error_and_import_views_do_not_contain_private_paths_or_validation_input(tmp_path):

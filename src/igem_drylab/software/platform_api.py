@@ -150,7 +150,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.get("/info")
     def info() -> dict[str, Any]:
-        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "hybrid_semantic_compiler" if planning_backend else "validated_workflow_templates", "capabilities": capabilities | {"stage_step":"ready","checkpoints":"ready","cancel_dispatch":"ready","hybrid_planning":"ready" if planning_backend else "unavailable","cross_run_reuse":"unavailable"}, "resources":engine.budget.state() | dispatcher.state(), "remote_desktop_authenticated_session": False, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
+        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "hybrid_semantic_compiler" if planning_backend else "validated_workflow_templates", "capabilities": capabilities | {"stage_step":"ready","checkpoints":"ready","cancel_dispatch":"ready","hybrid_planning":"ready" if planning_backend else "unavailable","cross_run_reuse":"unavailable"}, "resources":engine.budget.state() | dispatcher.state(), "remote_desktop_authenticated_session": True, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
 
     @router.post("/proposals")
     def propose(request: ProposalRequest):

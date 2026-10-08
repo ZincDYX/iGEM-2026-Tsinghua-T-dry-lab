@@ -41,7 +41,7 @@ test("authenticated real HTTP compiler/ledger/handlers, staged control, provenan
                 mode: "local",
               } as T;
             if (command === "desktop_settings")
-              return { mode: "local", ssh_host: "", remote_port: 8780 } as T;
+              return { mode: "local", api_url: "", ca_file: "", has_access_token: false } as T;
             throw new Error("SOFTWARE_FIXTURE: unsupported native command");
           },
         },

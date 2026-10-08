@@ -4,14 +4,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from secrets import compare_digest
 from threading import Lock, Thread
 from typing import Literal, TYPE_CHECKING
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 
@@ -128,15 +126,6 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
     if session_token:
         router.disclosure.register_private(session_token)
 
-    if session_token:
-        @app.middleware("http")
-        async def authenticate(request: Request, call_next):
-            if request.method != "OPTIONS":
-                supplied = request.headers.get("X-FusionLab-Token", "")
-                if not compare_digest(supplied, session_token):
-                    return JSONResponse(status_code=401, content={"detail": {"code": "unauthorized", "message": "Desktop session token required"}})
-            return await call_next(request)
-
     if deployment_mode == "development" and not session_token:
         @app.middleware("http")
         async def local_development_only(request: Request, call_next):
@@ -166,7 +155,8 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
     @app.exception_handler(RequestValidationError)
     def invalid_contract(request: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": router.disclosure.diagnostic(exc, code="invalid_contract")})
-    app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "tauri://localhost", "http://tauri.localhost"], allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-FusionLab-Token"])
+    from .session import configure_session
+    configure_session(app, session_token)
 
     @app.get("/api/dashboard/dag", response_model=list[DashboardModule], deprecated=True)
     def get_dag() -> list[DashboardModule]:
