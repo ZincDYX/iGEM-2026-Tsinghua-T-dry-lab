@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
+import json
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from igem_drylab.resources import default_config_path
 from .tool_evidence import ToolEvidenceProvenance, verify_artifact
@@ -150,6 +151,7 @@ class SecondaryStructureEvidence(BaseModel):
     tool_name: Literal["PSIPRED", "JPred"]
     tool_version: str
     source_file: Path
+    sequence_file: Path | None = None
     input_sha256: str
     states: str
     ss_fraction: float
@@ -328,7 +330,8 @@ def parse_iupred2a_output(
     if sha256("".join(residues).encode("ascii")).hexdigest() != input_sha256:
         raise ValueError("IUPred2A_residue_sequence_hash_mismatch")
     disordered = [score >= score_boundary for score in scores]
-    return DisorderEvidence(
+    provenance = _automated_record(path, "IUPred2A", tool_version, input_sha256)
+    evidence = DisorderEvidence(
         tool_version=tool_version,
         source_file=path,
         input_sha256=input_sha256,
@@ -338,7 +341,21 @@ def parse_iupred2a_output(
         disorder_fraction=sum(disordered) / len(disordered),
         longest_disordered_run=_longest_boolean_run(disordered, True),
         longest_folded_run=_longest_boolean_run(disordered, False),
+        provenance=provenance,
     )
+    return evidence
+
+
+def _automated_record(path: Path, tool_name: str, tool_version: str, input_sha256: str):
+    record_path = path.with_suffix(".run.json")
+    if not record_path.is_file():
+        return None
+    raw = record_path.read_bytes()
+    provenance = ToolEvidenceProvenance(origin="automated", output_sha256=sha256(path.read_bytes()).hexdigest(),
+        record_file=record_path, record_sha256=sha256(raw).hexdigest())
+    if not verify_artifact(provenance, path, tool_name, tool_version, input_sha256, {}):
+        raise ValueError(f"{tool_name}_execution_record_incomplete")
+    return provenance
 
 
 def parse_secondary_structure_output(
@@ -347,6 +364,7 @@ def parse_secondary_structure_output(
     tool_name: Literal["PSIPRED", "JPred"],
     tool_version: str,
     input_sha256: str,
+    sequence_file: Path | None = None,
 ) -> SecondaryStructureEvidence:
     """Parse PSIPRED SS2 rows or a JPred ``jnetpred:`` state line."""
 
@@ -357,11 +375,10 @@ def parse_secondary_structure_output(
         if not line or line.startswith("#"):
             continue
         if line.lower().startswith("jnetpred:"):
-            states.extend(
-                char
-                for char in line.split(":", 1)[1].replace(",", "").replace("-", "C").upper()
-                if char in "CHE"
-            )
+            predicted = line.split(":", 1)[1].replace(",", "").replace("-", "C").upper()
+            if any(char not in "CHE" for char in predicted):
+                raise ValueError("invalid JPred secondary-structure state")
+            states.extend(predicted)
             continue
         if line.lower().startswith("align1:"):
             residues.extend(line.split(":", 1)[1].replace(",", "").upper())
@@ -376,6 +393,15 @@ def parse_secondary_structure_output(
             states.append(fields[2].upper())
     if not states:
         raise ValueError("secondary-structure output contains no C/H/E states")
+    if sequence_file is not None:
+        from Bio import SeqIO
+        records = list(SeqIO.parse(sequence_file, "fasta"))
+        if len(records) != 1:
+            raise ValueError("secondary-structure companion must contain one FASTA record")
+        companion = str(records[0].seq).upper()
+        if residues and "".join(residues) != companion:
+            raise ValueError("secondary-structure companion differs from output sequence")
+        residues = list(companion)
     if len(residues) != len(states) or sha256("".join(residues).encode("ascii")).hexdigest() != input_sha256:
         raise ValueError("secondary_structure_residue_sequence_hash_mismatch")
     structured = [state in {"H", "E"} for state in states]
@@ -383,10 +409,12 @@ def parse_secondary_structure_output(
         tool_name=tool_name,
         tool_version=tool_version,
         source_file=path,
+        sequence_file=sequence_file,
         input_sha256=input_sha256,
         states="".join(states),
         ss_fraction=sum(structured) / len(structured),
         longest_ss_run=_longest_boolean_run(structured, True),
+        provenance=_automated_record(path, tool_name, tool_version, input_sha256),
     )
 
 
@@ -426,6 +454,7 @@ def parse_seg_fasta(
         sequence_length=expected_length,
         low_complexity_positions=positions,
         low_complexity_fraction=len(positions) / expected_length,
+        provenance=_automated_record(path, "SEG", tool_version, input_sha256),
     )
 
 
@@ -605,6 +634,7 @@ def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, prot
             keywords["score_boundary"] = evidence.score_boundary
         elif evidence is secondary:
             keywords["tool_name"] = evidence.tool_name
+            keywords["sequence_file"] = evidence.sequence_file
         else:
             keywords["expected_length"] = features.length
         parsed = parser(evidence.source_file, **keywords)
