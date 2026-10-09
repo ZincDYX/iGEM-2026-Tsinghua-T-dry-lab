@@ -7,6 +7,7 @@ from igem_drylab.template_geometry import (AssemblyExpansionInput, expand_actual
     RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble)
 from igem_drylab.fusion_tool_import import FusionImportInput, import_fusion_tools
 from igem_drylab.m1_prioritization import M1PrioritizationInput, prioritize_m1
+from igem_drylab.mpipi import MpipiAnalysisInput, parse_mpipi
 
 
 def binding(name, title, contract, calculate):
@@ -35,4 +36,5 @@ BINDINGS.extend([
 BINDINGS.extend([
     binding("igem.m1.import_fusion_results","Import actual native full-fusion results",FusionImportInput,import_fusion_tools),
     binding("igem.m1.prioritize","Apply reviewed original risk and ranking policy",M1PrioritizationInput,prioritize_m1),
+    binding("igem.m1.parse_mpipi", "Inspect original Mpipi raw observations without inventing an LLPS score", MpipiAnalysisInput, parse_mpipi),
 ])

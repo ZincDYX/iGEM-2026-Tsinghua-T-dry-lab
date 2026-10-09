@@ -1,6 +1,10 @@
 import json
 import shlex
 import sys
+import os
+import time
+
+import pytest
 
 from igem_drylab.pipeline.adapters import ExternalToolAdapter
 from igem_drylab.pipeline.config import ToolConfig
@@ -25,6 +29,30 @@ def test_timeout_retains_failure_record_instead_of_erasing_job(tmp_path):
     result = ExternalToolAdapter('fixture-process-not-scientific-tool',config).run(output_dir=tmp_path,timeout_seconds=.02)
     assert result.status=='timed_out' and result.return_code is None
     assert result.manifest_file.is_file() and result.executable_sha256
+
+
+@pytest.mark.platform
+def test_timeout_stops_actual_wrapper_descendant_not_only_parent(tmp_path):
+    """Actual operating-system process test; no prediction or numerical job."""
+    pid_file = tmp_path/'child.pid'
+    wrapper = ('import subprocess,sys,time; from pathlib import Path; '
+        'child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(60)"]); '
+        f'Path({str(pid_file)!r}).write_text(str(child.pid)); '
+        'print("owned wrapper and child",flush=True); child.wait()')
+    config = ToolConfig(enabled=True,mode='external',command=shlex.join([sys.executable,'-c',wrapper]))
+    result = ExternalToolAdapter('process-tree-fixture',config).run(output_dir=tmp_path/'out',timeout_seconds=2)
+    assert result.status == 'timed_out' and 'owned wrapper and child' in result.stdout
+    assert pid_file.is_file()
+    pid = int(pid_file.read_text())
+    if os.name == 'nt':
+        import subprocess
+        listing = subprocess.run(['tasklist','/FI',f'PID eq {pid}','/FO','CSV','/NH'], capture_output=True,text=True,check=True)
+        assert f'"{pid}"' not in listing.stdout
+    else:
+        from pathlib import Path
+        state = Path(f'/proc/{pid}/stat')
+        # A killed child can briefly remain a zombie until init reaps it.
+        assert not state.exists() or state.read_text().split()[2] == 'Z'
 
 
 def test_mock_is_not_execution_and_has_no_executable_hash(tmp_path):

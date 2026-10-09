@@ -79,6 +79,8 @@ def builtin_tools() -> WorkflowTools:
     from .m1_checks import m1_check_tools
     for tool in m1_check_tools():
         tools.register(tool)
+    from .mpipi import original_mpipi_tool
+    tools.register(original_mpipi_tool())
     return tools
 
 

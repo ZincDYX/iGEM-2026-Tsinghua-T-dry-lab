@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import time
 from hashlib import sha256
@@ -165,12 +166,27 @@ class ExternalToolAdapter:
         executable = Path(shutil.which(command.argv[0]) or command.argv[0]).resolve()
         input_hashes = {str(Path(path).resolve()):sha256(Path(path).read_bytes()).hexdigest() for path in (input_files or {}).values()}
         executable_hash = sha256(executable.read_bytes()).hexdigest()
+        process = None
         try:
-            completed = subprocess.run(command.argv,cwd=command.cwd,capture_output=True,text=True,
-                                       timeout=timeout_seconds,check=False)
+            process = subprocess.Popen(command.argv, cwd=command.cwd, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, start_new_session=os.name != "nt")
+            stdout, stderr = process.communicate(timeout=timeout_seconds)
+            completed = subprocess.CompletedProcess(command.argv, process.returncode, stdout, stderr)
         except (subprocess.TimeoutExpired, OSError) as error:
             stdout = getattr(error,"stdout",None) or ""
             stderr = getattr(error,"stderr",None) or ""
+            if process is not None:
+                # Python/API wrappers can own a native simulator. Stop the owned
+                # tree too; killing only the wrapper leaves the simulator running.
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                        capture_output=True, check=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                else:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                stdout, stderr = process.communicate()
             if isinstance(stdout,bytes): stdout = stdout.decode("utf-8",errors="replace")
             if isinstance(stderr,bytes): stderr = stderr.decode("utf-8",errors="replace")
             return self._write_manifest(ToolRunResult(tool=self.name,mode=self.config.mode,
