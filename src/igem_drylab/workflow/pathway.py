@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import numpy as np
 from pydantic import Field, model_validator
-from scipy.optimize import least_squares
 
 from .models import Contract
 
@@ -83,6 +82,7 @@ class Pathway(Contract):
 
 
 def solve_pathway(model: Pathway) -> dict[str, object]:
+    from scipy.optimize import least_squares
     index = {name: position for position, name in enumerate(model.species)}
     matrix = np.zeros((len(model.species), len(model.reactions)))
     for column, reaction in enumerate(model.reactions):

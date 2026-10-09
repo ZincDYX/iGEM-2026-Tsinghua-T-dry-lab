@@ -307,7 +307,7 @@ def test_raw_negative_states_fail_before_clipping(monkeypatch: pytest.MonkeyPatc
         y = np.zeros((16, 2))
 
     Solution.y[0, 1] = -1e-6
-    monkeypatch.setattr("igem_drylab.full_network.solve_ivp", lambda *args, **kwargs: Solution())
+    monkeypatch.setattr("scipy.integrate.solve_ivp", lambda *args, **kwargs: Solution())
     with pytest.raises(RuntimeError, match="numerical_negative"):
         simulate_full_network(full_params(), initial_intracellular=initial(), t_end=1)
 
@@ -320,7 +320,7 @@ def test_tiny_negative_states_are_clipped_only_within_tolerance(monkeypatch: pyt
         y = np.zeros((42, 2))
 
     Solution.y[0, 1] = -1e-10
-    monkeypatch.setattr("igem_drylab.full_network.solve_ivp", lambda *args, **kwargs: Solution())
+    monkeypatch.setattr("scipy.integrate.solve_ivp", lambda *args, **kwargs: Solution())
     result = simulate_full_network(full_params(), initial_intracellular={name: 0.0 for name in COMPOUNDS}, t_end=1)
     assert np.all(result.intracellular >= 0)
     assert result.raw_intracellular[0, 1] == -1e-10

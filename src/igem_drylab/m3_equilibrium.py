@@ -6,7 +6,6 @@ from typing import Literal
 from math import exp, isfinite
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from scipy.optimize import brentq
 
 
 M3_FORMULA_VERSION = "m3-s1-e10-2026-09-27"
@@ -314,6 +313,7 @@ def _solve_species(
     c_dense: float,
     phi: float,
 ) -> M3SpeciesResult:
+    from scipy.optimize import brentq
     if total == 0:
         return M3SpeciesResult(
             free_dense_um=0.0,

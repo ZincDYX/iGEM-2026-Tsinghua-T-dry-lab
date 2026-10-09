@@ -7,7 +7,6 @@ from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from scipy.stats import qmc, spearmanr
 
 
 class ScientificAnalysisInput(BaseModel):
@@ -100,6 +99,7 @@ def _value(contract, name):
 
 
 def analyze_prediction(contract: dict, settings: M4AnalysisConfig) -> dict:
+    from scipy.stats import qmc, spearmanr
     from copy import deepcopy
     import scipy
     from .prediction import PredictionContract

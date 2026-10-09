@@ -8,9 +8,68 @@ import shutil
 import subprocess
 import tarfile
 import zipfile
+import importlib.metadata
+
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+
+
+def runtime_distributions(metadata, site_packages):
+    """Resolve declared backend + software requirements, not the build venv."""
+    installed = {canonicalize_name(d.metadata['Name']): d
+                 for d in importlib.metadata.distributions(path=[str(site_packages)])}
+    pending = [(Requirement(r), '') for r in
+               metadata['dependencies'] + metadata['optional-dependencies']['software']]
+    selected = {}
+    expanded = set()
+    while pending:
+        requirement, parent_extra = pending.pop()
+        if requirement.marker and not requirement.marker.evaluate({'extra': parent_extra}):
+            continue
+        name = canonicalize_name(requirement.name)
+        dist = installed[name]
+        if not requirement.specifier.contains(dist.version, prereleases=True):
+            raise ValueError('runtime_dependency_version_mismatch:' + name)
+        selected[name] = dist
+        for extra in {''} | set(requirement.extras):
+            if (name, extra) in expanded:
+                continue
+            expanded.add((name, extra))
+            pending.extend((Requirement(r), extra) for r in dist.requires or [])
+    return selected
+
+
+def copy_runtime_dependencies(metadata, site_packages, destination):
+    """Wheel RECORD owns modules, native DLLs, data, metadata and licenses."""
+    selected = runtime_distributions(metadata, site_packages)
+    source_root = site_packages.resolve()
+    files = set()
+    for dist in selected.values():
+        if dist.files is None:
+            raise ValueError('missing_runtime_wheel_record:' + dist.metadata['Name'])
+        for entry in dist.files:
+            source = Path(dist.locate_file(entry)).resolve()
+            # Wheel entry-point Scripts live outside site-packages; runtime
+            # invokes Python modules, not development venv launchers.
+            if not source.is_relative_to(source_root):
+                continue
+            relative = source.relative_to(source_root)
+            if '__pycache__' in relative.parts or source.suffix in {'.pyc', '.pyo'} or source.name == 'direct_url.json':
+                continue
+            # Only upstream NumPy/SciPy test suites. Retain numpy.testing,
+            # runtime data, all native libraries and distribution licenses.
+            if relative.parts[0] in {'numpy', 'scipy'} and 'tests' in relative.parts[1:-1]:
+                continue
+            files.add(relative)
+    for relative in sorted(files):
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_root / relative, target)
+    return {name: dist.version for name, dist in sorted(selected.items())}
 
 
 def main():
+    import tomllib  # Windows release builder uses CPython 3.13.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--exe',type=Path,required=True)
     parser.add_argument('--source-tar',type=Path,required=True)
@@ -51,8 +110,8 @@ def main():
         archive.extractall(python)
     # Wheel-native dependencies already installed in the matching CPython ABI.
     # Do not ship editable source pointers, caches or workstation paths.
-    shutil.copytree(args.site_packages,python/'Lib/site-packages',ignore=shutil.ignore_patterns(
-        '__pycache__','__editable__*','direct_url.json','*.pyc','*.pyo'))
+    project_metadata = tomllib.loads((resources/'pyproject.toml').read_text(encoding='utf-8'))['project']
+    selected_dependencies = copy_runtime_dependencies(project_metadata, args.site_packages, python/'Lib/site-packages')
     for module in ('venv','ensurepip'):
         shutil.copytree(args.stdlib/module,python/'Lib'/module,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     pth = next(python.glob('python*._pth'))
@@ -88,6 +147,9 @@ def main():
     files = [p for p in sorted(root.rglob('*')) if p.is_file()]
     records = [{'path':p.relative_to(root).as_posix(),'bytes':p.stat().st_size,'sha256':sha256(p.read_bytes()).hexdigest()} for p in files]
     manifest = dict(commit=args.commit,platform='windows-x86_64',default_mode='local',bundled_frontend=True,
+        runtime_dependency_selection='pyproject backend + software extra, transitive wheel RECORD closure',
+        selected_runtime_distributions=selected_dependencies,
+        omitted_runtime_content=['unselected development distributions', 'numpy/scipy upstream tests', 'bytecode/editable workstation pointers'],
         python_archive_sha256=args.python_archive_sha256,source_archive_sha256=sha256(args.source_tar.read_bytes()).hexdigest(),
         viewer_dependencies={'plotly.js-strict-dist-min':'4.1.2','molstar':'5.13.0','fflate':'0.8.3'},
         viewer_dependency_scope='direct_viewer_manifest_not_complete_SBOM',

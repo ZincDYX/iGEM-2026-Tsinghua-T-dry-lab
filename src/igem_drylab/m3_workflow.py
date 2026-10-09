@@ -1,6 +1,5 @@
 """M3 expression-window and uncertainty propagation using the original solver."""
 from pydantic import Field, model_validator
-from scipy.stats import qmc
 
 from .design_analysis import RangeEvidence, ScientificAnalysisInput, sample_range
 from .m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
@@ -30,6 +29,7 @@ class M3EnsembleInput(M3UncertaintySettings):
 
 
 def solve_m3_ensemble(payload: M3EnsembleInput) -> dict:
+    from scipy.stats import qmc
     base = solve_m3_equilibrium(payload.equilibrium)
     samples = []
     for index, quantiles in enumerate(qmc.LatinHypercube(d=len(payload.ranges), seed=payload.seed).random(payload.samples)):

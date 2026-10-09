@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.integrate import solve_ivp, trapezoid
 
 
 @dataclass(frozen=True)
@@ -430,6 +429,7 @@ def simulate_glabridin(
     t_end: float = 24.0, points: int = 241,
 ) -> GlabridinSimulationResult:
     """Segmented two-compartment ODE; no degradation gives pathway mass balance."""
+    from scipy.integrate import solve_ivp, trapezoid
     params.validate(); pt_gate.validate(); oc_gate.validate(); dmt_gate.validate()
     if t_end <= 0 or points < 2 or any(value < 0 for value in initial):
         raise ValueError("invalid simulation horizon, point count, or initial state")
@@ -460,6 +460,7 @@ def simulate_cascade(
     t_end: float = 24.0,
     points: int = 241,
 ) -> SimulationResult:
+    from scipy.integrate import solve_ivp
     params.validate()
     if t_end <= 0 or points < 2:
         raise ValueError("t_end must be positive and points must be at least 2")
@@ -501,6 +502,7 @@ def simulate_piecewise_induction(
     Step gates are integrated piecewise at on/off boundaries. Sigmoid gates are
     continuous and can be handled in a single solver pass.
     """
+    from scipy.integrate import solve_ivp
     params.validate()
     oc_gate.validate()
     dmt_gate.validate()

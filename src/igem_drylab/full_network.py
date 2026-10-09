@@ -12,7 +12,6 @@ from typing import Literal
 from types import SimpleNamespace
 
 import numpy as np
-from scipy.integrate import solve_ivp
 from .kinetics import InductionGate, gate_value
 
 COMPOUNDS = ("8", "9", "10", "11", "12", "13", "14", "15")
@@ -272,6 +271,7 @@ def _transport_rates(intracellular: np.ndarray, extracellular: np.ndarray, param
 
 def simulate_full_network(params: FullNetworkParameters, *, initial_intracellular: dict[str, float], initial_extracellular: dict[str, float] | None = None, t_end: float, points: int = 501, method: Literal["LSODA", "BDF", "Radau"] = "LSODA", rtol: float = 1e-8, atol: float = 1e-12) -> FullNetworkResult:
     """Run the full ten-reaction Galatea two-phase model with LSODA."""
+    from scipy.integrate import solve_ivp
     params.validate()
     if method not in {"LSODA", "BDF", "Radau"} or not all(np.isfinite(v) and v > 0 for v in (rtol, atol)):
         raise ValueError("unsupported_or_invalid_production_solver_settings")

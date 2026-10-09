@@ -8,7 +8,6 @@ from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from scipy.optimize import least_squares
 
 from .full_network import (
     COMPOUNDS,
@@ -211,6 +210,7 @@ def classify_local_stability(jacobian: np.ndarray, tolerance_per_h: float) -> di
 
 def solve_m4_steady_state(payload: M4SteadyStateInput) -> M4SteadyStateResult:
     """Solve the eight original steady-state balances without dynamic substitution."""
+    from scipy.optimize import least_squares
     if payload.secretion_rate_per_h["15"] <= 0:
         return _blocked(payload, "nonzero_M15_steady_state_requires_ksec_15_or_another_declared_M15_outlet")
     active_edges = [(item.substrate,item.product) for item in payload.reactions if item.kcat_per_h > 0 and

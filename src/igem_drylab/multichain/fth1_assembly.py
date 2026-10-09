@@ -15,7 +15,10 @@ from string import ascii_letters, digits
 
 import numpy as np
 from pydantic import BaseModel, Field
-from scipy.spatial import cKDTree
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from scipy.spatial import cKDTree
 
 from .interface_metrics import read_pdb_atoms
 from .models import AtomRecord
@@ -123,6 +126,7 @@ def expand_fth1_arms(
 
     core_xyz = np.array([_xyz(atom) for atom in core_atoms])
     arm_xyz = [np.array([atom.coordinate for atom in arm]) for arm in expanded]
+    from scipy.spatial import cKDTree
     core_tree = cKDTree(core_xyz)
     core_arm_pairs, min_core_arm = _core_arm_metrics(
         core_atoms, core_chains, arm_xyz, core_anchor_residue, core_anchor_atom, clash_cutoff_angstrom
@@ -241,6 +245,7 @@ def _core_arm_metrics(
             for atom in core_atoms
             if not (atom.chain_id == chain_id and atom.residue_id == anchor_residue and atom.atom_name == anchor_atom)
         ]
+        from scipy.spatial import cKDTree
         tree = cKDTree(np.array([_xyz(atom) for atom in other_core]))
         distances, _ = tree.query(arm_xyz, k=1)
         pair_count += sum(len(items) for items in tree.query_ball_point(arm_xyz, r=cutoff))
@@ -254,6 +259,7 @@ def _between_arm_metrics(arms: list[np.ndarray], cutoff: float) -> tuple[int, fl
     minimum: float | None = None
     for left_index, left in enumerate(arms):
         for right in arms[left_index + 1 :]:
+            from scipy.spatial import cKDTree
             tree = cKDTree(right)
             distances, _ = tree.query(left, k=1)
             pair_count += sum(len(items) for items in tree.query_ball_point(left, r=cutoff))
@@ -283,6 +289,7 @@ def _probe_accessibility(
     all_xyz = [np.array([atom.coordinate for atom in arm]) for arm in expanded]
     for arm_index, arm in enumerate(expanded):
         other_arms = np.vstack([xyz for index, xyz in enumerate(all_xyz) if index != arm_index])
+        from scipy.spatial import cKDTree
         other_tree = cKDTree(other_arms)
         for probe_index in probe_indices:
             point = arm[probe_index].coordinate

@@ -52,3 +52,19 @@ Project simulation still requires explicit sequence/type mapping, temperature, s
 concentration/chain count, box, time, independent seeds, equilibration/phase-region policy,
 and the definition of the scalar used by the original M1 ranking. Author benchmark
 conditions are not automatically transferred to a fusion construct.
+# Completed original-author benchmark (2026-10-09)
+
+The unchanged hnRNPA1 coexistence example completed its original 500,000-step
+equilibration and 4,000,000-step production runs through the persisted workflow
+and the native MPI executable. Its raw log records normal termination; all 45
+density profiles contain 50 bins and 8,640 atoms. The parser classifies these
+bytes as `executed_job`, not `author_reference`. The original script was not
+shortened or replaced. The author README says 300 K, while the supplied script
+sets 310 K; the supplied script was retained and that discrepancy remains explicit.
+
+This validates execution of one author example. It does not reproduce the entire
+paper's multi-temperature phase diagram, establish equilibrium independently,
+validate a project fusion sequence, or define a reviewed conversion into an M1
+ranking score. The full 500-million-step single-chain Rg example has not been
+rerun; parsing the author's provided Rg observations is a separate reference check.
+

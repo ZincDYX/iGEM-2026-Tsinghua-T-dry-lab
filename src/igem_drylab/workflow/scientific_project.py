@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from igem_drylab.pipeline.config import ProjectConfig, load_config
 from igem_drylab.pipeline.models import M1Candidate, M2FusionAssessment, M3ConcentrationAssessment, M4ReactionPrediction
-from igem_drylab.pipeline import stages
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics
 from .models import Contract
 from .models import NodeInput, ProjectInput, WorkflowError
@@ -163,12 +162,13 @@ def bound_predecessor(payload: StageInput, context: NodeContext, stage: str) -> 
 
 
 def stage_tools():
-    source_root = Path(stages.__file__).resolve().parents[1]
+    source_root = Path(__file__).resolve().parents[1]
     implementation = tuple(sorted(source_root.rglob("*.py")))
     definitions = []
     for stage, predecessor in (("m1", None), ("m2", M1Candidate), ("m3", M2FusionAssessment),
                                ("m4", M3ConcentrationAssessment), ("m5", M4ReactionPrediction)):
         def handler(payload: StageInput, context: NodeContext, *, stage=stage, predecessor=predecessor):
+            from igem_drylab.pipeline import stages
             upstream = bound_predecessor(payload,context,stage)
             payload.project.verify()
             for item in payload.upstream_artifacts:

@@ -16,7 +16,6 @@ from pathlib import Path
 from types import ModuleType
 
 import numpy as np
-from scipy.integrate import solve_ivp
 
 
 @dataclass(frozen=True)
@@ -65,6 +64,7 @@ def _load_author_module(path: Path) -> ModuleType:
 
 
 def run_published_reference(repository_root: Path, *, points: int = 1000) -> PublishedReferenceResult:
+    from scipy.integrate import solve_ivp
     """Execute the uploaded author's RHS with author-native values and LSODA."""
     code_path, data_path = _author_paths(repository_root)
     if not code_path.exists() or not data_path.exists():

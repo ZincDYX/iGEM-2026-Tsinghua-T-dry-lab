@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TYPE_CHECKING
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from scipy.optimize import Bounds, LinearConstraint, milp
-from scipy.sparse import csr_matrix
+
+if TYPE_CHECKING:
+    from scipy.optimize import Bounds, LinearConstraint
 
 
 class GeometrySite(BaseModel):
@@ -95,6 +96,8 @@ class M2SiteGeometryResult(BaseModel):
 
 def analyse_site_cooccupancy(payload: M2SiteGeometryInput) -> M2SiteGeometryResult:
     """Solve the exact binary conflict graph and return species-specific ranges."""
+    from scipy.optimize import Bounds, LinearConstraint
+    from scipy.sparse import csr_matrix
 
     sites = payload.sites
     ids = [site.site_id for site in sites]
@@ -175,6 +178,8 @@ def analyse_site_cooccupancy(payload: M2SiteGeometryInput) -> M2SiteGeometryResu
 
 
 def _linear_constraint(rows: list[np.ndarray], upper: list[float], size: int) -> LinearConstraint:
+    from scipy.optimize import LinearConstraint
+    from scipy.sparse import csr_matrix
     matrix = np.vstack(rows) if rows else np.empty((0, size), dtype=float)
     return LinearConstraint(csr_matrix(matrix), np.full(len(rows), -np.inf), np.asarray(upper))
 
@@ -187,6 +192,7 @@ def _solve_binary(
     allow_infeasible: bool = False,
 ) -> tuple[float, np.ndarray | None]:
     constraints = constraint if isinstance(constraint, tuple) else (constraint,)
+    from scipy.optimize import milp
     result = milp(
         c=objective,
         integrality=np.ones(len(objective), dtype=int),

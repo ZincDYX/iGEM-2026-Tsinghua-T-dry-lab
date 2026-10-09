@@ -13,7 +13,6 @@ from typing import Literal
 
 import numpy as np
 from pydantic import Field, model_validator
-from scipy.spatial import cKDTree
 
 from .design_analysis import ScientificAnalysisInput
 from .structure_metrics import Atom, read_pdb_atoms, residue_key, kabsch_transform
@@ -114,6 +113,7 @@ def _identity(atom):
 
 
 def clashes(first, second, cutoff, exclusions=()):
+    from scipy.spatial import cKDTree
     first = [a for a in first if a.element not in {"H", "D"}]
     second = [a for a in second if a.element not in {"H", "D"}]
     excluded = {(tuple(a), tuple(b)) for a, b in exclusions}

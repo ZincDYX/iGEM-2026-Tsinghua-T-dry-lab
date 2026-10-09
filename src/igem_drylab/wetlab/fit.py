@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
-from scipy.optimize import least_squares
 
 
 class FitResult(BaseModel):
@@ -86,6 +85,7 @@ def fit_mechanistic_parameter(*, parameter_name: str, initial_value: float, boun
     A finite coarse profile supplies restart points, not global uniqueness.
     Confidence intervals require declared whole biological-replicate blocks.
     """
+    from scipy.optimize import least_squares
     if len(observed) < 4:
         raise ValueError("identifiability_warning:fewer_than_four_timepoints")
     if not np.all(np.isfinite([*bounds, initial_value, *observed])) or not bounds[0] <= initial_value <= bounds[1] or bounds[0] >= bounds[1]:
