@@ -133,11 +133,11 @@ with tempfile.TemporaryDirectory(prefix="fusionlab-plugin-runtime-") as owned:
     venv.EnvBuilder(with_pip=False).create(environment)
     configure_embedded_environment(environment)
     child=environment/"Scripts/python.exe"
-    output=subprocess.check_output([str(child),"-I","-c","import json,sys,importlib.util; print(json.dumps(dict(prefix=sys.prefix,parent_numpy=importlib.util.find_spec('numpy') is not None,parent_app=importlib.util.find_spec('igem_drylab') is not None)))"],text=True)
+    output=subprocess.check_output([str(child),"-I","-B","-c","import json,sys,importlib.util; print(json.dumps(dict(prefix=sys.prefix,parent_numpy=importlib.util.find_spec('numpy') is not None,parent_app=importlib.util.find_spec('igem_drylab') is not None)))"],text=True)
     result=json.loads(output)
     assert Path(result["prefix"]).resolve()==environment.resolve()
     assert not result["parent_numpy"] and not result["parent_app"]
-    subprocess.run([str(child),"-I","-m","ensurepip","--version"],check=True)
+    subprocess.run([str(child),"-I","-B","-m","ensurepip","--version"],check=True)
     print(json.dumps(dict(isolated_plugin_paths_verified=True,scientific_calculation=False)))
 '''], cwd=root, capture_output=True, text=True, env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
     (root/'plugin-runtime-check.log').write_text(plugin_check.stdout+'\n'+plugin_check.stderr,encoding='utf-8')
