@@ -51,3 +51,21 @@ def test_actual_stdio_report_is_available_and_executes():
             assert not response.is_error
             assert response.structured_content["result"]["yield_rel"]["directional"] == pytest.approx(1)
     asyncio.run(exercise())
+
+
+def test_phase_activity_extension_cannot_invent_original_uniform_H0():
+    payload=_input(phi=.1)
+    payload.enzymes["OC"].activity_dense_ratio=.5
+    result=run_m4_report(M4ReportInput(steady_input=payload))
+    assert result["status"]=="blocked"
+    assert result["missing"]==["matched_H0_activity_model_for_phase_specific_activity_extension"]
+
+
+def test_scaffold_scan_does_not_confuse_expression_change_with_site_ratio():
+    from igem_drylab.m4_workflow import ScaffoldScenario
+    from test_m3_markdown_contract import _input as recruitment_input
+    case=_input(phi=.1)
+    recruitment=recruitment_input(phi=.1,s_sh3=24,s_pdz=24)
+    with pytest.raises(ValueError,match="same_OC_DMT_total"):
+        M4ReportInput(steady_input=case,scaffold_designs=[ScaffoldScenario(site_ratio=1,recruitment=recruitment,
+            design_reference="synthetic_fixture",synthesized=False)])

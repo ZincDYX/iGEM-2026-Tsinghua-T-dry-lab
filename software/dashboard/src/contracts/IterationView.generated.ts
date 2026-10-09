@@ -179,9 +179,48 @@ export type FeatureDefinitionsFile = string;
 export type RulesFile = string;
 export type PredictorEvidenceFile = string | null;
 export type RequireExternalEvidenceInRealMode = boolean;
+export type PolicyVersion = string;
+export type SourceReference2 = string;
+export type Reviewer = string;
+export type RuleId = string;
+export type Feature = string;
+export type Transform = "identity" | "absolute";
+export type Operator = "lt" | "le" | "gt" | "ge" | "inside" | "outside";
+export type Lower1 = number;
+export type Upper1 = number | null;
+export type Tool = "FuzDrop" | "catGRANULE_2016" | "PSPredictor" | "PScore" | "Mpipi_original";
+export type NormalizationMinimum = number;
+export type NormalizationMaximum = number;
+export type HighDirection = "greater_equal" | "less_equal";
+export type NormalizedHighCutoff = number;
+export type Weight = number;
+export type PredictorRules = PredictorRule[];
+export type SortKeys = ("risk" | "consensus" | "rank_score")[];
+export type RankingFormulaReference = string | null;
 export type StructureMetricsFile = string | null;
 export type RegionAssessmentsFile = string | null;
 export type CalculationRequestsFile = string | null;
+export type Method = "statistical_factor" | "alpha" | "free_energy";
+export type ParameterName = string;
+/**
+ * @minItems 1
+ */
+export type Ranges = [RangeEvidence, ...RangeEvidence[]];
+export type ParameterName1 = string;
+export type Distribution = "uniform" | "empirical" | "interpolated_empirical";
+export type InterpolationReference = string | null;
+export type Lower2 = number | null;
+export type Upper2 = number | null;
+export type EmpiricalValues = number[];
+export type SourceReference3 = string;
+/**
+ * @minItems 1
+ */
+export type ParameterIds = [string, ...string[]];
+export type ReviewedBy = string;
+export type Samples = number;
+export type Seed = number;
+export type IndependenceReference = string;
 export type PhiSource = "measured" | "lever_rule" | "compare";
 export type TargetEnzymeRatioParameter = string | null;
 export type DesignDecisionId = string | null;
@@ -205,20 +244,8 @@ export type DmtScale = number;
 export type Source1 = "published_author_model" | "explicit_sensitivity_input";
 export type Interpretation = "relative_enzyme_scale_not_measured_abundance";
 export type LocalParameterNames = string[];
-export type ParameterName = string;
-export type Distribution = "uniform" | "empirical" | "interpolated_empirical";
-export type InterpolationReference = string | null;
-export type Lower1 = number | null;
-export type Upper1 = number | null;
-export type EmpiricalValues = number[];
-export type SourceReference2 = string;
-/**
- * @minItems 1
- */
-export type ParameterIds = [string, ...string[]];
-export type ReviewedBy = string;
-export type Ranges = RangeEvidence[];
-export type Samples = number;
+export type Ranges1 = RangeEvidence[];
+export type Samples1 = number;
 export type RandomSeed = number;
 export type StandardDeviationDdof = (0 | 1) | null;
 export type IndependenceEvidenceReference = string | null;
@@ -228,7 +255,7 @@ export type C = number;
 export type Const = number;
 export type ThetaHydro = number;
 export type ThetaAro = number;
-export type SourceReference3 = string;
+export type SourceReference4 = string;
 export type ApplicableDomainReference = string;
 export type ReviewedBy1 = string;
 export type AssayMode = ("substrate_feeding_functional" | "full_pathway_production") | null;
@@ -295,7 +322,7 @@ export type WetlabResultsFile = string | null;
 export type AbsoluteResidualTolerance = number;
 export type RelativeResidualTolerance = number;
 export type DiscrepancyThresholdConfigured = boolean;
-export type ParameterName1 = string;
+export type ParameterName2 = string;
 export type FixedParameterNames = string[];
 /**
  * @minItems 2
@@ -586,6 +613,35 @@ export interface M1Config {
   rules_file: RulesFile;
   predictor_evidence_file: PredictorEvidenceFile;
   require_external_evidence_in_real_mode: RequireExternalEvidenceInRealMode;
+  prioritization_policy: PrioritizationPolicy | null;
+}
+export interface PrioritizationPolicy {
+  policy_version: PolicyVersion;
+  source_reference: SourceReference2;
+  reviewer: Reviewer;
+  risk_rules: RiskRules;
+  predictor_rules: PredictorRules;
+  sort_keys: SortKeys;
+  ranking_formula_reference: RankingFormulaReference;
+}
+export interface RiskRules {
+  [k: string]: RiskPredicate[];
+}
+export interface RiskPredicate {
+  rule_id: RuleId;
+  feature: Feature;
+  transform: Transform;
+  operator: Operator;
+  lower: Lower1;
+  upper: Upper1;
+}
+export interface PredictorRule {
+  tool: Tool;
+  normalization_minimum: NormalizationMinimum;
+  normalization_maximum: NormalizationMaximum;
+  high_direction: HighDirection;
+  normalized_high_cutoff: NormalizedHighCutoff;
+  weight: Weight;
 }
 export interface M2Config {
   structure_metrics_file: StructureMetricsFile;
@@ -593,6 +649,9 @@ export interface M2Config {
   calculation_requests_file: CalculationRequestsFile;
 }
 export interface M3Config {
+  avidity_sh3: AvidityBinding | null;
+  avidity_pdz: AvidityBinding | null;
+  uncertainty: M3UncertaintySettings | null;
   phi_source: PhiSource;
   target_enzyme_ratio_parameter: TargetEnzymeRatioParameter;
   design_decision_id: DesignDecisionId;
@@ -605,6 +664,27 @@ export interface M3Config {
   recruitment_bias_oc_vs_dmt: RecruitmentBiasOcVsDmt;
   ptr_pt_phase_handling: PtrPtPhaseHandling;
   author_native_inputs: AuthorNativeEnzymeScales | null;
+}
+export interface AvidityBinding {
+  method: Method;
+  parameter_name: ParameterName;
+}
+export interface M3UncertaintySettings {
+  ranges: Ranges;
+  samples: Samples;
+  seed: Seed;
+  independence_reference: IndependenceReference;
+}
+export interface RangeEvidence {
+  parameter_name: ParameterName1;
+  distribution: Distribution;
+  interpolation_reference: InterpolationReference;
+  lower: Lower2;
+  upper: Upper2;
+  empirical_values: EmpiricalValues;
+  source_reference: SourceReference3;
+  parameter_ids: ParameterIds;
+  reviewed_by: ReviewedBy;
 }
 export interface RecruitmentConfig {
   enzyme_id: EnzymeId1;
@@ -669,23 +749,12 @@ export interface M4Config {
 }
 export interface M4AnalysisConfig {
   local_parameter_names: LocalParameterNames;
-  ranges: Ranges;
-  samples: Samples;
+  ranges: Ranges1;
+  samples: Samples1;
   random_seed: RandomSeed;
   standard_deviation_ddof: StandardDeviationDdof;
   independence_evidence_reference: IndependenceEvidenceReference;
   idr_mapping: IDRMappingEvidence | null;
-}
-export interface RangeEvidence {
-  parameter_name: ParameterName;
-  distribution: Distribution;
-  interpolation_reference: InterpolationReference;
-  lower: Lower1;
-  upper: Upper1;
-  empirical_values: EmpiricalValues;
-  source_reference: SourceReference2;
-  parameter_ids: ParameterIds;
-  reviewed_by: ReviewedBy;
 }
 export interface IDRMappingEvidence {
   a: A;
@@ -696,7 +765,7 @@ export interface IDRMappingEvidence {
   aromatic_counts: AromaticCounts;
   theta_hydro: ThetaHydro;
   theta_aro: ThetaAro;
-  source_reference: SourceReference3;
+  source_reference: SourceReference4;
   applicable_domain_reference: ApplicableDomainReference;
   reviewed_by: ReviewedBy1;
 }
@@ -770,7 +839,7 @@ export interface M5Config {
   fit_plan: FitPlanConfig | null;
 }
 export interface FitPlanConfig {
-  parameter_name: ParameterName1;
+  parameter_name: ParameterName2;
   fixed_parameter_names: FixedParameterNames;
   bounds: Bounds;
   observables: Observables;

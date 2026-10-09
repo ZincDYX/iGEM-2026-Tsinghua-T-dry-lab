@@ -52,13 +52,20 @@ def input_paths(config: ProjectConfig, allowed_roots: tuple[Path, ...] | None = 
             raise WorkflowError("scientific_file_outside_authorized_workspace")
     for path in paths:
         authorize(path)
+    predictor_file=config.stages.m1_llps.predictor_evidence_file
+    if predictor_file and predictor_file.is_file():
+        from igem_drylab.constructs.predictor_artifacts import load_predictor_artifacts
+        previous=set(paths)
+        walk(load_predictor_artifacts(predictor_file))
+        for dependency in paths-previous:
+            authorize(dependency)
     region_file = config.stages.m2_fusion.region_assessments_file
     if region_file and region_file.is_file():
         from igem_drylab.region_assessment import load_region_requests
         from igem_drylab.parsers.structure_prediction import parse_structure_prediction_output
         for request in load_region_requests(region_file):
             authorize(request.confidence_file)
-            prediction = parse_structure_prediction_output(request.confidence_file, candidate_id=request.candidate_id)
+            prediction = parse_structure_prediction_output(request.confidence_file, candidate_id=request.tool_input_id or request.candidate_id)
             authorize(prediction.model_file)
             paths.update((request.confidence_file, prediction.model_file))
     metrics_file = config.stages.m2_fusion.structure_metrics_file

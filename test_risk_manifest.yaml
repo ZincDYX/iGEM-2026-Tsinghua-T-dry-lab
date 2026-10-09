@@ -1,9 +1,19 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: M1_NATIVE_IMPORT_AND_REVIEWED_POLICY
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_m1_completion.py::test_native_import_derives_full_fusion_observations_and_reparses_raw_bytes", "tests/test_m1_completion.py::test_native_sequence_and_undefined_aggregation_rules_do_not_pass", "tests/test_m1_completion.py::test_soft_risk_count_and_undefined_feature_without_linker_composite", "tests/test_m1_completion.py::test_native_import_is_callable_over_actual_stdio_transport", "tests/test_m1_completion.py::test_original_IDR_ranking_uses_reviewed_ranges_consensus_and_three_keys"]
+    requirement_or_formula_source: M1 V3 full fusion third veto, risk hit counts and explicit original-method ranking policy
+    oracle_type: documented_native_columns_and_absolute_risk_counts
+    fixture_scope: synthetic_format_policy_and_stdio_fixtures_not_licensed_tool_execution_server_only
+    formula_version: m1-v3-2026-09-27
+    units: percent_fraction_residue_index
+    tolerance_basis: exact_native_residues_and_counts
+    expected_faults: [false_tool_execution_claim, mismatched_complete_sequence, invented_hotspot_cutoff, native_summary_tampering, undefined_risk_direction, composite_linker_score]
   - risk_id: M2_TEMPLATE_COORDINATE_WORKFLOWS
     group: scientific_algorithm
-    test_nodeids: ["tests/test_template_workflows.py::test_two_template_transforms_place_entire_enzyme_not_only_peptide", "tests/test_template_workflows.py::test_actual_overlapping_enzymes_generate_species_specific_conflict_edge", "tests/test_template_workflows.py::test_in_memory_FreeSASA_matches_independent_library_file_route", "tests/test_template_workflows.py::test_Q1_identity_reference_has_zero_core_RMSD_and_unit_pocket_retention", "tests/test_template_workflows.py::test_assembly_core_mapping_preserves_interface_distances_not_24mer_claim", "tests/test_template_workflows.py::test_missing_or_collinear_mapping_does_not_choose_arbitrary_rotation", "tests/test_template_workflows.py::test_real_stdio_calls_new_Q1_workflow_and_exports_matching_input_schema", "tests/test_template_workflows.py::test_expansion_is_directly_readable_with_actual_template_chain_ids", "tests/test_template_workflows.py::test_independent_conformations_preserve_observed_graph_uncertainty", "tests/test_template_workflows.py::test_calculation_file_runs_in_pipeline_without_promoting_blocked_M1"]
+    test_nodeids: ["tests/test_template_workflows.py::test_two_template_transforms_place_entire_enzyme_not_only_peptide", "tests/test_template_workflows.py::test_actual_overlapping_enzymes_generate_species_specific_conflict_edge", "tests/test_template_workflows.py::test_in_memory_FreeSASA_matches_independent_library_file_route", "tests/test_template_workflows.py::test_Q1_identity_reference_has_zero_core_RMSD_and_unit_pocket_retention", "tests/test_template_workflows.py::test_assembly_core_mapping_preserves_interface_distances_not_24mer_claim", "tests/test_template_workflows.py::test_missing_or_collinear_mapping_does_not_choose_arbitrary_rotation", "tests/test_template_workflows.py::test_real_stdio_calls_new_Q1_workflow_and_exports_matching_input_schema", "tests/test_template_workflows.py::test_expansion_is_directly_readable_with_actual_template_chain_ids", "tests/test_template_workflows.py::test_independent_conformations_preserve_observed_graph_uncertainty", "tests/test_template_workflows.py::test_calculation_file_runs_in_pipeline_without_promoting_blocked_M1", "tests/test_template_workflows.py::test_predicted_structure_read_accepts_mapped_tool_ID_and_exact_sequence"]
     requirement_or_formula_source: M2 V2 Q1-Q4 and original rigid template placement
     oracle_type: independent_absolute_coordinates_library_SASA_and_binary_graph
     fixture_scope: synthetic_coordinate_and_protocol_fixtures_not_biological_assembly_server_only
@@ -13,7 +23,7 @@ risks:
     expected_faults: [wrong_transform_order, moved_peptide_only, HETATM_SASA_mismatch, fake_24mer_confirmation, missing_conflicts, arbitrary_collinear_orientation]
   - risk_id: M3_AVIDITY_ENSEMBLE
     group: scientific_algorithm
-    test_nodeids: ["tests/test_m3_workflow.py::test_optional_avidity_uses_original_factor_and_preserves_E2_mass", "tests/test_m3_workflow.py::test_expression_window_is_sampled_without_clamping_failed_geometry", "tests/test_m3_workflow.py::test_no_ambiguous_avidity_or_float_topology"]
+    test_nodeids: ["tests/test_m3_workflow.py::test_optional_avidity_uses_original_factor_and_preserves_E2_mass", "tests/test_m3_workflow.py::test_expression_window_is_sampled_without_clamping_failed_geometry", "tests/test_m3_workflow.py::test_no_ambiguous_avidity_or_float_topology", "tests/test_m3_workflow.py::test_avidity_registry_binding_uses_same_pair_and_real_energy_units"]
     requirement_or_formula_source: M3 original avidity S1-E10 and expression intervals
     oracle_type: explicit_equivalent_Kd_and_independent_mass_balance
     fixture_scope: synthetic_solver_inputs_not_measured_biology_server_only
@@ -23,7 +33,7 @@ risks:
     expected_faults: [wrong_energy_units, double_avidity_correction, fake_ensemble_pass, continuous_integer_site_counts]
   - risk_id: M4_ORIGINAL_REPORT
     group: scientific_algorithm
-    test_nodeids: ["tests/test_m4_report.py::test_no_droplet_three_scenarios_are_identical_and_have_matched_baseline", "tests/test_m4_report.py::test_joint_lhs_envelopes_use_paired_H0_not_fixed_base_denominator", "tests/test_m4_report.py::test_no_product_outlet_blocks_whole_report_not_fake_three_yields", "tests/test_m4_report.py::test_actual_stdio_report_is_available_and_executes"]
+    test_nodeids: ["tests/test_m4_report.py::test_no_droplet_three_scenarios_are_identical_and_have_matched_baseline", "tests/test_m4_report.py::test_joint_lhs_envelopes_use_paired_H0_not_fixed_base_denominator", "tests/test_m4_report.py::test_no_product_outlet_blocks_whole_report_not_fake_three_yields", "tests/test_m4_report.py::test_actual_stdio_report_is_available_and_executes", "tests/test_m4_report.py::test_phase_activity_extension_cannot_invent_original_uniform_H0", "tests/test_m4_report.py::test_scaffold_scan_does_not_confuse_expression_change_with_site_ratio"]
     requirement_or_formula_source: M4 original Step5-8 F1-F3
     oracle_type: no_droplet_invariance_paired_uncertainty_and_actual_stdio
     fixture_scope: synthetic_solver_inputs_not_measured_biology_server_only

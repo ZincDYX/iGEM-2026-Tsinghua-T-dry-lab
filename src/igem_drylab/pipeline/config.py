@@ -12,6 +12,9 @@ from igem_drylab.resources import default_config_path
 from igem_drylab.design_analysis import M4AnalysisConfig
 from igem_drylab.transport_evidence import TransportEvidenceBinding
 from igem_drylab.active_network import AbsenceEvidenceBinding
+from igem_drylab.m1_prioritization import PrioritizationPolicy
+from igem_drylab.avidity_binding import AvidityBinding
+from igem_drylab.m3_workflow import M3UncertaintySettings
 
 
 DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
@@ -171,6 +174,7 @@ class M1Config(StrictScientificConfig):
     rules_file: Path = DEFAULT_CONFIG_DIR / "m1_rules_v3.yaml"
     predictor_evidence_file: Path | None = None
     require_external_evidence_in_real_mode: bool = True
+    prioritization_policy: PrioritizationPolicy | None = None
 
 
 class M2Config(StrictScientificConfig):
@@ -191,6 +195,9 @@ class AuthorNativeEnzymeScales(StrictScientificConfig):
 
 
 class M3Config(StrictScientificConfig):
+    avidity_sh3: AvidityBinding | None = None
+    avidity_pdz: AvidityBinding | None = None
+    uncertainty: M3UncertaintySettings | None = None
     phi_source: Literal["measured", "lever_rule", "compare"] = "measured"
     target_enzyme_ratio_parameter: str | None = None
     design_decision_id: str | None = None
@@ -206,6 +213,8 @@ class M3Config(StrictScientificConfig):
 
     @model_validator(mode="after")
     def _effective_ratio_contract(self) -> "M3Config":
+        if self.recruitment_mode!="finite_site" and any((self.avidity_sh3,self.avidity_pdz,self.uncertainty)):
+            raise ValueError("original_avidity_and_uncertainty_require_finite_site_model")
         if self.recruitment_mode != "finite_site" and (self.phi_source != "measured" or self.target_enzyme_ratio_parameter):
             raise ValueError("S4_and_target_feedback_require_finite_site")
         if self.target_enzyme_ratio_parameter and not self.design_decision_id:

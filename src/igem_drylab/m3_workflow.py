@@ -6,12 +6,15 @@ from .design_analysis import RangeEvidence, ScientificAnalysisInput, sample_rang
 from .m3_equilibrium import M3EquilibriumInput, solve_m3_equilibrium
 
 
-class M3EnsembleInput(ScientificAnalysisInput):
-    equilibrium: M3EquilibriumInput
+class M3UncertaintySettings(ScientificAnalysisInput):
     ranges: list[RangeEvidence] = Field(min_length=1)
     samples: int = Field(ge=2)
     seed: int
     independence_reference: str = Field(min_length=1)
+
+
+class M3EnsembleInput(M3UncertaintySettings):
+    equilibrium: M3EquilibriumInput
 
     @model_validator(mode="after")
     def varying_physical_fields(self):

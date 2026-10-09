@@ -3728,6 +3728,30 @@
         "title": "AuthorNativeEnzymeScales",
         "type": "object"
       },
+      "AvidityBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "statistical_factor",
+              "alpha",
+              "free_energy"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "parameter_name"
+        ],
+        "title": "AvidityBinding",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -5008,6 +5032,17 @@
             "default": true,
             "title": "Require External Evidence In Real Mode",
             "type": "boolean"
+          },
+          "prioritization_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PrioritizationPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "title": "M1Config",
@@ -5018,7 +5053,8 @@
           "feature_definitions_file",
           "rules_file",
           "predictor_evidence_file",
-          "require_external_evidence_in_real_mode"
+          "require_external_evidence_in_real_mode",
+          "prioritization_policy"
         ]
       },
       "M2Config": {
@@ -5075,6 +5111,39 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "avidity_sh3": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "avidity_pdz": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/M3UncertaintySettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "phi_source": {
             "default": "measured",
             "enum": [
@@ -5205,6 +5274,9 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "avidity_sh3",
+          "avidity_pdz",
+          "uncertainty",
           "phi_source",
           "target_enzyme_ratio_parameter",
           "design_decision_id",
@@ -5218,6 +5290,41 @@
           "ptr_pt_phase_handling",
           "author_native_inputs"
         ]
+      },
+      "M3UncertaintySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "ranges": {
+            "items": {
+              "$ref": "#/$defs/RangeEvidence"
+            },
+            "minItems": 1,
+            "title": "Ranges",
+            "type": "array"
+          },
+          "samples": {
+            "minimum": 2,
+            "title": "Samples",
+            "type": "integer"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "independence_reference": {
+            "minLength": 1,
+            "title": "Independence Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ranges",
+          "samples",
+          "seed",
+          "independence_reference"
+        ],
+        "title": "M3UncertaintySettings",
+        "type": "object"
       },
       "M4AnalysisConfig": {
         "additionalProperties": false,
@@ -6274,6 +6381,130 @@
           "type"
         ]
       },
+      "PredictorRule": {
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "enum": [
+              "FuzDrop",
+              "catGRANULE_2016",
+              "PSPredictor",
+              "PScore",
+              "Mpipi_original"
+            ],
+            "title": "Tool",
+            "type": "string"
+          },
+          "normalization_minimum": {
+            "title": "Normalization Minimum",
+            "type": "number"
+          },
+          "normalization_maximum": {
+            "title": "Normalization Maximum",
+            "type": "number"
+          },
+          "high_direction": {
+            "enum": [
+              "greater_equal",
+              "less_equal"
+            ],
+            "title": "High Direction",
+            "type": "string"
+          },
+          "normalized_high_cutoff": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Normalized High Cutoff",
+            "type": "number"
+          },
+          "weight": {
+            "minimum": 0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "tool",
+          "normalization_minimum",
+          "normalization_maximum",
+          "high_direction",
+          "normalized_high_cutoff",
+          "weight"
+        ],
+        "title": "PredictorRule",
+        "type": "object"
+      },
+      "PrioritizationPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewer": {
+            "minLength": 1,
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "risk_rules": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/$defs/RiskPredicate"
+              },
+              "type": "array"
+            },
+            "title": "Risk Rules",
+            "type": "object"
+          },
+          "predictor_rules": {
+            "items": {
+              "$ref": "#/$defs/PredictorRule"
+            },
+            "title": "Predictor Rules",
+            "type": "array"
+          },
+          "sort_keys": {
+            "items": {
+              "enum": [
+                "risk",
+                "consensus",
+                "rank_score"
+              ],
+              "type": "string"
+            },
+            "title": "Sort Keys",
+            "type": "array"
+          },
+          "ranking_formula_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ranking Formula Reference"
+          }
+        },
+        "required": [
+          "policy_version",
+          "source_reference",
+          "reviewer",
+          "risk_rules",
+          "predictor_rules",
+          "sort_keys",
+          "ranking_formula_reference"
+        ],
+        "title": "PrioritizationPolicy",
+        "type": "object"
+      },
       "PublicRunInput": {
         "additionalProperties": false,
         "properties": {
@@ -6420,6 +6651,65 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "RiskPredicate": {
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "transform": {
+            "enum": [
+              "identity",
+              "absolute"
+            ],
+            "title": "Transform",
+            "type": "string"
+          },
+          "operator": {
+            "enum": [
+              "lt",
+              "le",
+              "gt",
+              "ge",
+              "inside",
+              "outside"
+            ],
+            "title": "Operator",
+            "type": "string"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "rule_id",
+          "feature",
+          "transform",
+          "operator",
+          "lower",
+          "upper"
+        ],
+        "title": "RiskPredicate",
         "type": "object"
       },
       "ScaffoldConfig": {
@@ -9218,6 +9508,30 @@
         "title": "AuthorNativeEnzymeScales",
         "type": "object"
       },
+      "AvidityBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "statistical_factor",
+              "alpha",
+              "free_energy"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "parameter_name"
+        ],
+        "title": "AvidityBinding",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -10498,6 +10812,17 @@
             "default": true,
             "title": "Require External Evidence In Real Mode",
             "type": "boolean"
+          },
+          "prioritization_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PrioritizationPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "title": "M1Config",
@@ -10508,7 +10833,8 @@
           "feature_definitions_file",
           "rules_file",
           "predictor_evidence_file",
-          "require_external_evidence_in_real_mode"
+          "require_external_evidence_in_real_mode",
+          "prioritization_policy"
         ]
       },
       "M2Config": {
@@ -10565,6 +10891,39 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "avidity_sh3": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "avidity_pdz": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/M3UncertaintySettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "phi_source": {
             "default": "measured",
             "enum": [
@@ -10695,6 +11054,9 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "avidity_sh3",
+          "avidity_pdz",
+          "uncertainty",
           "phi_source",
           "target_enzyme_ratio_parameter",
           "design_decision_id",
@@ -10708,6 +11070,41 @@
           "ptr_pt_phase_handling",
           "author_native_inputs"
         ]
+      },
+      "M3UncertaintySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "ranges": {
+            "items": {
+              "$ref": "#/$defs/RangeEvidence"
+            },
+            "minItems": 1,
+            "title": "Ranges",
+            "type": "array"
+          },
+          "samples": {
+            "minimum": 2,
+            "title": "Samples",
+            "type": "integer"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "independence_reference": {
+            "minLength": 1,
+            "title": "Independence Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ranges",
+          "samples",
+          "seed",
+          "independence_reference"
+        ],
+        "title": "M3UncertaintySettings",
+        "type": "object"
       },
       "M4AnalysisConfig": {
         "additionalProperties": false,
@@ -11764,6 +12161,130 @@
           "type"
         ]
       },
+      "PredictorRule": {
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "enum": [
+              "FuzDrop",
+              "catGRANULE_2016",
+              "PSPredictor",
+              "PScore",
+              "Mpipi_original"
+            ],
+            "title": "Tool",
+            "type": "string"
+          },
+          "normalization_minimum": {
+            "title": "Normalization Minimum",
+            "type": "number"
+          },
+          "normalization_maximum": {
+            "title": "Normalization Maximum",
+            "type": "number"
+          },
+          "high_direction": {
+            "enum": [
+              "greater_equal",
+              "less_equal"
+            ],
+            "title": "High Direction",
+            "type": "string"
+          },
+          "normalized_high_cutoff": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Normalized High Cutoff",
+            "type": "number"
+          },
+          "weight": {
+            "minimum": 0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "tool",
+          "normalization_minimum",
+          "normalization_maximum",
+          "high_direction",
+          "normalized_high_cutoff",
+          "weight"
+        ],
+        "title": "PredictorRule",
+        "type": "object"
+      },
+      "PrioritizationPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewer": {
+            "minLength": 1,
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "risk_rules": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/$defs/RiskPredicate"
+              },
+              "type": "array"
+            },
+            "title": "Risk Rules",
+            "type": "object"
+          },
+          "predictor_rules": {
+            "items": {
+              "$ref": "#/$defs/PredictorRule"
+            },
+            "title": "Predictor Rules",
+            "type": "array"
+          },
+          "sort_keys": {
+            "items": {
+              "enum": [
+                "risk",
+                "consensus",
+                "rank_score"
+              ],
+              "type": "string"
+            },
+            "title": "Sort Keys",
+            "type": "array"
+          },
+          "ranking_formula_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ranking Formula Reference"
+          }
+        },
+        "required": [
+          "policy_version",
+          "source_reference",
+          "reviewer",
+          "risk_rules",
+          "predictor_rules",
+          "sort_keys",
+          "ranking_formula_reference"
+        ],
+        "title": "PrioritizationPolicy",
+        "type": "object"
+      },
       "PublicRunInput": {
         "additionalProperties": false,
         "properties": {
@@ -11910,6 +12431,65 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "RiskPredicate": {
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "transform": {
+            "enum": [
+              "identity",
+              "absolute"
+            ],
+            "title": "Transform",
+            "type": "string"
+          },
+          "operator": {
+            "enum": [
+              "lt",
+              "le",
+              "gt",
+              "ge",
+              "inside",
+              "outside"
+            ],
+            "title": "Operator",
+            "type": "string"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "rule_id",
+          "feature",
+          "transform",
+          "operator",
+          "lower",
+          "upper"
+        ],
+        "title": "RiskPredicate",
         "type": "object"
       },
       "ScaffoldConfig": {
@@ -12341,6 +12921,30 @@
         "title": "AuthorNativeEnzymeScales",
         "type": "object"
       },
+      "AvidityBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "statistical_factor",
+              "alpha",
+              "free_energy"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "parameter_name"
+        ],
+        "title": "AvidityBinding",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -13621,6 +14225,17 @@
             "default": true,
             "title": "Require External Evidence In Real Mode",
             "type": "boolean"
+          },
+          "prioritization_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PrioritizationPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "title": "M1Config",
@@ -13631,7 +14246,8 @@
           "feature_definitions_file",
           "rules_file",
           "predictor_evidence_file",
-          "require_external_evidence_in_real_mode"
+          "require_external_evidence_in_real_mode",
+          "prioritization_policy"
         ]
       },
       "M2Config": {
@@ -13688,6 +14304,39 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "avidity_sh3": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "avidity_pdz": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/M3UncertaintySettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "phi_source": {
             "default": "measured",
             "enum": [
@@ -13818,6 +14467,9 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "avidity_sh3",
+          "avidity_pdz",
+          "uncertainty",
           "phi_source",
           "target_enzyme_ratio_parameter",
           "design_decision_id",
@@ -13831,6 +14483,41 @@
           "ptr_pt_phase_handling",
           "author_native_inputs"
         ]
+      },
+      "M3UncertaintySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "ranges": {
+            "items": {
+              "$ref": "#/$defs/RangeEvidence"
+            },
+            "minItems": 1,
+            "title": "Ranges",
+            "type": "array"
+          },
+          "samples": {
+            "minimum": 2,
+            "title": "Samples",
+            "type": "integer"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "independence_reference": {
+            "minLength": 1,
+            "title": "Independence Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ranges",
+          "samples",
+          "seed",
+          "independence_reference"
+        ],
+        "title": "M3UncertaintySettings",
+        "type": "object"
       },
       "M4AnalysisConfig": {
         "additionalProperties": false,
@@ -14887,6 +15574,130 @@
           "type"
         ]
       },
+      "PredictorRule": {
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "enum": [
+              "FuzDrop",
+              "catGRANULE_2016",
+              "PSPredictor",
+              "PScore",
+              "Mpipi_original"
+            ],
+            "title": "Tool",
+            "type": "string"
+          },
+          "normalization_minimum": {
+            "title": "Normalization Minimum",
+            "type": "number"
+          },
+          "normalization_maximum": {
+            "title": "Normalization Maximum",
+            "type": "number"
+          },
+          "high_direction": {
+            "enum": [
+              "greater_equal",
+              "less_equal"
+            ],
+            "title": "High Direction",
+            "type": "string"
+          },
+          "normalized_high_cutoff": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Normalized High Cutoff",
+            "type": "number"
+          },
+          "weight": {
+            "minimum": 0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "tool",
+          "normalization_minimum",
+          "normalization_maximum",
+          "high_direction",
+          "normalized_high_cutoff",
+          "weight"
+        ],
+        "title": "PredictorRule",
+        "type": "object"
+      },
+      "PrioritizationPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewer": {
+            "minLength": 1,
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "risk_rules": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/$defs/RiskPredicate"
+              },
+              "type": "array"
+            },
+            "title": "Risk Rules",
+            "type": "object"
+          },
+          "predictor_rules": {
+            "items": {
+              "$ref": "#/$defs/PredictorRule"
+            },
+            "title": "Predictor Rules",
+            "type": "array"
+          },
+          "sort_keys": {
+            "items": {
+              "enum": [
+                "risk",
+                "consensus",
+                "rank_score"
+              ],
+              "type": "string"
+            },
+            "title": "Sort Keys",
+            "type": "array"
+          },
+          "ranking_formula_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ranking Formula Reference"
+          }
+        },
+        "required": [
+          "policy_version",
+          "source_reference",
+          "reviewer",
+          "risk_rules",
+          "predictor_rules",
+          "sort_keys",
+          "ranking_formula_reference"
+        ],
+        "title": "PrioritizationPolicy",
+        "type": "object"
+      },
       "ProjectView": {
         "additionalProperties": false,
         "properties": {
@@ -15170,6 +15981,65 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "RiskPredicate": {
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "transform": {
+            "enum": [
+              "identity",
+              "absolute"
+            ],
+            "title": "Transform",
+            "type": "string"
+          },
+          "operator": {
+            "enum": [
+              "lt",
+              "le",
+              "gt",
+              "ge",
+              "inside",
+              "outside"
+            ],
+            "title": "Operator",
+            "type": "string"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "rule_id",
+          "feature",
+          "transform",
+          "operator",
+          "lower",
+          "upper"
+        ],
+        "title": "RiskPredicate",
         "type": "object"
       },
       "ScaffoldConfig": {
@@ -15627,6 +16497,30 @@
         "title": "AuthorNativeEnzymeScales",
         "type": "object"
       },
+      "AvidityBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "statistical_factor",
+              "alpha",
+              "free_energy"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "parameter_name"
+        ],
+        "title": "AvidityBinding",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -16907,6 +17801,17 @@
             "default": true,
             "title": "Require External Evidence In Real Mode",
             "type": "boolean"
+          },
+          "prioritization_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PrioritizationPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "title": "M1Config",
@@ -16917,7 +17822,8 @@
           "feature_definitions_file",
           "rules_file",
           "predictor_evidence_file",
-          "require_external_evidence_in_real_mode"
+          "require_external_evidence_in_real_mode",
+          "prioritization_policy"
         ]
       },
       "M2Config": {
@@ -16974,6 +17880,39 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "avidity_sh3": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "avidity_pdz": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AvidityBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/M3UncertaintySettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "phi_source": {
             "default": "measured",
             "enum": [
@@ -17104,6 +18043,9 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "avidity_sh3",
+          "avidity_pdz",
+          "uncertainty",
           "phi_source",
           "target_enzyme_ratio_parameter",
           "design_decision_id",
@@ -17117,6 +18059,41 @@
           "ptr_pt_phase_handling",
           "author_native_inputs"
         ]
+      },
+      "M3UncertaintySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "ranges": {
+            "items": {
+              "$ref": "#/$defs/RangeEvidence"
+            },
+            "minItems": 1,
+            "title": "Ranges",
+            "type": "array"
+          },
+          "samples": {
+            "minimum": 2,
+            "title": "Samples",
+            "type": "integer"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "independence_reference": {
+            "minLength": 1,
+            "title": "Independence Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ranges",
+          "samples",
+          "seed",
+          "independence_reference"
+        ],
+        "title": "M3UncertaintySettings",
+        "type": "object"
       },
       "M4AnalysisConfig": {
         "additionalProperties": false,
@@ -18173,6 +19150,130 @@
           "type"
         ]
       },
+      "PredictorRule": {
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "enum": [
+              "FuzDrop",
+              "catGRANULE_2016",
+              "PSPredictor",
+              "PScore",
+              "Mpipi_original"
+            ],
+            "title": "Tool",
+            "type": "string"
+          },
+          "normalization_minimum": {
+            "title": "Normalization Minimum",
+            "type": "number"
+          },
+          "normalization_maximum": {
+            "title": "Normalization Maximum",
+            "type": "number"
+          },
+          "high_direction": {
+            "enum": [
+              "greater_equal",
+              "less_equal"
+            ],
+            "title": "High Direction",
+            "type": "string"
+          },
+          "normalized_high_cutoff": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Normalized High Cutoff",
+            "type": "number"
+          },
+          "weight": {
+            "minimum": 0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "tool",
+          "normalization_minimum",
+          "normalization_maximum",
+          "high_direction",
+          "normalized_high_cutoff",
+          "weight"
+        ],
+        "title": "PredictorRule",
+        "type": "object"
+      },
+      "PrioritizationPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewer": {
+            "minLength": 1,
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "risk_rules": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/$defs/RiskPredicate"
+              },
+              "type": "array"
+            },
+            "title": "Risk Rules",
+            "type": "object"
+          },
+          "predictor_rules": {
+            "items": {
+              "$ref": "#/$defs/PredictorRule"
+            },
+            "title": "Predictor Rules",
+            "type": "array"
+          },
+          "sort_keys": {
+            "items": {
+              "enum": [
+                "risk",
+                "consensus",
+                "rank_score"
+              ],
+              "type": "string"
+            },
+            "title": "Sort Keys",
+            "type": "array"
+          },
+          "ranking_formula_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ranking Formula Reference"
+          }
+        },
+        "required": [
+          "policy_version",
+          "source_reference",
+          "reviewer",
+          "risk_rules",
+          "predictor_rules",
+          "sort_keys",
+          "ranking_formula_reference"
+        ],
+        "title": "PrioritizationPolicy",
+        "type": "object"
+      },
       "ProjectView": {
         "additionalProperties": false,
         "properties": {
@@ -18456,6 +19557,65 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "RiskPredicate": {
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "transform": {
+            "enum": [
+              "identity",
+              "absolute"
+            ],
+            "title": "Transform",
+            "type": "string"
+          },
+          "operator": {
+            "enum": [
+              "lt",
+              "le",
+              "gt",
+              "ge",
+              "inside",
+              "outside"
+            ],
+            "title": "Operator",
+            "type": "string"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "rule_id",
+          "feature",
+          "transform",
+          "operator",
+          "lower",
+          "upper"
+        ],
+        "title": "RiskPredicate",
         "type": "object"
       },
       "ScaffoldConfig": {

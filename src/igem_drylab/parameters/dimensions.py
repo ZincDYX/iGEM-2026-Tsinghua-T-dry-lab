@@ -33,12 +33,13 @@ def normalize_for_requirement(value: float, unit: str | None, requirement: Param
         if unit not in _DIMENSIONLESS:
             raise ValueError(f"dimension_mismatch:{unit}:expected_dimensionless")
         return value
-    tables = {"concentration": _CONCENTRATION, "rate": _RATE_TO_PER_HOUR, "concentration_rate": _CONCENTRATION_RATE_TO_UM_PER_HOUR, "volume": _VOLUME_TO_LITRE}
+    tables = {"concentration": _CONCENTRATION, "rate": _RATE_TO_PER_HOUR, "concentration_rate": _CONCENTRATION_RATE_TO_UM_PER_HOUR, "volume": _VOLUME_TO_LITRE,
+        "molar_energy":{"J/mol":1.0,"kJ/mol":1000.0,"kcal/mol":4184.0}}
     table = tables[requirement.dimension]
     if unit not in table:
         raise ValueError(f"dimension_mismatch:{unit}:expected_{requirement.dimension}")
     canonical = value * table[unit]
-    if requirement.canonical_unit in {"uM", "1/h", "uM/h", "L"}:
+    if requirement.canonical_unit in {"uM", "1/h", "uM/h", "L", "J/mol"}:
         return canonical
     raise ValueError(f"unsupported_canonical_unit:{requirement.canonical_unit}")
 

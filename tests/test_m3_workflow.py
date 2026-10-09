@@ -47,3 +47,22 @@ def test_no_ambiguous_avidity_or_float_topology():
         M3EnsembleInput(equilibrium=_input(), ranges=[RangeEvidence(parameter_name="s_sh3", distribution="uniform",
             lower=1, upper=3, source_reference="fixture", parameter_ids=["fixture"], reviewed_by="fixture")],
             samples=2, seed=1, independence_reference="fixture")
+
+
+def test_avidity_registry_binding_uses_same_pair_and_real_energy_units():
+    from pathlib import Path
+    from igem_drylab.pipeline import load_config
+    from igem_drylab.parameters import ParameterRecord
+    from igem_drylab.avidity_binding import AvidityBinding,resolve_avidity
+    root=Path(__file__).resolve().parents[1]
+    config=load_config(root/"configs/m1_m4_example.yaml")
+    config.experimental_context.temperature_c=26.85
+    config.parameters=[ParameterRecord(parameter_id="energy",name="avidity_energy",value=-1,unit="kJ/mol",source_type="wetlab",
+        source_reference="synthetic_numerical_fixture_not_measured",review_status="approved",approved_by="fixture",conditions={"binding_pair":"exact_fixture_pair","temperature_c":26.85})]
+    binding=AvidityBinding(method="free_energy",parameter_name="avidity_energy")
+    correction,missing=resolve_avidity(binding,config,"fixture","condition","exact_fixture_pair")
+    assert not missing and correction.delta_delta_g_j_per_mol==-1000
+    assert correction.temperature_k==pytest.approx(300)
+    assert correction.kd_multiplier()==pytest.approx(math.exp(-1000/(8.31446261815324*300)),abs=1e-12)
+    _,missing=resolve_avidity(binding,config,"fixture","condition","different_pair")
+    assert missing==["avidity_requires_reviewed_same_exact_binding_pair_and_source"]

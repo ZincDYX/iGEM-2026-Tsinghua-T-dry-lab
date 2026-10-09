@@ -103,7 +103,7 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
                 flags.append(f"sequence_not_found:{identifier}")
                 continue
             screened = _screen_m1_sequence(sequences[identifier], kind, evidence.get(identifier, {}),
-                evidence.get(construct.id, {}), definitions, digest, rules, settings, config, qc.protein_sha256, construct)
+                evidence.get(construct.id, {}), definitions, digest, rules, settings, config, qc.protein_sha256, construct, qc.full_protein_sequence)
             screens[identifier] = screened.model_dump(mode="json")
             flags.extend(f"{identifier}:{reason}" for reason in screened.hard_reject_reasons)
             if screened.verdict == "blocked":
@@ -150,6 +150,15 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
             claim_scope="sequence_negative_screen", data_quality="demo_fixture" if config.execution.mode == "demo" else "heuristic",
             missing_inputs=sorted(set(flags + (missing_predictors if config.execution.mode == "real" else []))),
             notes="All ORFs and declared fragments audited. No ranking weights invented; eligible budget follows user input order. Baseline is diagnostic only when blocked/rejected."))
+    if settings.prioritization_policy:
+        from igem_drylab.m1_prioritization import (M1PrioritizationInput,PrioritizationCandidate,prioritize_m1)
+        from igem_drylab.constructs.linker_features import M1ScreenResult
+        for candidate in candidates:
+            if candidate.part_screens:
+                candidate.prioritization_report=prioritize_m1(M1PrioritizationInput(policy=settings.prioritization_policy,
+                    candidates=[PrioritizationCandidate(candidate_id=identifier,screen=M1ScreenResult.model_validate(screen),
+                        predictors=evidence.get(identifier,{}).get("predictor_scores",[]))
+                        for identifier,screen in candidate.part_screens.items()]))
     eligible = [item for item in candidates if item.eligibility == "eligible"]
     for item in eligible[settings.top_n:]:
         item.eligibility = "budget_deferred"
@@ -163,7 +172,7 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
     return candidates, _stage_output("m1_construct_screen", stage_dir, "candidates", len(candidates))
 
 
-def _screen_m1_sequence(sequence, kind, fragment_evidence, fusion_evidence, definitions, digest, rules, settings, config, fusion_hash, construct):
+def _screen_m1_sequence(sequence, kind, fragment_evidence, fusion_evidence, definitions, digest, rules, settings, config, fusion_hash, construct, full_sequence=None):
     features = compute_sequence_features(sequence, definitions=definitions, definitions_sha256=digest,
                                          forbidden_motifs=tuple(settings.forbidden_motifs))
     def parsed(key, model):
@@ -175,6 +184,7 @@ def _screen_m1_sequence(sequence, kind, fragment_evidence, fusion_evidence, defi
         seg=parsed("seg", SegEvidence), protparam=parsed("protparam", ProtParamEvidence),
         fusion_evidence=FusionToolEvidence.model_validate(fusion) if isinstance(fusion, dict) else None,
         full_fusion_sha256=fusion_hash,
+        full_fusion_sequence=full_sequence,
         localization_context=construct.localization_context or "cytosolic",
         require_external_evidence=config.execution.mode == "real" and settings.require_external_evidence_in_real_mode)
 
@@ -182,10 +192,8 @@ def _screen_m1_sequence(sequence, kind, fragment_evidence, fusion_evidence, defi
 def _load_m1_predictor_evidence(path: Path | None) -> dict[str, dict[str, object]]:
     if path is None:
         return {}
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or not all(isinstance(key, str) and isinstance(value, dict) for key, value in payload.items()):
-        raise ValueError("M1 predictor evidence must be an object keyed by linker/sequence id")
-    return payload
+    from igem_drylab.constructs.predictor_artifacts import load_predictor_artifacts
+    return {key:record.model_dump(mode="python",exclude_none=True) for key,record in load_predictor_artifacts(path).items()}
 
 
 def _ordered_construct_parts(definition: ConstructDefinition) -> list[str]:
@@ -529,6 +537,15 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                     status="insufficient_data",missing_inputs=[str(error)]))
                 continue
         selected, missing = validate_parameters(config.parameters, requirements=core_requirements, allow_assumptions=config.execution.allow_assumptions, host=config.experimental_context.host, strain=config.experimental_context.strain, assay_system=config.experimental_context.assay_system, pH=config.experimental_context.pH, temperature_c=config.experimental_context.temperature_c, construct_id=construct_id, condition_id=condition_id, require_provenance=config.execution.mode == "real" and config.execution.require_provenance)
+        avidity={}
+        from igem_drylab.avidity_binding import resolve_avidity
+        for site in ("sh3","pdz"):
+            binding=getattr(config.stages.m3_concentration,"avidity_"+site)
+            if binding:
+                kd=selected.get("kd_"+site)
+                pair=kd.selected_parameter.conditions.get("binding_pair") if kd and kd.selected_parameter else None
+                avidity[site],correction_missing=resolve_avidity(binding,config,construct_id,condition_id,pair)
+                missing.extend(correction_missing)
         if missing:
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=construct_id, status="insufficient_data", data_quality="heuristic",
                 missing_inputs=missing, recommended_next_action=["add reviewed phi, total concentration, and Kp ParameterRecords"],
@@ -640,7 +657,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                         notes="Formal M3 source gate rejected an otherwise numeric input set.",
                     ))
                     continue
-            exact = solve_m3_equilibrium(M3EquilibriumInput(
+            equilibrium_input = M3EquilibriumInput(
                 candidate_id=assessment.candidate_id,
                 construct_id=construct_id,
                 s_sh3=assessment.s_sh3,
@@ -673,7 +690,25 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                     for resolution in selected.values()
                     if resolution.selected_parameter
                 ),
-            ))
+                avidity_sh3=avidity.get("sh3"),avidity_pdz=avidity.get("pdz"),
+            )
+            exact = solve_m3_equilibrium(equilibrium_input)
+            uncertainty_report=None
+            settings=config.stages.m3_concentration.uncertainty
+            if settings:
+                from igem_drylab.m3_workflow import M3EnsembleInput,solve_m3_ensemble
+                names={"phi":"phi","c_dense_um":"c_dense_scaffold","c_scaffold_total_um":"c_total_scaffold",
+                    "c_sat_um":"c_sat_scaffold","kd_sh3_um":"kd_sh3","kd_pdz_um":"kd_pdz",
+                    "k_oc":"partition_oc","k_dmt":"partition_dmt","c_oc_total_um":"oc_total","c_dmt_total_um":"dmt_total"}
+                try:
+                    for interval in settings.ranges:
+                        name=names.get(interval.parameter_name)
+                        source=selected.get(name)
+                        if not source or interval.parameter_ids != [source.selected_parameter.parameter_id] or source.selected_parameter.review_status!="approved":
+                            raise ValueError("M3_uncertainty_requires_matching_approved_physical_parameter_source:"+interval.parameter_name)
+                    uncertainty_report=solve_m3_ensemble(M3EnsembleInput(equilibrium=equilibrium_input,**settings.model_dump()))
+                except ValueError as error:
+                    uncertainty_report={"status":"blocked","complete":False,"missing":[str(error)]}
             if exact.status != "valid" or exact.oc is None or exact.dmt is None:
                 records.append(M3ConcentrationAssessment(
                     candidate_id=assessment.candidate_id,
@@ -709,11 +744,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 "OC": {"dense": exact.oc.total_dense_um, "dilute": exact.oc.free_dilute_um, "partition_coefficient": selected["partition_oc"].canonical_value},
                 "DMT": {"dense": exact.dmt.total_dense_um, "dilute": exact.dmt.free_dilute_um, "partition_coefficient": selected["partition_dmt"].canonical_value},
             }
-            parameter_ids = sorted(
-                resolution.selected_parameter.parameter_id
-                for resolution in selected.values()
-                if resolution.selected_parameter
-            )
+            parameter_ids = sorted(set(exact.input_parameter_ids))
             bound_fractions = {
                 "OC": exact.oc.bound_fraction_of_whole_cell_total,
                 "DMT": exact.dmt.bound_fraction_of_whole_cell_total,
@@ -765,6 +796,8 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 binding_recruited_fraction=bound_fractions,
                 site_occupancy=site_occupancy,
                 formula_version=exact.formula_version,
+                avidity_corrections=exact.avidity_corrections,
+                uncertainty_report=uncertainty_report,
                 free_dense_concentration={"OC": exact.oc.free_dense_um, "DMT": exact.dmt.free_dense_um},
                 free_dilute_concentration={"OC": exact.oc.free_dilute_um, "DMT": exact.dmt.free_dilute_um},
                 bound_dense_concentration={"OC": exact.oc.bound_dense_um, "DMT": exact.dmt.bound_dense_um},
@@ -920,14 +953,20 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                     if len(sources)!=len(evidence.parameter_ids) or any(r.name!=evidence.parameter_name or r.review_status!="approved"
                             or r.parameter_id not in record.parameter_ids for r in sources):
                         raise ValueError("analysis_range_requires_matching_approved_candidate_parameter_sources")
-                record.analysis_result = {**(record.analysis_result or {}), **analyze_prediction(record.simulation_inputs["prediction_contract"], config.stages.m4_reaction.analysis)}
-                record.robustness = record.analysis_result["robustness"]
-                record.sensitivity = record.analysis_result["sensitivity"]
                 if record.simulation_inputs["prediction_contract"]["model_kind"] == "markdown_steady_state":
                     from igem_drylab.m4_workflow import M4ReportInput, run_m4_report
-                    record.analysis_result["original_report"] = run_m4_report(M4ReportInput(
+                    report = run_m4_report(M4ReportInput(
                         steady_input=M4SteadyStateInput.model_validate(record.simulation_inputs["prediction_contract"]["kernel_inputs"]),
                         analysis=config.stages.m4_reaction.analysis))
+                    analysis=report.get("analysis")
+                    record.analysis_result={**(record.analysis_result or {}),"original_report":report}
+                    if analysis is None:
+                        analysis=analyze_prediction(record.simulation_inputs["prediction_contract"],config.stages.m4_reaction.analysis)
+                else:
+                    analysis=analyze_prediction(record.simulation_inputs["prediction_contract"],config.stages.m4_reaction.analysis)
+                record.analysis_result={**(record.analysis_result or {}),**analysis}
+                record.robustness = analysis["robustness"]
+                record.sensitivity = analysis["sensitivity"]
             except (ValueError, RuntimeError, KeyError) as error:
                 record.analysis_result = {**(record.analysis_result or {}), "status":"insufficient_data","error":str(error)}
         write_models(run_dir / "m4_analysis", "reaction_predictions_with_analysis", records)

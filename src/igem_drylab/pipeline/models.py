@@ -48,6 +48,7 @@ class M1Candidate(ScientificResult):
     linker_features: dict[str, Any] | None = None
     part_screens: dict[str, Any] = Field(default_factory=dict)
     full_fusion_screen: dict[str, Any] = Field(default_factory=dict)
+    prioritization_report: dict[str, Any] | None = None
     retrospective_only: bool = False
     eligibility: Literal["eligible", "rejected", "blocked", "retrospective_only", "budget_deferred"] = "blocked"
     formula_version: str | None = None
@@ -111,6 +112,8 @@ class M2FusionAssessment(ScientificResult):
 
 
 class M3ConcentrationAssessment(ScientificResult):
+    avidity_corrections: dict[str, Any] = Field(default_factory=dict)
+    uncertainty_report: dict[str, Any] | None = None
     phi_source: Literal["measured_input", "S4_lever_rule"] | None = None
     phi_s4_if_available: float | None = None
     phi_measured_minus_s4: float | None = None

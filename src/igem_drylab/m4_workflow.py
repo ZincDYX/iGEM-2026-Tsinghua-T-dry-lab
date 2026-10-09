@@ -6,6 +6,7 @@ numbers, channeling multipliers, fitted constants or decision scores are added.
 from __future__ import annotations
 
 from copy import deepcopy
+from math import isclose
 from typing import Literal
 
 import numpy as np
@@ -45,9 +46,13 @@ class M4ReportInput(ScientificAnalysisInput):
             if any(any(getattr(row.recruitment, k) != getattr(first, k) for k in fields)
                    for row in self.scaffold_designs[1:]):
                 raise ValueError("scan_requires_condition_matched_recruitment_inputs")
-            phi = solve_m3_equilibrium(first).phi
+            phi = first.phi if first.phi is not None else (first.c_scaffold_total_um-first.c_sat_um)/(first.c_dense_um-first.c_sat_um)
             if phi != self.steady_input.phi:
                 raise ValueError("scan_phi_must_match_M4_base_condition")
+            for enzyme,total in (("OC",first.c_oc_total_um),("DMT",first.c_dmt_total_um)):
+                phase=self.steady_input.enzymes[enzyme]
+                if not isclose(phi*phase.dense_um+(1-phi)*phase.dilute_um,total,rel_tol=1e-10,abs_tol=1e-12):
+                    raise ValueError("scan_requires_same_OC_DMT_total_expression_as_M4_base")
         for spectrum in self.candidate_kp_spectra.values():
             if set(spectrum) != {str(i) for i in range(8, 16)} or any(v <= 0 for v in spectrum.values()):
                 raise ValueError("feasibility_requires_complete_positive_candidate_Kp8_to_Kp15")
@@ -102,6 +107,10 @@ def _solve_scenarios(base):
 
 
 def run_m4_report(payload: M4ReportInput) -> dict:
+    if any(e.activity_dense_ratio!=1 or e.activity_dilute_ratio!=1 for e in payload.steady_input.enzymes.values()):
+        return {"schema_version":"m4-original-report-v1","status":"blocked","candidate_id":payload.steady_input.candidate_id,
+            "missing":["matched_H0_activity_model_for_phase_specific_activity_extension"],
+            "claim_scope":"original_three_scenario_controls_do_not_infer_activity_after_removing_droplet"}
     cases = _solve_scenarios(payload.steady_input)
     complete = all(row["status"] == "valid" for row in cases.values())
     output = {"schema_version": "m4-original-report-v1", "candidate_id": payload.steady_input.candidate_id,
