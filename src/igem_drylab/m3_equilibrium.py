@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from math import exp, isfinite
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from scipy.optimize import brentq
@@ -11,6 +12,37 @@ from scipy.optimize import brentq
 M3_FORMULA_VERSION = "m3-s1-e10-2026-09-27"
 AVOGADRO_PER_MOL = 6.02214076e23
 UM_NM3_TO_MOLECULE_FRACTION = 1e-30 * AVOGADRO_PER_MOL
+
+
+class AvidityCorrection(BaseModel):
+    """Optional source-proposed Kd correction; no factor is inferred from geometry."""
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    method: Literal["statistical_factor", "alpha", "free_energy"]
+    value: float | None = Field(default=None, gt=0)
+    delta_delta_g_j_per_mol: float | None = Field(default=None, le=0)
+    temperature_k: float | None = Field(default=None, gt=0)
+    source_reference: str = Field(min_length=1)
+    reviewed_by: str = Field(min_length=1)
+    parameter_ids: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def selected_method(self):
+        if self.method == "free_energy":
+            if self.value is not None or self.delta_delta_g_j_per_mol is None or self.temperature_k is None:
+                raise ValueError("free_energy_requires_delta_delta_G_and_temperature_only")
+        elif self.value is None or self.delta_delta_g_j_per_mol is not None or self.temperature_k is not None:
+            raise ValueError("avidity_factor_requires_only_explicit_positive_value")
+        return self
+
+    def kd_multiplier(self) -> float:
+        if self.method == "statistical_factor":
+            return 1/self.value
+        if self.method == "alpha":
+            return self.value
+        factor = exp(self.delta_delta_g_j_per_mol/(8.31446261815324*self.temperature_k))
+        if factor == 0:
+            raise ValueError("avidity_exponential_underflow_no_zero_Kd_substitution")
+        return factor
 
 
 class M3EquilibriumInput(BaseModel):
@@ -58,6 +90,8 @@ class M3EquilibriumInput(BaseModel):
     # Optional E8/E9 design target. These remain regime-conditional candidates.
     r_target: float | None = Field(default=None, gt=0)
     input_parameter_ids: list[str] = Field(min_length=1)
+    avidity_sh3: AvidityCorrection | None = None
+    avidity_pdz: AvidityCorrection | None = None
 
     @model_validator(mode="after")
     def _validate_contract(self) -> "M3EquilibriumInput":
@@ -119,11 +153,27 @@ class M3EquilibriumResult(BaseModel):
     input_parameter_ids: list[str]
     m2_geometry_id: str
     warnings: list[str] = Field(default_factory=list)
+    avidity_corrections: dict = Field(default_factory=dict)
 
 
 def solve_m3_equilibrium(payload: M3EquilibriumInput) -> M3EquilibriumResult:
     """Solve S1--S5 and E1--E6; report rather than patch capacity conflicts."""
 
+    corrections = {}
+    corrected = {}
+    for domain in ("sh3", "pdz"):
+        correction = getattr(payload, "avidity_"+domain)
+        if correction is not None:
+            kd_name = "kd_"+domain+"_um"
+            corrected[kd_name] = getattr(payload, kd_name)*correction.kd_multiplier()
+            if not isfinite(corrected[kd_name]) or corrected[kd_name] <= 0:
+                raise ValueError("effective_avidity_Kd_outside_positive_finite_numeric_domain")
+            corrections[domain] = {"unmodified_kd_um": getattr(payload, kd_name),
+                "effective_kd_um": corrected[kd_name], "evidence": correction.model_dump(mode="json")}
+    if corrected:
+        payload = payload.model_copy(update={**corrected, "input_parameter_ids": sorted({*payload.input_parameter_ids,
+            *(p for domain in ("sh3", "pdz") if getattr(payload, "avidity_"+domain) is not None
+              for p in getattr(payload, "avidity_"+domain).parameter_ids)})})
     phi_s4 = _lever_rule_phi(payload)
     phi = payload.phi if payload.phi is not None else phi_s4
     assert phi is not None
@@ -152,6 +202,7 @@ def solve_m3_equilibrium(payload: M3EquilibriumInput) -> M3EquilibriumResult:
             input_parameter_ids=payload.input_parameter_ids,
             m2_geometry_id=payload.m2_geometry_id,
             warnings=[*warnings, "M2_joint_occupancy_constraints_not_cleared_for_independent_E1_equations"],
+            avidity_corrections=corrections,
         )
 
     oc = _solve_species(
@@ -241,6 +292,7 @@ def solve_m3_equilibrium(payload: M3EquilibriumInput) -> M3EquilibriumResult:
         input_parameter_ids=payload.input_parameter_ids,
         m2_geometry_id=payload.m2_geometry_id,
         warnings=warnings,
+        avidity_corrections=corrections,
     )
 
 

@@ -78,7 +78,8 @@ def test_official_stdio_mcp_executes_declared_multistart_analysis():
     from mcp.client.stdio import StdioServerParameters
     payload=search_input(software_input(),[{c:v if c=="8" else 0 for c in COMPOUNDS} for v in (1.,3.)])
     async def exercise():
-        params=StdioServerParameters(command=sys.executable,args=["-m","igem_drylab.mcp.server"],cwd=Path(__file__).resolve().parents[1])
+        params=StdioServerParameters(command=sys.executable,args=["-m","igem_drylab.mcp.server"],
+            cwd=Path(__file__).resolve().parents[1],env={"PYTHONPATH":str(Path(__file__).resolve().parents[1]/"src")})
         async with Client(params,read_timeout_seconds=30) as client:
             response=await client.call_tool("igem.m4.analyze_steady_state",{"inputs":payload.model_dump(mode="json")})
             assert not response.is_error

@@ -257,7 +257,8 @@ def test_stdio_mcp_server_calls_m3_solver() -> None:
     from mcp.client.stdio import StdioServerParameters
 
     async def exercise() -> None:
-        params = StdioServerParameters(command=sys.executable, args=["-m", "igem_drylab.mcp.server"], cwd=ROOT)
+        params = StdioServerParameters(command=sys.executable, args=["-m", "igem_drylab.mcp.server"], cwd=ROOT,
+                                       env={"PYTHONPATH": str(ROOT/"src")})
         async with Client(params, read_timeout_seconds=20) as client:
             response = await client.call_tool(
                 "igem.m3.solve_equilibrium",

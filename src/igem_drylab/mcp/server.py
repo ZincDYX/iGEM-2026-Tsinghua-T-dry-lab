@@ -33,6 +33,11 @@ def m4_report(payload: dict[str, Any]) -> dict[str, Any]:
     return _call_local("igem.m4.report", {"payload": payload})
 
 
+@server.tool(name="igem.m3.ensemble", title="Propagate original M3 parameter uncertainty", structured_output=True)
+def m3_ensemble(payload: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m3.ensemble", {"payload": payload})
+
+
 @server.tool(name="igem.m2.assess_regions", title="Assess actual full-length model regions", structured_output=True)
 def m2_assess_regions(candidate_id: str, sequence: str, confidence_file: str,
                       regions: list[dict[str, Any]], calculate_accessibility: bool = True) -> dict[str, Any]:

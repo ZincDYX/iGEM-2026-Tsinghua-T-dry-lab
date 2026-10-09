@@ -1,6 +1,7 @@
 """Typed module workflows, shared by local registry and real stdio transport."""
 from .types import McpTool, McpToolResult
 from igem_drylab.m4_workflow import M4ReportInput, run_m4_report
+from igem_drylab.m3_workflow import M3EnsembleInput, solve_m3_ensemble
 
 
 def binding(name, title, contract, calculate):
@@ -19,3 +20,4 @@ def binding(name, title, contract, calculate):
 
 
 BINDINGS = [binding("igem.m4.report", "Run original M4 three scenarios and F2/F3 report", M4ReportInput, run_m4_report)]
+BINDINGS.append(binding("igem.m3.ensemble", "Propagate M3 measured expression and parameter ranges", M3EnsembleInput, solve_m3_ensemble))

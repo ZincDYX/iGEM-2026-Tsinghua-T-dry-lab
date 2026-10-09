@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: M3_AVIDITY_ENSEMBLE
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_m3_workflow.py::test_optional_avidity_uses_original_factor_and_preserves_E2_mass", "tests/test_m3_workflow.py::test_expression_window_is_sampled_without_clamping_failed_geometry", "tests/test_m3_workflow.py::test_no_ambiguous_avidity_or_float_topology"]
+    requirement_or_formula_source: M3 original avidity S1-E10 and expression intervals
+    oracle_type: explicit_equivalent_Kd_and_independent_mass_balance
+    fixture_scope: synthetic_solver_inputs_not_measured_biology_server_only
+    formula_version: m3-s1-e10-2026-09-27
+    units: uM_J_per_mol_kelvin
+    tolerance_basis: conserved_concentration_1e-10
+    expected_faults: [wrong_energy_units, double_avidity_correction, fake_ensemble_pass, continuous_integer_site_counts]
   - risk_id: M4_ORIGINAL_REPORT
     group: scientific_algorithm
     test_nodeids: ["tests/test_m4_report.py::test_no_droplet_three_scenarios_are_identical_and_have_matched_baseline", "tests/test_m4_report.py::test_joint_lhs_envelopes_use_paired_H0_not_fixed_base_denominator", "tests/test_m4_report.py::test_no_product_outlet_blocks_whole_report_not_fake_three_yields", "tests/test_m4_report.py::test_actual_stdio_report_is_available_and_executes"]
