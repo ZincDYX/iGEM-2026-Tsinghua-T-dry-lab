@@ -232,7 +232,9 @@ fn launch(
         let _ = sender.send(result);
     });
     let line = receiver
-        .recv_timeout(Duration::from_secs(20))
+        // A cold packaged scientific backend can need >20 s to import its
+        // libraries; wait for actual lifespan readiness, never an early port.
+        .recv_timeout(Duration::from_secs(60))
         .map_err(|error| {
             format!(
                 "Python backend startup failed ({error}); inspect {}",

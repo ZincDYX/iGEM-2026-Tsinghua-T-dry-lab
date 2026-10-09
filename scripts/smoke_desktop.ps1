@@ -8,7 +8,7 @@ $desktopProcess = $null
 try {
     $env:FUSIONLAB_DATA_DIR = $desktopData
     $desktopProcess = Start-Process -FilePath $desktopExecutable -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
-    $deadline = [DateTime]::UtcNow.AddSeconds(25)
+    $deadline = [DateTime]::UtcNow.AddSeconds(75)
     $ready = $false
     $backendPid = $null
     while ([DateTime]::UtcNow -lt $deadline -and !$desktopProcess.HasExited) {
