@@ -2,7 +2,7 @@ import json
 import shlex
 import sys
 import os
-import time
+import subprocess
 
 import pytest
 
@@ -11,8 +11,12 @@ from igem_drylab.pipeline.config import ToolConfig
 from igem_drylab.mcp.tools import _persist_standard_output
 
 
+def command_line(argv):
+    return subprocess.list2cmdline(argv) if os.name == 'nt' else shlex.join(argv)
+
+
 def test_real_fixture_process_records_hashes_but_is_not_a_scientific_tool(tmp_path):
-    config = ToolConfig(enabled=True,mode='external',command=shlex.join([sys.executable,'-c',"print('fixture stdout, not a prediction')"]))
+    config = ToolConfig(enabled=True,mode='external',command=command_line([sys.executable,'-c',"print('fixture stdout, not a prediction')"]))
     input_file = tmp_path/'input.txt'
     input_file.write_text('software-fixture')
     result = ExternalToolAdapter('iupred2a',config).run(output_dir=tmp_path/'job',input_files={'input':input_file})
@@ -25,7 +29,7 @@ def test_real_fixture_process_records_hashes_but_is_not_a_scientific_tool(tmp_pa
 
 
 def test_timeout_retains_failure_record_instead_of_erasing_job(tmp_path):
-    config = ToolConfig(enabled=True,mode='external',command=shlex.join([sys.executable,'-c','import time; time.sleep(2)']))
+    config = ToolConfig(enabled=True,mode='external',command=command_line([sys.executable,'-c','import time; time.sleep(2)']))
     result = ExternalToolAdapter('fixture-process-not-scientific-tool',config).run(output_dir=tmp_path,timeout_seconds=.02)
     assert result.status=='timed_out' and result.return_code is None
     assert result.manifest_file.is_file() and result.executable_sha256
@@ -39,7 +43,7 @@ def test_timeout_stops_actual_wrapper_descendant_not_only_parent(tmp_path):
         'child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(60)"]); '
         f'Path({str(pid_file)!r}).write_text(str(child.pid)); '
         'print("owned wrapper and child",flush=True); child.wait()')
-    config = ToolConfig(enabled=True,mode='external',command=shlex.join([sys.executable,'-c',wrapper]))
+    config = ToolConfig(enabled=True,mode='external',command=command_line([sys.executable,'-c',wrapper]))
     result = ExternalToolAdapter('process-tree-fixture',config).run(output_dir=tmp_path/'out',timeout_seconds=2)
     assert result.status == 'timed_out' and 'owned wrapper and child' in result.stdout
     assert pid_file.is_file()

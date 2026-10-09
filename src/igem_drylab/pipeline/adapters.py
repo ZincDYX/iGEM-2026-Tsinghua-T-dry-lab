@@ -229,7 +229,24 @@ def create_tool_adapter(name: str, config: ToolConfig | None) -> ExternalToolAda
 
 
 def _split_command(command: str) -> list[str]:
-    argv = shlex.split(command, posix=os.name != "nt")
+    if os.name == "nt":
+        import ctypes
+        parse = ctypes.windll.shell32.CommandLineToArgvW
+        parse.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_int)]
+        parse.restype = ctypes.POINTER(ctypes.c_wchar_p)
+        free = ctypes.windll.kernel32.LocalFree
+        free.argtypes = [ctypes.c_void_p]
+        free.restype = ctypes.c_void_p
+        count = ctypes.c_int()
+        pointer = parse(command.strip(), ctypes.byref(count)) if command.strip() else None
+        if pointer is None or not pointer:
+            raise ValueError("Empty or invalid Windows command line")
+        try:
+            argv = [pointer[index] for index in range(count.value)]
+        finally:
+            free(pointer)
+    else:
+        argv = shlex.split(command)
     if not argv:
         raise ValueError("Command template rendered to an empty command")
     return argv
