@@ -156,13 +156,20 @@ def main():
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--case", choices=tuple(CASES), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--mpi-executable", type=Path)
+    parser.add_argument("--mpi-ranks", type=int)
     args = parser.parse_args()
+    if ((args.mpi_executable is None) != (args.mpi_ranks is None)
+            or (args.mpi_ranks is not None and args.mpi_ranks < 1)):
+        parser.error("MPI requires both an explicit launcher and a positive rank count")
     executable = args.executable.resolve()
     help_text = subprocess.run([str(executable), "-h"], capture_output=True, text=True, check=True).stdout
     if "10 Mar 2021" not in help_text or "wf/cut" not in help_text:
         raise ValueError("original_Mpipi_requires_LAMMPS_10Mar2021_with_wf_cut")
     hashes = prepare_author_case(args.archive, args.case, args.output_dir)
     argv = [str(executable), "-echo", "none", "-screen", "none", "-in", CASES[args.case]["script"], "-log", "log.lammps"]
+    if args.mpi_executable is not None:
+        argv = [str(args.mpi_executable.resolve()), "-n", str(args.mpi_ranks), *argv]
     completed = subprocess.run(argv, cwd=args.output_dir, check=False)
     record = dict(case=args.case, author_archive_md5=AUTHOR_MD5, source_url=AUTHOR_URL,
         input_sha256=hashes, executable_sha256=sha256(executable.read_bytes()).hexdigest(),

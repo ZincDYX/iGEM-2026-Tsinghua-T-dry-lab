@@ -14,6 +14,10 @@ The backend runner `python -m igem_drylab.mpipi --executable <original-lammps>
 --archive <verified-supporting-code.zip> --case <rg|coexistence> --output-dir <new-job-directory>`
 copies the author's inputs byte-for-byte and runs their complete requested steps:
 
+An MPI build can use explicit `--mpi-executable <mpiexec> --mpi-ranks <ranks>`;
+the rank count is a deployment choice, not a changed model parameter. The author
+warns that parallel random-seed streams need not yield identical trajectories.
+
 - `rg`: K25, 500,000,000 steps; the author reference reports about 7 hours on four MPI ranks.
 - `coexistence`: hnRNPA1, 500,000 equilibration plus 4,000,000 production steps. The README
   says 300 K, while its actual script sets **310 K**. We retain 310 K and report the discrepancy;
