@@ -99,7 +99,6 @@ def _value(contract, name):
 
 
 def analyze_prediction(contract: dict, settings: M4AnalysisConfig) -> dict:
-    from scipy.stats import qmc, spearmanr
     from copy import deepcopy
     import scipy
     from .prediction import PredictionContract
@@ -130,6 +129,7 @@ def analyze_prediction(contract: dict, settings: M4AnalysisConfig) -> dict:
 
 def analyze_response(settings, base_values, evaluate, base_yield):
     """Pure analysis boundary; caller supplies the same versioned physical solver."""
+    from scipy.stats import qmc, spearmanr
     local = {}
     for name in settings.local_parameter_names:
         value = base_values[name]
