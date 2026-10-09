@@ -5,6 +5,8 @@ from igem_drylab.m3_workflow import M3EnsembleInput, solve_m3_ensemble
 from igem_drylab.structural_workflow import M2EnzymeComparisonInput, compare_fusion_to_reference
 from igem_drylab.template_geometry import (AssemblyExpansionInput, expand_actual_fusion,
     RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble)
+from igem_drylab.fusion_tool_import import FusionImportInput, import_fusion_tools
+from igem_drylab.m1_prioritization import M1PrioritizationInput, prioritize_m1
 
 
 def binding(name, title, contract, calculate):
@@ -29,4 +31,8 @@ BINDINGS.extend([
     binding("igem.m2.expand_fusion", "Map actual fusion cores to assembly template", AssemblyExpansionInput, expand_actual_fusion),
     binding("igem.m2.place_recruitment", "Place recruitment templates and derive actual conflict graph", RecruitmentGeometryInput, calculate_recruitment_geometry),
     binding("igem.m2.recruitment_ensemble", "Retain independent conformation uncertainty", RecruitmentEnsembleInput, calculate_recruitment_ensemble),
+])
+BINDINGS.extend([
+    binding("igem.m1.import_fusion_results","Import actual native full-fusion results",FusionImportInput,import_fusion_tools),
+    binding("igem.m1.prioritize","Apply reviewed original risk and ranking policy",M1PrioritizationInput,prioritize_m1),
 ])

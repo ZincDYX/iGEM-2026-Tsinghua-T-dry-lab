@@ -212,8 +212,8 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             name="catgranule",
             capability="optional LLPS propensity cross-check",
             route="optional_local",
-            official_url="https://github.com/tartaglialabIIT/catGRANULE2.0",
-            notes="Optional raw predictor output; never substitutes for measured M3 inputs.",
+            official_url="https://service.tartaglialab.com/static_files/shared/tutorial_catGRANULES.html",
+            notes="Original catGRANULE (2016), not catGRANULE2. Preserve raw output; never substitutes for measured M3 inputs.",
         ),
         ExternalToolSpec(
             name="calvados",

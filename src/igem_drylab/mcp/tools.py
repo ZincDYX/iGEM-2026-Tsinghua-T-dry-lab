@@ -316,6 +316,7 @@ def m1_screen_sequence(arguments: JsonObject) -> McpToolResult:
         protparam=None if protparam_payload is None else ProtParamEvidence.model_validate(protparam_payload),
         fusion_evidence=None if fusion_payload is None else FusionToolEvidence.model_validate(fusion_payload),
         full_fusion_sha256=arguments.get("full_fusion_sha256"),
+        full_fusion_sequence=arguments.get("full_fusion_sequence"),
         localization_context=arguments.get("localization_context", "cytosolic"),
         require_external_evidence=bool(arguments.get("require_external_evidence", True)),
     )
@@ -1196,6 +1197,7 @@ M1_SCREEN_SEQUENCE_TOOL = McpTool(
             "protparam_evidence": {"type": "object"},
             "fusion_evidence": {"type": "object"},
             "full_fusion_sha256": {"type": "string"},
+            "full_fusion_sequence": {"type": "string"},
             "require_external_evidence": {"type": "boolean", "default": True},
         },
         ["sequence", "sequence_kind"],

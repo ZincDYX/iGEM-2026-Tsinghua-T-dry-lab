@@ -32,6 +32,10 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         tool=tool, input_sequence_sha256=digest, sequence_length=len(sequence),
         tool_status="not_configured", parse_status="not_run", outputs={}, parsed=None,
         scientific_status="diagnostic_not_formal_M1_M2_acceptance")
+    fusion_tool = tool in {"signalp","deeptmhmm","tango"}
+    if fusion_tool and payload.item.role != "full_fusion":
+        result.update(tool_status="not_eligible",blocker="Full-fusion predictors require the complete actual fusion sequence.")
+        return result
     if payload.prechecks:
         matching = [row for row in payload.prechecks if row.get("candidate_id") == payload.item.id]
         if len(matching) != 1 or matching[0].get("input_sequence_sha256") != digest:
@@ -55,6 +59,7 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
     source.write_text(f">sequence_input\n{sequence}\n", encoding="utf-8")
     output_dir = context.work_dir / "prediction"
     run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
+        sequence=sequence,
         job_state=context.work_dir.parent / "remote-job.json",
         input_files={"sequence": source}, timeout_seconds=7200)
     result["tool_status"] = run.status
@@ -62,7 +67,36 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         result["blocker"] = "External tool did not complete; its private execution record is retained."
         return result
     parsed = None
-    if tool == "colabfold":
+    if fusion_tool:
+        from igem_drylab.fusion_tool_import import NativeFusionArtifact, parse_native_artifact
+        from igem_drylab.constructs.linker_features import FusionToolEvidence
+        from igem_drylab.constructs.tool_evidence import ToolEvidenceProvenance
+        names = {"signalp":("SignalP","signalp","signalp6_summary","prediction_results.txt"),
+            "deeptmhmm":("DeepTMHMM","deeptmhmm","deeptmhmm1_3line","predicted_topologies.3line"),
+            "tango":("TANGO","aggregation","tango_residue_out","sequence_input.out")}
+        name,prefix,format,filename = names[tool]
+        if not config.verified_version:
+            result.update(parse_status="blocked",blocker="Record the actual installed tool version before importing predictions.")
+            return result
+        output = output_dir/filename
+        artifact = NativeFusionArtifact(path=output,tool_version=config.verified_version,format=format,
+            record_id="sequence_input",aggregation_rule=config.extra.get("aggregation_rule") if tool=="tango" else None)
+        observations = parse_native_artifact(artifact,sequence)
+        record_path = output.with_suffix(".run.json")
+        record = dict(tool_name=name,tool_version=config.verified_version,origin="automated",returncode=run.return_code,
+            command=run.argv,input_sha256=digest,output_sha256=sha256(output.read_bytes()).hexdigest(),
+            record_id="sequence_input",native_format=format,aggregation_rule=artifact.aggregation_rule.model_dump() if artifact.aggregation_rule else None)
+        record_path.write_text(json.dumps(record,indent=2),encoding="utf-8")
+        evidence = FusionToolEvidence(input_sha256=digest,
+            provenance={name:ToolEvidenceProvenance(origin="automated",output_sha256=record["output_sha256"],
+                record_file=record_path,record_sha256=sha256(record_path.read_bytes()).hexdigest())},
+            native_formats={name:format},native_rules={name:record["aggregation_rule"]},**observations,
+            **{prefix+"_source_file":output,prefix+"_tool_version":config.verified_version})
+        if tool=="tango":
+            evidence.aggregation_tool="TANGO"
+        parsed = evidence.model_dump(mode="json")
+        result["outputs"] = {"raw_output":str(output),"execution_record":str(record_path)}
+    elif tool == "colabfold":
         from Bio.PDB import PDBParser
         from Bio.SeqUtils import seq1
         summaries = parse_colabfold_models(output_dir, candidate_id="sequence_input")
@@ -122,11 +156,15 @@ def sequence_prediction_tools():
     implementation = (Path(__file__), Path(__file__).parents[1] / "pipeline/adapters.py",
         Path(__file__).parents[1] / "constructs/linker_features.py",
         Path(__file__).parents[1] / "parsers/structure_prediction.py",
-        Path(__file__).parents[1] / "pscore_runner.py", Path(__file__).parents[1] / "jpred_runner.py")
+        Path(__file__).parents[1] / "pscore_runner.py", Path(__file__).parents[1] / "jpred_runner.py",
+        Path(__file__).parents[1] / "fusion_tool_import.py",Path(__file__).parents[1]/"tango_runner.py")
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
         implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu")
         for name, label in (("iupred2a", "IUPred2 disorder prediction"), ("seg", "SEG low-complexity prediction"),
                             ("colabfold", "ColabFold enzyme / fusion prediction"),
                             ("pscore", "Original PScore — diagnostic LLPS propensity"),
-                            ("jpred", "JPred — exact-sequence secondary structure"))]
+                            ("jpred", "JPred — exact-sequence secondary structure"),
+                            ("signalp", "SignalP 6 — actual full-fusion signal peptide"),
+                            ("deeptmhmm", "DeepTMHMM 1 — actual full-fusion topology"),
+                            ("tango", "Licensed TANGO — actual full-fusion aggregation"))]

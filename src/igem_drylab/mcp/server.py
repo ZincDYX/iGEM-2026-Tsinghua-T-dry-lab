@@ -7,6 +7,12 @@ from typing import Any, Literal
 from mcp.server import MCPServer
 
 from .registry import create_default_registry
+from igem_drylab.m4_workflow import M4ReportInput
+from igem_drylab.m3_workflow import M3EnsembleInput
+from igem_drylab.structural_workflow import M2EnzymeComparisonInput
+from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeometryInput, RecruitmentEnsembleInput
+from igem_drylab.fusion_tool_import import FusionImportInput
+from igem_drylab.m1_prioritization import M1PrioritizationInput
 
 server = MCPServer(
     name="igem-drylab-2026",
@@ -29,40 +35,50 @@ def _call_local(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 @server.tool(name="igem.m4.report", title="Original M4 three-scenario F1/F2/F3 report", structured_output=True)
-def m4_report(payload: dict[str, Any]) -> dict[str, Any]:
-    return _call_local("igem.m4.report", {"payload": payload})
+def m4_report(payload: M4ReportInput) -> dict[str, Any]:
+    return _call_local("igem.m4.report", {"payload": payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m3.ensemble", title="Propagate original M3 parameter uncertainty", structured_output=True)
-def m3_ensemble(payload: dict[str, Any]) -> dict[str, Any]:
-    return _call_local("igem.m3.ensemble", {"payload": payload})
+def m3_ensemble(payload: M3EnsembleInput) -> dict[str, Any]:
+    return _call_local("igem.m3.ensemble", {"payload": payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m2.compare_enzyme", title="Original M2 Q1/Q2 reference comparisons", structured_output=True)
-def m2_compare_enzyme(payload: dict[str, Any]) -> dict[str, Any]:
-    return _call_local("igem.m2.compare_enzyme", {"payload": payload})
+def m2_compare_enzyme(payload: M2EnzymeComparisonInput) -> dict[str, Any]:
+    return _call_local("igem.m2.compare_enzyme", {"payload": payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m2.expand_fusion", title="Actual fusion core assembly template expansion", structured_output=True)
-def m2_expand_fusion(payload: dict[str, Any]) -> dict[str, Any]:
-    return _call_local("igem.m2.expand_fusion", {"payload": payload})
+def m2_expand_fusion(payload: AssemblyExpansionInput) -> dict[str, Any]:
+    return _call_local("igem.m2.expand_fusion", {"payload": payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m2.place_recruitment", title="Template recruitment placement and conflict graph", structured_output=True)
-def m2_place_recruitment(payload: dict[str, Any]) -> dict[str, Any]:
-    return _call_local("igem.m2.place_recruitment", {"payload": payload})
+def m2_place_recruitment(payload: RecruitmentGeometryInput) -> dict[str, Any]:
+    return _call_local("igem.m2.place_recruitment", {"payload": payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m2.recruitment_ensemble", title="Independent recruitment conformation observations", structured_output=True)
-def m2_recruitment_ensemble(payload: dict[str, Any]) -> dict[str, Any]:
-    return _call_local("igem.m2.recruitment_ensemble", {"payload": payload})
+def m2_recruitment_ensemble(payload: RecruitmentEnsembleInput) -> dict[str, Any]:
+    return _call_local("igem.m2.recruitment_ensemble", {"payload": payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m1.import_fusion_results",title="Import native full-fusion raw tool results",structured_output=True)
+def m1_import_fusion_results(payload: FusionImportInput) -> dict[str,Any]:
+    return _call_local("igem.m1.import_fusion_results",{"payload":payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m1.prioritize",title="Apply reviewed M1 soft risk and original ranking",structured_output=True)
+def m1_prioritize(payload: M1PrioritizationInput) -> dict[str,Any]:
+    return _call_local("igem.m1.prioritize",{"payload":payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m2.assess_regions", title="Assess actual full-length model regions", structured_output=True)
 def m2_assess_regions(candidate_id: str, sequence: str, confidence_file: str,
-                      regions: list[dict[str, Any]], calculate_accessibility: bool = True) -> dict[str, Any]:
+                      regions: list[dict[str, Any]], calculate_accessibility: bool = True, tool_input_id: str | None = None) -> dict[str, Any]:
     return _call_local("igem.m2.assess_regions", dict(candidate_id=candidate_id, sequence=sequence,
-        confidence_file=confidence_file, regions=regions, calculate_accessibility=calculate_accessibility))
+        confidence_file=confidence_file, regions=regions, calculate_accessibility=calculate_accessibility,tool_input_id=tool_input_id))
 
 
 @server.tool(
@@ -163,6 +179,7 @@ def m1_screen_sequence(
     protparam_evidence: dict[str, Any] | None = None,
     fusion_evidence: dict[str, Any] | None = None,
     full_fusion_sha256: str | None = None,
+    full_fusion_sequence: str | None = None,
     require_external_evidence: bool = True,
 ) -> dict[str, Any]:
     arguments: dict[str, Any] = {
@@ -176,6 +193,7 @@ def m1_screen_sequence(
         "protparam_evidence": protparam_evidence,
         "fusion_evidence": fusion_evidence,
         "full_fusion_sha256": full_fusion_sha256,
+        "full_fusion_sequence": full_fusion_sequence,
         "require_external_evidence": require_external_evidence,
     }
     if feature_definitions_file is not None:

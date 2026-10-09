@@ -199,6 +199,8 @@ class FusionToolEvidence(BaseModel):
     restriction_source_file: Path | None = None
     forbidden_dna_sites: list[str] = Field(default_factory=list)
     provenance: dict[str, ToolEvidenceProvenance] = Field(default_factory=dict)
+    native_formats: dict[str, str] = Field(default_factory=dict)
+    native_rules: dict[str, dict | None] = Field(default_factory=dict)
 
 
 class M1ScreenResult(BaseModel):
@@ -488,6 +490,7 @@ def screen_sequence_v3(
     protparam: ProtParamEvidence | None = None,
     fusion_evidence: FusionToolEvidence | None = None,
     full_fusion_sha256: str | None = None,
+    full_fusion_sequence: str | None = None,
     sequence: str | None = None,
     localization_context: Literal["cytosolic", "er_anchored"] = "cytosolic",
     require_external_evidence: bool = True,
@@ -497,7 +500,7 @@ def screen_sequence_v3(
     missing: list[str] = []
     if require_external_evidence:
         _verify_sequence_evidence(features, sequence, disorder, secondary_structure, seg, protparam, fusion_evidence,
-                                  full_fusion_sha256, missing)
+                                  full_fusion_sha256, missing, full_fusion_sequence)
 
     is_linker = sequence_kind not in {"idr", "full_fusion"}
     if is_linker and (features.length < rules.linker_min_length or features.length > rules.linker_max_length):
@@ -606,7 +609,7 @@ def screen_sequence_v3(
     )
 
 
-def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, protparam, fusion, fusion_hash, missing):
+def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, protparam, fusion, fusion_hash, missing, full_sequence=None):
     """Reparse actual bytes before any declared summary can qualify a design."""
     normalized = normalize_amino_acid_sequence(sequence) if sequence is not None else None
     if normalized is not None and sha256(normalized.encode()).hexdigest() != features.sequence_sha256:
@@ -673,6 +676,22 @@ def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, prot
             # require a byte-bound human review, explicitly not an automatic job.
             if not verify_artifact(provenance, path, name, version, fusion_hash, observations):
                 missing.append(name + "_verified_raw_output_and_review")
+            elif name in fusion.native_formats:
+                from igem_drylab.fusion_tool_import import NativeFusionArtifact, parse_native_artifact
+                native_sequence=normalize_amino_acid_sequence(full_sequence) if full_sequence is not None else normalized if features.sequence_sha256==fusion_hash else None
+                if native_sequence is None:
+                    # Fragment checks rely on the separately reparsed full
+                    # fusion screen; a fragment is not the native tool input.
+                    if provenance.origin != "manual_review":
+                        missing.append(name + "_complete_fusion_sequence_required_for_native_reparse")
+                    continue
+                if sha256(native_sequence.encode()).hexdigest()!=fusion_hash:
+                    raise ValueError("full_fusion_native_reparse_sequence_mismatch")
+                record = json.loads(provenance.record_file.read_text(encoding="utf-8"))
+                artifact = NativeFusionArtifact(path=path, tool_version=version, format=fusion.native_formats[name],
+                    record_id=record["record_id"],aggregation_rule=fusion.native_rules.get(name))
+                if parse_native_artifact(artifact,native_sequence) != observations:
+                    raise ValueError(name + "_native_parser_summary_mismatch")
             elif provenance.origin != "manual_review":
                 missing.append(name + "_version_specific_automatic_parser_not_available")
 

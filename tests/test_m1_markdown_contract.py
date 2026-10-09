@@ -228,6 +228,7 @@ def test_stdio_mcp_server_is_launchable_and_callable() -> None:
             command=sys.executable,
             args=["-m", "igem_drylab.mcp.server"],
             cwd=ROOT,
+            env={"PYTHONPATH": str(ROOT / "src")},
         )
         async with Client(params, read_timeout_seconds=20) as client:
             listed = await client.list_tools()
