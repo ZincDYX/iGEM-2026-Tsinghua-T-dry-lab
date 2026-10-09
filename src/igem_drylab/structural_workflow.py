@@ -28,10 +28,12 @@ class M2EnzymeComparisonInput(ScientificAnalysisInput):
 
 
 def compare_fusion_to_reference(payload: M2EnzymeComparisonInput) -> dict:
-    reference, _ = payload.reference.read()
+    reference, reference_confidence = payload.reference.read()
     fusion, confidence = payload.fusion.read()
     core_selection = ResidueSelection(chain=payload.core_mapping.mobile_chain,
                                       residues=[b for _, b in payload.core_mapping.residue_pairs])
+    ref_core = ResidueSelection(chain=payload.core_mapping.reference_chain,
+                               residues=[a for a, _ in payload.core_mapping.residue_pairs])
     ref_pocket = ResidueSelection(chain=payload.core_mapping.reference_chain, residues=[a for a, _ in payload.pocket_mapping])
     pocket = ResidueSelection(chain=payload.core_mapping.mobile_chain, residues=[b for _, b in payload.pocket_mapping])
     core_atoms = selected_atoms(fusion, core_selection)
@@ -43,9 +45,15 @@ def compare_fusion_to_reference(payload: M2EnzymeComparisonInput) -> dict:
     if confidence is not None:
         for name, selection in (("core", core_selection), ("pocket", pocket)):
             scores[name] = float(np.mean([confidence[key] for key in selection.keys()]))
-    gate = "high" if confidence is None or min(scores.values()) > 70 else "medium" if min(scores.values()) >= 50 else "low"
+    reference_scores = {}
+    if reference_confidence is not None:
+        for name, selection in (("core", ref_core), ("pocket", ref_pocket)):
+            reference_scores[name] = float(np.mean([reference_confidence[key] for key in selection.keys()]))
+    folded_scores = [*scores.values(), *reference_scores.values()]
+    gate = "high" if not folded_scores or min(folded_scores) > 70 else "medium" if min(folded_scores) >= 50 else "low"
     result = {"schema_version": "m2-enzyme-comparison-v1", "candidate_id": payload.candidate_id,
-        "confidence_gate": gate, "region_mean_plddt": scores, "q1_verdict": "blocked", "q2_verdict": "blocked",
+        "confidence_gate": gate, "region_mean_plddt": scores, "reference_region_mean_plddt": reference_scores,
+        "q1_verdict": "blocked", "q2_verdict": "blocked",
         "core_ca_rmsd_angstrom": None, "pocket_ca_rmsd_angstrom": None, "pocket_sasa_retention": None,
         "tail_pocket_min_distance_angstrom": None, "tail_core_clashes": None, "ligand_accessibility": None,
         "source_hashes": _hashes(payload.reference, payload.fusion),

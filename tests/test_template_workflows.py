@@ -188,3 +188,22 @@ def test_predicted_structure_read_accepts_mapped_tool_ID_and_exact_sequence(tmp_
         expected_sequence=request.sequence,source_kind="prediction",source_reference="synthetic_prediction_format_fixture")
     atoms,confidence=structure.read()
     assert len([a for a in atoms if a.name=="CA"])==4 and len(confidence)==4
+
+
+def test_low_confidence_predicted_reference_cannot_pass_Q1(tmp_path, monkeypatch):
+    reference=write_structure(tmp_path/"reference.pdb",[("A",i,xyz) for i,xyz in enumerate(points(),1)])
+    fusion=write_structure(tmp_path/"fusion.pdb",[("A",i,xyz) for i,xyz in enumerate(points(),1)])
+    # Explicit confidence-gate oracle, not real prediction output or a tool job.
+    def read_fixture(self):
+        atoms=read_pdb_atoms(self.path)
+        score=40.0 if self.path==reference.path else 90.0
+        return atoms,{(a.chain,a.residue,a.insertion):score for a in atoms}
+    monkeypatch.setattr(StructureInput,"read",read_fixture)
+    payload=M2EnzymeComparisonInput(candidate_id="fixture",reference=reference,fusion=fusion,
+        core_mapping=mapping("A","A"),pocket_mapping=[(1,1),(2,2)],pocket_definition_reference="synthetic_fixture",
+        clash_cutoff_angstrom=2.5,clash_rule_reference="fixture")
+    result=compare_fusion_to_reference(payload)
+    assert result["reference_region_mean_plddt"]==dict(core=40,pocket=40)
+    assert result["region_mean_plddt"]==dict(core=90,pocket=90)
+    assert result["confidence_gate"]=="low" and result["q1_verdict"]=="blocked"
+    assert result["core_ca_rmsd_angstrom"] is None and result["pocket_sasa_retention"] is None
