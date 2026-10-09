@@ -25,6 +25,15 @@
 - 一次全量测试没有在 PATH 加入已安装的 Node，失败日志保留；补正确测试环境后重跑。未修改科学规则以让测试通过。
 - 外部工具和缓存没有新增安装。本轮不包含项目特异的小分子 docking、长时间 MD、原始 Mpipi 相图作业、许可预测器真实作业或湿实验复现。
 
+## 软件交付与实际作业状态
+
+- 运行源码冻结在 `cc2e8eb38d0765751d390495f3f00314a8b1294c`。此后的报告更新不改变运行代码。最终冻结服务器回归为 749 passed/9 skipped 和实际工具环境 52 passed/0 skipped。
+- 实际 M1 DAG 已重跑，11 个对象仍 blocked；原始 PScore 的 IDR/OC/DMT/全长支架结果分别为 10.79/0.19/0.77/11.32。不能把这些预测值说成 LLPS 概率或完整排名。该批实际作业及区域计算执行源码为本轮较早的 `96e1a6a`，与最终新增的预测参考 Q1 置信度回归分开记录。
+- 前端 56 项测试、12 项生产构建交互测试通过。Windows 原生包实际启动本地 Python、随机 loopback API；匿名访问被拒绝；关闭 owned desktop 后后台退出。默认仍为 Local，已有 HTTPS API 和访问令牌只作用户自选配置。
+- 服务器 runtime 已按冻结源码更新，583 个源码文件与 16 个前端资源逐字节核对。没有在仓库加入私人服务器地址、别名或路径。
+- 本轮先核对旧备份无运行进程，再压缩、验证后退役两个旧 runtime 目录；完整恢复归档保留，未删除用户科学数据。一个仍被使用的更早备份未动。部署大小与最终便携包核验另见发布验证文件，范围不含非活动发布压缩档、科学输出和无关构建工具链，不是整机占用。
+- 主 `iGEM-drylab-codebundle.md` 包含最终提交的后端、科学计算、MCP、工作流、前端、桌面壳、测试与说明；冻结运行 bundle 另留，避免把仅报告的新提交误说成实际科学作业源码。
+
 ## 你需要人工做什么
 
 ### 1. 先提供三类全长筛查工具的合法材料或原始结果
@@ -33,7 +42,7 @@
 
 | 工具 | 你最少需要做什么 | 给我的材料 |
 |---|---|---|
-| SignalP 6 | 到 [DTU 官方页面](https://services.healthtech.dtu.dk/services/SignalP-6.0/) 使用网页预测，或者按其学术下载入口获取 Python 包并核对条款 | 原始 `prediction_results.txt`、实际输入 FASTA 和版本；或合法安装包。不要只给截图。具体当前下载表单是否要求账号/机构审核，本次未完全核实 |
+| SignalP 6 | 到 [DTU 官方页面](https://services.healthtech.dtu.dk/services/SignalP-6.0/) 使用网页预测；本地包需在 [官方学术申请表](https://services.healthtech.dtu.dk/cgi-bin/sw_request?packageversion=6.0i&platform=slow_sequential&software=signalp&version=6.0) 填姓名、职位、大学/机构邮箱和单位，并自行阅读、接受协议，下载链接发往该邮箱 | 原始 `prediction_results.txt`、实际输入 FASTA 和版本；或者将合法安装包放到许可允许的私有部署位置，提供路径。不要只给截图，不要公开转发原包或提交仓库。许可不自动允许商业平台服务或跨机构再分发 |
 | DeepTMHMM 1 | 可先用 [官方 BioLib 网页](https://dtu.biolib.com/DeepTMHMM/) 跑完整序列；若要账户 API 自动作业，按 [BioLib 官方说明](https://biolib.com/docs/using-applications/python/) 登录并创建 token，只配置在用户私有环境 | 原始 `predicted_topologies.3line`、输入 FASTA、实际版本；或可用的私有 API 访问配置。公开服务免费用于学术和商业；商业自托管另有许可，不是所有情况都要买许可证，见 [DTU 说明](https://services.healthtech.dtu.dk/services/DeepTMHMM-1.0/) |
 | TANGO 或 PASTA 2（二选一） | 优先按 [TANGO 官方许可入口](https://tango.crg.es/licensing-and-services) 获取学术/非营利研究材料并接受对应协议；PASTA 可经 [ELIXIR 官方服务目录](https://www.elixir-italy.org/services/pasta/) 找入口，但其当前下载站与条款未确认 | TANGO 合法可执行程序及原始逐残基输出，或 PASTA 原始结果待人工审核。PASTA 原生版本解析/自动作业仍未验证，不能承诺给账号就已跑通 |
 
