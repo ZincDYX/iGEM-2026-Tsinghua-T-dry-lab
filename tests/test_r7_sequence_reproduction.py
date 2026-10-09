@@ -7,6 +7,9 @@ not cloning, localization, LLPS, assembly or experiment validation.
 from hashlib import sha256
 import json
 from pathlib import Path
+import sys
+
+import pytest
 
 from Bio import SeqIO
 
@@ -15,6 +18,42 @@ from igem_drylab.workflow.engine import WorkflowEngine
 from igem_drylab.workflow.models import Project, SequenceRecord
 from igem_drylab.workflow.sequence_results import sequence_map
 from igem_drylab.workflow.store import WorkflowStore
+
+
+def assert_statistics_replay(actual, expected):
+    """Only floating arithmetic gets roundoff tolerance; identity stays exact.
+
+    Python 3.12 changed sum(float) to compensated summation. The immutable
+    historical evidence remains the oracle, with a 32-epsilon relative bound
+    and 1e-14 absolute bound for cancellation near zero (not biological error).
+    """
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict) and actual.keys() == expected.keys()
+        for key in expected:
+            assert_statistics_replay(actual[key], expected[key])
+    elif isinstance(expected, list):
+        assert isinstance(actual, list) and len(actual) == len(expected)
+        for left, right in zip(actual, expected):
+            assert_statistics_replay(left, right)
+    elif isinstance(expected, float):
+        assert isinstance(actual, float)
+        assert actual == pytest.approx(expected, rel=32 * sys.float_info.epsilon, abs=1e-14)
+    elif type(expected) is int:
+        # JSON can represent an exactly-zero statistic as 0 rather than 0.0.
+        assert type(actual) in (int, float) and actual == expected
+    else:
+        assert type(actual) is type(expected) and actual == expected
+
+
+@pytest.mark.parametrize('changed', [
+    {'mass': 21554.259201, 'count': 12, 'source': 'original'},
+    {'mass': 21554.2592, 'count': 13, 'source': 'original'},
+    {'mass': 21554.2592, 'count': 12, 'source': 'different'},
+    {'mass': 21554.2592, 'count': 12},
+])
+def test_replay_comparison_rejects_numerical_drift_or_changed_identity(changed):
+    with pytest.raises(AssertionError):
+        assert_statistics_replay(changed, {'mass': 21554.2592, 'count': 12, 'source': 'original'})
 
 
 def test_original_twelve_statistics_replay_with_production_tool_and_registered_parent(tmp_path):
@@ -34,7 +73,8 @@ def test_original_twelve_statistics_replay_with_production_tool_and_registered_p
     actual = engine.run(run_id)
     assert actual["status"] == "succeeded"
     parent = next(node for node in actual["nodes"] if node["id"] == "sequences")
-    assert parent["output"]["items"] == [{"schema_version": "sequence-metrics-v1", **item} for item in expected]
+    assert_statistics_replay(parent["output"]["items"],
+        [{"schema_version": "sequence-metrics-v1", **item} for item in expected])
     with store.connection() as db:
         view = sequence_map(db, run_id, "sequences", 0, 20)
     assert view["total_count"] == 12 and len(view["rows"]) == 12

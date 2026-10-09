@@ -2,6 +2,7 @@
 from pathlib import Path
 from time import sleep
 import json
+import shutil
 
 from fastapi.testclient import TestClient
 import pytest
@@ -10,18 +11,31 @@ from igem_drylab.software.dashboard import create_app
 from igem_drylab.workflow.scientific_project import load_scientific_project
 
 
-def test_typed_project_executes_original_stages_and_preserves_missing_evidence(tmp_path):
+@pytest.mark.parametrize('external_defaults', [False, True])
+def test_typed_project_executes_original_stages_and_preserves_missing_evidence(tmp_path, external_defaults):
     app = create_app(data_dir=tmp_path, deployment_mode="development")
     client = TestClient(app)
     source = Path('configs/m1_m4_real_scoring_example.yaml').resolve()
     original = load_scientific_project(source)
+    if external_defaults:
+        # Exercise wheel-like asset placement even when imports use the checkout.
+        assets = tmp_path / 'installed-assets'
+        assets.mkdir()
+        for field in ('feature_definitions_file', 'rules_file'):
+            old = getattr(original.config.stages.m1_llps, field)
+            copied = assets / old.name
+            shutil.copyfile(old, copied)
+            setattr(original.config.stages.m1_llps, field, copied)
+            next(item for item in original.evidence_files if item.path == old).path = copied
+        original.verify()
     private_config = original.config.model_dump(mode='json',exclude={'tools'})
     files = []
     replacements = {}
     for item in original.evidence_files:
         if item.path == source: continue
-        # Keep the original tree, including paths inside typed metrics JSON.
-        logical = item.path.relative_to(Path.cwd()).as_posix()
+        # Keep project paths; installed default assets are not in the checkout.
+        logical = (item.path.relative_to(Path.cwd()).as_posix()
+            if item.path.is_relative_to(Path.cwd()) else 'bundled-defaults/' + item.path.name)
         replacements[str(item.path)] = '../' + logical
         files.append({'filename':logical,'content':item.path.read_text(encoding='utf-8')})
     def relative(value):
