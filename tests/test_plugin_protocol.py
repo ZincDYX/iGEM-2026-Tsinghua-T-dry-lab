@@ -41,6 +41,8 @@ def test_two_plugins_really_use_incompatible_dependency_versions(tmp_path, monke
         assert result["version"] == version
         # Private independent oracle, not a path published by the plugin.
         prefixes.append(subprocess.check_output([record['python'], '-I', '-c', 'import sys; print(sys.prefix)'], text=True).strip())
+        assert subprocess.check_output([record['python'], '-I', '-c',
+            'import importlib.util; print(importlib.util.find_spec("igem_drylab") is None)'], text=True).strip() == 'True'
     assert prefixes[0] != prefixes[1]
 
 

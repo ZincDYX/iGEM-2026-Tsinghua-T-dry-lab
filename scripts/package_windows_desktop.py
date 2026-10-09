@@ -124,6 +124,24 @@ def main():
     (root/'runtime-import-check.log').write_text(checked.stdout+'\n'+checked.stderr,encoding='utf-8')
     if checked.returncode: raise RuntimeError('runtime import check failed; see '+str(root/'runtime-import-check.log'))
     (root/'runtime-dependencies.json').write_text(checked.stdout,encoding='utf-8')
+    plugin_check = subprocess.run([str(python/'python.exe'), '-B', '-c', '''
+import importlib.util,json,subprocess,tempfile,venv
+from pathlib import Path
+from igem_drylab.workflow.plugins import configure_embedded_environment
+with tempfile.TemporaryDirectory(prefix="fusionlab-plugin-runtime-") as owned:
+    environment=Path(owned)/"environment"
+    venv.EnvBuilder(with_pip=False).create(environment)
+    configure_embedded_environment(environment)
+    child=environment/"Scripts/python.exe"
+    output=subprocess.check_output([str(child),"-I","-c","import json,sys,importlib.util; print(json.dumps(dict(prefix=sys.prefix,parent_numpy=importlib.util.find_spec('numpy') is not None,parent_app=importlib.util.find_spec('igem_drylab') is not None)))"],text=True)
+    result=json.loads(output)
+    assert Path(result["prefix"]).resolve()==environment.resolve()
+    assert not result["parent_numpy"] and not result["parent_app"]
+    subprocess.run([str(child),"-I","-m","ensurepip","--version"],check=True)
+    print(json.dumps(dict(isolated_plugin_paths_verified=True,scientific_calculation=False)))
+'''], cwd=root, capture_output=True, text=True, env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
+    (root/'plugin-runtime-check.log').write_text(plugin_check.stdout+'\n'+plugin_check.stderr,encoding='utf-8')
+    if plugin_check.returncode: raise RuntimeError('plugin runtime check failed; see '+str(root/'plugin-runtime-check.log'))
     if args.release_inventory:
         inventory = args.release_inventory.resolve()
         for name in ('SBOM.cdx.json', 'OSV-audit.json'):

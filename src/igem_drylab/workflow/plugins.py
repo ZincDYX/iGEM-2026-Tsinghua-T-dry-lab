@@ -77,6 +77,29 @@ def contained(root: Path, relative: str) -> Path:
     return result
 
 
+def configure_embedded_environment(environment: Path) -> None:
+    """Keep a Windows embedded parent's ._pth out of managed plugin paths.
+
+    Ordinary venv interpreters need no modification. An embedded redirector
+    otherwise loads the parent's DLL and its authoritative ._pth, including
+    the application's dependencies. A local launcher/DLL gives this plugin
+    its own ._pth while sharing only standard-library files with the parent.
+    """
+    base = Path(sys.base_prefix)
+    runtime = f"python{sys.version_info.major}{sys.version_info.minor}"
+    if os.name != "nt" or not (base / (runtime + "._pth")).is_file():
+        return
+    scripts = environment / "Scripts"
+    for name in ("python.exe", runtime + ".dll", "python3.dll"):
+        shutil.copy2(base / name, scripts / name)
+    for source in base.glob("vcruntime*.dll"):
+        shutil.copy2(source, scripts / source.name)
+    (scripts / (runtime + "._pth")).write_text("\n".join([
+        str(base / (runtime + ".zip")), str(base), str(base / "Lib"),
+        "../Lib/site-packages", "import site", "",
+    ]), encoding="utf-8")
+
+
 class PluginManager:
     """Trusted plugin environments, isolated dependencies and JSON process IO.
 
@@ -168,6 +191,10 @@ class PluginManager:
             if tree_hash(code) != digest:
                 raise ValueError("plugin_source_changed_during_install")
             venv.EnvBuilder(with_pip=False).create(environment)
+        # Reinstalling an already-ready managed plugin also repairs its
+        # launcher without deleting the plugin's own installed dependencies.
+        configure_embedded_environment(environment)
+        if not ready.exists():
             if manifest.requirements_lock:
                 lock = contained(code, manifest.requirements_lock)
                 # Hashed lock files prevent a resolver from silently installing
@@ -207,6 +234,9 @@ class PluginManager:
             return
 
         def invoke(payload: PluginArguments, context: NodeContext) -> dict[str, Any]:
+            runtime = f"python{sys.version_info.major}{sys.version_info.minor}._pth"
+            if os.name == "nt" and (Path(sys.base_prefix) / runtime).is_file() and not (Path(record["python"]).parent / runtime).is_file():
+                raise ToolFailure("plugin_environment_requires_reinstall", "Reinstall this trusted plugin to isolate its dependencies from the desktop runtime.")
             source = Path(record["source"])
             if tree_hash(source) != record["hash"]:
                 raise ToolFailure("plugin_hash_mismatch", "Installed plugin source has changed")

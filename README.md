@@ -29,9 +29,9 @@ It provides:
 - provenance-bearing literature evidence retrieval with BM25, optional embeddings, DOI de-duplication, MMR diversity, and optional one-call grounded synthesis;
 - a reviewed Parameter Registry with unit, identity, construct, condition, and provenance checks;
 - parsers and tool contracts for structure predictors, FreeSASA, AutoDock Vina, and CALVADOS-style outputs;
-- a measured sub-10-GiB deployment contract and real local runners for FreeSASA and AutoDock Vina;
+- a measured 15,000,000,000-byte installed-deployment budget and real local runners for FreeSASA and AutoDock Vina;
 - lightweight FTH1 24-mer geometric expansion and finite-site multichain binding utilities;
-- an MCP-style local tool registry and a conservative agent runtime for orchestration experiments.
+- a real stdio MCP server, persisted DAG execution with fan-out, and isolated trusted-plugin dependency environments.
 
 ## Scientific boundaries
 
@@ -65,7 +65,7 @@ igem-drylab pipeline run configs/m1_m4_example.yaml
 
 The example writes artifacts under `outputs/m1-m4-demo/`. It is a software demonstration, not a project-specific prediction.
 
-## Software Dashboard MVP
+## FusionLab workbench
 
 The optional Dashboard is a React/TypeScript client with a thin FastAPI transport layer. The client displays the real M0–M5 workflow contract and invokes existing local MCP-style tools; it does not reimplement scientific calculations.
 
@@ -78,7 +78,14 @@ pnpm install
 pnpm dev
 ```
 
-Open the Vite URL (normally `http://127.0.0.1:5173`). M0 validates a selected configuration through `igem.pipeline.validate`. M4 invokes `igem.pipeline.run_stage`, which runs its existing deterministic M1–M3 prerequisites before M4. The Dashboard has not yet wired its isolated stage buttons to the newer M1–M3 transport tools, so it still returns an unavailable state rather than fabricating a result; M5 also remains unavailable for isolated Dashboard execution. Attachments are selected locally in this MVP but are not uploaded or persisted.
+Open the Vite URL (normally `http://127.0.0.1:5173`). The maintained workbench uses
+typed projects, actual file uploads, frozen run inputs and a SQLite execution
+ledger. Its M1–M5 stage adapters invoke the existing scientific implementations;
+missing evidence remains blocked rather than generating a demonstration result.
+The Windows desktop defaults to a bundled local backend. An existing HTTPS API
+and access token are optional user settings, never a hard-coded server default.
+See [runtime packaging and startup](docs/desktop-runtime-size.md) and
+[original Mpipi execution boundaries](docs/mpipi-original.md).
 
 To inspect available local tools:
 

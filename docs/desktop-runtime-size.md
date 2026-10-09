@@ -10,6 +10,11 @@ Native NumPy/SciPy libraries, runtime data, public `numpy.testing` APIs,
 distribution metadata and licenses remain included. Only the upstream NumPy/SciPy
 `tests` directories and unselected development distributions are omitted.
 `venv` and `ensurepip` remain available for isolated plugin environments.
+On Windows embedded Python, each managed plugin has its own interpreter DLL and
+`._pth` configuration: only standard-library paths are shared with the parent,
+not the application's dependencies or source. Existing plugins made with the
+old inherited-path launcher must be reinstalled before execution. Reinstall
+repairs the launcher while preserving their own installed dependency files.
 Scientific formulas, solver settings, sampling budgets and evidence requirements
 are not changed by this selection.
 
