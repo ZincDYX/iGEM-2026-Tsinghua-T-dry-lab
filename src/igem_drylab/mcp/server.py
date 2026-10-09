@@ -28,6 +28,11 @@ def _call_local(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     return result.structured_content
 
 
+@server.tool(name="igem.m4.report", title="Original M4 three-scenario F1/F2/F3 report", structured_output=True)
+def m4_report(payload: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m4.report", {"payload": payload})
+
+
 @server.tool(name="igem.m2.assess_regions", title="Assess actual full-length model regions", structured_output=True)
 def m2_assess_regions(candidate_id: str, sequence: str, confidence_file: str,
                       regions: list[dict[str, Any]], calculate_accessibility: bool = True) -> dict[str, Any]:

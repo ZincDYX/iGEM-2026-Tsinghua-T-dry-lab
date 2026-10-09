@@ -892,6 +892,11 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
                 record.analysis_result = {**(record.analysis_result or {}), **analyze_prediction(record.simulation_inputs["prediction_contract"], config.stages.m4_reaction.analysis)}
                 record.robustness = record.analysis_result["robustness"]
                 record.sensitivity = record.analysis_result["sensitivity"]
+                if record.simulation_inputs["prediction_contract"]["model_kind"] == "markdown_steady_state":
+                    from igem_drylab.m4_workflow import M4ReportInput, run_m4_report
+                    record.analysis_result["original_report"] = run_m4_report(M4ReportInput(
+                        steady_input=M4SteadyStateInput.model_validate(record.simulation_inputs["prediction_contract"]["kernel_inputs"]),
+                        analysis=config.stages.m4_reaction.analysis))
             except (ValueError, RuntimeError, KeyError) as error:
                 record.analysis_result = {**(record.analysis_result or {}), "status":"insufficient_data","error":str(error)}
         write_models(run_dir / "m4_analysis", "reaction_predictions_with_analysis", records)
@@ -1099,7 +1104,8 @@ def _run_markdown_steady_m4(
                     if result.reaction_flux_um_per_h["R3"]+result.reaction_flux_um_per_h["R6"]>0 else None,
                 "q_9_to_13": result.reaction_flux_um_per_h["R5"]/(result.reaction_flux_um_per_h["R2"]+result.reaction_flux_um_per_h["R5"])
                     if result.reaction_flux_um_per_h["R2"]+result.reaction_flux_um_per_h["R5"]>0 else None},
-            analysis_result={"steady_state_local_stability": result.local_stability},
+            analysis_result={"steady_state_local_stability": result.local_stability,
+                "original_report": _original_m4_report(steady_inputs)},
             transport_report={"secretion_flux_um_per_h":result.secretion_flux_um_per_h,
                 "product_recovery_15_um_per_h":result.secretion_flux_um_per_h["15"],
                 "intermediate_outflow_8_to_14_um_per_h":sum(result.secretion_flux_um_per_h[str(i)] for i in range(8,15)),
@@ -1112,6 +1118,11 @@ def _run_markdown_steady_m4(
     _label_scientific_results(config, records)
     write_models(stage_dir, "reaction_predictions", records)
     return records, _stage_output("m4_markdown_steady_state", stage_dir, "reaction_predictions", len(records))
+
+
+def _original_m4_report(inputs):
+    from igem_drylab.m4_workflow import M4ReportInput, run_m4_report
+    return run_m4_report(M4ReportInput(steady_input=inputs))
 
 
 def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
