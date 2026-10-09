@@ -121,7 +121,8 @@ def test_stdio_MCP_analysis_calls_real_registered_solver():
     payload = steady_fixture()
     async def exercise():
         async with Client(StdioServerParameters(command=sys.executable,args=['-m','igem_drylab.mcp.server'],
-                cwd=Path.cwd()),read_timeout_seconds=30) as client:
+                cwd=Path(__file__).resolve().parents[1],
+                env={"PYTHONPATH":str(Path(__file__).resolve().parents[1]/"src")}),read_timeout_seconds=30) as client:
             response = await client.call_tool('igem.m4.analyze_prediction',{'prediction_contract':
                 steady_contract(payload,solve_m4_steady_state(payload)),'analysis_config':{'local_parameter_names':['partition_x9']}})
             assert not response.is_error

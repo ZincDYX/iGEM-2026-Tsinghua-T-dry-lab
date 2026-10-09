@@ -1,0 +1,138 @@
+"""M2 Q1/Q2 complete reference comparison from explicit reviewed selections."""
+import json
+from pathlib import Path
+from pydantic import BaseModel
+
+import numpy as np
+from pydantic import Field
+
+from .design_analysis import ScientificAnalysisInput
+from .template_geometry import (StructureInput, CAMapping, ResidueSelection, atom_sasa,
+                                selected_sasa, selected_atoms, clashes, _hashes)
+from .structure_metrics import aligned_ca_rmsds
+
+
+class M2EnzymeComparisonInput(ScientificAnalysisInput):
+    candidate_id: str
+    reference: StructureInput
+    fusion: StructureInput
+    core_mapping: CAMapping
+    pocket_mapping: list[tuple[int | str, int | str]] = Field(min_length=1)
+    pocket_definition_reference: str = Field(min_length=1)
+    introduced_tail: ResidueSelection | None = None
+    recruitment_ligand: ResidueSelection | None = None
+    clash_cutoff_angstrom: float = Field(gt=0)
+    clash_rule_reference: str = Field(min_length=1)
+    burial_retention_cutoff: float | None = Field(default=None, ge=0, le=1)
+    burial_rule_reference: str | None = None
+
+
+def compare_fusion_to_reference(payload: M2EnzymeComparisonInput) -> dict:
+    reference, _ = payload.reference.read()
+    fusion, confidence = payload.fusion.read()
+    core_selection = ResidueSelection(chain=payload.core_mapping.mobile_chain,
+                                      residues=[b for _, b in payload.core_mapping.residue_pairs])
+    ref_pocket = ResidueSelection(chain=payload.core_mapping.reference_chain, residues=[a for a, _ in payload.pocket_mapping])
+    pocket = ResidueSelection(chain=payload.core_mapping.mobile_chain, residues=[b for _, b in payload.pocket_mapping])
+    core_atoms = selected_atoms(fusion, core_selection)
+    pocket_atoms = selected_atoms(fusion, pocket)
+    selected_atoms(reference, ref_pocket)
+    if (payload.burial_retention_cutoff is None) != (payload.burial_rule_reference is None):
+        raise ValueError("burial_cutoff_requires_reviewed_rule")
+    scores = {}
+    if confidence is not None:
+        for name, selection in (("core", core_selection), ("pocket", pocket)):
+            scores[name] = float(np.mean([confidence[key] for key in selection.keys()]))
+    gate = "high" if confidence is None or min(scores.values()) > 70 else "medium" if min(scores.values()) >= 50 else "low"
+    result = {"schema_version": "m2-enzyme-comparison-v1", "candidate_id": payload.candidate_id,
+        "confidence_gate": gate, "region_mean_plddt": scores, "q1_verdict": "blocked", "q2_verdict": "blocked",
+        "core_ca_rmsd_angstrom": None, "pocket_ca_rmsd_angstrom": None, "pocket_sasa_retention": None,
+        "tail_pocket_min_distance_angstrom": None, "tail_core_clashes": None, "ligand_accessibility": None,
+        "source_hashes": _hashes(payload.reference, payload.fusion),
+        "definition_sources": {"core_mapping": payload.core_mapping.reviewed_reference,
+                               "pocket": payload.pocket_definition_reference, "clash": payload.clash_rule_reference},
+        "formal_verdict": "blocked", "missing": ["Q3 actual fusion assembly and Q4 recruitment scenario evidence"],
+        "scope": "predicted_reference_comparison_not_catalytic_activity"}
+    if gate == "low":
+        result["missing"].append("low_confidence_folded_core_or_pocket_geometry_not_interpretable")
+        return result
+    rmsd = aligned_ca_rmsds(payload.reference.path, payload.fusion.path,
+        reference_chain=payload.core_mapping.reference_chain, model_chain=payload.core_mapping.mobile_chain,
+        core_residues=[a for a, _ in payload.core_mapping.residue_pairs], pocket_residues=[a for a, _ in payload.pocket_mapping],
+        core_residue_mapping=payload.core_mapping.residue_pairs, pocket_residue_mapping=payload.pocket_mapping,
+        reference_model_id=payload.reference.model_id, model_id=payload.fusion.model_id,
+        reference_altloc=payload.reference.altloc, model_altloc=payload.fusion.altloc)
+    import freesasa
+    parameters = freesasa.Parameters()
+    ref_areas = atom_sasa({"reference": reference}, parameters)
+    fusion_areas = atom_sasa({"fusion": fusion}, parameters)
+    ref_area = selected_sasa(ref_areas, "reference", ref_pocket)
+    if ref_area <= 0:
+        raise ValueError("reference_pocket_has_no_positive_SASA_no_retention_defined")
+    result.update(core_ca_rmsd_angstrom=rmsd["core_ca_rmsd_angstrom"], pocket_ca_rmsd_angstrom=rmsd["pocket_ca_rmsd_angstrom"],
+                  pocket_sasa_retention=selected_sasa(fusion_areas, "fusion", pocket)/ref_area)
+    failures = []
+    if result["core_ca_rmsd_angstrom"] > 4:
+        failures.append("original_core_RMSD_gt_4_angstrom")
+    if result["pocket_sasa_retention"] < .7:
+        failures.append("original_pocket_SASA_retention_lt_0.7")
+    result["q1_verdict"] = "reject" if gate == "high" and failures else "review" if gate != "high" else "pass"
+    result["q1_rule_hits"] = failures
+    if payload.introduced_tail:
+        tail = selected_atoms(fusion, payload.introduced_tail)
+        if payload.introduced_tail.keys() & (pocket.keys() | core_selection.keys()):
+            raise ValueError("tail_selection_must_not_overlap_pocket_or_core")
+        result["tail_pocket_min_distance_angstrom"] = clashes(tail, pocket_atoms, payload.clash_cutoff_angstrom)["minimum_distance_angstrom"]
+        result["tail_core_clashes"] = clashes(tail, core_atoms, payload.clash_cutoff_angstrom)
+        result["tail_geometry_scope"] = "flexible_tail_reference_only_not_a_rejection"
+    if payload.recruitment_ligand:
+        ligand = selected_atoms(fusion, payload.recruitment_ligand)
+        isolated_areas = atom_sasa({"ligand": ligand}, parameters)
+        isolated = selected_sasa(isolated_areas, "ligand", payload.recruitment_ligand)
+        retention = selected_sasa(fusion_areas, "fusion", payload.recruitment_ligand)/isolated if isolated > 0 else None
+        ligand_score = float(np.mean([confidence[k] for k in payload.recruitment_ligand.keys()])) if confidence is not None else None
+        credible = ligand_score is None or ligand_score > 70
+        buried = retention < payload.burial_retention_cutoff if retention is not None and payload.burial_retention_cutoff is not None and credible else None
+        result["ligand_accessibility"] = {"sasa_retention": retention, "mean_plddt": ligand_score,
+            "buried": buried, "reference": "same_conformation_isolated_ligand_not_a_free_equilibrium_structure"}
+        result["q2_verdict"] = "reject" if buried is True else "pass" if buried is False else "review"
+    if result["q1_verdict"] == "reject" or result["q2_verdict"] == "reject":
+        result["formal_verdict"] = "reject"
+    return result
+
+
+def calculation_kinds():
+    from .template_geometry import (AssemblyExpansionInput, expand_actual_fusion,
+        RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble)
+    return {"enzyme_comparison": (M2EnzymeComparisonInput, compare_fusion_to_reference),
+            "assembly_expansion": (AssemblyExpansionInput, expand_actual_fusion),
+            "recruitment_geometry": (RecruitmentGeometryInput, calculate_recruitment_geometry),
+            "recruitment_ensemble": (RecruitmentEnsembleInput, calculate_recruitment_ensemble)}
+
+
+def load_calculation_requests(path: Path):
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(rows, list):
+        raise ValueError("M2_calculations_require_request_list")
+    def resolve(model):
+        if isinstance(model, BaseModel):
+            for key in type(model).model_fields:
+                value = getattr(model, key)
+                if isinstance(value, Path) and not value.is_absolute():
+                    setattr(model, key, (path.parent/value).resolve())
+                else:
+                    resolve(value)
+        elif isinstance(model, (tuple, list)):
+            for value in model:
+                resolve(value)
+    result = []
+    for row in rows:
+        if set(row) != {"kind", "candidate_id", "payload"} or row["kind"] not in calculation_kinds():
+            raise ValueError("M2_calculation_requires_explicit_kind_candidate_and_payload")
+        contract, handler = calculation_kinds()[row["kind"]]
+        request = contract.model_validate(row["payload"])
+        if getattr(request, "candidate_id", row["candidate_id"]) != row["candidate_id"]:
+            raise ValueError("M2_calculation_candidate_identity_mismatch")
+        resolve(request)
+        result.append((row["kind"], row["candidate_id"], request, handler))
+    return result

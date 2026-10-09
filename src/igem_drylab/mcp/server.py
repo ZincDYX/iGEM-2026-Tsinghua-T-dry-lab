@@ -38,6 +38,26 @@ def m3_ensemble(payload: dict[str, Any]) -> dict[str, Any]:
     return _call_local("igem.m3.ensemble", {"payload": payload})
 
 
+@server.tool(name="igem.m2.compare_enzyme", title="Original M2 Q1/Q2 reference comparisons", structured_output=True)
+def m2_compare_enzyme(payload: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m2.compare_enzyme", {"payload": payload})
+
+
+@server.tool(name="igem.m2.expand_fusion", title="Actual fusion core assembly template expansion", structured_output=True)
+def m2_expand_fusion(payload: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m2.expand_fusion", {"payload": payload})
+
+
+@server.tool(name="igem.m2.place_recruitment", title="Template recruitment placement and conflict graph", structured_output=True)
+def m2_place_recruitment(payload: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m2.place_recruitment", {"payload": payload})
+
+
+@server.tool(name="igem.m2.recruitment_ensemble", title="Independent recruitment conformation observations", structured_output=True)
+def m2_recruitment_ensemble(payload: dict[str, Any]) -> dict[str, Any]:
+    return _call_local("igem.m2.recruitment_ensemble", {"payload": payload})
+
+
 @server.tool(name="igem.m2.assess_regions", title="Assess actual full-length model regions", structured_output=True)
 def m2_assess_regions(candidate_id: str, sequence: str, confidence_file: str,
                       regions: list[dict[str, Any]], calculate_accessibility: bool = True) -> dict[str, Any]:

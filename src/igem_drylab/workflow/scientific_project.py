@@ -62,6 +62,14 @@ def input_paths(config: ProjectConfig, allowed_roots: tuple[Path, ...] | None = 
             authorize(prediction.model_file)
             paths.update((request.confidence_file, prediction.model_file))
     metrics_file = config.stages.m2_fusion.structure_metrics_file
+    calculation_file = config.stages.m2_fusion.calculation_requests_file
+    if calculation_file and calculation_file.is_file():
+        from igem_drylab.structural_workflow import load_calculation_requests
+        for _, _, request, _ in load_calculation_requests(calculation_file):
+            previous = set(paths)
+            walk(request)
+            for dependency in paths-previous:
+                authorize(dependency)
     if metrics_file and metrics_file.is_file():
         for row in load_m2_structure_metrics(metrics_file).values():
             for field in ("artifact_path", "reference_artifact_path", "geometry_input_path", "sasa_configuration_path"):
@@ -176,6 +184,7 @@ def stage_tools():
                 region_output = output.directory / "region_observations.json"
                 if region_output.is_file():
                     artifacts.add(region_output)
+                artifacts.update(output.directory.glob("calculation-*.json"))
             if stage == "m4":
                 for row in records:
                     if row.trajectory_artifact and row.trajectory_artifact.is_file():

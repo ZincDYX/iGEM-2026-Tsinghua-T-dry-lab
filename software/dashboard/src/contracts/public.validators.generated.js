@@ -18457,13 +18457,13 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
   if (errors === 0) {
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
-      if (data.structure_metrics_file === void 0 && (missing0 = "structure_metrics_file") || data.region_assessments_file === void 0 && (missing0 = "region_assessments_file")) {
+      if (data.structure_metrics_file === void 0 && (missing0 = "structure_metrics_file") || data.region_assessments_file === void 0 && (missing0 = "region_assessments_file") || data.calculation_requests_file === void 0 && (missing0 = "calculation_requests_file")) {
         validate163.errors = [{ instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: missing0 }, message: "must have required property '" + missing0 + "'" }];
         return false;
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "structure_metrics_file" || key0 === "region_assessments_file")) {
+          if (!(key0 === "structure_metrics_file" || key0 === "region_assessments_file" || key0 === "calculation_requests_file")) {
             validate163.errors = [{ instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" }];
             return false;
             break;
@@ -18604,6 +18604,75 @@ function validate163(data, { instancePath = "", parentData, parentDataProperty, 
               var valid0 = _errs8 === errors;
             } else {
               var valid0 = true;
+            }
+            if (valid0) {
+              if (data.calculation_requests_file !== void 0) {
+                let data2 = data.calculation_requests_file;
+                const _errs14 = errors;
+                const _errs15 = errors;
+                let valid3 = false;
+                const _errs16 = errors;
+                if (errors === _errs16) {
+                  if (errors === _errs16) {
+                    if (typeof data2 === "string") {
+                      if (!formats4.test(data2)) {
+                        const err8 = { instancePath: instancePath + "/calculation_requests_file", schemaPath: "#/properties/calculation_requests_file/anyOf/0/format", keyword: "format", params: { format: "path" }, message: 'must match format "path"' };
+                        if (vErrors === null) {
+                          vErrors = [err8];
+                        } else {
+                          vErrors.push(err8);
+                        }
+                        errors++;
+                      }
+                    } else {
+                      const err9 = { instancePath: instancePath + "/calculation_requests_file", schemaPath: "#/properties/calculation_requests_file/anyOf/0/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                      if (vErrors === null) {
+                        vErrors = [err9];
+                      } else {
+                        vErrors.push(err9);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                var _valid2 = _errs16 === errors;
+                valid3 = valid3 || _valid2;
+                const _errs18 = errors;
+                if (data2 !== null) {
+                  const err10 = { instancePath: instancePath + "/calculation_requests_file", schemaPath: "#/properties/calculation_requests_file/anyOf/1/type", keyword: "type", params: { type: "null" }, message: "must be null" };
+                  if (vErrors === null) {
+                    vErrors = [err10];
+                  } else {
+                    vErrors.push(err10);
+                  }
+                  errors++;
+                }
+                var _valid2 = _errs18 === errors;
+                valid3 = valid3 || _valid2;
+                if (!valid3) {
+                  const err11 = { instancePath: instancePath + "/calculation_requests_file", schemaPath: "#/properties/calculation_requests_file/anyOf", keyword: "anyOf", params: {}, message: "must match a schema in anyOf" };
+                  if (vErrors === null) {
+                    vErrors = [err11];
+                  } else {
+                    vErrors.push(err11);
+                  }
+                  errors++;
+                  validate163.errors = vErrors;
+                  return false;
+                } else {
+                  errors = _errs15;
+                  if (vErrors !== null) {
+                    if (_errs15) {
+                      vErrors.length = _errs15;
+                    } else {
+                      vErrors = null;
+                    }
+                  }
+                }
+                var valid0 = _errs14 === errors;
+              } else {
+                var valid0 = true;
+              }
             }
           }
         }

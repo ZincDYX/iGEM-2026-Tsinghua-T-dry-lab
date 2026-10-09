@@ -29,6 +29,8 @@ class Atom:
     label_chain: str | None = None
     label_residue: int | None = None
     pdb_line: str | None = None
+    residue_name: str | None = None
+    is_hetero: bool = False
 
 
 def _read_atom_records(path: str | Path) -> list[Atom]:
@@ -69,6 +71,8 @@ def _read_atom_records(path: str | Path) -> list[Atom]:
                     model_id=model_id,
                     altloc=line[16:17].strip(),
                     pdb_line=line,
+                    residue_name=line[17:20].strip(),
+                    is_hetero=line.startswith("HETATM"),
                 )
             )
         except ValueError as exc:
@@ -101,6 +105,8 @@ def _read_cif_atoms(path: str | Path) -> list[Atom]:
             altloc=value("label_alt_id", index),
             label_chain=value("label_asym_id", index),
             label_residue=int(label_residue) if label_residue else None,
+            residue_name=value("auth_comp_id", index) or value("label_comp_id", index),
+            is_hetero=value("group_PDB", index) == "HETATM",
         ))
     if not atoms:
         raise ValueError(f"no atoms parsed from {path}")

@@ -5049,13 +5049,27 @@
             ],
             "default": null,
             "title": "Region Assessments File"
+          },
+          "calculation_requests_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Calculation Requests File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
           "structure_metrics_file",
-          "region_assessments_file"
+          "region_assessments_file",
+          "calculation_requests_file"
         ]
       },
       "M3Config": {
@@ -10525,13 +10539,27 @@
             ],
             "default": null,
             "title": "Region Assessments File"
+          },
+          "calculation_requests_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Calculation Requests File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
           "structure_metrics_file",
-          "region_assessments_file"
+          "region_assessments_file",
+          "calculation_requests_file"
         ]
       },
       "M3Config": {
@@ -13634,13 +13662,27 @@
             ],
             "default": null,
             "title": "Region Assessments File"
+          },
+          "calculation_requests_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Calculation Requests File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
           "structure_metrics_file",
-          "region_assessments_file"
+          "region_assessments_file",
+          "calculation_requests_file"
         ]
       },
       "M3Config": {
@@ -16906,13 +16948,27 @@
             ],
             "default": null,
             "title": "Region Assessments File"
+          },
+          "calculation_requests_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Calculation Requests File"
           }
         },
         "title": "M2Config",
         "type": "object",
         "required": [
           "structure_metrics_file",
-          "region_assessments_file"
+          "region_assessments_file",
+          "calculation_requests_file"
         ]
       },
       "M3Config": {

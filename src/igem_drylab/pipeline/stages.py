@@ -224,6 +224,36 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     """Report observed structural negative-screen metrics; never fill absent metrics."""
     stage_dir = run_dir / "m2_structure_screen"
     observations = []
+    calculation_reports = []
+    if config.stages.m2_fusion.calculation_requests_file:
+        from igem_drylab.structural_workflow import load_calculation_requests
+        from igem_drylab.template_geometry import StructureInput, AssemblyExpansionInput
+        known = {row.construct_id: row for row in candidates}
+        known_hashes = {row.full_sequence_sha256 for row in candidates}
+        def check_structure_identity(value, allowed_hashes):
+            if value.source_kind == "prediction" and sha256(value.expected_sequence.encode()).hexdigest() not in allowed_hashes:
+                raise ValueError("M2_calculation_prediction_not_registered_M1_sequence")
+        for index, (kind, candidate_id, request, handler) in enumerate(load_calculation_requests(config.stages.m2_fusion.calculation_requests_file)):
+            if candidate_id not in known:
+                raise ValueError("M2_calculation_candidate_not_registered_M1_construct")
+            # References and complex templates need their own exact sequence,
+            # not the fusion sequence. Only actual project models bind to M1.
+            for scenario in request.scenarios if kind == "recruitment_ensemble" else [request]:
+                actual = scenario.fusion if kind == "enzyme_comparison" else scenario.actual_fusion if kind == "assembly_expansion" else scenario.scaffold
+                if isinstance(actual, AssemblyExpansionInput):
+                    actual = actual.actual_fusion
+                check_structure_identity(actual, {known[candidate_id].full_sequence_sha256})
+                if kind in {"recruitment_geometry","recruitment_ensemble"}:
+                    for placement in scenario.placements:
+                        check_structure_identity(placement.enzyme, known_hashes)
+            result = handler(request)
+            result["M1_eligibility"] = known[candidate_id].eligibility
+            stage_dir.mkdir(parents=True, exist_ok=True)
+            artifact = stage_dir / f"calculation-{index}.json"
+            artifact.write_text(json.dumps(result), encoding="utf-8")
+            calculation_reports.append({"candidate_id": candidate_id, "kind": kind, "artifact_path": str(artifact),
+                "artifact_sha256": sha256(artifact.read_bytes()).hexdigest(), "formal_verdict": result.get("formal_verdict", "blocked"),
+                "scope": result["scope"], "M1_eligibility": known[candidate_id].eligibility})
     if config.stages.m2_fusion.region_assessments_file:
         from igem_drylab.region_assessment import assess_regions, load_region_requests
         requests = load_region_requests(config.stages.m2_fusion.region_assessments_file)
@@ -325,6 +355,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     _append_design_assessments(config, candidates, metrics, assessments)
     for assessment in assessments:
         assessment.region_observations = [row for row in observations if row["candidate_id"] == assessment.construct_id]
+        assessment.calculation_reports = [row for row in calculation_reports if row["candidate_id"] == assessment.construct_id]
     write_models(stage_dir, "fusion_assessments", assessments)
     return assessments, _stage_output("m2_structure_screen", stage_dir, "fusion_assessments", len(assessments))
 
