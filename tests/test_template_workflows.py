@@ -177,3 +177,14 @@ def test_calculation_file_runs_in_pipeline_without_promoting_blocked_M1(tmp_path
     assert rows[0].calculation_reports[0]["M1_eligibility"]=="blocked"
     assert json.loads(Path(rows[0].calculation_reports[0]["artifact_path"]).read_text())["q1_verdict"]=="pass"
     assert not rows[0].recommended_for_m3
+
+
+def test_predicted_structure_read_accepts_mapped_tool_ID_and_exact_sequence(tmp_path):
+    from test_region_assessment import prediction
+    from igem_drylab.parsers.structure_prediction import parse_structure_prediction_output
+    request=prediction(tmp_path)
+    summary=parse_structure_prediction_output(request.confidence_file,candidate_id=request.candidate_id)
+    structure=StructureInput(path=summary.model_file,confidence_file=request.confidence_file,
+        expected_sequence=request.sequence,source_kind="prediction",source_reference="synthetic_prediction_format_fixture")
+    atoms,confidence=structure.read()
+    assert len([a for a in atoms if a.name=="CA"])==4 and len(confidence)==4

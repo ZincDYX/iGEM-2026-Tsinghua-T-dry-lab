@@ -41,6 +41,7 @@ class StructureInput(ScientificAnalysisInput):
         if self.source_kind == "prediction":
             from .region_assessment import assess_regions, RegionAssessmentInput, Region
             observed = assess_regions(RegionAssessmentInput(candidate_id="geometry", sequence=self.expected_sequence,
+                tool_input_id=self.confidence_file.name.partition("_scores_rank_")[0],
                 confidence_file=self.confidence_file, regions=[Region(name="complete", role="diagnostic",
                 start=1, end=len(self.expected_sequence))], calculate_accessibility=False))
             if observed["model_sha256"] != sha256(self.path.read_bytes()).hexdigest():

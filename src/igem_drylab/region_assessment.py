@@ -35,6 +35,7 @@ class Region(BaseModel):
 class RegionAssessmentInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     candidate_id: str
+    tool_input_id: str | None = None
     sequence: str
     confidence_file: Path
     regions: list[Region] = Field(min_length=1)
@@ -51,7 +52,7 @@ def load_region_requests(path: Path) -> list[RegionAssessmentInput]:
 
 def assess_regions(request: RegionAssessmentInput) -> dict:
     summary = parse_structure_prediction_output(request.confidence_file,
-                                               candidate_id=request.candidate_id)
+                                               candidate_id=request.tool_input_id or request.candidate_id)
     if summary.source != "colabfold_af2_ptm":
         raise ValueError("region_assessment_requires_paired_ColabFold_artifacts")
     model = PDBParser(QUIET=True).get_structure(request.candidate_id, summary.model_file)
