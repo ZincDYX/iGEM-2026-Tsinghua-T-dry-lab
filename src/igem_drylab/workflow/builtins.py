@@ -97,9 +97,12 @@ def recommend(project: Project, goal: Goal) -> Workflow:
         from .scientific_project import ScientificProject
         if project.scientific_project is None:
             raise ValueError("load_and_confirm_typed_scientific_project_first")
-        ScientificProject.model_validate(project.scientific_project).verify()
+        science = ScientificProject.model_validate(project.scientific_project)
+        science.verify()
         nodes = []
         for index, stage in enumerate(("m1", "m2", "m3", "m4", "m5")):
+            if index >= int(science.config.prepared_through[1:]):
+                break
             inputs = {"project": ProjectInput(path=["scientific_project"])}
             if index:
                 inputs["upstream_result"] = NodeInput(node_id=nodes[-1].id, path=["result_identity"])

@@ -40,6 +40,7 @@ import { WorkbenchMenus } from "./WorkbenchMenus";
 import { primaryCommand, commandLabels } from "./workbenchCommands";
 import { usePlanController } from "./usePlanController";
 import { PredictionTools } from "./PredictionTools";
+import { useDocuments } from "./useDocuments";
 
 type Tab =
   | "plan"
@@ -65,11 +66,13 @@ function Tabs({
   selected,
   onChange,
   label,
+  onClose,
 }: {
   values: { id: string; label: string }[];
   selected: string;
   onChange: (id: string) => void;
   label: string;
+  onClose?: (id: string) => void;
 }) {
   return (
     <div
@@ -89,6 +92,7 @@ function Tabs({
       }}
     >
       {values.map((tab) => (
+        <span key={tab.id}>
         <button
           role="tab"
           key={tab.id}
@@ -98,6 +102,8 @@ function Tabs({
         >
           {tab.label}
         </button>
+        {onClose && <button aria-label={`Close ${tab.label}`} onClick={() => onClose(tab.id)}>×</button>}
+        </span>
       ))}
     </div>
   );
@@ -128,7 +134,9 @@ export function WorkspaceShell() {
   const [mode, setMode] = useState<"template" | "hybrid">("template");
   const [permission, setPermission] = useState(false);
   const [policy, setPolicy] = useState<ExecutionPolicy>(client.defaultPolicy);
-  const [tab, setTab] = useState<Tab>("plan");
+  const [editing, setEditing] = useState(false);
+  const { tab, setTab, openDocuments, closeDocument } = useDocuments(info?.workspace_id ?? "initial", project.dirty || editing,
+    () => setError("Save or discard input edits before closing Inputs."));
   const [resourceFile, setResourceFile] = useState<string>();
   const [resourceRunScope, setResourceRunScope] = useState(false);
   const [resourcesVisited, setResourcesVisited] = useState(false);
@@ -139,7 +147,6 @@ export function WorkspaceShell() {
   const [inspector, setInspector] = useState("agent");
   const [bottom, setBottom] = useState("queue");
   const [selection, setSelection] = useState<Selection>();
-  const [editing, setEditing] = useState(false);
   const view = useWorkbenchLayout();
   const { layout, bottomOpen, setBottomOpen, inspectorOpen, setInspectorOpen } =
     view;
@@ -800,12 +807,10 @@ export function WorkspaceShell() {
       />
       <main className="workspace-center">
         <Tabs
-          values={tabs.filter(
-            (item) =>
-              !["settings", "plugins"].includes(item.id) || item.id === tab,
-          )}
+          values={tabs.filter(item => openDocuments.includes(item.id))}
           selected={tab}
           label="Workspace documents"
+          onClose={(id) => closeDocument(id as Tab)}
           onChange={(id) => {
             const value = tabs.find((t) => t.id === id);
             if (value) setTab(value.id);

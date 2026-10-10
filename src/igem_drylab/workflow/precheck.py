@@ -33,7 +33,7 @@ class ScientificPrecheckView(Contract):
     limitations: list[str]
 
 
-def precheck(project: Project) -> ScientificPrecheckView:
+def precheck(project: Project, through: str | None = None) -> ScientificPrecheckView:
     missing=[]
     def absent(stage,code,field,source):
         missing.append(KnownMissingInput(stage=stage,code=code,field_path="scientific_project.config."+field,
@@ -43,19 +43,21 @@ def precheck(project: Project) -> ScientificPrecheckView:
             construct_id=None,condition_id=None,reason_codes=["not_declared"],source_kind="typed_configuration_and_original_files"))
     else:
         science=ScientificProject.model_validate(project.scientific_project)
-        science.verify()
         config=science.config
+        target = int((through or config.prepared_through)[1:])
         if not (config.inputs.constructs or config.inputs.construct_records):
             absent("m1","explicit_construct_definitions","inputs.constructs","construct_sequence_and_identity")
         if config.execution.mode=="real" and config.stages.m1_llps.require_external_evidence_in_real_mode and config.stages.m1_llps.predictor_evidence_file is None:
             absent("m1","registered_predictor_evidence_file","stages.m1_llps.predictor_evidence_file","predictor_original_outputs_or_reviewed_tool_jobs")
-        if config.stages.m2_fusion.structure_metrics_file is None:
+        if target >= 2 and config.stages.m2_fusion.structure_metrics_file is None:
             absent("m2","structure_metrics_file","stages.m2_fusion.structure_metrics_file","same_construct_structure_reference_mapping_geometry")
-        if config.stages.m5_feedback.wetlab_results_file is None:
+        if target >= 5 and config.stages.m5_feedback.wetlab_results_file is None:
             absent("m5","wetlab_results_file","stages.m5_feedback.wetlab_results_file","typed_measurements_units_replicates_qc")
         registry=ParameterRegistry(config.parameters)
         scopes=[(item.id,item.condition_id) for item in config.inputs.designs] or [(item.id,config.stages.m4_reaction.condition_id) for item in config.inputs.constructs] or [(None,config.stages.m4_reaction.condition_id)]
         for stage in ("m3","m4"):
+            if int(stage[1:]) > target:
+                continue
             for construct_id,condition_id in scopes:
                 for requirement in requirements_for_stage(config,stage):
                     result=resolve_requirement(registry,requirement,config.experimental_context,

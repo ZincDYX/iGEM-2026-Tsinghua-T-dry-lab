@@ -12,7 +12,7 @@ from igem_drylab.workflow.views import ProjectSummaryView, RunSummaryView
 from igem_drylab.workflow.planning import ProposalView
 from igem_drylab.workflow.public_errors import PublicError
 from igem_drylab.workflow.precheck import ScientificPrecheckView
-from igem_drylab.workflow.sequence_index import SequenceIndexView
+from igem_drylab.workflow.sequence_index import SequenceIndexView, SequencePage
 from igem_drylab.workflow.sequence_results import SequenceMapView
 from igem_drylab.workflow.display_resources import ResourcePage, SeriesPage, StructurePage
 from igem_drylab.workflow.lineage_compare import LineagePage, ComparePage
@@ -195,7 +195,7 @@ class PredictionToolView(Contract):
 
 
 PUBLIC_MODELS = {model.__name__:model for model in (ScientificRecordView, TablePage, ScanPage, M5ComparisonSeries, LineagePage, ComparePage, ResourcePage, SeriesPage, StructurePage, ScientificPrecheckView,PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,
-    NodePage,PlanView,ProposalView,ScientificPreviewView,BindingPreviewView,IterationView,ImportView,ActionView,RunListView,InputDiffView,PluginInspectionView,PredictionToolView,Workflow)}
+    NodePage,PlanView,ProposalView,ScientificPreviewView,BindingPreviewView,IterationView,ImportView,ActionView,RunListView,InputDiffView,PluginInspectionView,PredictionToolView,SequencePage,Workflow)}
 
 
 def public_schemas():

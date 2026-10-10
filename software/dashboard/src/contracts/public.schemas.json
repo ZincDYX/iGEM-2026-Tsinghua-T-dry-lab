@@ -4838,6 +4838,22 @@
             "title": "Protein Fasta",
             "type": "string"
           },
+          "sequence_roles": {
+            "additionalProperties": {
+              "enum": [
+                "full_fusion",
+                "idr",
+                "enzyme",
+                "enzyme_ligand_linker",
+                "scaffold_linker",
+                "rigid_linker",
+                "protein"
+              ],
+              "type": "string"
+            },
+            "title": "Sequence Roles",
+            "type": "object"
+          },
           "ligands": {
             "items": {
               "$ref": "#/$defs/LigandConfig"
@@ -4902,6 +4918,7 @@
         },
         "required": [
           "protein_fasta",
+          "sequence_roles",
           "ligands",
           "enzymes",
           "scaffolds",
@@ -6754,6 +6771,18 @@
       "ScientificConfig": {
         "additionalProperties": false,
         "properties": {
+          "prepared_through": {
+            "default": "m5",
+            "enum": [
+              "m1",
+              "m2",
+              "m3",
+              "m4",
+              "m5"
+            ],
+            "title": "Prepared Through",
+            "type": "string"
+          },
           "execution": {
             "$ref": "#/$defs/ExecutionConfig"
           },
@@ -6778,6 +6807,7 @@
           }
         },
         "required": [
+          "prepared_through",
           "execution",
           "experimental_context",
           "inputs",
@@ -7363,7 +7393,8 @@
               "mapping": {
                 "literal": "#/$defs/LiteralInput",
                 "node": "#/$defs/NodeInput",
-                "project": "#/$defs/ProjectInput"
+                "project": "#/$defs/ProjectInput",
+                "sequence": "#/$defs/SequenceRef"
               },
               "propertyName": "kind"
             },
@@ -7376,6 +7407,9 @@
               },
               {
                 "$ref": "#/$defs/NodeInput"
+              },
+              {
+                "$ref": "#/$defs/SequenceRef"
               }
             ],
             "title": "Items"
@@ -7579,6 +7613,61 @@
         "title": "ScientificStageSummary",
         "type": "object"
       },
+      "SequenceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "sequence",
+            "default": "sequence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "project",
+              "scientific_fasta"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Id"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sequence Sha256",
+            "type": "string"
+          },
+          "construct_version": {
+            "minimum": 1,
+            "title": "Construct Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "file_id",
+          "record_id",
+          "sequence_sha256",
+          "construct_version"
+        ],
+        "title": "SequenceRef",
+        "type": "object"
+      },
       "Workflow": {
         "additionalProperties": false,
         "properties": {
@@ -7646,7 +7735,8 @@
                 "mapping": {
                   "literal": "#/$defs/LiteralInput",
                   "node": "#/$defs/NodeInput",
-                  "project": "#/$defs/ProjectInput"
+                  "project": "#/$defs/ProjectInput",
+                  "sequence": "#/$defs/SequenceRef"
                 },
                 "propertyName": "kind"
               },
@@ -7659,6 +7749,9 @@
                 },
                 {
                   "$ref": "#/$defs/NodeInput"
+                },
+                {
+                  "$ref": "#/$defs/SequenceRef"
                 }
               ]
             },
@@ -8585,7 +8678,8 @@
               "mapping": {
                 "literal": "#/$defs/LiteralInput",
                 "node": "#/$defs/NodeInput",
-                "project": "#/$defs/ProjectInput"
+                "project": "#/$defs/ProjectInput",
+                "sequence": "#/$defs/SequenceRef"
               },
               "propertyName": "kind"
             },
@@ -8598,6 +8692,9 @@
               },
               {
                 "$ref": "#/$defs/NodeInput"
+              },
+              {
+                "$ref": "#/$defs/SequenceRef"
               }
             ],
             "title": "Items"
@@ -8714,6 +8811,61 @@
           "path"
         ]
       },
+      "SequenceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "sequence",
+            "default": "sequence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "project",
+              "scientific_fasta"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Id"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sequence Sha256",
+            "type": "string"
+          },
+          "construct_version": {
+            "minimum": 1,
+            "title": "Construct Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "file_id",
+          "record_id",
+          "sequence_sha256",
+          "construct_version"
+        ],
+        "title": "SequenceRef",
+        "type": "object"
+      },
       "Workflow": {
         "additionalProperties": false,
         "properties": {
@@ -8781,7 +8933,8 @@
                 "mapping": {
                   "literal": "#/$defs/LiteralInput",
                   "node": "#/$defs/NodeInput",
-                  "project": "#/$defs/ProjectInput"
+                  "project": "#/$defs/ProjectInput",
+                  "sequence": "#/$defs/SequenceRef"
                 },
                 "propertyName": "kind"
               },
@@ -8794,6 +8947,9 @@
                 },
                 {
                   "$ref": "#/$defs/NodeInput"
+                },
+                {
+                  "$ref": "#/$defs/SequenceRef"
                 }
               ]
             },
@@ -8987,7 +9143,8 @@
               "mapping": {
                 "literal": "#/$defs/LiteralInput",
                 "node": "#/$defs/NodeInput",
-                "project": "#/$defs/ProjectInput"
+                "project": "#/$defs/ProjectInput",
+                "sequence": "#/$defs/SequenceRef"
               },
               "propertyName": "kind"
             },
@@ -9000,6 +9157,9 @@
               },
               {
                 "$ref": "#/$defs/NodeInput"
+              },
+              {
+                "$ref": "#/$defs/SequenceRef"
               }
             ],
             "title": "Items"
@@ -9116,6 +9276,61 @@
           "path"
         ]
       },
+      "SequenceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "sequence",
+            "default": "sequence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "project",
+              "scientific_fasta"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Id"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sequence Sha256",
+            "type": "string"
+          },
+          "construct_version": {
+            "minimum": 1,
+            "title": "Construct Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "file_id",
+          "record_id",
+          "sequence_sha256",
+          "construct_version"
+        ],
+        "title": "SequenceRef",
+        "type": "object"
+      },
       "Workflow": {
         "additionalProperties": false,
         "properties": {
@@ -9183,7 +9398,8 @@
                 "mapping": {
                   "literal": "#/$defs/LiteralInput",
                   "node": "#/$defs/NodeInput",
-                  "project": "#/$defs/ProjectInput"
+                  "project": "#/$defs/ProjectInput",
+                  "sequence": "#/$defs/SequenceRef"
                 },
                 "propertyName": "kind"
               },
@@ -9196,6 +9412,9 @@
                 },
                 {
                   "$ref": "#/$defs/NodeInput"
+                },
+                {
+                  "$ref": "#/$defs/SequenceRef"
                 }
               ]
             },
@@ -10618,6 +10837,22 @@
             "title": "Protein Fasta",
             "type": "string"
           },
+          "sequence_roles": {
+            "additionalProperties": {
+              "enum": [
+                "full_fusion",
+                "idr",
+                "enzyme",
+                "enzyme_ligand_linker",
+                "scaffold_linker",
+                "rigid_linker",
+                "protein"
+              ],
+              "type": "string"
+            },
+            "title": "Sequence Roles",
+            "type": "object"
+          },
           "ligands": {
             "items": {
               "$ref": "#/$defs/LigandConfig"
@@ -10682,6 +10917,7 @@
         },
         "required": [
           "protein_fasta",
+          "sequence_roles",
           "ligands",
           "enzymes",
           "scaffolds",
@@ -12534,6 +12770,18 @@
       "ScientificConfig": {
         "additionalProperties": false,
         "properties": {
+          "prepared_through": {
+            "default": "m5",
+            "enum": [
+              "m1",
+              "m2",
+              "m3",
+              "m4",
+              "m5"
+            ],
+            "title": "Prepared Through",
+            "type": "string"
+          },
           "execution": {
             "$ref": "#/$defs/ExecutionConfig"
           },
@@ -12558,6 +12806,7 @@
           }
         },
         "required": [
+          "prepared_through",
           "execution",
           "experimental_context",
           "inputs",
@@ -14031,6 +14280,22 @@
             "title": "Protein Fasta",
             "type": "string"
           },
+          "sequence_roles": {
+            "additionalProperties": {
+              "enum": [
+                "full_fusion",
+                "idr",
+                "enzyme",
+                "enzyme_ligand_linker",
+                "scaffold_linker",
+                "rigid_linker",
+                "protein"
+              ],
+              "type": "string"
+            },
+            "title": "Sequence Roles",
+            "type": "object"
+          },
           "ligands": {
             "items": {
               "$ref": "#/$defs/LigandConfig"
@@ -14095,6 +14360,7 @@
         },
         "required": [
           "protein_fasta",
+          "sequence_roles",
           "ligands",
           "enzymes",
           "scaffolds",
@@ -16084,6 +16350,18 @@
       "ScientificConfig": {
         "additionalProperties": false,
         "properties": {
+          "prepared_through": {
+            "default": "m5",
+            "enum": [
+              "m1",
+              "m2",
+              "m3",
+              "m4",
+              "m5"
+            ],
+            "title": "Prepared Through",
+            "type": "string"
+          },
           "execution": {
             "$ref": "#/$defs/ExecutionConfig"
           },
@@ -16108,6 +16386,7 @@
           }
         },
         "required": [
+          "prepared_through",
           "execution",
           "experimental_context",
           "inputs",
@@ -17607,6 +17886,22 @@
             "title": "Protein Fasta",
             "type": "string"
           },
+          "sequence_roles": {
+            "additionalProperties": {
+              "enum": [
+                "full_fusion",
+                "idr",
+                "enzyme",
+                "enzyme_ligand_linker",
+                "scaffold_linker",
+                "rigid_linker",
+                "protein"
+              ],
+              "type": "string"
+            },
+            "title": "Sequence Roles",
+            "type": "object"
+          },
           "ligands": {
             "items": {
               "$ref": "#/$defs/LigandConfig"
@@ -17671,6 +17966,7 @@
         },
         "required": [
           "protein_fasta",
+          "sequence_roles",
           "ligands",
           "enzymes",
           "scaffolds",
@@ -19660,6 +19956,18 @@
       "ScientificConfig": {
         "additionalProperties": false,
         "properties": {
+          "prepared_through": {
+            "default": "m5",
+            "enum": [
+              "m1",
+              "m2",
+              "m3",
+              "m4",
+              "m5"
+            ],
+            "title": "Prepared Through",
+            "type": "string"
+          },
           "execution": {
             "$ref": "#/$defs/ExecutionConfig"
           },
@@ -19684,6 +19992,7 @@
           }
         },
         "required": [
+          "prepared_through",
           "execution",
           "experimental_context",
           "inputs",
@@ -20348,6 +20657,129 @@
     "title": "PredictionToolView",
     "type": "object"
   },
+  "SequencePage": {
+    "$defs": {
+      "SequenceChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "$ref": "#/$defs/SequenceRef"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "length": {
+            "minimum": 1,
+            "title": "Length",
+            "type": "integer"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "label",
+          "length",
+          "role"
+        ],
+        "title": "SequenceChoice",
+        "type": "object"
+      },
+      "SequenceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "sequence",
+            "default": "sequence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "project",
+              "scientific_fasta"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Id"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sequence Sha256",
+            "type": "string"
+          },
+          "construct_version": {
+            "minimum": 1,
+            "title": "Construct Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "file_id",
+          "record_id",
+          "sequence_sha256",
+          "construct_version"
+        ],
+        "title": "SequenceRef",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "project_revision": {
+        "title": "Project Revision",
+        "type": "integer"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/$defs/SequenceChoice"
+        },
+        "title": "Items",
+        "type": "array"
+      }
+    },
+    "required": [
+      "project_id",
+      "project_revision",
+      "offset",
+      "total",
+      "items"
+    ],
+    "title": "SequencePage",
+    "type": "object"
+  },
   "Workflow": {
     "$defs": {
       "ExecutionPolicy": {
@@ -20473,7 +20905,8 @@
               "mapping": {
                 "literal": "#/$defs/LiteralInput",
                 "node": "#/$defs/NodeInput",
-                "project": "#/$defs/ProjectInput"
+                "project": "#/$defs/ProjectInput",
+                "sequence": "#/$defs/SequenceRef"
               },
               "propertyName": "kind"
             },
@@ -20486,6 +20919,9 @@
               },
               {
                 "$ref": "#/$defs/NodeInput"
+              },
+              {
+                "$ref": "#/$defs/SequenceRef"
               }
             ],
             "title": "Items"
@@ -20570,6 +21006,61 @@
           "path"
         ]
       },
+      "SequenceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "sequence",
+            "default": "sequence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "project",
+              "scientific_fasta"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Id"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sequence Sha256",
+            "type": "string"
+          },
+          "construct_version": {
+            "minimum": 1,
+            "title": "Construct Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "file_id",
+          "record_id",
+          "sequence_sha256",
+          "construct_version"
+        ],
+        "title": "SequenceRef",
+        "type": "object"
+      },
       "WorkflowNode": {
         "additionalProperties": false,
         "properties": {
@@ -20593,7 +21084,8 @@
                 "mapping": {
                   "literal": "#/$defs/LiteralInput",
                   "node": "#/$defs/NodeInput",
-                  "project": "#/$defs/ProjectInput"
+                  "project": "#/$defs/ProjectInput",
+                  "sequence": "#/$defs/SequenceRef"
                 },
                 "propertyName": "kind"
               },
@@ -20606,6 +21098,9 @@
                 },
                 {
                   "$ref": "#/$defs/NodeInput"
+                },
+                {
+                  "$ref": "#/$defs/SequenceRef"
                 }
               ]
             },

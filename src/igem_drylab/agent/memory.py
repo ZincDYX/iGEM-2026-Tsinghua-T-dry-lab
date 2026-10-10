@@ -12,6 +12,23 @@ from pydantic import BaseModel, Field
 MemoryKind = Literal["task", "tool_call", "artifact", "parameter", "wet_lab", "failure", "reflection", "note"]
 
 
+class ScientificClaim(BaseModel):
+    """A comparable assertion; events and revised outputs are not claims.
+
+    Values must already use the declared canonical unit/entity basis. Different
+    conditions or methods are deliberately different comparison scopes.
+    """
+    subject_ref: str
+    quantity: str
+    construct_ref: str
+    condition_ref: str
+    model_version: str
+    canonical_unit: str
+    entity_basis: str
+    value: str | float | bool
+    supersedes_record_id: str | None = None
+
+
 class MemoryRecord(BaseModel):
     record_id: str
     kind: MemoryKind = "note"
@@ -21,6 +38,7 @@ class MemoryRecord(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: dict[str, Any] = Field(default_factory=dict)
+    claim: ScientificClaim | None = None
 
 
 class AgentMemory:

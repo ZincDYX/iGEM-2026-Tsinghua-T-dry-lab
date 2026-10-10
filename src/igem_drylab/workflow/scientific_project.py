@@ -168,6 +168,8 @@ def stage_tools():
     for stage, predecessor in (("m1", None), ("m2", M1Candidate), ("m3", M2FusionAssessment),
                                ("m4", M3ConcentrationAssessment), ("m5", M4ReactionPrediction)):
         def handler(payload: StageInput, context: NodeContext, *, stage=stage, predecessor=predecessor):
+            if int(stage[1:]) > int(payload.project.config.prepared_through[1:]):
+                raise WorkflowError("stage_configuration_not_prepared:" + stage)
             from igem_drylab.pipeline import stages
             upstream = bound_predecessor(payload,context,stage)
             payload.project.verify()

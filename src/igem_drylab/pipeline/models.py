@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from igem_drylab.compartments import CompartmentScenario
 
 ScientificStatus = Literal["valid", "insufficient_data", "invalid_input", "failed"]
 DataQuality = Literal["measured", "fitted", "literature", "predicted", "heuristic", "demo_fixture", "mixed"]
@@ -22,6 +23,7 @@ class ScientificResult(BaseModel):
     numerically_solved: bool = False
     evidence_ready: bool = False
     claim_scope: str = "not_established"
+    compartment_scenario: CompartmentScenario = "cytosolic_two_phase"
 
 
 class StageOutput(BaseModel):

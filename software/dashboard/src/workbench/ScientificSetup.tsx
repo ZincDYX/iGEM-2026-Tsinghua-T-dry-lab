@@ -7,12 +7,12 @@ import type {
 } from "../contracts/generated";
 import { ScientificFields, type FieldSchema } from "./ScientificFields";
 
-export function useScientificSchema() {
+export function useScientificSchema(preparedThrough = "m5") {
   const [schema, setSchema] = useState<FieldSchema>(),
     [error, setError] = useState("");
   useEffect(() => {
     const c = new AbortController();
-    void requestJson("/scientific-projects/form-schema", undefined, c.signal)
+    void requestJson(`/scientific-projects/form-schema?prepared_through=${preparedThrough}`, undefined, c.signal)
       .then((v) => {
         if (!object(v) || !object(v.$defs) || !object(v.properties))
           throw Error("Scientific form schema unavailable");
@@ -22,7 +22,7 @@ export function useScientificSchema() {
         if (!c.signal.aborted) setError(String(e));
       });
     return () => c.abort();
-  }, []);
+  }, [preparedThrough]);
   return { schema, error };
 }
 export function ScientificSetup({
@@ -30,8 +30,8 @@ export function ScientificSetup({
   dirty,
   busy,
   onPreview,
-  schema,
-  schemaError,
+  schema: _schema,
+  schemaError: _schemaError,
 }: {
   project: ProjectView;
   dirty: boolean;
@@ -41,11 +41,13 @@ export function ScientificSetup({
   schemaError: string;
 }) {
   const [value, setValue] = useState<Record<string, unknown>>({
+    prepared_through: "m1",
     execution: {},
     experimental_context: {},
     inputs: { enzymes: [], scaffolds: [], linkers: [], constructs: [] },
-    stages: { m3_concentration: {}, m4_reaction: {} },
+    stages: {},
   });
+  const { schema, error: schemaError } = useScientificSchema(String(value.prepared_through));
   const [error, setError] = useState(""),
     [pending, setPending] = useState(false);
   const latest = useRef(project);

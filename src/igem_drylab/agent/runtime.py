@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from igem_drylab.mcp import ToolRegistry, create_default_registry
 
@@ -162,6 +163,9 @@ class AgentRuntime:
         step.attempts += 1
         self.events.emit("tool_call_started", step_id=step.step_id, tool_name=step.tool_name)
         call = self.executor.execute(step)
+        call.plan_id = trace.plan.plan_id
+        call.attempt = step.attempts
+        call.result_id = str(uuid4())
         self.budget.record_tool_call(step, succeeded=call.status == "succeeded")
         trace.calls.append(call)
         self.memory.append(MemoryRecord(record_id=f"call-{task.task_id}-{step.step_id}-{step.attempts}", kind="tool_call", content=f"{step.tool_name}:{call.status}", tags=[step.step_id, call.status], metadata={"result": call.result}))
@@ -183,8 +187,18 @@ class AgentRuntime:
 
     @staticmethod
     def _conditions_met(trace: AgentTrace, step: PlanStep) -> tuple[bool, str]:
+        current_steps = {item.step_id: item for item in trace.plan.steps}
         for condition in step.run_conditions:
-            source = next((call for call in trace.calls if call.step_id == condition.source_step_id), None)
+            source_step = current_steps.get(condition.source_step_id)
+            eligible = [call for call in trace.calls
+                        if source_step is not None
+                        and source_step.status == "succeeded"
+                        and call.step_id == source_step.step_id
+                        and call.plan_id == trace.plan.plan_id
+                        and call.attempt == source_step.attempts
+                        and call.result_id is not None
+                        and call.status == "succeeded"]
+            source = eligible[-1] if eligible else None
             if source is None:
                 return False, f"condition_source_missing:{condition.source_step_id}"
             try:

@@ -164,6 +164,9 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
         item.eligibility = "budget_deferred"
         item.recommended_for_m2 = False
         item.notes += " Deferred by top_n compute budget, not a scientific rejection."
+    from igem_drylab.compartments import scenario_for_construct
+    for row in candidates:
+        row.compartment_scenario = scenario_for_construct(config, row.construct_id, row.construct_definition)
     write_models(stage_dir, "candidates", candidates)
     (stage_dir / "construct_sequence.fasta").write_text("".join(f">{identifier}\n{sequence}\n" for identifier, sequence in full_sequences.items()), encoding="utf-8")
     (stage_dir / "sequence_qc.json").write_text(json.dumps(qc_records, indent=2), encoding="utf-8")
@@ -364,6 +367,9 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     for assessment in assessments:
         assessment.region_observations = [row for row in observations if row["candidate_id"] == assessment.construct_id]
         assessment.calculation_reports = [row for row in calculation_reports if row["candidate_id"] == assessment.construct_id]
+    from igem_drylab.compartments import scenario_for_construct
+    for row in assessments:
+        row.compartment_scenario = scenario_for_construct(config, row.construct_id, row.construct_definition)
     write_models(stage_dir, "fusion_assessments", assessments)
     return assessments, _stage_output("m2_structure_screen", stage_dir, "fusion_assessments", len(assessments))
 
@@ -499,6 +505,15 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
     core_requirements = [item for item in requirements if item.blocking]
     records: list[M3ConcentrationAssessment] = []
     for assessment in assessments:
+        from igem_drylab.compartments import scenario_for_construct
+        scenario = scenario_for_construct(config, assessment.construct_id, assessment.construct_definition)
+        if scenario == "er_anchored" or assessment.compartment_scenario == "er_anchored":
+            records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id,
+                construct_id=assessment.construct_id, compartment_scenario="er_anchored",
+                status="insufficient_data", missing_inputs=["unsupported_compartment_model:er_anchored"],
+                recommended_next_action=["Supply an independently versioned ER topology, geometry and amount-conserving model binding."],
+                notes="ER sequence/structure results are preserved; no cytosolic fallback or concentrations were generated."))
+            continue
         if any(assessment.construct_id in design.protein_construct_ids for design in config.inputs.designs):
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=assessment.construct_id,
                 status="insufficient_data", missing_inputs=["use the complete design-level M2 assessment"],
@@ -658,6 +673,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                     ))
                     continue
             equilibrium_input = M3EquilibriumInput(
+                compartment_scenario=scenario,
                 candidate_id=assessment.candidate_id,
                 construct_id=construct_id,
                 s_sh3=assessment.s_sh3,
@@ -917,7 +933,24 @@ def _m3_formal_source_violations(selected: dict[str, ParameterResolution], site_
 
 
 def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3ConcentrationAssessment]) -> tuple[list[M4ReactionPrediction], StageOutput]:
-    records, output = _run_m4_base(config, run_dir, assessments)
+    from igem_drylab.compartments import scenario_for_construct
+    permitted, blocked = [], []
+    for item in assessments:
+        scenario = scenario_for_construct(config, item.construct_id)
+        if scenario == "er_anchored" or item.compartment_scenario == "er_anchored":
+            row = _m4_insufficient(item.candidate_id, config, ["unsupported_compartment_model:er_anchored"], construct_id=item.construct_id)
+            row.compartment_scenario = "er_anchored"
+            blocked.append(row)
+        else:
+            permitted.append(item)
+    if permitted or not blocked:
+        records, output = _run_m4_base(config, run_dir, permitted)
+    else:
+        directory = run_dir / "m4_evidence_gate"
+        records = []
+        output = _stage_output("m4_evidence_gate", directory, "reaction_predictions", len(blocked))
+    records.extend(blocked)
+    output.record_count = len(records)
     settings = config.stages.m4_reaction
     for record in records:
         record.experimental_contract = {

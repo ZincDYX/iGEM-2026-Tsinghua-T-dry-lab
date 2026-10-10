@@ -26,6 +26,7 @@ export type Path = string;
 export type Sha256 = string;
 export type Name1 = string;
 export type Files = AssetIdentity[];
+export type PreparedThrough = "m1" | "m2" | "m3" | "m4" | "m5";
 export type Mode = "demo" | "real";
 export type RequireProvenance = boolean;
 export type AllowAssumptions = boolean;
@@ -395,6 +396,7 @@ export interface ScientificInputsView {
   sequence_index: SequenceIndexView;
 }
 export interface ScientificConfig {
+  prepared_through: PreparedThrough;
   execution: ExecutionConfig;
   experimental_context: ExperimentalContext;
   inputs: InputsConfig;
@@ -417,6 +419,7 @@ export interface ExperimentalContext {
 }
 export interface InputsConfig {
   protein_fasta: ProteinFasta;
+  sequence_roles: SequenceRoles;
   ligands: Ligands;
   enzymes: Enzymes;
   scaffolds: Scaffolds;
@@ -425,6 +428,10 @@ export interface InputsConfig {
   constructs: Constructs;
   construct_records: ConstructRecords;
   designs: Designs;
+}
+export interface SequenceRoles {
+  [k: string]:
+    "full_fusion" | "idr" | "enzyme" | "enzyme_ligand_linker" | "scaffold_linker" | "rigid_linker" | "protein";
 }
 export interface LigandConfig {
   id: Id4;

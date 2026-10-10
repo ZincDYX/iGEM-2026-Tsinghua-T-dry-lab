@@ -41,9 +41,14 @@ class ContextBuilder:
 
 
 def _find_conflicts(records: list[Any]) -> list[str]:
-    by_tag: dict[str, set[str]] = {}
+    superseded = {record.claim.supersedes_record_id for record in records if record.claim}
+    scoped: dict[tuple, list[Any]] = {}
     for record in records:
-        for tag in record.tags:
-            if record.content:
-                by_tag.setdefault(tag, set()).add(record.content)
-    return [f"conflicting_memory_tag:{tag}" for tag, values in by_tag.items() if len(values) > 1]
+        if record.claim is None or record.record_id in superseded:
+            continue
+        claim = record.claim
+        scope = (claim.subject_ref, claim.quantity, claim.construct_ref,
+                 claim.condition_ref, claim.model_version, claim.canonical_unit, claim.entity_basis)
+        scoped.setdefault(scope, []).append(record)
+    return ["conflicting_scientific_claim:" + ",".join(record.record_id for record in items)
+            for items in scoped.values() if len({(type(item.claim.value), item.claim.value) for item in items}) > 1]

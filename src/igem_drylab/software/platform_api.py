@@ -186,9 +186,9 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         return result
 
     @router.get("/projects/{project_id}/precheck")
-    def scientific_precheck(project_id:str):
+    def scientific_precheck(project_id:str, through: Literal["m1", "m2", "m3", "m4", "m5"] | None = None):
         from igem_drylab.workflow.precheck import precheck
-        result=precheck(store.project(project_id)).model_dump(mode="json")
+        result=precheck(store.project(project_id), through).model_dump(mode="json")
         boundary.check(result)
         return result
 
@@ -229,6 +229,13 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def get_project(project_id: str) -> dict[str, Any]:
         return boundary.project(store.project(project_id))
 
+    @router.get("/projects/{project_id}/sequences")
+    def project_sequence_choices(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
+        from igem_drylab.workflow.sequence_index import sequence_page
+        result = sequence_page(store.project(project_id), boundary, offset, limit).model_dump(mode="json")
+        boundary.check(result)
+        return result
+
     @router.post("/projects")
     def save_project(request: SaveProject) -> dict[str, Any]:
         boundary.check(request.project.model_dump(mode="json"))
@@ -253,9 +260,9 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         return boundary.project(store.save_project(request.project, request.expected_revision))
 
     @router.get("/scientific-projects/form-schema")
-    def scientific_form_schema():
+    def scientific_form_schema(prepared_through: Literal["m1", "m2", "m3", "m4", "m5"] = "m5"):
         from igem_drylab.workflow.scientific_setup import form_schema
-        result = form_schema()
+        result = form_schema(prepared_through)
         boundary.check(result)
         return result
 

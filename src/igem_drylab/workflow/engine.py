@@ -18,7 +18,7 @@ from time import sleep
 from pydantic import ValidationError
 import jsonschema
 
-from .models import InputValue, LiteralInput, NodeInput, NodeStatus, Project, ProjectInput, RunStatus, Workflow, read_path
+from .models import InputValue, LiteralInput, NodeInput, NodeStatus, Project, ProjectInput, RunStatus, Workflow, read_path, SequenceRef
 from .store import WorkflowStore, canonical
 from .tools import NodeContext, ToolFailure, WorkflowTools
 
@@ -324,6 +324,9 @@ class WorkflowEngine:
             return deepcopy(value.value)
         if isinstance(value, ProjectInput):
             return deepcopy(read_path(project, value.path))
+        if isinstance(value, SequenceRef):
+            from .sequence_index import resolve_sequence_ref
+            return resolve_sequence_ref(value, project, self.store)
         if isinstance(value, NodeInput):
             if value.path == ["result_identity"]:
                 return deepcopy(records[value.node_id]["result_identity"])

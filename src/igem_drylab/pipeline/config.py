@@ -146,6 +146,7 @@ class DesignConfig(StrictScientificConfig):
 class InputsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     protein_fasta: Path
+    sequence_roles: dict[str, Literal["full_fusion", "idr", "enzyme", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "protein"]] = Field(default_factory=dict)
     ligands: list[LigandConfig] = Field(default_factory=list)
     enzymes: list[EnzymeConfig]
     scaffolds: list[ScaffoldConfig]
@@ -470,6 +471,7 @@ class StagesConfig(StrictScientificConfig):
 
 
 class ProjectConfig(StrictScientificConfig):
+    prepared_through: Literal["m1", "m2", "m3", "m4", "m5"] = "m5"
     run: RunConfig
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     experimental_context: ExperimentalContext = Field(default_factory=ExperimentalContext)

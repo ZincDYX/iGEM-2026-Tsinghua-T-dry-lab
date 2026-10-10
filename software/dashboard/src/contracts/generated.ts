@@ -26,4 +26,5 @@ export type { RunListView } from "./RunListView.generated";
 export type { InputDiffView } from "./InputDiffView.generated";
 export type { PluginInspectionView } from "./PluginInspectionView.generated";
 export type { PredictionToolView } from "./PredictionToolView.generated";
+export type { SequencePage } from "./SequencePage.generated";
 export type { Workflow } from "./Workflow.generated";

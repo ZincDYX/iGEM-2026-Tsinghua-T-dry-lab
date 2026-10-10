@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { requestJson } from "../api";
-import { parseList } from "../contracts/validation";
+import { parseList, parsePublic } from "../contracts/validation";
 import type {
   PredictionToolView,
   ProjectView,
   Workflow,
+  SequencePage,
 } from "../contracts/generated";
 import { defaultPolicy } from "./client";
 
@@ -20,9 +21,25 @@ export function PredictionTools({
   onOpenResource: (fileId: string) => void;
 }) {
   const [rows, setRows] = useState<PredictionToolView[]>([]);
-  const [sequenceId, setSequenceId] = useState(project.sequences[0]?.id ?? "");
+  const [sequences, setSequences] = useState<SequencePage>();
+  const [offset, setOffset] = useState(0);
+  const [sequenceId, setSequenceId] = useState("");
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    setSequences(undefined);
+    setSequenceId("");
+    void requestJson(`/projects/${encodeURIComponent(project.id)}/sequences?offset=${offset}&limit=100`, undefined, controller.signal)
+      .then(raw => {
+        const page = parsePublic("SequencePage", raw);
+        if (!controller.signal.aborted) {
+          setSequences(page);
+          setSequenceId(page.items.length ? "0" : "");
+        }
+      }).catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
+    return () => controller.abort();
+  }, [project.id, project.revision, offset]);
   useEffect(() => {
     const controller = new AbortController();
     void requestJson(
@@ -58,13 +75,18 @@ export function PredictionTools({
           onChange={(e) => setSequenceId(e.target.value)}
         >
           <option value="">Select imported input</option>
-          {project.sequences.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.id} ({item.sequence.length} aa)
+          {sequences?.items.map((item, index) => (
+            <option key={`${item.ref.source}:${item.ref.file_id}:${item.ref.record_id}`} value={String(index)}>
+              {item.label} ({item.length} aa; {item.role})
             </option>
           ))}
         </select>
       </label>
+      {sequences && sequences.total > 100 && <nav aria-label="Sequence pages">
+        <button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 100))}>Previous sequences</button>
+        <span>{offset + 1}–{offset + sequences.items.length} of {sequences.total}</span>
+        <button disabled={offset + 100 >= sequences.total} onClick={() => setOffset(value => value + 100)}>Next sequences</button>
+      </nav>}
       <button
         disabled={busy}
         onClick={() => {
@@ -114,13 +136,11 @@ export function PredictionTools({
                     busy || !sequenceId || row.status === "not_configured"
                   }
                   onClick={() => {
-                    const index = project.sequences.findIndex(
-                      (item) => item.id === sequenceId,
-                    );
-                    if (index < 0) return;
+                    const input = sequences?.items[Number(sequenceId)];
+                    if (!input || sequences?.project_revision !== project.revision) return;
                     onPlan({
                       id: "sequence-prediction",
-                      name: `${row.name}: ${sequenceId}`,
+                      name: `${row.name}: ${input.label}`,
                       version: "1",
                       description:
                         "Diagnostic tool job; formal M1/M2 screening remains a separate evidence-gated step.",
@@ -131,10 +151,7 @@ export function PredictionTools({
                           label: row.name,
                           tool_id: row.id,
                           inputs: {
-                            item: {
-                              kind: "project",
-                              path: ["sequences", index],
-                            },
+                            item: input.ref,
                           },
                           depends_on: [],
                           map: null,

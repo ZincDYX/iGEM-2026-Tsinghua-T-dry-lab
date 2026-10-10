@@ -17,8 +17,14 @@ export type Path = (string | number)[];
 export type Kind2 = "node";
 export type NodeId = string;
 export type Path1 = (string | number)[];
+export type Kind3 = "sequence";
+export type Source = "project" | "scientific_fasta";
+export type FileId = string | null;
+export type RecordId = string;
+export type SequenceSha256 = string;
+export type ConstructVersion = number;
 export type DependsOn = string[];
-export type Items = LiteralInput | ProjectInput | NodeInput;
+export type Items = LiteralInput | ProjectInput | NodeInput | SequenceRef;
 export type ItemArgument = string;
 export type TargetNodeId = string | null;
 export type MaxCompletedStages = number | null;
@@ -32,14 +38,14 @@ export type ProjectId = string;
 export type ProjectRevision = number;
 export type ProjectInputSha256 = string;
 export type WorkflowSha256 = string;
-export type Source = string;
+export type Source1 = string;
 export type RequiresConfirmation = boolean;
 export type ReviewId = string;
 
 export interface PlanView {
   workflow: Workflow;
   confirmation: PlanBinding;
-  source: Source;
+  source: Source1;
   requires_confirmation: RequiresConfirmation;
   review_id: ReviewId;
 }
@@ -60,7 +66,7 @@ export interface WorkflowNode {
   map: MapSpec | null;
 }
 export interface Inputs {
-  [k: string]: LiteralInput | ProjectInput | NodeInput;
+  [k: string]: LiteralInput | ProjectInput | NodeInput | SequenceRef;
 }
 export interface LiteralInput {
   kind: Kind;
@@ -77,6 +83,14 @@ export interface NodeInput {
   kind: Kind2;
   node_id: NodeId;
   path: Path1;
+}
+export interface SequenceRef {
+  kind: Kind3;
+  source: Source;
+  file_id: FileId;
+  record_id: RecordId;
+  sequence_sha256: SequenceSha256;
+  construct_version: ConstructVersion;
 }
 export interface MapSpec {
   items: Items;

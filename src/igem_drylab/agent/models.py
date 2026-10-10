@@ -75,6 +75,9 @@ class Plan(BaseModel):
 
 
 class ToolCallRecord(BaseModel):
+    plan_id: str | None = None
+    attempt: int = Field(default=0, ge=0)
+    result_id: str | None = None
     step_id: str
     tool_name: str
     arguments: dict[str, Any]

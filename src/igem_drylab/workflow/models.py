@@ -62,7 +62,16 @@ class NodeInput(Contract):
     path: list[str | int] = Field(default_factory=list)
 
 
-InputValue = Annotated[LiteralInput | ProjectInput | NodeInput, Field(discriminator="kind")]
+class SequenceRef(Contract):
+    kind: Literal["sequence"] = "sequence"
+    source: Literal["project", "scientific_fasta"]
+    file_id: str | None = None
+    record_id: str
+    sequence_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    construct_version: int = Field(ge=1)
+
+
+InputValue = Annotated[LiteralInput | ProjectInput | NodeInput | SequenceRef, Field(discriminator="kind")]
 
 
 class MapSpec(Contract):

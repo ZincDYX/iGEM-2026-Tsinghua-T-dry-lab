@@ -22,7 +22,7 @@ class ScientificSetupRequest(Contract):
     config: dict
 
 
-def form_schema():
+def form_schema(prepared_through="m5"):
     # Schema is the existing Pydantic contract; defaults are intentionally not
     # used to populate new scientific inputs or expose installation paths.
     schema = ProjectConfig.model_json_schema()
@@ -37,8 +37,9 @@ def form_schema():
     schema['properties'].pop('run')
     schema['$defs'].pop('ToolConfig', None)
     schema['$defs'].pop('RunConfig', None)
-    schema['required'] = ['inputs', 'execution', 'stages']
-    schema['$defs']['StagesConfig']['required'] = ['m3_concentration', 'm4_reaction']
+    schema['required'] = ['inputs', 'execution', 'prepared_through']
+    schema['$defs']['StagesConfig']['required'] = ([] if prepared_through in {'m1','m2'} else
+        ['m3_concentration'] if prepared_through == 'm3' else ['m3_concentration', 'm4_reaction'])
     schema['$defs']['M3Config']['required'] = list(EXPLICIT_M3)
     schema['$defs']['M4Config']['required'] = list(EXPLICIT_M4)
     schema['$defs']['ExecutionConfig']['required'] = ['mode', 'allow_assumptions']
@@ -70,7 +71,9 @@ def preview_setup(request, store, boundary):
     # the pipeline's historical demo/config defaults silently fill this form.
     m3 = raw.get('stages', {}).get('m3_concentration', {})
     m4 = raw.get('stages', {}).get('m4_reaction', {})
-    if any(k not in m3 for k in EXPLICIT_M3) or any(k not in m4 for k in EXPLICIT_M4):
+    target = raw.get('prepared_through', 'm5')  # legacy full-project requests remain strict
+    if ((target in {'m3','m4','m5'} and any(k not in m3 for k in EXPLICIT_M3))
+            or (target in {'m4','m5'} and any(k not in m4 for k in EXPLICIT_M4))):
         raise WorkflowError('setup_requires_explicit_model_and_decision_controls')
     if any(p.get('review_status', 'extracted') != 'extracted' or p.get('approved_by') for p in raw.get('parameters', [])):
         raise WorkflowError('preview_cannot_approve_scientific_records')
@@ -91,7 +94,7 @@ def preview_setup(request, store, boundary):
             for v in value: paths(v, schema.get('items', {}))
         for branch in schema.get('anyOf', []):
             if branch.get('type') != 'null': paths(value, branch)
-    form_schema_cache = form_schema()
+    form_schema_cache = form_schema(target)
     paths(raw, form_schema_cache)
     config = ProjectConfig.model_validate({**boundary.materialize(raw, saved.id), 'run': {'id': saved.id}})
     rules = {default_config_path('m1_feature_definitions.yaml').resolve(), default_config_path('m1_rules_v3.yaml').resolve()}

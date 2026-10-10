@@ -1,6 +1,36 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R19_ER_NO_CYTOSOLIC_FALLBACK
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_r19_er_routing.py::test_whole_design_er_localization_cannot_be_lost_by_default_upstream_result", "tests/test_r19_er_routing.py::test_explicit_er_result_cannot_be_reinterpreted_as_cytosolic_config"]
+    requirement_or_formula_source: r18 ER review 3.2 and batch 1
+    oracle_type: explicit_compartment_identity_and_absence_of_calculated_concentrations
+    fixture_scope: synthetic_routing_only_not_biology_server_only
+    formula_version: original_cytosolic_unchanged_ER_explicitly_unsupported
+    units: none
+    tolerance_basis: exact_routing_and_blocker
+    expected_faults: [ER_design_falls_into_cytosolic_solver, forged_or_old_result_unlocks_ER_M4]
+  - risk_id: R19_CURRENT_OBSERVATION_AND_CONDITIONAL_CLAIMS
+    group: platform
+    test_nodeids: ["tests/test_r19_observation_identity.py::test_retry_uses_current_committed_attempt_not_first_call_or_old_plan", "tests/test_r19_observation_identity.py::test_history_and_different_conditions_are_not_scientific_conflicts"]
+    requirement_or_formula_source: r18 review 6.9 A1 A3
+    oracle_type: independently_ordered_event_history_and_explicit_claim_scopes
+    fixture_scope: software_state_only_no_scientific_calculation
+    formula_version: not_applicable
+    units: none
+    tolerance_basis: exact_event_identity_and_scope
+    expected_faults: [first_failed_attempt_wins, obsolete_revision_unblocks_node, normal_events_are_scientific_conflicts]
+  - risk_id: R19_SCIENTIFIC_SEQUENCE_SINGLE_SOURCE
+    group: platform
+    test_nodeids: ["tests/test_r19_sequence_refs.py::test_m1_setup_requires_no_m3_m4_controls_and_tools_use_the_same_fasta", "tests/test_r19_sequence_refs.py::test_browsing_cache_does_not_reopen_fasta_and_execution_still_checks_bytes", "tests/test_r19_sequence_refs.py::test_sequence_ref_cannot_reuse_other_project_file_even_with_identical_bytes"]
+    requirement_or_formula_source: r18 review 5.1 5.2 7.2
+    oracle_type: source_bytes_API_binding_and_independent_file_read_counter
+    fixture_scope: software_sequence_protocol_fixture_no_prediction
+    formula_version: not_applicable
+    units: residues
+    tolerance_basis: exact_source_identity_and_reads
+    expected_faults: [duplicate_sequence_truth, mutable_array_index_binding, stale_sequence_execution, cross_project_file_access, M1_requires_M4_parameters]
   - risk_id: M2_PREDICTED_REFERENCE_CONFIDENCE
     group: scientific_algorithm
     test_nodeids: ["tests/test_template_workflows.py::test_low_confidence_predicted_reference_cannot_pass_Q1"]

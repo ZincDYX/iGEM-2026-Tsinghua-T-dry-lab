@@ -1,0 +1,47 @@
+# r19 review implementation and acceptance ledger
+
+Source: user-supplied `current_status_review_r18_ER_agent_20261009 (1).md`,
+review of commit `635b5db`. This ledger is not a declaration of complete delivery.
+The original M1–M4 mathematical contracts remain authoritative for cytosolic
+calculations. Proposed ER equations have a separate implementation/version and
+must never be silently substituted into author regression.
+
+## Acceptance tracking
+
+| Review requirement | Implementation state | Independent acceptance / outstanding work |
+|---|---|---|
+| 3.2 ER propagation and no cytosolic fallback | Implemented safety gate | `test_r19_er_routing.py`: anchored scaffold in a multi-ORF design; old/default M3 result cannot bypass M4 guard. ER quantitative solver remains separate work. |
+| 3.3 typed topology and exact anchor checks | Pending | Actual 888-aa construct, native topology output, unknown orientation and cleavage retained. |
+| 3.4 membrane/tether/assembly ensemble | Pending | Rigid-frame invariance, membrane exclusion, complete subunit composition, confidence-aware decisions. |
+| 3.5 conserved ER recruitment / graph occupancy | Pending | Independent partition function and no-edge original E1 oracle; 96-site bounded computation. |
+| 3.6–3.7 ER amounts / exchange / stability / matched controls | Pending | Closed-system mass invariant; explicit reaction locations; no forced equilibrium plus finite exchange on the same interface. |
+| 4 S1–S4 native tools, formal M2 chain and coupled occupancy | Existing pieces; closure pending | Do not promote diagnostic output to formal acceptance or MILP capacity to affinity. |
+| 4 S5 joint M3→M4 uncertainty | Pending | Each supplied joint sample recalculates M3 before M4; preserve supplied correlations. |
+| 4 S6–S10 scientific boundaries | Preserve existing methods; UI and physical control extension pending | No global uniqueness claim, no abundance→kcat change, no invented Kp or channeling gain. |
+| 5.1 SequenceRef and scientific FASTA in Tools | Implemented | Stable record/file/revision/digest binding resolved from frozen source. No second FASTA in project.sequences; bounded page API; cross-project and tampering probes. |
+| 5.2 stage preparation/precheck | Implemented initial M1–M2 preparation | New setup chooses prepared_through. M1 does not require M3/M4 controls; compiler stops at prepared stage; later stage adapter rejects unprepared configuration. Legacy full-project controls remain strict. |
+| 5.3 unified import and object tree | Pending | One preview/confirmation; real project objects rather than duplicate scroll navigation. |
+| 5.4 inspector / node execution | Pending extensions | Inputs, sources, units, methods and numerical settings; authorized node/ancestry execution, pause/cancel/retry. |
+| 5.5 semantic Results / 2D–3D linking | Existing viewers; completion pending | Registered native outputs, axis/units/sample scope, membrane views and selected-table linking. |
+| 5.6 stable documents | Implemented initial lifecycle | Open/activate/close; dirty Inputs close blocked; workspace-scoped preferences restored; Settings/Plugins no longer disappear on navigation. Object-specific document state still pending. |
+| 6 A1 retry observation | Implemented | Current plan + successful source status + exact effective attempt + committed result identity. First failure and obsolete plan cannot win. |
+| 6 A3 conflicts | Implemented | Structured claims compare same entity, construct, condition, unit/basis and method. Events are not scientific conflicts; explicit supersession retained. |
+| 6.3–6.4 typed scientific environment and strategy | Pending | Real stage gaps/capabilities/outputs become observations and validated typed actions using the sole engine. |
+| 6.5 evidence cards / conditional applicability | Pending extension of existing registry | Native and fusion assays not interchangeable; literature extraction cannot approve itself. |
+| 6.6 long-job lifecycle / reconciliation | Existing ledger; asynchronous extension pending | Persist submission intent before external call; unknown acknowledgement never retries blindly; cancellation confirmed remotely. |
+| 6.7 real dependency reuse | Pending | Explicit actual read sets and invalidation closure; no reuse claim yet. |
+| 6.8 research loop / 6.11 held-out evaluation | Pending | Hypotheses, refutable controls, scientific applicability and measured cost; no framework-name success claim. |
+| 7.2 FASTA projection hotspot | Implemented identity cache | Repeated unchanged projection does not reopen FASTA; execution always verifies bytes. File signature invalidation is for browsing, not authorization or scientific cache reuse. |
+| 7.2 other hotspots / 7.3 splitting / 7.5 load profiling | Pending | Same-machine before/after RSS/CPU/API/DB metrics, long viewer cycles and cancellation. |
+| 7.4 safety / 15-GB deployment budget | Preserve safeguards; refreshed quota audit pending | Secret/runtime paths remain backend-only; venv is not an OS sandbox; scientific evidence not deleted. |
+| 8 real tools/project calculations | Not claimed complete | Existing actual sequences/references reused; licenses/physical data gaps explicitly reported. Author Mpipi cases are not fusion LLPS validation. |
+
+## Execution boundary
+
+Scientific numerical tests and author regression run only on the designated
+compute environment, not on the desktop machine. Software protocol, UI and
+packaging tests may run locally. Synthetic fixture values are never delivered
+as project physical parameters or wet-lab observations.
+
+No new Agent framework, runtime platform, guessed physical parameters or
+alternative scientific tool has been introduced in the initial safety batch.
