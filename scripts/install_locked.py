@@ -18,7 +18,7 @@ def main():
     if sys.prefix==sys.base_prefix:
         raise SystemExit('Create and activate a virtual environment before installing the release.')
     def run(*command):subprocess.run(command,cwd=repo,check=True)
-    run(sys.executable,'-B','-m','pip','install','--no-cache-dir','--no-compile','-r',str(repo/config['runtime_lock']),'-r',str(repo/config['build_lock']))
+    run(sys.executable,'-B','-m','pip','install','--no-cache-dir','--no-compile','-r',str(repo/'requirements.txt'))
     run(sys.executable,'-B',str(repo/'scripts/verify_release_lock.py'),'--installed')
     if args.wheel_dir:
         args.wheel_dir.mkdir(parents=True,exist_ok=True)

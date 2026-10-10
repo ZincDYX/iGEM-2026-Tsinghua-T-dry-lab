@@ -71,6 +71,14 @@ to a team server. Use Windows x64 and allow internet access for dependencies.
 
 Install these build prerequisites once, then reopen PowerShell:
 
+These are the host tools, not individual Python packages. Python dependencies
+are already pinned and installed automatically by the build command from the
+root [requirements.txt](requirements.txt), which includes the existing runtime
+and build locks without duplicating versions. Frontend dependencies are installed
+from `pnpm-lock.yaml`; Rust libraries are installed from `Cargo.lock`.
+`pip install -r requirements.txt` cannot install Python itself, Node, Rust,
+Microsoft C++ Build Tools or WebView2.
+
 1. [Git for Windows](https://git-scm.com/downloads/win).
 2. [Python 3.13.13 x64](https://www.python.org/downloads/release/python-31313/).
 3. [Node 24.19.0 x64](https://nodejs.org/dist/v24.19.0/).
@@ -127,6 +135,20 @@ pnpm **10.30.3**, Rust **1.95.0**, and WebView2.
 [Toolchain record](requirements/release-toolchain.json),
 runtime/build locks, pnpm-lock.yaml and Cargo.lock are consumed by the common
 release entry. Compatibility ranges are not release locks.
+
+If you only want to install the pinned Python dependencies, use the supported
+Python version and a virtual environment:
+
+```powershell
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+```
+
+This installs Python dependencies only, not FusionLab itself, external scientific
+tools or a desktop executable. For the complete backend, use `install_locked.py`
+below; for an exe, use `build-desktop.ps1` above. Both use the same requirements
+entry automatically, so users do not need to run the dependency-only commands
+before building the desktop.
 
 Clone the official develop branch:
 

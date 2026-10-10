@@ -58,3 +58,12 @@ def test_current_release_pins_satisfy_project_and_build_requirements():
     pins = lock.read_pins([repo/config['runtime_lock'], repo/config['build_lock']], environment)
     required = project['project']['dependencies'] + project['project']['optional-dependencies']['software'] + project['build-system']['requires']
     assert lock.verify(pins, required, environment=environment)['checked_pins'] == 55
+
+
+def test_root_requirements_reuses_the_release_locks_without_duplicate_pins():
+    import json
+    repo = Path(__file__).parents[1]
+    config = json.loads((repo/'requirements/release-toolchain.json').read_text())
+    entries = [line.strip() for line in (repo/'requirements.txt').read_text().splitlines()
+               if line.strip() and not line.lstrip().startswith('#')]
+    assert entries == ['-r '+config['runtime_lock'], '-r '+config['build_lock']]

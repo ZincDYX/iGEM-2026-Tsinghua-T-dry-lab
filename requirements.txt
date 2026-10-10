@@ -1,0 +1,6 @@
+# Python dependencies for the supported Windows x64 / CPython 3.13.13 release.
+# Reuse the exact runtime/build locks; do not maintain a second version list.
+# This installs dependencies, not FusionLab itself or the native build tools.
+# The desktop build command calls scripts/install_locked.py automatically.
+-r requirements/runtime-py313-windows.lock
+-r requirements/build-py313.lock
