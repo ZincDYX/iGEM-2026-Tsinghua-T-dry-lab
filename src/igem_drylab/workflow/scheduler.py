@@ -1,7 +1,7 @@
 """One bounded task pool and controller queue per backend, not per run."""
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Full
-from threading import BoundedSemaphore, Lock, Thread
+from threading import BoundedSemaphore, Lock, Thread, Condition
 
 from .models import WorkflowError
 
@@ -13,11 +13,13 @@ class TaskBudget:
         self._permits = BoundedSemaphore(self.max_pending)
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="fusionlab-tool")
         self._lock = Lock()
+        self._capacity = Condition(self._lock)
         self._admitted = self._active = 0
 
     def reserve(self) -> bool:
-        if not self._permits.acquire(blocking=False): return False
-        with self._lock: self._admitted += 1
+        with self._lock:
+            if not self._permits.acquire(blocking=False): return False
+            self._admitted += 1
         return True
 
     def submit(self, function, *args):
@@ -27,15 +29,23 @@ class TaskBudget:
             finally:
                 with self._lock: self._active -= 1
         def release(_future):
-            with self._lock: self._admitted -= 1
-            self._permits.release()
+            with self._capacity:
+                self._admitted -= 1
+                self._permits.release()
+                self._capacity.notify_all()
         future = self._pool.submit(invoke)
         future.add_done_callback(release)
         return future
 
     def release_reservation(self):
-        with self._lock: self._admitted -= 1
-        self._permits.release()
+        with self._capacity:
+            self._admitted -= 1
+            self._permits.release()
+            self._capacity.notify_all()
+
+    def wait_for_capacity(self, *, timeout: float):
+        with self._capacity:
+            return self._capacity.wait_for(lambda:self._admitted < self.max_pending,timeout)
 
     def state(self):
         with self._lock:

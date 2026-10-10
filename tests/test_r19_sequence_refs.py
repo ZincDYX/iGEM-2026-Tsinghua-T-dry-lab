@@ -77,3 +77,13 @@ def test_sequence_ref_cannot_reuse_other_project_file_even_with_identical_bytes(
     other["id"] = "not-the-owner"
     with pytest.raises(WorkflowError, match="file_project_mismatch"):
         resolve_sequence_ref(SequenceRef.model_validate(choice["ref"]), other, app.state.platform_store)
+
+
+def test_preparation_form_exposes_only_selected_required_stage_controls():
+    from igem_drylab.workflow.scientific_setup import form_schema
+    initial=form_schema("m1")
+    assert "stages" not in initial["required"]
+    assert initial["$defs"]["StagesConfig"]["required"]==[]
+    advanced=form_schema("m4")
+    assert "stages" in advanced["required"]
+    assert advanced["$defs"]["StagesConfig"]["required"]==["m3_concentration","m4_reaction"]

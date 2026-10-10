@@ -192,6 +192,15 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         boundary.check(result)
         return result
 
+    @router.get("/projects/{project_id}/scientific-observation")
+    def scientific_observation(project_id:str):
+        from igem_drylab.agent.scientific_environment import ScientificEnvironment
+        from igem_drylab.workflow.models import ExecutionPolicy
+        observation=ScientificEnvironment(store,tools).observe(store.project(project_id),ExecutionPolicy())
+        result=observation.model_dump(mode="json")
+        boundary.check(result)
+        return result
+
     @router.get("/plan-actions")
     def plan_actions(project_id: str,after_seq: int = Query(0,ge=0),limit: int = Query(100,ge=1,le=200)):
         return planning.actions(project_id,after_seq,limit)
@@ -708,7 +717,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def tool_list() -> list[dict[str, Any]]:
         # The public catalogue is attestation, not private executable schemas.
         # Internal tool schemas may include runtime command/profile definitions.
-        result=[{key:item[key] for key in ("id","name","description","version","capability","runtime","plugin_hash","idempotent","resource")} for item in tools.list()]
+        result=[{key:getattr(item,key) for key in ("id","name","description","version","capability","runtime","plugin_hash","idempotent","resource")} for item in tools.definitions()]
         boundary.check(result)
         return result
 
@@ -731,11 +740,13 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             config = ToolConfig.model_validate(private.get(name, {}))
             adapter = create_tool_adapter(name, config)
             executed = next(((json.loads(row["output"]), row["updated_at"]) for row in last if json.loads(row["output"]).get("tool") == name), None)
-            status = "configured_unverified" if adapter.is_available() else "not_configured"
+            from igem_drylab.workflow.sequence_predictions import uses_native_jpred_route
+            complete_route = name!="jpred" or uses_native_jpred_route(config)
+            status = "configured_unverified" if complete_route and adapter.is_available() else "not_configured"
             latest_file, checked = None, None
             if executed:
                 output, checked = executed
-                if output["tool_status"] == "succeeded" and output["parse_status"] == "succeeded":
+                if complete_route and output["tool_status"] == "succeeded" and output["parse_status"] == "succeeded":
                     status = "available"
                 elif output["tool_status"] not in {"succeeded", "not_configured", "not_eligible"}:
                     status = "failed"

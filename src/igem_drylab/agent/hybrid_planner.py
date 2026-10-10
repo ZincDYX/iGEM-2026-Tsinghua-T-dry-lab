@@ -32,7 +32,8 @@ class HybridLLMPlanningBackend:
 Classify project-state change and evidence state. You do NOT choose tools, M1/M2/M3/M4/M5 stages, shell commands, DAG dependencies, file paths, scientific numeric values, kinetic values, partition coefficients, or experimental results. Do not infer missing scientific facts. Do not convert structural/docking evidence into kinetics. Do not treat scaffold capacity as measured enzyme abundance. Do not treat normalized sensitivity as physical titer. Return only JSON conforming to the supplied schema."""
         prompt = {
             "task": task.model_dump(mode="json"),
-            "context": {"constraints": context.constraints, "artifacts": context.artifact_summaries, "conflicts": context.conflicts},
+            "context": {"constraints": context.constraints, "artifacts": context.artifact_summaries, "conflicts": context.conflicts,
+                "scientific_observation":context.scientific_observation.model_dump(mode="json") if context.scientific_observation else None},
             "rules": ["Use only enums in the supplied schema.", "Do not invent parameters, evidence, sequences, paths, residues, concentrations, rates, or wet-lab results.", "Gold labels are not available."],
             "planning_decision_schema": schema,
         }

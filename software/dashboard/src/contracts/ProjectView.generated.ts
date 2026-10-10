@@ -404,6 +404,21 @@ export type SteadyAbsoluteToleranceUmolPerH = number;
 export type EigenvalueTolerancePerH = number;
 export type SteadyMaxEvaluations = number;
 export type EvidenceMode = "conditional_model" | "reviewed_project_binding";
+export type ConstructId6 = string;
+export type ConditionId6 = string;
+export type SourceReference7 = string;
+export type ReviewedBy1 = string;
+/**
+ * @minItems 1
+ */
+export type Columns = [JointSampleColumn, ...JointSampleColumn[]];
+export type Column = string;
+export type Stage = "m3" | "m4";
+export type ParameterName2 = string;
+export type ParameterId2 = string;
+export type Unit2 = "1" | "uM" | "1/h";
+export type SampleBasis = "paired_observations" | "supplied_joint_model_draws";
+export type SamplingMethodReference = string;
 export type LocalParameterNames = string[];
 export type Ranges1 = RangeEvidence[];
 export type Samples1 = number;
@@ -416,9 +431,9 @@ export type C = number;
 export type Const = number;
 export type ThetaHydro = number;
 export type ThetaAro = number;
-export type SourceReference7 = string;
+export type SourceReference8 = string;
 export type ApplicableDomainReference = string;
-export type ReviewedBy1 = string;
+export type ReviewedBy2 = string;
 export type AssayMode = ("substrate_feeding_functional" | "full_pathway_production") | null;
 export type MeasurementCompartment = ("intracellular" | "extracellular" | "total_extract") | null;
 export type ExpressionMode = ("constitutive" | "induced") | null;
@@ -426,7 +441,7 @@ export type FeedingTimeH = number | null;
 export type NetworkVariant = "full_ten" | "oc_dmt_verified_absence";
 export type Artifact = string;
 export type Sha2562 = string;
-export type ReviewedBy2 = string;
+export type ReviewedBy3 = string;
 export type SteadyStateObservationReference = string | null;
 export type TargetProduct = string;
 export type FeedCompoundId = string | null;
@@ -450,7 +465,7 @@ export type Induced = number;
 export type Mode2 = "step" | "sigmoid";
 export type TransitionWidth = number;
 export type TimeUnit = "h" | "author_native_day_axis";
-export type ConditionId6 = string | null;
+export type ConditionId7 = string | null;
 export type MaxSideProductFraction13 = number;
 export type Min13Reduction = number;
 export type Min15Improvement = number;
@@ -483,7 +498,7 @@ export type WetlabResultsFile = string | null;
 export type AbsoluteResidualTolerance = number;
 export type RelativeResidualTolerance = number;
 export type DiscrepancyThresholdConfigured = boolean;
-export type ParameterName2 = string;
+export type ParameterName3 = string;
 export type FixedParameterNames = string[];
 /**
  * @minItems 2
@@ -1038,6 +1053,7 @@ export interface AuthorNativeEnzymeScales {
 }
 export interface M4Config {
   compartment_requests: CompartmentRequests;
+  joint_samples: JointSamples;
   analysis: M4AnalysisConfig | null;
   assay_mode: AssayMode;
   measurement_compartment: MeasurementCompartment;
@@ -1058,7 +1074,7 @@ export interface M4Config {
   pt_gate: InductionGateConfig | null;
   oc_gate: InductionGateConfig | null;
   dmt_gate: InductionGateConfig | null;
-  condition_id: ConditionId6;
+  condition_id: ConditionId7;
   max_side_product_fraction_13: MaxSideProductFraction13;
   min_13_reduction: Min13Reduction;
   min_15_improvement: Min15Improvement;
@@ -1165,6 +1181,26 @@ export interface CompartmentNumerics {
   eigenvalue_tolerance_per_h: EigenvalueTolerancePerH;
   steady_max_evaluations: SteadyMaxEvaluations;
 }
+export interface JointSamples {
+  [k: string]: M3M4JointSamples;
+}
+export interface M3M4JointSamples {
+  construct_id: ConstructId6;
+  condition_id: ConditionId6;
+  source: ArtifactReference;
+  source_reference: SourceReference7;
+  reviewed_by: ReviewedBy1;
+  columns: Columns;
+  sample_basis: SampleBasis;
+  sampling_method_reference: SamplingMethodReference;
+}
+export interface JointSampleColumn {
+  column: Column;
+  stage: Stage;
+  parameter_name: ParameterName2;
+  parameter_id: ParameterId2;
+  unit: Unit2;
+}
 export interface M4AnalysisConfig {
   local_parameter_names: LocalParameterNames;
   ranges: Ranges1;
@@ -1183,9 +1219,9 @@ export interface IDRMappingEvidence {
   aromatic_counts: AromaticCounts;
   theta_hydro: ThetaHydro;
   theta_aro: ThetaAro;
-  source_reference: SourceReference7;
+  source_reference: SourceReference8;
   applicable_domain_reference: ApplicableDomainReference;
-  reviewed_by: ReviewedBy1;
+  reviewed_by: ReviewedBy2;
 }
 export interface Logp {
   [k: string]: number;
@@ -1199,7 +1235,7 @@ export interface ConfirmedAbsentEnzymes {
 export interface AbsenceEvidenceBinding {
   artifact: Artifact;
   sha256: Sha2562;
-  reviewed_by: ReviewedBy2;
+  reviewed_by: ReviewedBy3;
 }
 export interface InitialStateConfig {
   concentration_unit: ConcentrationUnit;
@@ -1257,7 +1293,7 @@ export interface M5Config {
   fit_plan: FitPlanConfig | null;
 }
 export interface FitPlanConfig {
-  parameter_name: ParameterName2;
+  parameter_name: ParameterName3;
   fixed_parameter_names: FixedParameterNames;
   bounds: Bounds;
   observables: Observables;

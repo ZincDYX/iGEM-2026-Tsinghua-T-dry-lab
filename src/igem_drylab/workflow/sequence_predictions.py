@@ -14,7 +14,38 @@ from igem_drylab.parsers.structure_prediction import parse_colabfold_models
 from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline.config import ToolConfig
 from .models import Contract, SequenceRecord
-from .tools import NodeContext, ToolDefinition
+from .tools import NodeContext, ToolDefinition, ToolDeferred, ToolFailure
+
+
+def uses_native_jpred_route(config):
+    from igem_drylab.pipeline.adapters import _split_command
+    if not config.command:
+        return False
+    command=_split_command(config.command)
+    return any(command[index:index+2]==["-m","igem_drylab.jpred_runner"] for index in range(len(command)-1))
+
+
+def reconcile_jpred(node_directory):
+    state_file = node_directory / "remote-job.json"
+    if not state_file.is_file():
+        return False
+    state = json.loads(state_file.read_text())
+    # This native protocol cannot submit again when an intent exists, including
+    # unknown acknowledgements. Other arbitrary configured commands get no
+    # automatic recovery permission from merely writing a job-id-shaped string.
+    if state.get("protocol") != "jpred-known-job-v2":
+        return False
+    if state.get("job_id"):
+        return True
+    from igem_drylab.jpred_runner import _accepted_job
+    log = Path(state["acknowledgement_log"])
+    if not log.is_file():
+        return False
+    try:
+        _accepted_job(log.read_text())
+    except ValueError:
+        return False
+    return True
 
 
 class SequencePredictionInput(Contract):
@@ -58,14 +89,30 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
     # the full biological sequence and its identity are unchanged.
     source.write_text(f">sequence_input\n{sequence}\n", encoding="utf-8")
     output_dir = context.work_dir / "prediction"
+    if tool == "jpred":
+        native = uses_native_jpred_route(config)
+        if not native:
+            raise ToolFailure("jpred_requires_recoverable_native_route", "A submit-only or arbitrary command cannot recover a JPred job. Configure the native JPred runner with the official client.")
+        config = config.model_copy(update={"command":config.command + " --poll-once"})
+        adapter = create_tool_adapter(tool, config)
     run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
         sequence=sequence,
         job_state=context.work_dir.parent / "remote-job.json",
         input_files={"sequence": source}, timeout_seconds=7200)
     result["tool_status"] = run.status
     if run.status != "succeeded":
+        if tool == "jpred" and native:
+            state_file = context.work_dir.parent / "remote-job.json"
+            if state_file.is_file() and not json.loads(state_file.read_text()).get("job_id"):
+                raise ToolFailure("remote_submission_reconciliation_required", "Submission acknowledgement unknown; never resubmit blindly.")
+            raise ToolFailure("remote_retrieval_failed", "Original JPred job retained; retry retrieves that job only.",retryable=True)
         result["blocker"] = "External tool did not complete; its private execution record is retained."
         return result
+    if tool == "jpred" and native and not (output_dir / "secondary.json").is_file():
+        state = json.loads((context.work_dir.parent / "remote-job.json").read_text())
+        if state["status"] == "waiting_for_result":
+            raise ToolDeferred(state["job_id"],poll_after_seconds=60)
+        raise ValueError("JPred returned neither validated results nor a known waiting job")
     parsed = None
     if fusion_tool:
         from igem_drylab.fusion_tool_import import NativeFusionArtifact, parse_native_artifact
@@ -160,7 +207,8 @@ def sequence_prediction_tools():
         Path(__file__).parents[1] / "fusion_tool_import.py",Path(__file__).parents[1]/"tango_runner.py")
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
-        implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False)
+        implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False,
+        reconcile=reconcile_jpred if name == "jpred" else None)
         for name, label in (("iupred2a", "IUPred2 disorder prediction"), ("seg", "SEG low-complexity prediction"),
                             ("colabfold", "ColabFold enzyme / fusion prediction"),
                             ("pscore", "Original PScore — diagnostic LLPS propensity"),

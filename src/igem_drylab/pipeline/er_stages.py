@@ -188,7 +188,7 @@ def run_er_m3(config,assessment):
     row.compartment_result = result
     row.compartment_result_sha256 = result_identity(result)
     row.formula_version = request.formula_version
-    row.parameter_ids = sorted({q.parameter_id for q in quantities(request)})
+    row.parameter_ids = sorted({q.parameter_id for q in quantities(request)} | set(assessment.parameter_ids))
     row.numerically_solved = result["status"] == "numerically_solved"
     row.evidence_ready = row.numerically_solved and config.execution.mode == "real" and config.execution.analysis_grade == "formal_measured"
     row.status = "valid" if row.numerically_solved else "insufficient_data"
@@ -262,7 +262,8 @@ def run_er_m4(config,assessment,stage_dir):
     row.status = "valid" if row.numerically_solved else "insufficient_data"
     row.missing_inputs = result.get("missing",[])
     row.simulation_inputs = request.model_dump(mode="json")
-    row.parameter_ids = sorted({q.parameter_id for q in quantities(request)})
+    row.parameter_ids = sorted({q.parameter_id for q in quantities(request)} |
+        {identifier for reaction in request.reactions for identifier in reaction.parameter_ids} | set(assessment.parameter_ids))
     stage_dir.mkdir(parents=True,exist_ok=True)
     row.trajectory_artifact = stage_dir/(assessment.construct_id+"-ER-amounts.json")
     row.trajectory_artifact.write_text(json.dumps(result,indent=2),encoding="utf-8")

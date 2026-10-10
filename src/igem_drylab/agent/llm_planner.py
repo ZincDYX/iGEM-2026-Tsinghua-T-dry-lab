@@ -50,6 +50,7 @@ class OpenAICompatiblePlanningBackend:
                 "memory": context.retrieved_memory,
                 "artifacts": context.artifact_summaries,
                 "conflicts": context.conflicts,
+                "scientific_observation":context.scientific_observation.model_dump(mode="json") if context.scientific_observation else None,
             },
             "rules": [
                 "Return one JSON object that validates against the supplied schema.",

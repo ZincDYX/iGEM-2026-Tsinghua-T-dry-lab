@@ -28,6 +28,15 @@ class ToolFailure(Exception):
         self.retryable = retryable
 
 
+class ToolDeferred(Exception):
+    """Known external job, not a result: release the worker until its next poll."""
+    def __init__(self, job_id: str, *, poll_after_seconds: float = 60):
+        if not job_id or poll_after_seconds <= 0:
+            raise ValueError("invalid_deferred_job")
+        self.job_id, self.poll_after_seconds = job_id, poll_after_seconds
+        super().__init__("external_job_waiting")
+
+
 @dataclass(frozen=True)
 class ToolDefinition:
     id: str
@@ -44,6 +53,7 @@ class ToolDefinition:
     resource: str = "cpu"
     input_schema: dict[str, Any] | None = None
     implementation_files: tuple[Path, ...] = ()
+    reconcile: Callable[[Path], bool] | None = None
 
     def metadata(self) -> dict[str, Any]:
         return {
@@ -77,3 +87,8 @@ class WorkflowTools:
         with self._lock:
             definitions = list(self._tools.values())
         return [tool.metadata() for tool in definitions]
+
+    def definitions(self) -> tuple[ToolDefinition,...]:
+        """Lightweight immutable catalog view; observers do not build all schemas."""
+        with self._lock:
+            return tuple(self._tools.values())

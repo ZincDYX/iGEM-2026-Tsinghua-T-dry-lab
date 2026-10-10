@@ -6,6 +6,8 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import sqlite3
+from threading import Condition
+from time import time
 from typing import Any, Iterator
 from uuid import uuid4
 
@@ -20,6 +22,19 @@ def canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 
 
+def file_sha256(path: Path, verified: dict[Path,str] | None = None) -> str:
+    """Stream bytes; deduplicate only within one caller-owned verification boundary."""
+    path=path.resolve()
+    if verified is not None and path in verified: return verified[path]
+    digest=sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda:stream.read(1024*1024),b""):
+            digest.update(chunk)
+    result=digest.hexdigest()
+    if verified is not None: verified[path]=result
+    return result
+
+
 def plan_binding(project: Project, workflow: Workflow) -> PlanBinding:
     return PlanBinding(project_id=project.id, project_revision=project.revision,
         project_input_sha256=sha256(canonical(project.model_dump(mode="json")).encode()).hexdigest(),
@@ -32,6 +47,7 @@ class WorkflowStore:
     def __init__(self, path: Path) -> None:
         self.path = path.resolve()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._changed = Condition()
         with self.connection() as db:
             db.executescript("""
                 PRAGMA journal_mode=WAL;
@@ -78,6 +94,10 @@ class WorkflowStore:
             db.execute("CREATE INDEX IF NOT EXISTS assets_path_project ON file_assets(path,project_id)")
             if "logical_relative_path" not in {row[1] for row in db.execute("PRAGMA table_info(file_assets)")}:
                 db.execute("ALTER TABLE file_assets ADD COLUMN logical_relative_path TEXT")
+            columns = {row[1] for row in db.execute("PRAGMA table_info(nodes)")}
+            if "remote_job" not in columns:
+                db.execute("ALTER TABLE nodes ADD COLUMN remote_job TEXT")
+                db.execute("ALTER TABLE nodes ADD COLUMN poll_after REAL")
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
@@ -230,8 +250,12 @@ class WorkflowStore:
             if row is None: raise KeyError(run_id)
             result = dict(row)
             result["nodes"] = [dict(item) | {"inputs":json.loads(item["inputs"]) if item["inputs"] else None, "output":None, "error":None}
-                for item in db.execute("SELECT id,parent_id,status,attempts,inputs FROM nodes WHERE run_id=? ORDER BY rowid",(run_id,))]
-            result["artifacts"] = [dict(item) for item in db.execute("SELECT id,node_id,hash FROM artifacts WHERE run_id=?",(run_id,))]
+                for item in db.execute("SELECT id,parent_id,status,attempts,inputs,poll_after FROM nodes WHERE run_id=? ORDER BY rowid",(run_id,))]
+            result["artifacts"] = [dict(item) for item in db.execute(
+                """SELECT a.id,a.node_id,a.hash FROM artifacts a
+                JOIN nodes n ON n.run_id=a.run_id AND n.id=a.node_id
+                WHERE a.run_id=? AND n.status='succeeded'
+                AND json_extract(a.metadata,'$.attempt')=n.attempts""", (run_id,))]
         return result
 
     def node_output(self, run_id: str, node_id: str):
@@ -244,9 +268,15 @@ class WorkflowStore:
         results = []
         with self.connection() as db:
             for node_id in node_ids:
-                row = db.execute("SELECT artifacts.*,nodes.status,runs.project_id,runs.snapshot_hash FROM artifacts JOIN nodes ON nodes.run_id=artifacts.run_id AND nodes.id=artifacts.node_id JOIN runs ON runs.id=artifacts.run_id WHERE artifacts.run_id=? AND artifacts.node_id=?",(run_id,node_id)).fetchone()
+                row = db.execute("""SELECT a.*,n.status,n.inputs,r.project_id,r.snapshot_hash
+                    FROM artifacts a JOIN nodes n ON n.run_id=a.run_id AND n.id=a.node_id
+                    JOIN runs r ON r.id=a.run_id WHERE a.run_id=? AND a.node_id=?
+                    AND json_extract(a.metadata,'$.attempt')=n.attempts""", (run_id,node_id)).fetchone()
                 if row is None or row["status"] != NodeStatus.succeeded.value:
                     raise WorkflowError("upstream_result_not_successful")
+                metadata = json.loads(row["metadata"])
+                if metadata["inputs_sha256"] != sha256((row["inputs"] or "{}").encode()).hexdigest():
+                    raise WorkflowError("upstream_result_inputs_mismatch")
                 path = Path(row["path"])
                 raw = path.read_bytes()
                 if sha256(raw).hexdigest() != row["hash"]: raise WorkflowError("upstream_result_hash_mismatch")
@@ -285,6 +315,29 @@ class WorkflowStore:
                 return
             db.execute("UPDATE runs SET control=?,updated_at=? WHERE id=?", (action, now(), run_id))
             self._event(db,run_id,"control_requested",{"action":action,"actor":"user_or_execution_policy"})
+        self.notify_change()
+
+    def notify_change(self):
+        with self._changed:
+            self._changed.notify_all()
+
+    def wait_for_change(self, timeout):
+        with self._changed:
+            self._changed.wait(timeout)
+
+    def defer_node(self, run_id, node_id, job_id, poll_after_seconds):
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT remote_job FROM nodes WHERE run_id=? AND id=?", (run_id,node_id)).fetchone()
+            previous = json.loads(row[0]) if row[0] else {}
+            if previous and previous["job_id"] != job_id:
+                raise WorkflowError("remote_job_identity_changed")
+            job = {"job_id":job_id,"status":"waiting_for_result","poll_count":previous.get("poll_count",0)+1,
+                   "remote_cancellation_confirmed":False}
+            db.execute("UPDATE nodes SET status='waiting',remote_job=?,poll_after=?,error=NULL WHERE run_id=? AND id=?",
+                       (canonical(job),time()+poll_after_seconds,run_id,node_id))
+            self._event(db,run_id,"remote_job_waiting",job,node_id)
+        self.notify_change()
 
     def set_node(self, run_id: str, node_id: str, status: NodeStatus, *, inputs: Any = None, output: Any = None, error: Any = None, increment: bool = False) -> None:
         with self.connection() as db:
@@ -312,7 +365,7 @@ class WorkflowStore:
         db.execute("INSERT INTO events(run_id,node_id,event,payload,timestamp) VALUES(?,?,?,?,?)", (run_id,node_id,event,canonical(payload),now()))
 
     def complete_node(self, run_id: str, node_id: str, output: dict[str, Any], path: Path, upstream: list[str]) -> None:
-        digest = sha256(path.read_bytes()).hexdigest()
+        digest = file_sha256(path)
         artifact_id = sha256(f"{run_id}:{node_id}:{path.resolve()}".encode()).hexdigest()
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -324,11 +377,12 @@ class WorkflowStore:
             metadata = {"type": "application/json", "attempt": record["attempts"], "inputs_sha256": sha256((record["inputs"] or "{}").encode()).hexdigest()}
             db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?,?)", (artifact_id, run_id, node_id, digest, str(path.resolve()), canonical(upstream), canonical(metadata)))
             db.execute("UPDATE nodes SET status=?,output=?,error=NULL WHERE run_id=? AND id=?", (NodeStatus.succeeded.value, canonical(output), run_id, node_id))
+            db.execute("UPDATE nodes SET remote_job=json_set(remote_job,'$.status','published'),poll_after=NULL WHERE run_id=? AND id=? AND remote_job IS NOT NULL", (run_id,node_id))
             db.execute("INSERT INTO events(run_id,node_id,event,payload,timestamp) VALUES(?,?,?,?,?)", (run_id, node_id, "node_state", canonical({"status": NodeStatus.succeeded.value, "error": None}), now()))
 
     @staticmethod
     def _node(row: sqlite3.Row) -> dict[str, Any]:
         result = dict(row)
-        for key in ("inputs", "output", "error"):
+        for key in ("inputs", "output", "error", "remote_job"):
             result[key] = json.loads(result[key]) if result[key] else None
         return result

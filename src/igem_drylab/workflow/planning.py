@@ -11,6 +11,8 @@ from uuid import uuid4
 from .builtins import Goal, recommend
 from .models import Contract, ExecutionPolicy, PlanBinding, Workflow, WorkflowError
 from .store import now, plan_binding
+from igem_drylab.agent.scientific_environment import ScientificEnvironment,ScientificObservation
+from igem_drylab.agent.decision import ScientificAction,InspectProjectAction,PrepareNodeAction,WaitAction,SemanticDecision
 
 
 class ProposalRequest(Contract):
@@ -23,6 +25,9 @@ class ProposalRequest(Contract):
 
 
 class ProposalView(Contract):
+    observation: ScientificObservation | None = None
+    scientific_actions: list[ScientificAction] = Field(default_factory=list)
+    reviewed_tool_labels: list[str] = Field(default_factory=list)
     id: str
     task_id: str
     project_id: str
@@ -67,6 +72,11 @@ class PlanningService:
             objective=request.objective,rationale="Template planner; no language model was called.",evidence=[],requested_stages=[],execution_stages=[],
             reused_artifacts=[],missing_inputs=[],limitations=["Accepting a proposal does not approve parameters or start execution.","Cross-run dependency reuse is not verified; original scientific outputs are not automatically reused."],workflow=None,confirmation=None,created_at=now())
         workflow = None
+        environment = ScientificEnvironment(self.store,self.engine.tools) if self.engine else None
+        if environment:
+            result.observation = environment.observe(project,request.policy)
+            self.boundary.check(result.observation.model_dump(mode="json"))
+            result.scientific_actions = [InspectProjectAction(kind="inspect_project",reason="Read actual declared gaps, registry applicability, capabilities and recorded stage outcomes.")]
         if request.mode == "hybrid":
             result.source = "hybrid_semantic_compiler"
             if self.backend is None or not request.external_planning_approved:
@@ -80,14 +90,22 @@ class PlanningService:
                     inputs={"project_revision":project.revision,"scientific_project_available":project.scientific_project is not None},
                     constraints=["do_not_invent_parameters","human_approval_before_execution"])
                 context = ContextBundle(task=task,constraints=task.constraints,
+                    scientific_observation=result.observation,
                     artifact_summaries=[{"file_id":item["file_id"],"sha256":item["sha256"],"name":item["name"]} for item in self.boundary.project(project)["files"]])
                 # Call the existing semantic interpreter + deterministic compiler,
                 # not AgentRuntime or a second executor.
                 compiled = self.backend.create_plan(task,context,{"igem.pipeline.plan_stage"})
                 semantic = compiled.diagnostics.get("semantic_decision",{})
+                if semantic.get("scientific_actions") and environment:
+                    typed = SemanticDecision.model_validate(semantic).scientific_actions
+                    try:
+                        result.scientific_actions += environment.validate_actions(typed,result.observation)
+                    except WorkflowError as error:
+                        result.status = "blocked"
+                        result.missing_inputs = [error.code]
                 result.rationale = semantic.get("rationale") or "The deterministic compiler requires additional inputs or evidence."
                 result.change_types = list(semantic.get("change_types",[]))
-                result.missing_inputs = list(semantic.get("missing_inputs",[]))
+                result.missing_inputs.extend(semantic.get("missing_inputs",[]))
                 result.evidence = [item["sha256"] for item in context.artifact_summaries]
                 requested = [step.arguments["stage"] for step in compiled.steps if step.action_type == "dispatch_stage"]
                 result.requested_stages = requested
@@ -102,13 +120,20 @@ class PlanningService:
                     target = max(requested,key=lambda item:["m1","m2","m3","m4","m5"].index(item))
                     selected = {target}
                     definitions = {node.id:node for node in workflow.nodes}
+                    if target not in definitions:
+                        result.status = "blocked"
+                        result.missing_inputs.append("stage_configuration_not_prepared:"+target)
+                        workflow = None
+                        selected = set()
                     while True:
+                        if workflow is None: break
                         expanded = selected | set().union(*(definitions[key].dependencies() for key in selected))
                         if expanded == selected: break
                         selected = expanded
-                    workflow.nodes = [node for node in workflow.nodes if node.id in selected]
-                    workflow.execution_policy.allowed_tools = sorted({node.tool_id for node in workflow.nodes})
-                    expanded_stages = [node.id for node in workflow.nodes if node.id not in requested]
+                    if workflow is not None:
+                        workflow.nodes = [node for node in workflow.nodes if node.id in selected]
+                        workflow.execution_policy.allowed_tools = sorted({node.tool_id for node in workflow.nodes})
+                    expanded_stages = [node.id for node in workflow.nodes if node.id not in requested] if workflow else []
                     if expanded_stages:
                         result.limitations.append("No verified reusable predecessor artifacts; dependencies explicitly added: "+", ".join(expanded_stages))
                         constraints = semantic.get("scientific_constraints",[])
@@ -120,12 +145,26 @@ class PlanningService:
             workflow = recommend(project,request.goal)
             result.requested_stages = [node.id for node in workflow.nodes]
         if workflow is not None:
+            if result.status == "blocked":
+                workflow = None
+        if workflow is not None:
             workflow.execution_policy = request.policy.model_copy(deep=True)
             workflow = Workflow.model_validate(workflow.model_dump(mode="json"))
             result.execution_stages = [node.id for node in workflow.nodes]
             result.workflow = workflow
             result.confirmation = plan_binding(project,workflow)
             result.review_identity = self.engine.review_identity(project,workflow) if self.engine else None
+            result.reviewed_tool_labels = self._tool_labels(result.review_identity)
+            if environment:
+                first = workflow.nodes[0]
+                actions=[PrepareNodeAction(kind="prepare_node",tool_id=first.tool_id,input_refs=["project:"+project.id],reason="Prepare the reviewed execution entry point; no tool runs or approvals are performed by proposing.")]
+                if result.observation.gaps:
+                    actions.append(WaitAction(kind="wait",pending_refs=sorted({gap.code for gap in result.observation.gaps}),reason="Later quantitative work still requires the recorded sources or approvals; already prepared stages remain usable."))
+                # An unconfigured external route is recorded as a gap, not a fabricated capability.
+                try:
+                    result.scientific_actions += environment.validate_actions(actions,result.observation)
+                except WorkflowError as error:
+                    result.limitations.append(error.code)
         self.boundary.check(result.model_dump(mode="json"))
         with self.store.connection() as db:
             db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project.id,result.model_dump_json()))
@@ -140,6 +179,7 @@ class PlanningService:
             execution_stages=[node.id for node in workflow.nodes],reused_artifacts=[],missing_inputs=[],limitations=["User DAGs do not approve scientific parameters; the durable executor verifies provenance and approvals."],
             workflow=workflow,confirmation=plan_binding(project,workflow),created_at=now(),
             review_identity=self.engine.review_identity(project,workflow) if self.engine else None,previous_review_identity=previous_review_identity)
+        result.reviewed_tool_labels = self._tool_labels(result.review_identity)
         self.boundary.check(result.model_dump(mode="json"))
         with self.store.connection() as db:
             db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project_id,result.model_dump_json()))
@@ -197,6 +237,11 @@ class PlanningService:
         with self.store.connection() as db:
             rows = db.execute("SELECT seq,proposal_id,run_id,action,actor,timestamp FROM plan_actions WHERE project_id=? AND seq>? ORDER BY seq LIMIT ?",(project_id,after,limit))
             return [dict(row) for row in rows]
+
+    @staticmethod
+    def _tool_labels(identity):
+        return [tool+" · "+str(values["version"])+" · "+str(values["runtime"])
+            for tool,values in (identity or {}).get("tools",{}).items()]
 
     @staticmethod
     def _action(db,proposal,action,actor,run_id=None):

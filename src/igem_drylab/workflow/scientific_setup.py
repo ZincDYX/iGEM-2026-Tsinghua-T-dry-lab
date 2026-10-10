@@ -37,7 +37,7 @@ def form_schema(prepared_through="m5"):
     schema['properties'].pop('run')
     schema['$defs'].pop('ToolConfig', None)
     schema['$defs'].pop('RunConfig', None)
-    schema['required'] = ['inputs', 'execution', 'prepared_through']
+    schema['required'] = ['inputs', 'execution', 'prepared_through'] + ([] if prepared_through in {'m1','m2'} else ['stages'])
     schema['$defs']['StagesConfig']['required'] = ([] if prepared_through in {'m1','m2'} else
         ['m3_concentration'] if prepared_through == 'm3' else ['m3_concentration', 'm4_reaction'])
     schema['$defs']['M3Config']['required'] = list(EXPLICIT_M3)

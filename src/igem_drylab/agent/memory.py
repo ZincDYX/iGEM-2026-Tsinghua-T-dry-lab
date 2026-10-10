@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from heapq import nlargest
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -61,33 +62,48 @@ class AgentMemory:
         return typed
 
     def load_recent(self, limit: int = 20) -> list[dict[str, Any]]:
-        return [record.model_dump(mode="json") for record in self.records()[-limit:]]
+        if limit <= 0 or not self.path.exists(): return []
+        rows = []
+        # Read only enough tail blocks for the requested valid JSONL records.
+        with self.path.open("rb") as handle:
+            handle.seek(0,2)
+            position,pending = handle.tell(),b""
+            while position and len(rows) < limit:
+                start = max(0,position-65536)
+                handle.seek(start)
+                lines = (handle.read(position-start)+pending).split(b"\n")
+                position = start
+                pending = lines[0] if position else b""
+                for line in reversed(lines[1:] if position else lines):
+                    if not line.strip(): continue
+                    try: rows.append(MemoryRecord.model_validate_json(line).model_dump(mode="json"))
+                    except ValueError: continue
+                    if len(rows) == limit: break
+        return rows[::-1]
 
     def records(self) -> list[MemoryRecord]:
+        return list(self._iter_records())
+
+    def _iter_records(self):
         if not self.path.exists():
-            return []
-        rows: list[MemoryRecord] = []
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            try:
-                rows.append(MemoryRecord.model_validate_json(line))
-            except ValueError:
-                continue
-        return rows
+            return
+        with self.path.open("r",encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip(): continue
+                try: yield MemoryRecord.model_validate_json(line)
+                except ValueError: continue
 
     def search(self, query: str, *, limit: int = 8, kinds: set[MemoryKind] | None = None) -> list[MemoryRecord]:
         tokens = set(_tokens(query))
-        ranked: list[tuple[float, MemoryRecord]] = []
-        for record in self.records():
-            if kinds and record.kind not in kinds:
-                continue
-            haystack = set(_tokens(" ".join([record.content, *record.tags, record.source or ""])))
-            overlap = len(tokens & haystack)
-            if overlap:
-                ranked.append((overlap / max(1, len(tokens)), record))
-        ranked.sort(key=lambda item: (item[0], item[1].created_at), reverse=True)
-        return [record for _score, record in ranked[:limit]]
+        if limit <= 0: return []
+        def ranked():
+            for record in self._iter_records():
+                if kinds and record.kind not in kinds: continue
+                haystack = set(_tokens(" ".join([record.content,*record.tags,record.source or ""])))
+                overlap = len(tokens & haystack)
+                if overlap: yield overlap / max(1,len(tokens)),record
+        # Exact old lexical ordering, O(limit) retained records, no approximation.
+        return [record for _,record in nlargest(limit,ranked(),key=lambda item:(item[0],item[1].created_at))]
 
     def _coerce(self, raw: dict[str, Any]) -> MemoryRecord:
         event = str(raw.get("event", "note"))

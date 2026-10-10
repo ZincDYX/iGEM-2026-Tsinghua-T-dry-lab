@@ -44,9 +44,22 @@ for(const schema of Object.values(schemas))for(const[name,definition]of Object.e
   definitions[name]=definition;
 }
 function externalReferences(value){
-  if(Array.isArray(value))return value.map(externalReferences);
-  if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,key==="$ref"&&typeof item==="string"&&item.startsWith("#/$defs/")?`urn:fusionlab:shared${item}`:externalReferences(item)]));
-  return value;
+  if(!value||typeof value!=="object")return value;
+  // Descriptions/defaults remain in the exported schemas and TypeScript docs.
+  // They do not participate in validation (useDefaults is false), so do not
+  // embed those repeated annotations in the executable browser validators.
+  const annotations=new Set(["title","description","default","examples"]);
+  const maps=new Set(["properties","patternProperties","$defs","definitions","dependentSchemas"]);
+  const arrays=new Set(["allOf","anyOf","oneOf","prefixItems"]);
+  const children=new Set(["items","additionalProperties","contains","not","if","then","else","propertyNames","unevaluatedProperties"]);
+  return Object.fromEntries(Object.entries(value).filter(([key])=>!annotations.has(key)).map(([key,item])=>{
+    if(key==="$ref"&&typeof item==="string"&&item.startsWith("#/$defs/"))return[key,`urn:fusionlab:shared${item}`];
+    if(maps.has(key))return[key,Object.fromEntries(Object.entries(item).map(([name,schema])=>[name,externalReferences(schema)]))];
+    if(arrays.has(key))return[key,item.map(externalReferences)];
+    if(children.has(key))return[key,externalReferences(item)];
+    // Literal enum/const objects and property names are not schema annotations.
+    return[key,item];
+  }));
 }
 ajv.addSchema({$id:"urn:fusionlab:shared",$defs:externalReferences(definitions)},"shared");
 for(const[name,schema]of Object.entries(schemas)){const{$defs,...root}=schema;ajv.addSchema(externalReferences(root),name);}

@@ -85,6 +85,8 @@ def test_er_m2_m3_m4_chain_uses_actual_upstream_amounts_and_never_original_conce
     assert rows[0].status=="valid" and rows[0].numerically_solved and not rows[0].evidence_ready
     assert rows[0].compartment_result["max_mass_conservation_residual_umol"] < 1e-8
     assert rows[0].candidate_context is None and rows[0].final_15 is None
+    assert set(m3.parameter_ids) <= set(rows[0].parameter_ids)
+    assert {identifier for reaction in request.reactions for identifier in reaction.parameter_ids} <= set(rows[0].parameter_ids)
     # A changed abundance must not pass merely because it carries the same source ID.
     request.pools[0].enzyme_amounts["OC"].value += .1
     rows,_=run_m4(project,tmp_path,[m3])

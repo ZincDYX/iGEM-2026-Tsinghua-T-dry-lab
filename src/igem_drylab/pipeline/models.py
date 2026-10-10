@@ -117,6 +117,7 @@ class M2FusionAssessment(ScientificResult):
 
 
 class M3ConcentrationAssessment(ScientificResult):
+    equilibrium_inputs: dict[str,Any] | None = None
     compartment_result: dict[str,Any] | None = None
     compartment_result_sha256: str | None = None
     avidity_corrections: dict[str, Any] = Field(default_factory=dict)

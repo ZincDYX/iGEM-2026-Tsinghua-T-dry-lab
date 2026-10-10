@@ -28,3 +28,4 @@ export type { PluginInspectionView } from "./PluginInspectionView.generated";
 export type { PredictionToolView } from "./PredictionToolView.generated";
 export type { SequencePage } from "./SequencePage.generated";
 export type { Workflow } from "./Workflow.generated";
+export type { ScientificObservation } from "./ScientificObservation.generated";

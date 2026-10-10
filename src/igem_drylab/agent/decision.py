@@ -10,6 +10,68 @@ class StringEnum(str, Enum):
         return self.value
 
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal, Annotated, Union
+
+
+class ScientificActionBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=1)
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
+class InspectProjectAction(ScientificActionBase):
+    kind: Literal["inspect_project"]
+
+
+class RetrieveEvidenceAction(ScientificActionBase):
+    kind: Literal["retrieve_evidence"]
+    query: str = Field(min_length=1)
+    source_scope: Literal["project_registry", "registered_artifacts"]
+
+
+class PrepareNodeAction(ScientificActionBase):
+    kind: Literal["prepare_node"]
+    tool_id: str
+    input_refs: list[str]
+
+
+class SubmitJobAction(ScientificActionBase):
+    kind: Literal["submit_job"]
+    reviewed_proposal_id: str
+
+
+class InspectJobAction(ScientificActionBase):
+    kind: Literal["inspect_job"]
+    run_id: str
+
+
+class EvaluateResultAction(ScientificActionBase):
+    kind: Literal["evaluate_result"]
+    result_ref: str
+    metric: Literal["recorded_stage_status", "recorded_mass_balance", "recorded_applicability"]
+
+
+class ProposeExperimentAction(ScientificActionBase):
+    kind: Literal["propose_experiment"]
+    hypothesis: str = Field(min_length=1)
+    controls: list[str] = Field(min_length=1)
+    observable: str = Field(min_length=1)
+    refutation_criterion: str = Field(min_length=1)
+    requires_human_review: Literal[True] = True
+
+
+class WaitAction(ScientificActionBase):
+    kind: Literal["wait"]
+    pending_refs: list[str] = Field(min_length=1)
+
+
+class FinishAction(ScientificActionBase):
+    kind: Literal["finish"]
+    outcome: Literal["available_work_completed", "human_input_required", "no_compute_requested"]
+
+
+ScientificAction = Annotated[Union[InspectProjectAction,RetrieveEvidenceAction,PrepareNodeAction,SubmitJobAction,
+    InspectJobAction,EvaluateResultAction,ProposeExperimentAction,WaitAction,FinishAction],Field(discriminator="kind")]
 
 
 class ChangeType(StringEnum):
@@ -68,6 +130,7 @@ class SemanticDecision(BaseModel):
     requires_new_compute: bool
     scientific_constraints: list[ScientificConstraint] = Field(default_factory=list)
     rationale: str = Field(min_length=1)
+    scientific_actions: list[ScientificAction] = Field(default_factory=list)
 
 
 # Compatibility name for v3 callers.  It has v4 semantics and intentionally

@@ -12,6 +12,9 @@ class PublicError(Contract):
 
 
 ERROR_GUIDANCE = {
+    "jpred_requires_recoverable_native_route": ("JPred is configured to submit only, not retrieve a prediction.", [], ["Configure the backend native JPred runner with the installed jpredapi client", "Keep existing job records; do not submit the same job again"]),
+    "remote_submission_reconciliation_required": ("The service may have accepted this job, but its acknowledgement is unknown.", [], ["Reconcile the original submission log or service job identity", "Do not resubmit until the original job is accounted for"]),
+    "remote_retrieval_failed": ("The known remote job is retained; its result could not yet be retrieved.", [], ["Retry retrieval of the same job", "Check the service and the backend diagnostic"]),
     "annotation_requires_json": ("Choose an imported annotation JSON file.", ["files"], ["Import and save the source file first"]),
     "annotation_binding_conflict": ("An existing source binding contradicts the selected file; nothing was rebound.", ["files"], ["Check the selected files and the original annotation source"]),
     "structure_annotations_already_linked": ("This structure already has a different linked annotation source.", ["files"], ["Preserve the existing source; use a new project for a changed annotation set"]),

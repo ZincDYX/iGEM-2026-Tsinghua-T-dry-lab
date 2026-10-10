@@ -6,6 +6,7 @@ from typing import Any
 from .artifacts import ArtifactStore
 from .memory import AgentMemory
 from .models import AgentTask, PlanStep
+from .scientific_environment import ScientificObservation
 
 
 @dataclass
@@ -16,6 +17,7 @@ class ContextBundle:
     artifact_summaries: list[dict[str, Any]] = field(default_factory=list)
     constraints: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
+    scientific_observation: ScientificObservation | None = None
 
 
 class ContextBuilder:

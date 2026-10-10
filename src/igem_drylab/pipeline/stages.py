@@ -824,6 +824,7 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
                 site_occupancy=site_occupancy,
                 formula_version=exact.formula_version,
                 avidity_corrections=exact.avidity_corrections,
+                equilibrium_inputs=equilibrium_input.model_dump(mode="json"),
                 uncertainty_report=uncertainty_report,
                 free_dense_concentration={"OC": exact.oc.free_dense_um, "DMT": exact.dmt.free_dense_um},
                 free_dilute_concentration={"OC": exact.oc.free_dilute_um, "DMT": exact.dmt.free_dilute_um},
@@ -1019,6 +1020,42 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             except (ValueError, RuntimeError, KeyError) as error:
                 record.analysis_result = {**(record.analysis_result or {}), "status":"insufficient_data","error":str(error)}
         write_models(run_dir / "m4_analysis", "reaction_predictions_with_analysis", records)
+    if config.stages.m4_reaction.joint_samples:
+        from igem_drylab.m4_workflow import _joint_uncertainty
+        m3_names={"phi":"phi","c_dense_um":"c_dense_scaffold","c_scaffold_total_um":"c_total_scaffold",
+            "c_sat_um":"c_sat_scaffold","kd_sh3_um":"kd_sh3","kd_pdz_um":"kd_pdz",
+            "k_oc":"partition_oc","k_dmt":"partition_dmt","c_oc_total_um":"oc_total","c_dmt_total_um":"dmt_total"}
+        for record in records:
+            settings=config.stages.m4_reaction.joint_samples.get(record.construct_id)
+            if settings is None:
+                continue
+            try:
+                if record.status!="valid" or record.compartment_scenario!="cytosolic_two_phase":
+                    raise ValueError("joint_sample_replay_requires_ready_original_cytosolic_model_not_ER_fallback")
+                parents=[row for row in assessments if (row.candidate_id,row.construct_id)==(record.candidate_id,record.construct_id)]
+                if len(parents)!=1 or parents[0].equilibrium_inputs is None:
+                    raise ValueError("joint_sample_replay_requires_registered_M3_kernel_inputs")
+                parent=parents[0]
+                if parent.m4_candidate_context is None or parent.m4_candidate_context.condition_id!=settings.condition_id:
+                    raise ValueError("joint_sample_replay_requires_exact_M3_condition")
+                for column in settings.columns:
+                    source=next((r for r in config.parameters if r.parameter_id==column.parameter_id),None)
+                    applicable_ids=parent.parameter_ids if column.stage=="m3" else record.parameter_ids
+                    name=m3_names[column.parameter_name] if column.stage=="m3" else column.parameter_name
+                    if source is None or source.parameter_id not in applicable_ids or source.name!=name or source.review_status!="approved" or source.approved_by!=settings.reviewed_by:
+                        raise ValueError("joint_sample_column_requires_actual_approved_bound_parameter:"+column.column)
+                    if (source.construct_id,source.condition_id)!=(settings.construct_id,settings.condition_id) or any(
+                        source.conditions.get(key)!=value for key,value in {"joint_samples_sha256":settings.source.sha256,
+                            "joint_samples_column":column.column,"joint_samples_unit":column.unit}.items()):
+                        raise ValueError("joint_samples_require_reviewed_dataset_column_unit_and_condition_binding:"+column.column)
+                contract=record.simulation_inputs["prediction_contract"]
+                if contract["model_kind"]!="markdown_steady_state":
+                    raise ValueError("joint_sample_method_not_defined_for_this_M4_kernel")
+                result=_joint_uncertainty(M4SteadyStateInput.model_validate(contract["kernel_inputs"]),
+                    M3EquilibriumInput.model_validate(parent.equilibrium_inputs),settings)
+                record.analysis_result={**(record.analysis_result or {}),"joint_uncertainty":result}
+            except (ValueError,RuntimeError,KeyError) as error:
+                record.analysis_result={**(record.analysis_result or {}),"joint_uncertainty":{"status":"blocked","missing":[str(error)]}}
     write_models(output.directory, output.json_file.stem, records)
     return records, output
 

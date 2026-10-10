@@ -19,6 +19,7 @@ from igem_drylab.compartments import MembraneTopologyEvidence, resolve_contract_
 from igem_drylab.membrane_geometry import MembraneGeometryInput
 from igem_drylab.m3_er import ERRecruitmentInput
 from igem_drylab.m4_compartments import CompartmentNetworkInput
+from igem_drylab.m4_workflow import M3M4JointSamples
 
 
 DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
@@ -290,6 +291,7 @@ class InductionGateConfig(StrictScientificConfig):
 
 class M4Config(StrictScientificConfig):
     compartment_requests: dict[str,CompartmentNetworkInput] = Field(default_factory=dict)
+    joint_samples: dict[str,M3M4JointSamples] = Field(default_factory=dict)
     analysis: M4AnalysisConfig | None = None
     assay_mode: Literal["substrate_feeding_functional", "full_pathway_production"] | None = None
     measurement_compartment: Literal["intracellular", "extracellular", "total_extract"] | None = None
@@ -545,6 +547,7 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
     resolve_contract_paths(config.stages.m2_fusion.membrane_requests,base_dir)
     resolve_contract_paths(config.stages.m3_concentration.er_requests,base_dir)
     resolve_contract_paths(config.stages.m4_reaction.compartment_requests,base_dir)
+    resolve_contract_paths(config.stages.m4_reaction.joint_samples,base_dir)
     config.inputs.protein_fasta = _resolve_path(config.inputs.protein_fasta, base_dir)  # type: ignore[assignment]
     for ligand in config.inputs.ligands:
         ligand.sdf = _resolve_path(ligand.sdf, base_dir)  # type: ignore[assignment]

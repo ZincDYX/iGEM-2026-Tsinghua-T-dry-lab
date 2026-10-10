@@ -1,50 +1,34 @@
-"""Agent framework skeleton for dry-lab orchestration.
+"""Scientific planning types; the workbench uses the sole WorkflowEngine.
 
-This package intentionally contains the full architectural slots expected in a
-research/industry agent system, while leaving project-specific policies as TODOs.
+Historical AgentRuntime remains a compatibility interface, not the production
+executor. Importing a decision/observation must not initialize that runtime,
+its deprecated MCP registry or the optional language-model client.
 """
+from importlib import import_module
 
-from .artifacts import ArtifactRecord, ArtifactStore
-from .budget import BudgetManager, BudgetState
-from .context import ContextBuilder, ContextBundle
-from .human import ApprovalDecision, HumanApprovalGate
-from .hypothesis import HypothesisRecord
-from .memory import AgentMemory, MemoryRecord
-from .llm_planner import OpenAICompatiblePlanningBackend
-from .hybrid_planner import HybridLLMPlanningBackend
-from .decision import PlanningDecision
-from .plan_compiler import DeterministicPlanCompiler
-from .models import AgentTask, AgentTrace, Plan, PlanStep, ResultBinding, ResultCondition
-from .observability import EventLogger
-from .reflection import ReflectionEvaluator, ReflectionReport
-from .runtime import AgentRuntime
-from .scheduler import StepScheduler
+_EXPORTS = {
+    "artifacts": ("ArtifactRecord", "ArtifactStore"),
+    "budget": ("BudgetManager", "BudgetState"),
+    "context": ("ContextBuilder", "ContextBundle"),
+    "human": ("ApprovalDecision", "HumanApprovalGate"),
+    "hypothesis": ("HypothesisRecord",),
+    "memory": ("AgentMemory", "MemoryRecord"),
+    "llm_planner": ("OpenAICompatiblePlanningBackend",),
+    "hybrid_planner": ("HybridLLMPlanningBackend",),
+    "decision": ("PlanningDecision",),
+    "plan_compiler": ("DeterministicPlanCompiler",),
+    "models": ("AgentTask", "AgentTrace", "Plan", "PlanStep", "ResultBinding", "ResultCondition"),
+    "observability": ("EventLogger",),
+    "reflection": ("ReflectionEvaluator", "ReflectionReport"),
+    "runtime": ("AgentRuntime",),
+    "scheduler": ("StepScheduler",),
+}
+__all__ = [name for names in _EXPORTS.values() for name in names]
 
-__all__ = [
-    "AgentRuntime",
-    "AgentMemory",
-    "AgentTask",
-    "AgentTrace",
-    "ArtifactRecord",
-    "ArtifactStore",
-    "ApprovalDecision",
-    "BudgetManager",
-    "BudgetState",
-    "ContextBuilder",
-    "ContextBundle",
-    "EventLogger",
-    "HumanApprovalGate",
-    "HypothesisRecord",
-    "MemoryRecord",
-    "OpenAICompatiblePlanningBackend",
-    "HybridLLMPlanningBackend",
-    "PlanningDecision",
-    "DeterministicPlanCompiler",
-    "Plan",
-    "PlanStep",
-    "ResultBinding",
-    "ResultCondition",
-    "ReflectionEvaluator",
-    "ReflectionReport",
-    "StepScheduler",
-]
+
+def __getattr__(name):
+    module = next((module for module,names in _EXPORTS.items() if name in names),None)
+    if module is None: raise AttributeError(name)
+    value = getattr(import_module("."+module,__name__),name)
+    globals()[name] = value
+    return value

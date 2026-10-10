@@ -62,6 +62,9 @@ const project: ProjectView = {
 };
 const proposal: ProposalView = {
   review_identity: null,
+  observation: null,
+  scientific_actions: [],
+  reviewed_tool_labels: [],
   previous_review_identity: null,
   id: "proposal",
   task_id: "proposal",

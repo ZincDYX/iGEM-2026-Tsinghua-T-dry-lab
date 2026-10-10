@@ -14,7 +14,7 @@ from igem_drylab.pipeline.models import M1Candidate, M2FusionAssessment, M3Conce
 from igem_drylab.scoring.m2_structure import load_m2_structure_metrics
 from .models import Contract
 from .models import NodeInput, ProjectInput, WorkflowError
-from .store import canonical
+from .store import canonical, file_sha256
 from .tools import NodeContext, ToolDefinition
 
 
@@ -22,8 +22,8 @@ class EvidenceFile(Contract):
     path: Path
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
-    def verify(self):
-        if not self.path.is_file() or sha256(self.path.read_bytes()).hexdigest() != self.sha256:
+    def verify(self, verified=None):
+        if not self.path.is_file() or file_sha256(self.path,verified) != self.sha256:
             raise ValueError("scientific_input_artifact_hash_mismatch:" + str(self.path))
 
 
@@ -93,12 +93,12 @@ class ScientificProject(Contract):
     evidence_files: list[EvidenceFile]
     dependency_scope: str = "configured_data_rules_and_typed_M2_artifacts; remote_sources_are_declared_provenance"
 
-    def verify(self):
+    def verify(self, verified=None):
         bound = {item.path.resolve(): item for item in self.evidence_files}
         if not input_paths(self.config) <= bound.keys():
             raise ValueError("scientific_project_has_unbound_input_files")
         for item in bound.values():
-            item.verify()
+            item.verify(verified)
 
 
 def load_scientific_project(path: Path, *, allowed_roots: tuple[Path, ...] | None = None) -> ScientificProject:
@@ -111,7 +111,7 @@ def load_scientific_project(path: Path, *, allowed_roots: tuple[Path, ...] | Non
             if allowed_roots and Path(item).is_relative_to(allowed_roots[0])))
         raise WorkflowError("scientific_project_missing_local_dependencies", logical_files=logical,
             private_detail="Missing scientific dependencies: " + ",".join(sorted(missing)))
-    return ScientificProject(config=config, evidence_files=[EvidenceFile(path=path, sha256=sha256(path.read_bytes()).hexdigest())
+    return ScientificProject(config=config, evidence_files=[EvidenceFile(path=path, sha256=file_sha256(path))
         for path in sorted(files)])
 
 

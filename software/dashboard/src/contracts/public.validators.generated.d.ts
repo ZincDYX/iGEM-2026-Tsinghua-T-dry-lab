@@ -28,3 +28,4 @@ export function PluginInspectionView(value:unknown):value is import("./PluginIns
 export function PredictionToolView(value:unknown):value is import("./PredictionToolView.generated").PredictionToolView;
 export function SequencePage(value:unknown):value is import("./SequencePage.generated").SequencePage;
 export function Workflow(value:unknown):value is import("./Workflow.generated").Workflow;
+export function ScientificObservation(value:unknown):value is import("./ScientificObservation.generated").ScientificObservation;

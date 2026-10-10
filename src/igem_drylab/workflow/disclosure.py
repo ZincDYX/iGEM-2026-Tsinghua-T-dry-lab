@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from .models import Contract, Project, WorkflowError
 from .sequence_index import SequenceIndexView, sequence_index
+from .store import file_sha256
 
 # Explicit rules, not a claim that arbitrary secrets can be detected.
 SENSITIVE_KEYS = {"api_key", "access_token", "password", "private_key", "secret_env", "deployment_paths", "repo_path", "ssh_host"}
@@ -172,7 +173,6 @@ class DisclosureBoundary:
     def asset(self, path: str | Path, *, project_id: str | None = None, fresh: bool = False, logical_name: str | None = None, db=None) -> dict[str, str]:
         if db is None:
             with self.store.connection() as connection:
-                connection.execute("BEGIN IMMEDIATE")
                 return self.asset(path, project_id=project_id, fresh=fresh, logical_name=logical_name, db=connection)
         source = Path(path).resolve()
         name = Path(logical_name).name if logical_name else source.name
@@ -184,31 +184,42 @@ class DisclosureBoundary:
             "SELECT * FROM file_assets WHERE path=? AND (project_id IS ? OR project_id IS NULL) ORDER BY project_id IS NULL LIMIT 1",
             (str(source), project_id)).fetchone()
         if row is None:
+            digest = file_sha256(source) if source.is_file() else ""
+            # Ordinary GET projections with existing identities never take a
+            # writer lock. Only registration serializes the read/insert pair.
+            if not db.in_transaction:
+                db.execute("BEGIN IMMEDIATE")
+            if not fresh:
+                row = db.execute("SELECT * FROM file_assets WHERE path=? AND (project_id IS ? OR project_id IS NULL) ORDER BY project_id IS NULL LIMIT 1",
+                                 (str(source),project_id)).fetchone()
+        if row is None:
             file_id = str(uuid4())
-            digest = sha256(source.read_bytes()).hexdigest() if source.is_file() else ""
             db.execute("INSERT INTO file_assets(id,project_id,path,hash,name,logical_relative_path) VALUES(?,?,?,?,?,?)", (file_id, project_id, str(source), digest, name, logical_name))
         else:
             file_id, digest = row["id"], row["hash"]
             name = row["name"]
-            if logical_name:
+            if logical_name and row["logical_relative_path"] != logical_name:
                 db.execute("UPDATE file_assets SET logical_relative_path=? WHERE id=?", (logical_name, file_id))
             if project_id and row["project_id"] is None:
-                db.execute("UPDATE file_assets SET project_id=? WHERE id=?", (project_id,file_id))
+                db.execute("UPDATE file_assets SET project_id=? WHERE id=? AND project_id IS NULL", (project_id,file_id))
+                if db.execute("SELECT project_id FROM file_assets WHERE id=?", (file_id,)).fetchone()[0] != project_id:
+                    raise WorkflowError("file_project_mismatch",status_code=403)
         return {"id": file_id, "file_id": file_id, "path": "asset:" + file_id, "sha256": digest, "name": name}
 
-    def resolve_asset(self, file_id: str, project_id: str | None = None) -> str:
+    def resolve_asset(self, file_id: str, project_id: str | None = None, *, verified=None) -> str:
         file_id = file_id.removeprefix("asset:")
         with self.store.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM file_assets WHERE id=?", (file_id,)).fetchone()
             if row is None:
                 raise WorkflowError("unknown_file_identity", status_code=404)
             if project_id and row["project_id"] and row["project_id"] != project_id:
                 raise WorkflowError("file_project_mismatch", status_code=403)
-            if project_id:
+            if project_id and row["project_id"] is None:
                 db.execute("UPDATE file_assets SET project_id=? WHERE id=? AND project_id IS NULL", (project_id, file_id))
+                if db.execute("SELECT project_id FROM file_assets WHERE id=?", (file_id,)).fetchone()[0] != project_id:
+                    raise WorkflowError("file_project_mismatch",status_code=403)
         path = Path(row["path"])
-        if not path.is_file() or sha256(path.read_bytes()).hexdigest() != row["hash"]:
+        if not path.is_file() or file_sha256(path,verified) != row["hash"]:
             raise WorkflowError("file_identity_changed", status_code=409)
         return str(path)
 
@@ -223,19 +234,20 @@ class DisclosureBoundary:
             return [self.tree(item, project_id=project_id, db=db) for item in value]
         return value
 
-    def materialize(self, value: Any, project_id: str) -> Any:
+    def materialize(self, value: Any, project_id: str, *, verified=None) -> Any:
+        if verified is None:
+            verified = {}
         if isinstance(value, str) and value.startswith("asset:"):
-            return self.resolve_asset(value, project_id)
+            return self.resolve_asset(value, project_id, verified=verified)
         if isinstance(value, dict):
-            return {key: self.materialize(item, project_id) for key, item in value.items()}
+            return {key: self.materialize(item, project_id, verified=verified) for key, item in value.items()}
         if isinstance(value, list):
-            return [self.materialize(item, project_id) for item in value]
+            return [self.materialize(item, project_id, verified=verified) for item in value]
         return value
 
     def scientific(self, raw: dict[str, Any], project_id: str | None = None, *, db=None) -> dict[str, Any]:
         if db is None:
             with self.store.connection() as connection:
-                connection.execute("BEGIN IMMEDIATE")
                 return self.scientific(raw, project_id, db=connection)
         from .scientific_project import ScientificProject
         parsed = ScientificProject.model_validate(raw)

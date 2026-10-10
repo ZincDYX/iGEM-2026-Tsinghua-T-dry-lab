@@ -11,16 +11,16 @@ from pathlib import Path
 import platform
 from importlib.metadata import version
 from threading import Event, Lock, Thread
+from time import time
 from typing import Any
 from uuid import uuid4
-from time import sleep
 
 from pydantic import ValidationError
 import jsonschema
 
 from .models import InputValue, LiteralInput, NodeInput, NodeStatus, Project, ProjectInput, RunStatus, Workflow, read_path, SequenceRef
-from .store import WorkflowStore, canonical
-from .tools import NodeContext, ToolFailure, WorkflowTools
+from .store import WorkflowStore, canonical, file_sha256
+from .tools import NodeContext, ToolFailure, ToolDeferred, WorkflowTools
 
 
 class WorkflowEngine:
@@ -57,8 +57,9 @@ class WorkflowEngine:
             identity, runtime_tools = RuntimeProfiles(self.store).get(project.runtime_profile_ref)
             snapshot["runtime_profile"] = identity
             self.disclosure.register_runtime(runtime_tools)
-        self._verify_files(snapshot["project"]["files"])
-        self._verify_scientific_project(snapshot["project"])
+        verified = {}
+        self._verify_files(snapshot["project"]["files"],verified)
+        self._verify_scientific_project(snapshot["project"],verified)
         return snapshot
 
     def create(self, project: Project, workflow: Workflow) -> str:
@@ -105,7 +106,9 @@ class WorkflowEngine:
                 if retry_node_id and (record["parent_id"] or record["id"]) != retry_node_id:
                     continue
                 node = next(node for node in workflow.nodes if node.id == (record["parent_id"] or record["id"]))
-                if self.tools.get(node.tool_id).idempotent:
+                definition = self.tools.get(node.tool_id)
+                node_dir = self.artifact_root / run_id / sha256(record["id"].encode()).hexdigest()[:16]
+                if definition.idempotent or definition.reconcile is not None and definition.reconcile(node_dir):
                     self.store.set_node(run_id, record["id"], NodeStatus.pending)
                 else:
                     self.store.set_node(run_id, record["id"], NodeStatus.blocked, error={"code": "reconciliation_required", "message": "Interrupted non-idempotent call needs external-job reconciliation before retry."})
@@ -141,20 +144,21 @@ class WorkflowEngine:
         return {"python": platform.python_version(), "platform": platform.platform(), "packages": {name: version(name) for name in ("numpy", "scipy", "pydantic", "biopython", "jsonschema")}}
 
     @staticmethod
-    def _verify_files(files: list[dict[str, str]]) -> None:
+    def _verify_files(files: list[dict[str, str]], verified=None) -> None:
         for file in files:
             path = Path(file["path"])
-            if not path.is_file() or sha256(path.read_bytes()).hexdigest() != file["sha256"]:
+            if not path.is_file() or file_sha256(path,verified) != file["sha256"]:
                 raise ValueError(f"input_artifact_hash_mismatch:{file['name']}")
 
     def verify_snapshot(self, run: dict[str, Any], *, execution_identity: bool = True) -> None:
         if sha256(canonical(run["snapshot"]).encode()).hexdigest() != run["snapshot_hash"]:
             raise ValueError("run_snapshot_hash_mismatch")
-        self._verify_files(run["snapshot"]["project"]["files"])
-        self._verify_scientific_project(run["snapshot"]["project"])
+        verified = {}
+        self._verify_files(run["snapshot"]["project"]["files"],verified)
+        self._verify_scientific_project(run["snapshot"]["project"],verified)
         for artifact in run["artifacts"]:
             path = Path(artifact["path"])
-            if not path.is_file() or sha256(path.read_bytes()).hexdigest() != artifact["hash"]:
+            if not path.is_file() or file_sha256(path,verified) != artifact["hash"]:
                 raise ValueError("output_artifact_hash_mismatch")
         if not execution_identity:
             # Input-only iteration does not execute/reuse the old tools. A new
@@ -175,10 +179,10 @@ class WorkflowEngine:
                 raise ValueError(f"tool_changed_since_snapshot:{tool_id}; clone the run with the new tool version")
 
     @staticmethod
-    def _verify_scientific_project(project):
+    def _verify_scientific_project(project, verified=None):
         if project.get("scientific_project") is not None:
             from .scientific_project import ScientificProject
-            ScientificProject.model_validate(project["scientific_project"]).verify()
+            ScientificProject.model_validate(project["scientific_project"]).verify(verified)
 
     def _execute(self, run_id: str, workflow: Workflow, snapshot: dict[str, Any]) -> RunStatus:
         project = snapshot["project"]
@@ -215,7 +219,9 @@ class WorkflowEngine:
                     for node in workflow.nodes:
                         if node.id not in allowed: continue
                         record = records[node.id]
-                        if record["status"] != NodeStatus.pending.value:
+                        if record["status"] not in {NodeStatus.pending.value,NodeStatus.waiting.value}:
+                            continue
+                        if record["status"] == "waiting" and record["poll_after"] > time():
                             continue
                         dependencies = [records[key] for key in node.dependencies()]
                         if any(item["status"] in {NodeStatus.failed.value, NodeStatus.blocked.value} for item in dependencies):
@@ -253,7 +259,8 @@ class WorkflowEngine:
                                     continue
                                 if any(item["status"] in {NodeStatus.failed.value, NodeStatus.blocked.value} for item in shards):
                                     continue
-                                jobs = [(item["id"], item["inputs"]) for item in shards if item["status"] == NodeStatus.pending.value]
+                                jobs = [(item["id"], item["inputs"]) for item in shards if item["status"] == NodeStatus.pending.value
+                                    or item["status"] == "waiting" and item["poll_after"] <= time()]
                             else:
                                 jobs = [(node.id, inputs)]
                             tool = self.tools.get(node.tool_id)
@@ -264,7 +271,8 @@ class WorkflowEngine:
                                     break
                                 if any(key == node_id for key, _ in active.values()):
                                     continue
-                                if sum(item["attempts"] for item in records.values()) >= policy.max_tool_calls:
+                                polling = records.get(node_id,record)["status"] == "waiting"
+                                if not polling and sum(item["attempts"] for item in records.values()) >= policy.max_tool_calls:
                                     self.store.control(run_id,"pause")
                                     self.store.event(run_id,"execution_budget_exhausted",{"reason":"tool_calls"})
                                     control = "pause"
@@ -277,12 +285,12 @@ class WorkflowEngine:
                                 if node.tool_id in {"project.m1","project.m2","project.m3","project.m4","project.m5"}:
                                     persisted["project"] = {"snapshot_project_sha256":sha256(canonical(project).encode()).hexdigest()}
                                 try:
-                                    self.store.set_node(run_id, node_id, NodeStatus.queued, inputs=persisted, increment=True)
+                                    self.store.set_node(run_id, node_id, NodeStatus.queued, inputs=persisted, increment=not polling)
                                     future = self.budget.submit(self._invoke, run_id, node_id, node.tool_id, arguments, sorted(node.dependencies()), snapshot)
                                 except Exception:
                                     self.budget.release_reservation()
                                     raise
-                                records[node_id] = {**records.get(node_id,record),"status":"queued","attempts":records.get(node_id,record)["attempts"]+1}
+                                records[node_id] = {**records.get(node_id,record),"status":"queued","attempts":records.get(node_id,record)["attempts"]+int(not polling)}
                                 active[future] = (node_id, tool.resource)
                             if control: break
                         except (KeyError, IndexError, TypeError, ValidationError, ToolFailure) as exc:
@@ -308,7 +316,11 @@ class WorkflowEngine:
                     self.store.event(run_id,"execution_range_completed",{"reason":"target_node"})
                     return RunStatus.paused
                 if waiting_budget:
-                    sleep(0.05)
+                    self.budget.wait_for_capacity(timeout=0.25)
+                    continue
+                remote_waits = [item["poll_after"] for item in latest["nodes"] if item["status"] == "waiting"]
+                if remote_waits:
+                    self.store.wait_for_change(timeout=max(0,min(2,min(remote_waits)-time())))
                     continue
                 # A completed map can unlock its downstream join on the next pass.
                 if any(records[record["id"]]["status"] != record["status"] for record in parents):
@@ -337,7 +349,8 @@ class WorkflowEngine:
         try:
             control = self.store.execution_state(run_id)["control"]
             if control:
-                self.store.set_node(run_id,node_id,NodeStatus.pending)
+                record=next(item for item in self.store.execution_state(run_id)["nodes"] if item["id"]==node_id)
+                self.store.set_node(run_id,node_id,NodeStatus.waiting if record["poll_after"] is not None else NodeStatus.pending)
                 return
             self.store.set_node(run_id,node_id,NodeStatus.running)
             definition = self.tools.get(tool_id)
@@ -369,6 +382,8 @@ class WorkflowEngine:
                 self.store.set_node(run_id,node_id,NodeStatus.interrupted,error={"code":"cancelled_before_publication","message":"已取消；结果未发布。"})
                 return
             self._complete(run_id, node_id, result, upstream)
+        except ToolDeferred as deferred:
+            self.store.defer_node(run_id,node_id,deferred.job_id,deferred.poll_after_seconds)
         except ToolFailure as exc:
             self.store.set_node(run_id, node_id, NodeStatus.failed, error={**self.disclosure.diagnostic(exc, code=exc.code), "retryable": exc.retryable})
         except Exception as exc:

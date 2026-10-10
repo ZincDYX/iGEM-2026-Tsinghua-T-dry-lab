@@ -40,6 +40,7 @@ class NodeStatus(str, Enum):
     pending = "pending"
     queued = "queued"
     running = "running"
+    waiting = "waiting"
     succeeded = "succeeded"
     failed = "failed"
     interrupted = "interrupted"

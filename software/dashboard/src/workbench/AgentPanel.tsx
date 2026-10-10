@@ -1,6 +1,5 @@
 import type { ProposalView, RuntimeInfoView } from "../contracts/generated";
 import type { Goal } from "../types";
-import { LazyJson } from "../contracts/LazyJson";
 
 export function AgentPanel(props: {
   proposal?: ProposalView;
@@ -138,16 +137,33 @@ export function AgentPanel(props: {
               <li key={i}>{line}</li>
             ))}
           </ul>
-          <LazyJson
-            value={p.review_identity}
-            label="Reviewed tool / environment identity (private paths/configuration omitted)"
-          />
-          {p.previous_review_identity && (
-            <LazyJson
-              value={p.previous_review_identity}
-              label="Original run tool / environment identity (review differences before acceptance)"
-            />
-          )}
+          <details>
+            <summary>Reviewed tools and versions</summary>
+            <ul>{p.reviewed_tool_labels.map(label => <li key={label}>{label}</li>)}</ul>
+            <p>Backend checks tool, input and environment identity again before execution.</p>
+          </details>
+          {p.observation && <section aria-label="Scientific observation and proposed actions">
+            <h4>Observed project state</h4>
+            <p>{p.observation.prepared_through ? `Prepared through ${p.observation.prepared_through.toUpperCase()}` : "Scientific inputs not prepared"} · {p.observation.gaps.length + p.observation.omitted_gap_count} declared gaps</p>
+            <ul>{p.observation.gaps.map((gap,i) => <li key={`${gap.stage}-${gap.code}-${i}`}>
+              {gap.stage.toUpperCase()} · {gap.construct_id || "Project"} · Required: {gap.code.replaceAll("_"," ")} · {gap.reasons.map(reason => reason.replaceAll("_"," ")).join("; ")}
+            </li>)}</ul>
+            {p.observation.omitted_gap_count > 0 && <p>{p.observation.omitted_gap_count} additional gaps omitted from this bounded summary; inspect the project precheck for details.</p>}
+            <h4>Recorded results</h4>
+            {p.observation.recorded_results.length ? <ul>{p.observation.recorded_results.map(result => <li key={`${result.run_id}-${result.node_id}`}>
+              {result.stage.toUpperCase()} · {result.node_status} · {result.current_project_revision ? "Current saved inputs" : "Historical inputs — not authorized for reuse"} · {result.numerically_solved_count ?? "Not recorded"} numerically solved / {result.evidence_ready_count ?? "Not recorded"} evidence-ready records
+            </li>)}</ul> : <p>No recorded stage results; nothing has been calculated by this proposal.</p>}
+            <h4>Recorded jobs</h4>
+            {p.observation.recorded_jobs.length ? <ul>{p.observation.recorded_jobs.map(job => <li key={`${job.run_id}-${job.node_id}`}>
+              {job.tool_id.replaceAll("."," ")} · {job.node_status}{job.remote_status ? ` · Remote: ${job.remote_status.replaceAll("_"," ")}` : ""}
+              {job.remote_status && <span> · Local cancellation does not confirm cancellation at the remote service.</span>}
+            </li>)}</ul> : <p>No recorded jobs.</p>}
+            <h4>Proposed actions — no execution yet</h4>
+            <ol>{p.scientific_actions.map((action,i) => <li key={`${action.kind}-${i}`}>
+              {action.kind.replaceAll("_"," ")} · {action.reason}
+              {action.kind === "propose_experiment" && <p>Hypothesis: {action.hypothesis}. Controls: {action.controls.join("; ")}. Observe: {action.observable}. Refute if: {action.refutation_criterion}. Human review required.</p>}
+            </li>)}</ol>
+          </section>}
           {p.confirmation && (
             <p className="subtle">
               Proposal checked against saved inputs{" "}

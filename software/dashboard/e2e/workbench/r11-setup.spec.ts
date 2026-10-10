@@ -59,6 +59,10 @@ test("empty project creates bound scientific configuration through real forms, n
   await expect(
     page.getByLabel(root + ".execution.mode", { exact: true }),
   ).toHaveValue("");
+  // New projects prepare M1 only. This test explicitly prepares M1–M4;
+  // later-stage controls must not be forced into the default M1 form.
+  await expect(page.getByLabel(root + ".prepared_through", { exact: true })).toHaveValue("m1");
+  await page.getByLabel(root + ".prepared_through", { exact: true }).selectOption("m4");
   await expect(
     page.getByLabel(root + ".stages.m4_reaction.t_end", { exact: true }),
   ).toHaveValue("");
@@ -119,6 +123,7 @@ test("empty project creates bound scientific configuration through real forms, n
   const saved = await (
     await request.get(u + "/projects/r11-form", { headers })
   ).json();
+  expect(saved.scientific_project.config.prepared_through).toBe("m4");
   expect(saved.scientific_project.config.parameters).toEqual([]);
   expect(
     Object.values(saved.scientific_project.config.experimental_context).every(

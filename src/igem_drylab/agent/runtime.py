@@ -21,7 +21,11 @@ from .scheduler import StepScheduler
 
 
 class AgentRuntime:
-    """Conservative, traceable research-agent runtime for this project.
+    """Deprecated compatibility runtime for archived experiments and callers.
+
+    Production desktop planning/execution uses PlanningService/WorkflowEngine.
+    This runtime does not provide the production authorization or persistent
+    long-job lifecycle and must not be selected as a second production executor.
 
     It is deliberately autonomy-bounded: external API calls and costly GPU jobs
     stop at an approval gate, and scientific outputs are treated as hypotheses

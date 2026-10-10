@@ -5750,6 +5750,51 @@
         "title": "InputsConfig",
         "type": "object"
       },
+      "JointSampleColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "minLength": 1,
+            "title": "Column",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "m3",
+              "m4"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "1",
+              "uM",
+              "1/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "stage",
+          "parameter_name",
+          "parameter_id",
+          "unit"
+        ],
+        "title": "JointSampleColumn",
+        "type": "object"
+      },
       "LigandConfig": {
         "additionalProperties": false,
         "properties": {
@@ -6143,6 +6188,65 @@
           "author_native_inputs"
         ]
       },
+      "M3M4JointSamples": {
+        "additionalProperties": false,
+        "properties": {
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewed_by": {
+            "minLength": 1,
+            "title": "Reviewed By",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/$defs/JointSampleColumn"
+            },
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "sample_basis": {
+            "enum": [
+              "paired_observations",
+              "supplied_joint_model_draws"
+            ],
+            "title": "Sample Basis",
+            "type": "string"
+          },
+          "sampling_method_reference": {
+            "minLength": 1,
+            "title": "Sampling Method Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "construct_id",
+          "condition_id",
+          "source",
+          "source_reference",
+          "reviewed_by",
+          "columns",
+          "sample_basis",
+          "sampling_method_reference"
+        ],
+        "title": "M3M4JointSamples",
+        "type": "object"
+      },
       "M3UncertaintySettings": {
         "additionalProperties": false,
         "properties": {
@@ -6266,6 +6370,13 @@
               "$ref": "#/$defs/CompartmentNetworkInput"
             },
             "title": "Compartment Requests",
+            "type": "object"
+          },
+          "joint_samples": {
+            "additionalProperties": {
+              "$ref": "#/$defs/M3M4JointSamples"
+            },
+            "title": "Joint Samples",
             "type": "object"
           },
           "analysis": {
@@ -6705,6 +6816,7 @@
         "type": "object",
         "required": [
           "compartment_requests",
+          "joint_samples",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -10593,6 +10705,89 @@
   },
   "ProposalView": {
     "$defs": {
+      "DomainCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "tool_id": {
+            "title": "Tool Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "resource": {
+            "title": "Resource",
+            "type": "string"
+          },
+          "route_state": {
+            "enum": [
+              "local_method",
+              "configured_not_verified",
+              "unconfigured"
+            ],
+            "title": "Route State",
+            "type": "string"
+          },
+          "execution_allowed_by_policy": {
+            "title": "Execution Allowed By Policy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tool_id",
+          "version",
+          "resource",
+          "route_state",
+          "execution_allowed_by_policy"
+        ],
+        "title": "DomainCapability",
+        "type": "object"
+      },
+      "EvaluateResultAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "evaluate_result",
+            "title": "Kind",
+            "type": "string"
+          },
+          "result_ref": {
+            "title": "Result Ref",
+            "type": "string"
+          },
+          "metric": {
+            "enum": [
+              "recorded_stage_status",
+              "recorded_mass_balance",
+              "recorded_applicability"
+            ],
+            "title": "Metric",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "result_ref",
+          "metric"
+        ],
+        "title": "EvaluateResultAction",
+        "type": "object"
+      },
       "ExecutionPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -10687,6 +10882,108 @@
           "stop_after_seconds",
           "memory_limit_mb"
         ]
+      },
+      "FinishAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "finish",
+            "title": "Kind",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "available_work_completed",
+              "human_input_required",
+              "no_compute_requested"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "outcome"
+        ],
+        "title": "FinishAction",
+        "type": "object"
+      },
+      "InspectJobAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "inspect_job",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "run_id"
+        ],
+        "title": "InspectJobAction",
+        "type": "object"
+      },
+      "InspectProjectAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "inspect_project",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind"
+        ],
+        "title": "InspectProjectAction",
+        "type": "object"
       },
       "LiteralInput": {
         "additionalProperties": false,
@@ -10818,6 +11115,48 @@
         "title": "PlanBinding",
         "type": "object"
       },
+      "PrepareNodeAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "prepare_node",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tool_id": {
+            "title": "Tool Id",
+            "type": "string"
+          },
+          "input_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "tool_id",
+          "input_refs"
+        ],
+        "title": "PrepareNodeAction",
+        "type": "object"
+      },
       "ProjectInput": {
         "additionalProperties": false,
         "properties": {
@@ -10848,6 +11187,615 @@
           "kind",
           "path"
         ]
+      },
+      "ProposeExperimentAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "propose_experiment",
+            "title": "Kind",
+            "type": "string"
+          },
+          "hypothesis": {
+            "minLength": 1,
+            "title": "Hypothesis",
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Controls",
+            "type": "array"
+          },
+          "observable": {
+            "minLength": 1,
+            "title": "Observable",
+            "type": "string"
+          },
+          "refutation_criterion": {
+            "minLength": 1,
+            "title": "Refutation Criterion",
+            "type": "string"
+          },
+          "requires_human_review": {
+            "const": true,
+            "default": true,
+            "title": "Requires Human Review",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "hypothesis",
+          "controls",
+          "observable",
+          "refutation_criterion",
+          "requires_human_review"
+        ],
+        "title": "ProposeExperimentAction",
+        "type": "object"
+      },
+      "RecordedJob": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "tool_id": {
+            "title": "Tool Id",
+            "type": "string"
+          },
+          "node_status": {
+            "title": "Node Status",
+            "type": "string"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "tool_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Status"
+          },
+          "parse_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parse Status"
+          },
+          "remote_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Remote Status"
+          },
+          "remote_poll_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Remote Poll Count"
+          },
+          "remote_cancellation_confirmed": {
+            "const": false,
+            "default": false,
+            "title": "Remote Cancellation Confirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_id",
+          "node_id",
+          "tool_id",
+          "node_status",
+          "attempt",
+          "tool_status",
+          "parse_status",
+          "remote_status",
+          "remote_poll_count",
+          "remote_cancellation_confirmed"
+        ],
+        "title": "RecordedJob",
+        "type": "object"
+      },
+      "RecordedStageResult": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "node_status": {
+            "title": "Node Status",
+            "type": "string"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Ref"
+          },
+          "current_project_revision": {
+            "title": "Current Project Revision",
+            "type": "boolean"
+          },
+          "scientific_status_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Scientific Status Counts",
+            "type": "object"
+          },
+          "numerically_solved_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerically Solved Count"
+          },
+          "evidence_ready_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Ready Count"
+          },
+          "claim_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Claim Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "node_id",
+          "stage",
+          "node_status",
+          "attempt",
+          "result_ref",
+          "current_project_revision",
+          "scientific_status_counts",
+          "numerically_solved_count",
+          "evidence_ready_count",
+          "claim_scopes"
+        ],
+        "title": "RecordedStageResult",
+        "type": "object"
+      },
+      "RetrieveEvidenceAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "retrieve_evidence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "query": {
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "source_scope": {
+            "enum": [
+              "project_registry",
+              "registered_artifacts"
+            ],
+            "title": "Source Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "query",
+          "source_scope"
+        ],
+        "title": "RetrieveEvidenceAction",
+        "type": "object"
+      },
+      "ReviewedParameterSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "parameter_id": {
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "parameter_type": {
+            "title": "Parameter Type",
+            "type": "string"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Id"
+          },
+          "review_status": {
+            "title": "Review Status",
+            "type": "string"
+          },
+          "source_type": {
+            "title": "Source Type",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "entity_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Basis"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          },
+          "parameter_version": {
+            "title": "Parameter Version",
+            "type": "integer"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Conditions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "parameter_id",
+          "parameter_type",
+          "construct_id",
+          "condition_id",
+          "review_status",
+          "source_type",
+          "unit",
+          "entity_basis",
+          "model_version",
+          "value",
+          "parameter_version",
+          "conditions"
+        ],
+        "title": "ReviewedParameterSummary",
+        "type": "object"
+      },
+      "ScientificGap": {
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Id"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "stage",
+          "code",
+          "construct_id",
+          "condition_id",
+          "reasons"
+        ],
+        "title": "ScientificGap",
+        "type": "object"
+      },
+      "ScientificObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_revision": {
+            "title": "Project Revision",
+            "type": "integer"
+          },
+          "observation_identity": {
+            "title": "Observation Identity",
+            "type": "string"
+          },
+          "scientific_input_identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scientific Input Identity"
+          },
+          "prepared_through": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared Through"
+          },
+          "scenarios": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Scenarios",
+            "type": "object"
+          },
+          "available_input_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Input Refs",
+            "type": "array"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/$defs/ScientificGap"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "omitted_gap_count": {
+            "title": "Omitted Gap Count",
+            "type": "integer"
+          },
+          "parameter_summaries": {
+            "items": {
+              "$ref": "#/$defs/ReviewedParameterSummary"
+            },
+            "title": "Parameter Summaries",
+            "type": "array"
+          },
+          "omitted_parameter_count": {
+            "title": "Omitted Parameter Count",
+            "type": "integer"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/$defs/DomainCapability"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "recorded_results": {
+            "items": {
+              "$ref": "#/$defs/RecordedStageResult"
+            },
+            "title": "Recorded Results",
+            "type": "array"
+          },
+          "recorded_jobs": {
+            "items": {
+              "$ref": "#/$defs/RecordedJob"
+            },
+            "title": "Recorded Jobs",
+            "type": "array"
+          },
+          "accepted_proposal_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Proposal Refs",
+            "type": "array"
+          },
+          "budget": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Budget",
+            "type": "object"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_revision",
+          "observation_identity",
+          "scientific_input_identity",
+          "prepared_through",
+          "scenarios",
+          "available_input_refs",
+          "gaps",
+          "omitted_gap_count",
+          "parameter_summaries",
+          "omitted_parameter_count",
+          "capabilities",
+          "recorded_results",
+          "recorded_jobs",
+          "accepted_proposal_refs",
+          "budget",
+          "limitations"
+        ],
+        "title": "ScientificObservation",
+        "type": "object"
       },
       "SequenceRef": {
         "additionalProperties": false,
@@ -10902,6 +11850,78 @@
           "construct_version"
         ],
         "title": "SequenceRef",
+        "type": "object"
+      },
+      "SubmitJobAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "submit_job",
+            "title": "Kind",
+            "type": "string"
+          },
+          "reviewed_proposal_id": {
+            "title": "Reviewed Proposal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "reviewed_proposal_id"
+        ],
+        "title": "SubmitJobAction",
+        "type": "object"
+      },
+      "WaitAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "kind": {
+            "const": "wait",
+            "title": "Kind",
+            "type": "string"
+          },
+          "pending_refs": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Pending Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reason",
+          "evidence_refs",
+          "kind",
+          "pending_refs"
+        ],
+        "title": "WaitAction",
         "type": "object"
       },
       "Workflow": {
@@ -11027,6 +12047,73 @@
     },
     "additionalProperties": false,
     "properties": {
+      "observation": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ScientificObservation"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "scientific_actions": {
+        "items": {
+          "discriminator": {
+            "mapping": {
+              "evaluate_result": "#/$defs/EvaluateResultAction",
+              "finish": "#/$defs/FinishAction",
+              "inspect_job": "#/$defs/InspectJobAction",
+              "inspect_project": "#/$defs/InspectProjectAction",
+              "prepare_node": "#/$defs/PrepareNodeAction",
+              "propose_experiment": "#/$defs/ProposeExperimentAction",
+              "retrieve_evidence": "#/$defs/RetrieveEvidenceAction",
+              "submit_job": "#/$defs/SubmitJobAction",
+              "wait": "#/$defs/WaitAction"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/InspectProjectAction"
+            },
+            {
+              "$ref": "#/$defs/RetrieveEvidenceAction"
+            },
+            {
+              "$ref": "#/$defs/PrepareNodeAction"
+            },
+            {
+              "$ref": "#/$defs/SubmitJobAction"
+            },
+            {
+              "$ref": "#/$defs/InspectJobAction"
+            },
+            {
+              "$ref": "#/$defs/EvaluateResultAction"
+            },
+            {
+              "$ref": "#/$defs/ProposeExperimentAction"
+            },
+            {
+              "$ref": "#/$defs/WaitAction"
+            },
+            {
+              "$ref": "#/$defs/FinishAction"
+            }
+          ]
+        },
+        "title": "Scientific Actions",
+        "type": "array"
+      },
+      "reviewed_tool_labels": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Reviewed Tool Labels",
+        "type": "array"
+      },
       "id": {
         "title": "Id",
         "type": "string"
@@ -11163,6 +12250,9 @@
       }
     },
     "required": [
+      "observation",
+      "scientific_actions",
+      "reviewed_tool_labels",
       "id",
       "task_id",
       "project_id",
@@ -13113,6 +14203,51 @@
         "title": "InputsConfig",
         "type": "object"
       },
+      "JointSampleColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "minLength": 1,
+            "title": "Column",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "m3",
+              "m4"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "1",
+              "uM",
+              "1/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "stage",
+          "parameter_name",
+          "parameter_id",
+          "unit"
+        ],
+        "title": "JointSampleColumn",
+        "type": "object"
+      },
       "LigandConfig": {
         "additionalProperties": false,
         "properties": {
@@ -13506,6 +14641,65 @@
           "author_native_inputs"
         ]
       },
+      "M3M4JointSamples": {
+        "additionalProperties": false,
+        "properties": {
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewed_by": {
+            "minLength": 1,
+            "title": "Reviewed By",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/$defs/JointSampleColumn"
+            },
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "sample_basis": {
+            "enum": [
+              "paired_observations",
+              "supplied_joint_model_draws"
+            ],
+            "title": "Sample Basis",
+            "type": "string"
+          },
+          "sampling_method_reference": {
+            "minLength": 1,
+            "title": "Sampling Method Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "construct_id",
+          "condition_id",
+          "source",
+          "source_reference",
+          "reviewed_by",
+          "columns",
+          "sample_basis",
+          "sampling_method_reference"
+        ],
+        "title": "M3M4JointSamples",
+        "type": "object"
+      },
       "M3UncertaintySettings": {
         "additionalProperties": false,
         "properties": {
@@ -13629,6 +14823,13 @@
               "$ref": "#/$defs/CompartmentNetworkInput"
             },
             "title": "Compartment Requests",
+            "type": "object"
+          },
+          "joint_samples": {
+            "additionalProperties": {
+              "$ref": "#/$defs/M3M4JointSamples"
+            },
+            "title": "Joint Samples",
             "type": "object"
           },
           "analysis": {
@@ -14068,6 +15269,7 @@
         "type": "object",
         "required": [
           "compartment_requests",
+          "joint_samples",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -17920,6 +19122,51 @@
         "title": "InputsConfig",
         "type": "object"
       },
+      "JointSampleColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "minLength": 1,
+            "title": "Column",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "m3",
+              "m4"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "1",
+              "uM",
+              "1/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "stage",
+          "parameter_name",
+          "parameter_id",
+          "unit"
+        ],
+        "title": "JointSampleColumn",
+        "type": "object"
+      },
       "LigandConfig": {
         "additionalProperties": false,
         "properties": {
@@ -18313,6 +19560,65 @@
           "author_native_inputs"
         ]
       },
+      "M3M4JointSamples": {
+        "additionalProperties": false,
+        "properties": {
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewed_by": {
+            "minLength": 1,
+            "title": "Reviewed By",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/$defs/JointSampleColumn"
+            },
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "sample_basis": {
+            "enum": [
+              "paired_observations",
+              "supplied_joint_model_draws"
+            ],
+            "title": "Sample Basis",
+            "type": "string"
+          },
+          "sampling_method_reference": {
+            "minLength": 1,
+            "title": "Sampling Method Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "construct_id",
+          "condition_id",
+          "source",
+          "source_reference",
+          "reviewed_by",
+          "columns",
+          "sample_basis",
+          "sampling_method_reference"
+        ],
+        "title": "M3M4JointSamples",
+        "type": "object"
+      },
       "M3UncertaintySettings": {
         "additionalProperties": false,
         "properties": {
@@ -18436,6 +19742,13 @@
               "$ref": "#/$defs/CompartmentNetworkInput"
             },
             "title": "Compartment Requests",
+            "type": "object"
+          },
+          "joint_samples": {
+            "additionalProperties": {
+              "$ref": "#/$defs/M3M4JointSamples"
+            },
+            "title": "Joint Samples",
             "type": "object"
           },
           "analysis": {
@@ -18875,6 +20188,7 @@
         "type": "object",
         "required": [
           "compartment_requests",
+          "joint_samples",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -22890,6 +24204,51 @@
         "title": "InputsConfig",
         "type": "object"
       },
+      "JointSampleColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "minLength": 1,
+            "title": "Column",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "m3",
+              "m4"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "parameter_name": {
+            "title": "Parameter Name",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "1",
+              "uM",
+              "1/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "stage",
+          "parameter_name",
+          "parameter_id",
+          "unit"
+        ],
+        "title": "JointSampleColumn",
+        "type": "object"
+      },
       "LigandConfig": {
         "additionalProperties": false,
         "properties": {
@@ -23283,6 +24642,65 @@
           "author_native_inputs"
         ]
       },
+      "M3M4JointSamples": {
+        "additionalProperties": false,
+        "properties": {
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "reviewed_by": {
+            "minLength": 1,
+            "title": "Reviewed By",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/$defs/JointSampleColumn"
+            },
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "sample_basis": {
+            "enum": [
+              "paired_observations",
+              "supplied_joint_model_draws"
+            ],
+            "title": "Sample Basis",
+            "type": "string"
+          },
+          "sampling_method_reference": {
+            "minLength": 1,
+            "title": "Sampling Method Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "construct_id",
+          "condition_id",
+          "source",
+          "source_reference",
+          "reviewed_by",
+          "columns",
+          "sample_basis",
+          "sampling_method_reference"
+        ],
+        "title": "M3M4JointSamples",
+        "type": "object"
+      },
       "M3UncertaintySettings": {
         "additionalProperties": false,
         "properties": {
@@ -23406,6 +24824,13 @@
               "$ref": "#/$defs/CompartmentNetworkInput"
             },
             "title": "Compartment Requests",
+            "type": "object"
+          },
+          "joint_samples": {
+            "additionalProperties": {
+              "$ref": "#/$defs/M3M4JointSamples"
+            },
+            "title": "Joint Samples",
             "type": "object"
           },
           "analysis": {
@@ -23845,6 +25270,7 @@
         "type": "object",
         "required": [
           "compartment_requests",
+          "joint_samples",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -26844,6 +28270,549 @@
       "execution_policy"
     ],
     "title": "Workflow",
+    "type": "object"
+  },
+  "ScientificObservation": {
+    "$defs": {
+      "DomainCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "tool_id": {
+            "title": "Tool Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "resource": {
+            "title": "Resource",
+            "type": "string"
+          },
+          "route_state": {
+            "enum": [
+              "local_method",
+              "configured_not_verified",
+              "unconfigured"
+            ],
+            "title": "Route State",
+            "type": "string"
+          },
+          "execution_allowed_by_policy": {
+            "title": "Execution Allowed By Policy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tool_id",
+          "version",
+          "resource",
+          "route_state",
+          "execution_allowed_by_policy"
+        ],
+        "title": "DomainCapability",
+        "type": "object"
+      },
+      "RecordedJob": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "tool_id": {
+            "title": "Tool Id",
+            "type": "string"
+          },
+          "node_status": {
+            "title": "Node Status",
+            "type": "string"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "tool_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Status"
+          },
+          "parse_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parse Status"
+          },
+          "remote_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Remote Status"
+          },
+          "remote_poll_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Remote Poll Count"
+          },
+          "remote_cancellation_confirmed": {
+            "const": false,
+            "default": false,
+            "title": "Remote Cancellation Confirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_id",
+          "node_id",
+          "tool_id",
+          "node_status",
+          "attempt",
+          "tool_status",
+          "parse_status",
+          "remote_status",
+          "remote_poll_count",
+          "remote_cancellation_confirmed"
+        ],
+        "title": "RecordedJob",
+        "type": "object"
+      },
+      "RecordedStageResult": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "node_status": {
+            "title": "Node Status",
+            "type": "string"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Ref"
+          },
+          "current_project_revision": {
+            "title": "Current Project Revision",
+            "type": "boolean"
+          },
+          "scientific_status_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Scientific Status Counts",
+            "type": "object"
+          },
+          "numerically_solved_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerically Solved Count"
+          },
+          "evidence_ready_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Ready Count"
+          },
+          "claim_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Claim Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "node_id",
+          "stage",
+          "node_status",
+          "attempt",
+          "result_ref",
+          "current_project_revision",
+          "scientific_status_counts",
+          "numerically_solved_count",
+          "evidence_ready_count",
+          "claim_scopes"
+        ],
+        "title": "RecordedStageResult",
+        "type": "object"
+      },
+      "ReviewedParameterSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "parameter_id": {
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "parameter_type": {
+            "title": "Parameter Type",
+            "type": "string"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Id"
+          },
+          "review_status": {
+            "title": "Review Status",
+            "type": "string"
+          },
+          "source_type": {
+            "title": "Source Type",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "entity_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Basis"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          },
+          "parameter_version": {
+            "title": "Parameter Version",
+            "type": "integer"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Conditions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "parameter_id",
+          "parameter_type",
+          "construct_id",
+          "condition_id",
+          "review_status",
+          "source_type",
+          "unit",
+          "entity_basis",
+          "model_version",
+          "value",
+          "parameter_version",
+          "conditions"
+        ],
+        "title": "ReviewedParameterSummary",
+        "type": "object"
+      },
+      "ScientificGap": {
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "construct_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Construct Id"
+          },
+          "condition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Id"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "stage",
+          "code",
+          "construct_id",
+          "condition_id",
+          "reasons"
+        ],
+        "title": "ScientificGap",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "project_revision": {
+        "title": "Project Revision",
+        "type": "integer"
+      },
+      "observation_identity": {
+        "title": "Observation Identity",
+        "type": "string"
+      },
+      "scientific_input_identity": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Scientific Input Identity"
+      },
+      "prepared_through": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Prepared Through"
+      },
+      "scenarios": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Scenarios",
+        "type": "object"
+      },
+      "available_input_refs": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Available Input Refs",
+        "type": "array"
+      },
+      "gaps": {
+        "items": {
+          "$ref": "#/$defs/ScientificGap"
+        },
+        "title": "Gaps",
+        "type": "array"
+      },
+      "omitted_gap_count": {
+        "title": "Omitted Gap Count",
+        "type": "integer"
+      },
+      "parameter_summaries": {
+        "items": {
+          "$ref": "#/$defs/ReviewedParameterSummary"
+        },
+        "title": "Parameter Summaries",
+        "type": "array"
+      },
+      "omitted_parameter_count": {
+        "title": "Omitted Parameter Count",
+        "type": "integer"
+      },
+      "capabilities": {
+        "items": {
+          "$ref": "#/$defs/DomainCapability"
+        },
+        "title": "Capabilities",
+        "type": "array"
+      },
+      "recorded_results": {
+        "items": {
+          "$ref": "#/$defs/RecordedStageResult"
+        },
+        "title": "Recorded Results",
+        "type": "array"
+      },
+      "recorded_jobs": {
+        "items": {
+          "$ref": "#/$defs/RecordedJob"
+        },
+        "title": "Recorded Jobs",
+        "type": "array"
+      },
+      "accepted_proposal_refs": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Accepted Proposal Refs",
+        "type": "array"
+      },
+      "budget": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": "Budget",
+        "type": "object"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Limitations",
+        "type": "array"
+      }
+    },
+    "required": [
+      "project_id",
+      "project_revision",
+      "observation_identity",
+      "scientific_input_identity",
+      "prepared_through",
+      "scenarios",
+      "available_input_refs",
+      "gaps",
+      "omitted_gap_count",
+      "parameter_summaries",
+      "omitted_parameter_count",
+      "capabilities",
+      "recorded_results",
+      "recorded_jobs",
+      "accepted_proposal_refs",
+      "budget",
+      "limitations"
+    ],
+    "title": "ScientificObservation",
     "type": "object"
   }
 }

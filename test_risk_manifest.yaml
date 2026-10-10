@@ -1,6 +1,36 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R19_REMOTE_RECOVERY_AND_CURRENT_ATTEMPT
+    group: platform
+    test_nodeids: ["tests/test_r19_remote_recovery.py", "tests/test_r19_execution_integrity.py"]
+    requirement_or_formula_source: r18 review 6.6 A1 7.2
+    oracle_type: durable_SQLite_state_independent_crash_faults_and_blocking_software_handlers
+    fixture_scope: software_only_no_real_remote_job_or_numerical_computation
+    formula_version: not_applicable
+    units: attempt_count; worker_count; file_read_count
+    tolerance_basis: exact_original_job_identity_no_duplicate_POST_and_current_attempt_artifact
+    expected_faults: [unknown_ack_resubmitted, stale_attempt_result_selected, wait_holds_worker, pause_destroys_job_state, unsupported_submit_only_route_executed]
+  - risk_id: R19_JOINT_M3_M4_UNCERTAINTY
+    group: integration
+    test_nodeids: ["tests/test_r19_joint_uncertainty.py"]
+    requirement_or_formula_source: r18 review S5; original M3 E1 and M4 paired three-scenario controls
+    oracle_type: independent_E1_quadratic_mass_oracle_actual_paired_rows_and_MCP_stdio
+    fixture_scope: server_only_synthetic_method_validation_not_project_measurements
+    formula_version: m3-s1-e10-2026-09-27; m4-step0-step8-2026-09-27
+    units: uM; 1/h; dimensionless_1
+    tolerance_basis: relative_1e-10_and_mass_absolute_1e-10_uM; exact_pairing_and_failed_row_retention
+    expected_faults: [correlations_destroyed, M3_not_recomputed, fixed_H0_denominator, failed_samples_deleted, changed_source_rebound]
+  - risk_id: R19_TYPED_SCIENTIFIC_OBSERVATION_ACTION
+    group: platform
+    test_nodeids: ["tests/test_r19_scientific_environment.py", "tests/test_r19_memory_streaming.py"]
+    requirement_or_formula_source: r18 review 6.3 6.4 6.9 A4 and 7.2
+    oracle_type: independent_software_state_scopes_action_denial_and_exact_lexical_order
+    fixture_scope: software_fixture_only_no_scientific_solver_or_model_API
+    formula_version: none
+    units: none
+    tolerance_basis: exact_observation_identity_current_result_scope_permissions_and_read_sizes
+    expected_faults: [missing_actual_observation_in_prompt, invented_shell_tool, forged_approval, obsolete_result_unblocks, idle_model_calls, eager_legacy_registry_import, recent_memory_loads_full_history]
   - risk_id: R19_ER_AMOUNT_ORACLES_AND_SOURCE_BINDINGS
     group: scientific_algorithm
     test_nodeids: ["tests/test_r19_er_equations.py", "tests/test_r19_membrane_geometry.py", "tests/test_r19_er_stage_bindings.py"]
