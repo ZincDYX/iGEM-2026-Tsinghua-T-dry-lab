@@ -2,6 +2,9 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
+import io
+import tarfile
+import pytest
 
 
 def packaging_module():
@@ -38,3 +41,27 @@ def test_runtime_copy_retains_native_data_testing_api_and_licenses(tmp_path, mon
     output = tmp_path/'runtime'
     assert module.copy_runtime_dependencies(tmp_path/'unused', source, output) == {'numpy': '1.0'}
     assert sorted(p.relative_to(output).as_posix() for p in output.rglob('*') if p.is_file()) == sorted(included)
+
+
+def test_git_archive_directories_are_not_rejected_or_shipped_as_extra_content(tmp_path):
+    module=packaging_module()
+    source=tmp_path/'git-source.tar'
+    with tarfile.open(source,'w') as archive:
+        directory=tarfile.TarInfo('src/');directory.type=tarfile.DIRTYPE;archive.addfile(directory)
+        for name in ['src/app.py','docs/not-runtime.md']:
+            member=tarfile.TarInfo(name);member.size=7;archive.addfile(member,io.BytesIO(b'fixture'))
+    destination=tmp_path/'resources'
+    module.extract_runtime_sources(source,destination)
+    assert (destination/'src/app.py').read_bytes()==b'fixture'
+    assert not (destination/'docs').exists()
+
+
+@pytest.mark.parametrize('name,kind',[('src/../../outside.py',tarfile.REGTYPE),('src/link',tarfile.SYMTYPE)])
+def test_runtime_archive_still_rejects_traversal_and_links(tmp_path,name,kind):
+    module=packaging_module()
+    source=tmp_path/'invalid-source.tar'
+    with tarfile.open(source,'w') as archive:
+        member=tarfile.TarInfo(name);member.type=kind;member.linkname='../../outside.py';archive.addfile(member)
+    with pytest.raises(ValueError,match='unsafe_or_nonfile_source_member'):
+        module.extract_runtime_sources(source,tmp_path/'resources')
+    assert not (tmp_path/'outside.py').exists()

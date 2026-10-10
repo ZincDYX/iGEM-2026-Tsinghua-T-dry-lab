@@ -68,6 +68,21 @@ def copy_runtime_dependencies(metadata, site_packages, destination):
     return {name: dist.version for name, dist in sorted(selected.items())}
 
 
+def extract_runtime_sources(source_tar, resources):
+    """Copy only allowlisted regular files from the owned source archive."""
+    with tarfile.open(source_tar) as archive:
+        for member in archive.getmembers():
+            if member.isdir():
+                continue  # git archive emits directories; files create their parents.
+            if not (member.name.startswith("src/") or member.name in {"configs/m1_feature_definitions.yaml", "configs/m1_rules_v3.yaml", "LICENSE", "pyproject.toml", "software/dashboard/THIRD_PARTY_NOTICES.txt"}):
+                continue
+            target = (resources/member.name).resolve()
+            if not target.is_relative_to(resources.resolve()) or not member.isfile():
+                raise ValueError('unsafe_or_nonfile_source_member')
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(archive.extractfile(member).read())
+
+
 def main():
     import tomllib  # Windows release builder uses CPython 3.13.
     parser = argparse.ArgumentParser(description=__doc__)
@@ -92,16 +107,8 @@ def main():
     root = args.output.resolve(); root.mkdir(parents=True)
     shutil.copy2(args.exe,root/'FusionLab.exe')
     resources = root/'resources'; resources.mkdir()
-    with tarfile.open(args.source_tar) as archive:
-        for member in archive.getmembers():
-            # Runtime allowlist. Full source/tests/operations stay in the bundle.
-            if not (member.name.startswith("src/") or member.name in {"configs/m1_feature_definitions.yaml", "configs/m1_rules_v3.yaml", "LICENSE", "pyproject.toml", "software/dashboard/THIRD_PARTY_NOTICES.txt"}):
-                continue
-            target = (resources/member.name).resolve()
-            if not target.is_relative_to(resources) or not member.isfile():
-                raise ValueError('unsafe_or_nonfile_source_member')
-            target.parent.mkdir(parents=True,exist_ok=True)
-            target.write_bytes(archive.extractfile(member).read())
+    # Full source/tests/operations stay in the bundle, not the runtime.
+    extract_runtime_sources(args.source_tar, resources)
     python = root/'python'; python.mkdir()
     with zipfile.ZipFile(args.python_archive) as archive:
         for member in archive.infolist():
