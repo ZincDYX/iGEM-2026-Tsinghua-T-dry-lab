@@ -240,6 +240,37 @@ def compartment_evaluator(payload: CompartmentNetworkInput):
     return evaluate,distribute,aggregate,index,groups
 
 
+def conserved_amount_basis(payload, aggregate, index):
+    """Left nullspace of active reaction/exchange/boundary stoichiometry.
+
+    Boundary columns remove only the invariants actually broken by feeds/losses.
+    Rapid-equilibrium aggregation uses the same state coordinates as the RHS.
+    This adds no rate law, biological parameter or artificial mass source.
+    """
+    from scipy.linalg import null_space
+    columns = []
+    def column(changes):
+        vector = np.zeros(len(index))
+        for key, value in changes: vector[index[key]] += value
+        columns.append(aggregate @ vector)
+    for pool in payload.pools:
+        for reaction in payload.reactions:
+            if (pool.pool_id in payload.reaction_locations[reaction.reaction_id]
+                and reaction.kcat_per_h > 0 and pool.enzyme_amounts[reaction.enzyme].value > 0
+                and pool.enzyme_activity_ratios[reaction.enzyme].value > 0):
+                column([((pool.pool_id,reaction.substrate),-1),((pool.pool_id,reaction.product),1)])
+    for interface in payload.interfaces:
+        if interface.mode == 'finite_exchange':
+            for compound, conductance in interface.conductance.items():
+                if conductance.value > 0:
+                    column([((interface.first_pool,compound),-1),((interface.second_pool,compound),1)])
+    for boundary in payload.boundaries:
+        if boundary.quantity.value > 0:
+            column([((boundary.pool_id,boundary.compound),1 if boundary.kind == 'constant_feed' else -1)])
+    matrix = np.column_stack(columns) if columns else np.empty((aggregate.shape[0],0))
+    return null_space(matrix.T).T
+
+
 def solve_compartment_network(payload: CompartmentNetworkInput) -> dict:
     from scipy.integrate import solve_ivp
     from scipy.optimize import least_squares
@@ -262,6 +293,8 @@ def solve_compartment_network(payload: CompartmentNetworkInput) -> dict:
                 matrix[size+1,:size] += boundary.quantity.value*distribute[index[boundary.pool_id,boundary.compound],:]
         return matrix
     n = payload.numerics
+    invariants = conserved_amount_basis(payload,aggregate,index)
+    invariant_initial = invariants @ reduced
     solved = solve_ivp(rhs,(0.,payload.time_grid_h[-1]),np.concatenate((reduced,[0.,0.])),
         t_eval=payload.time_grid_h,method=n.method,rtol=n.relative_tolerance,atol=n.amount_absolute_tolerance_umol,jac=jac)
     result = {"schema_version":"m4-compartment-amount-v1","formula_version":payload.formula_version,
@@ -274,6 +307,12 @@ def solve_compartment_network(payload: CompartmentNetworkInput) -> dict:
     if float(amounts.min()) < -n.amount_absolute_tolerance_umol:
         result["missing"] = ["negative_amount_exceeds_declared_numerical_tolerance"]; return result
     conservation = amounts.sum(axis=0)-initial.sum()-solved.y[size]+solved.y[size+1]
+    conservation_scale = initial.sum()+np.abs(solved.y[size])+np.abs(solved.y[size+1])
+    conservation_limit = n.amount_absolute_tolerance_umol+n.relative_tolerance*conservation_scale
+    invariant_residual = invariants@solved.y[:size]-invariant_initial[:,None]
+    invariant_limit = n.amount_absolute_tolerance_umol+n.relative_tolerance*max(float(initial.sum()),n.amount_absolute_tolerance_umol)
+    conservation_valid = bool(np.all(np.abs(conservation) <= conservation_limit)
+        and np.all(np.abs(invariant_residual) <= invariant_limit))
     pools = {pool.pool_id:{"amounts_umol":{c:amounts[index[pool.pool_id,c]].tolist() for c in COMPOUNDS},
         "concentrations_um":{c:(amounts[index[pool.pool_id,c]]/pool.volume.value).tolist() for c in COMPOUNDS}} for pool in payload.pools}
     flux_rows = [evaluate(solved.y[:size,i]) for i in range(len(payload.time_grid_h))]
@@ -281,16 +320,26 @@ def solve_compartment_network(payload: CompartmentNetworkInput) -> dict:
     for guess in payload.steady_initial_guesses_umol:
         full = np.array([guess[pool.pool_id][c] for pool in payload.pools for c in COMPOUNDS])
         start = aggregate@full
-        scale = max(sum(b.quantity.value for b in payload.boundaries if b.kind == "constant_feed"),n.steady_absolute_tolerance_umol_per_h)
-        root = least_squares(lambda x:evaluate(x)[0]/scale,start,bounds=(0,np.inf),jac=lambda x:evaluate(x)[1]/scale,
+        scale = max(float(np.max(np.abs(evaluate(reduced)[0]))),
+            sum(b.quantity.value for b in payload.boundaries if b.kind == "constant_feed"),n.steady_absolute_tolerance_umol_per_h)
+        flux_limit = n.steady_absolute_tolerance_umol_per_h+n.steady_relative_tolerance*scale
+        def constrained_residual(x):
+            return np.concatenate((evaluate(x)[0]/flux_limit,(invariants@x-invariant_initial)/invariant_limit))
+        def constrained_jacobian(x):
+            return np.vstack((evaluate(x)[1]/flux_limit,invariants/invariant_limit))
+        root = least_squares(constrained_residual,start,bounds=(0,np.inf),jac=constrained_jacobian,
             max_nfev=n.steady_max_evaluations,xtol=1e-12,ftol=1e-12,gtol=1e-12)
         residual,jacobian,_,fluxes,exchanges,feed,loss = evaluate(root.x)
-        valid = root.success and float(np.max(np.abs(residual))) <= n.steady_absolute_tolerance_umol_per_h+n.steady_relative_tolerance*scale
+        class_residual = invariants@root.x-invariant_initial
+        class_valid = bool(np.all(np.abs(class_residual) <= invariant_limit))
+        valid = root.success and class_valid and float(np.max(np.abs(residual))) <= flux_limit
         stability = classify_local_stability(jacobian,n.eigenvalue_tolerance_per_h) if valid else None
         if stability: stability["analysis_version"] = "ER_amount_exact_competitive_exchange_jacobian_v1"
         steady.append({"status":"steady_state_found" if valid else "no_accepted_root_from_this_guess",
             "amounts_umol":{pool.pool_id:{c:float((distribute@root.x)[index[pool.pool_id,c]]) for c in COMPOUNDS} for pool in payload.pools},
-            "residual_umol_per_h":residual.tolist(),"local_stability":stability,"scope":"multistart_search_not_global_uniqueness_or_nonexistence_proof"})
+            "residual_umol_per_h":residual.tolist(),"local_stability":stability,
+            "initial_compatibility_class_valid":class_valid,"invariant_residual_umol":class_residual.tolist(),
+            "scope":"multistart_search_in_initial_compatibility_class_not_global_uniqueness_or_nonexistence_proof"})
         production = sum(pool.get("R7",0.)+pool.get("R10",0.) for pool in fluxes.values())
         product_losses = sum(b.quantity.value*(distribute@root.x)[index[b.pool_id,b.compound]]
             for b in payload.boundaries if b.kind == "first_order_loss" and b.compound == "15")
@@ -300,12 +349,16 @@ def solve_compartment_network(payload: CompartmentNetworkInput) -> dict:
             yield_abs=production/feed if valid and feed > 0 and pure_m8_feed else None,
             loss_fraction_8_to_14=(loss-product_losses)/feed if valid and feed > 0 and pure_m8_feed else None,
             yield_plus_loss_residual=(production+loss-product_losses)/feed-1 if valid and feed > 0 and pure_m8_feed else None)
-    result.update(status="numerically_solved",time_h=solved.t.tolist(),pools=pools,
+    result.update(status="numerically_solved" if conservation_valid else "numerical_admission_failed",time_h=solved.t.tolist(),pools=pools,
         cumulative_feed_umol=solved.y[size].tolist(),cumulative_loss_umol=solved.y[size+1].tolist(),
         total_mass_conservation_residual_umol=conservation.tolist(),
         max_mass_conservation_residual_umol=float(np.max(np.abs(conservation))),
+        numerical_admission={"conservation_valid":conservation_valid,"mass_tolerance_umol":conservation_limit.tolist(),
+            "invariant_tolerance_umol":invariant_limit,"invariant_basis":invariants.tolist(),
+            "invariant_residual_umol":invariant_residual.tolist()},
         reaction_fluxes_umol_per_h=[row[3] for row in flux_rows],exchange_fluxes_umol_per_h=[row[4] for row in flux_rows],
         steady_state_candidates=steady,steady_state_existence="at_least_one_accepted_root" if any(r["status"] == "steady_state_found" for r in steady) else "not_established")
+    if not conservation_valid: result['missing'] = ['amount_conservation_exceeds_declared_numerical_tolerance']
     return result
 
 
@@ -332,6 +385,20 @@ class CompartmentComparisonInput(CompartmentContract):
             reference = sorted((b.compound,b.quantity.value) for b in first.boundaries if b.kind == "constant_feed")
             if feeds != reference:
                 raise ValueError("physical_controls_require_same_metabolite_feed_amounts")
+            for compound in COMPOUNDS:
+                total = sum(row[compound].value for row in case.initial_amounts_umol.values())
+                original = sum(row[compound].value for row in first.initial_amounts_umol.values())
+                if not np.isclose(total,original,rtol=self.matched_enzyme_relative_tolerance,atol=0):
+                    raise ValueError('physical_controls_require_same_initial_total_metabolite_amount:'+compound)
+            if not np.isclose(sum(p.volume.value for p in case.pools),sum(p.volume.value for p in first.pools),
+                rtol=self.matched_enzyme_relative_tolerance,atol=0):
+                raise ValueError('physical_controls_require_same_total_reference_volume')
+            losses = sorted((b.compound,next(p.role for p in case.pools if p.pool_id==b.pool_id),b.quantity.value)
+                for b in case.boundaries if b.kind == 'first_order_loss')
+            original_losses = sorted((b.compound,next(p.role for p in first.pools if p.pool_id==b.pool_id),b.quantity.value)
+                for b in first.boundaries if b.kind == 'first_order_loss')
+            if losses != original_losses:
+                raise ValueError('physical_controls_require_same_loss_conditions')
         return self
 
 

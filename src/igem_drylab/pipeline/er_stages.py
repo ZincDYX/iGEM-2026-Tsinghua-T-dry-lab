@@ -122,6 +122,14 @@ def attach_membrane_geometry(config,candidates,assessments,stage_dir):
             for conformer in request.conformers:
                 if conformer.structure.source_kind == "prediction" and sha256(conformer.structure.expected_sequence.encode()).hexdigest() != candidate.full_sequence_sha256:
                     raise ValueError("ER_membrane_prediction_not_registered_full_construct")
+                for name,identity in conformer.site_identities.items():
+                    definition = next((d for d in config.inputs.constructs if d.id == identity.enzyme_construct_id),None)
+                    enzyme_candidate = known.get(identity.enzyme_construct_id)
+                    if (name not in conformer.recruited_enzymes or identity.binding_domain not in conformer.domains
+                        or definition is None or identity.species not in definition.enzyme_ids
+                        or identity.ligand_id not in definition.recruitment_tags
+                        or enzyme_candidate is None or enzyme_candidate.full_sequence_sha256 != identity.enzyme_fusion_sequence_sha256):
+                        raise ValueError('ER_M2_site_identity_not_bound_to_registered_enzyme_fusion_and_domain:'+name)
             report = calculate_membrane_geometry(request)
             report["topology_report"] = topology
             report["subunit_composition"] = request.subunit_composition
@@ -177,6 +185,16 @@ def run_er_m3(config,assessment):
         supplied = {frozenset(edge) for edge in request.binding_graph.conflict_edges}
         if not any(ids == names and supplied == graph for names,graph in zip(placements,graphs)):
             gaps.append("ER_binding_graph_requires_complete_matching_M2_conformer_site_set_and_edges")
+        matched = [c for c,names,graph in zip(geometry['conformers'],placements,graphs)
+            if ids == names and supplied == graph and c.get('eligibility') == 'eligible']
+        if not matched:
+            gaps.append('ER_M3_requires_eligible_matching_M2_conformer_not_conflicted_or_conditional_capacity')
+        identities_match = lambda c: all(
+            (identity := c.get('site_identities',{}).get(site.site_id)) is not None
+            and identity['species'] == site.species and identity['binding_pair_ref'] == site.binding_pair_ref
+            for site in request.binding_graph.sites)
+        if not any(identities_match(c) for c in matched):
+            gaps.append('ER_M3_site_species_or_binding_pair_not_bound_to_registered_M2_enzyme_fusion')
         for site in request.binding_graph.sites:
             record = next((r for r in config.parameters if r.parameter_id == site.kd.parameter_id),None)
             if site.geometry_ref != request.geometry_ref or record is None or record.conditions.get("binding_pair") != site.binding_pair_ref:

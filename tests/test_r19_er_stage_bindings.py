@@ -28,10 +28,18 @@ def register_quantities(project,request,skip=()):
 
 def prepared(tmp_path):
     raw = membrane(tmp_path)
+    # The general geometry fixture deliberately places its pocket in the slab.
+    # This closure fixture uses a separate accessible pose, not a relaxed gate.
+    pdb = raw['conformers'][0]['structure']['path']
+    pdb.write_text(pdb.read_text().replace('   8.000   0.000   0.000','   8.000   0.000  12.000'))
+    raw['conformers'][0]['site_identities'] = {'enzyme':dict(species='OC',enzyme_construct_id='fixture',
+        enzyme_fusion_sequence_sha256=raw['topology']['input_sequence_sha256'],ligand_id='synthetic-ligand',
+        binding_domain='SH3',binding_pair_ref='synthetic-pair',source_reference='SYNTHETIC TEST ONLY')}
     request = MembraneGeometryInput.model_validate(raw)
     source = tmp_path/"synthetic.fasta";source.write_text(">fixture\nAAAAAAAA\n")
     project = ProjectConfig.model_validate(dict(run={"id":"synthetic-binding"},execution={"analysis_grade":"mechanistic_sensitivity","allow_assumptions":True},
-        inputs=dict(protein_fasta=source,enzymes=[],scaffolds=[],linkers=[],constructs=[dict(id="fixture",components=["fixture"],localization_context="er_anchored")]),
+        inputs=dict(protein_fasta=source,enzymes=[dict(id='OC',protein_id='fixture',reaction_role='synthetic')],scaffolds=[],linkers=[],
+            constructs=[dict(id="fixture",components=["fixture"],localization_context="er_anchored",enzyme_ids=['OC'],recruitment_tags=['synthetic-ligand'])]),
         stages={"m2_fusion":{"membrane_requests":{"fixture":request.model_dump()}}}))
     candidate = M1Candidate(candidate_id="fixture",construct_id="fixture",construct_definition={},compartment_scenario="er_anchored",
         full_sequence_sha256=request.topology.input_sequence_sha256,sequence_qc={"full_protein_sequence":"AAAAAAAA"})

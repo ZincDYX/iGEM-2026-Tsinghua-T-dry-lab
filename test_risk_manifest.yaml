@@ -1,6 +1,22 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: WEB_CLI_SCI_01_02_04_05
+    group: scientific_algorithm
+    test_nodeids:
+      - tests/test_web_cli_scientific_admission.py::test_species_swap_cannot_reinterpret_registered_oc_site_as_dmt
+      - tests/test_web_cli_scientific_admission.py::test_one_conflicted_pose_does_not_reject_a_different_eligible_pose
+      - tests/test_web_cli_scientific_admission.py::test_closed_exchange_root_keeps_initial_three_umol_not_the_zero_root
+      - tests/test_web_cli_scientific_admission.py::test_open_feed_and_sink_are_not_falsely_constrained_to_initial_total
+      - tests/test_web_cli_scientific_admission.py::test_matched_controls_compare_total_initial_amount_not_pool_distribution
+      - tests/test_web_cli_scientific_admission.py::test_successful_integrator_with_mass_drift_is_not_numerically_admitted
+    requirement_or_formula_source: 2026-10-11 Web CLI review SCI-01 SCI-02 SCI-04 SCI-05
+    oracle_type: independent_three_umol_exchange_and_open_boundary_analytic_roots_identity_swap_and_integrator_fault_injection
+    fixture_scope: server_only_synthetic_math_not_biological_validation
+    formula_version: original_competitive_MM_and_ER_amount_v1_unchanged
+    units: [umol, L, umol/h]
+    tolerance_basis: declared_solver_tolerances_and_exact_source_identity
+    expected_faults: [OC_site_becomes_DMT, different_initial_compatibility_class, unmatched_bolus, mass_drift_promoted]
   - risk_id: R19_REMOTE_RECOVERY_AND_CURRENT_ATTEMPT
     group: platform
     test_nodeids: ["tests/test_r19_remote_recovery.py", "tests/test_r19_execution_integrity.py"]

@@ -43,6 +43,16 @@ class TetherGeometry(CompartmentContract):
     contour_length_source: str = Field(min_length=1)
 
 
+class MembraneSiteIdentity(CompartmentContract):
+    species: Literal['OC','DMT']
+    enzyme_construct_id: str
+    enzyme_fusion_sequence_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    ligand_id: str
+    binding_domain: str
+    binding_pair_ref: str = Field(min_length=1)
+    source_reference: str = Field(min_length=1)
+
+
 class MembraneConformer(CompartmentContract):
     model_id: str
     conformer_id: str
@@ -53,6 +63,7 @@ class MembraneConformer(CompartmentContract):
     domains: dict[str,ResidueSelection]
     pockets: dict[str,ResidueSelection]
     recruited_enzymes: dict[str,ResidueSelection]
+    site_identities: dict[str,MembraneSiteIdentity] = Field(default_factory=dict)
     sampling_method: str = Field(min_length=1)
     sampling_scope: str = Field(min_length=1)
     coordinate_transform_reference: str = Field(min_length=1)
@@ -146,12 +157,28 @@ def calculate_membrane_geometry(payload: MembraneGeometryInput) -> dict:
             observation = clashes(placed[first],placed[second],payload.heavy_atom_clash_cutoff_angstrom)
             if observation["clash_count"]:
                 conflicts.append({"first":first,"second":second,**observation})
+        domain_access = {name:accessible(selection) for name,selection in conformer.domains.items()}
+        pocket_access = {name:accessible(selection) for name,selection in conformer.pockets.items()}
+        reasons = []
+        if membrane_atoms: reasons.append('non_anchor_membrane_exclusion')
+        if any(row['clash_count'] for row in scaffold_clashes.values()): reasons.append('enzyme_scaffold_clash')
+        if any(row['accessible'] is False for row in [*domain_access.values(),*pocket_access.values()]):
+            reasons.append('domain_or_pocket_wrong_side_or_membrane_occlusion')
+        if any(not row['within_declared_contour_bound'] or not row['anchor_spans_declared_membrane'] for row in tether_records):
+            reasons.append('tether_static_feasibility_failed')
+        gates = [row['confidence'] for row in [*domain_access.values(),*pocket_access.values(),*tether_records]]
+        uncertain = frame.body_side == 'unknown' or any(gate not in {'high','experimental_template'} for gate in gates)
+        eligibility = 'conditional' if uncertain else 'excluded' if reasons else 'eligible'
+        if uncertain: reasons.append('side_or_confidence_not_quantitatively_resolved')
         observations.append({"model_id":conformer.model_id,"conformer_id":conformer.conformer_id,
+            'eligibility':eligibility,'eligibility_reasons':reasons,
+            'eligibility_rule_source':payload.clash_rule_source,
+            'site_identities':{name:identity.model_dump(mode='json') for name,identity in conformer.site_identities.items()},
             "structure_sha256":sha256(conformer.structure.path.read_bytes()).hexdigest(),
             "membrane_frame":frame.model_dump(mode="json"),
             "membrane_clashes":{"count":len(membrane_atoms),"atoms":[{"chain":a.chain,"residue":a.residue,"atom":a.name} for a in membrane_atoms]},
-            "domains_on_accessible_side":{name:accessible(selection) for name,selection in conformer.domains.items()},
-            "pocket_accessibility_in_membrane_context":{name:accessible(selection) for name,selection in conformer.pockets.items()},
+            "domains_on_accessible_side":domain_access,
+            "pocket_accessibility_in_membrane_context":pocket_access,
             "tether_assembly_feasibility":tether_records,"site_conflict_graph":conflicts,
             "enzyme_scaffold_clashes":scaffold_clashes,
             "sampling_method":conformer.sampling_method,"sampling_scope":conformer.sampling_scope,

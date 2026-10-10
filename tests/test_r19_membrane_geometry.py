@@ -65,6 +65,8 @@ def test_membrane_exclusion_and_domains_are_invariant_under_joint_rigid_transfor
     result = calculate_membrane_geometry(MembraneGeometryInput.model_validate(raw))
     row = result["conformers"][0]
     assert row["membrane_clashes"]["count"] == 1
+    assert row['eligibility']=='excluded'
+    assert 'domain_or_pocket_wrong_side_or_membrane_occlusion' in row['eligibility_reasons']
     assert row["domains_on_accessible_side"]["SH3"]["accessible"] is True
     assert row["pocket_accessibility_in_membrane_context"]["enzyme"]["accessible"] is False
     assert row["tether_assembly_feasibility"][0]["anchor_spans_declared_membrane"] is True
