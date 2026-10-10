@@ -68,12 +68,23 @@ $previousRust = $env:RUSTUP_TOOLCHAIN
 $previousBytecode = $env:PYTHONDONTWRITEBYTECODE
 try {
     # Process-scoped override: do not change the user's global Rust default.
-    $env:RUSTUP_TOOLCHAIN = "$($config.rust)-x86_64-pc-windows-msvc"
     $env:PYTHONDONTWRITEBYTECODE = '1'
     $installed = & $rustup toolchain list
     if ($LASTEXITCODE -ne 0) { throw 'Cannot list Rust toolchains.' }
+    $active = & $rustup show active-toolchain
+    $selectedRust = "$($config.rust)-x86_64-pc-windows-msvc"
+    if ($LASTEXITCODE -eq 0) {
+        $activeName = $active.Split(' ')[0]
+        if ($installed | Where-Object { $_.Split(' ')[0] -eq $activeName }) {
+            $compiler = & $rustup run $activeName rustc -vV
+            if ($LASTEXITCODE -eq 0 -and $compiler -contains "release: $($config.rust)" -and $compiler -contains 'host: x86_64-pc-windows-msvc') {
+                $selectedRust = $activeName  # Reuse an exact matching stable/custom toolchain.
+            }
+        }
+    }
+    $env:RUSTUP_TOOLCHAIN = $selectedRust
     if (-not ($installed | Where-Object { $_.Split(' ')[0] -eq $env:RUSTUP_TOOLCHAIN })) {
-        Run-Checked -Program $rustup -Arguments @('toolchain','install',$env:RUSTUP_TOOLCHAIN,'--profile','minimal')
+        Run-Checked -Program $rustup -Arguments @('toolchain','install',$env:RUSTUP_TOOLCHAIN,'--profile','minimal','--no-self-update')
     }
     $pnpm = Get-Command pnpm.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $ready = $false
