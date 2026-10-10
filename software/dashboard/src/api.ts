@@ -1,7 +1,7 @@
 import { PublicError as isPublicError } from "./contracts/public.validators.generated.js";
 import type { PublicError } from "./contracts/generated";
 export let baseUrl =
-  import.meta.env.VITE_DASHBOARD_API_URL ?? "http://127.0.0.1:8780";
+  import.meta.env.VITE_DASHBOARD_API_URL ?? "";
 let sessionToken = "";
 export let backendMode: "local" | "https" = "local";
 declare global {
@@ -29,6 +29,17 @@ const connection = window.__TAURI__
         );
       })
   : Promise.resolve();
+let browserSession: Promise<void> | undefined;
+async function ready() {
+  await connection;
+  if (window.__TAURI__ || baseUrl) return;
+  browserSession ??= fetch('/api/session/bootstrap', {
+    method:'POST',credentials:'same-origin',cache:'no-store',
+  }).then(response => {
+    if (!response.ok) throw new Error('Local browser session could not start. Open FusionLab using fusionlab serve --open; hosted deployments require their own user authentication.');
+  });
+  await browserSession;
+}
 export interface DesktopSettings {
   mode: "local" | "https";
   api_url: string;
@@ -60,7 +71,7 @@ export async function requestJson(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<unknown> {
-  await connection;
+  await ready();
   const response = await fetch(`${baseUrl}/api/platform${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: {
@@ -86,7 +97,7 @@ export async function requestBinary(
   body?: Blob,
   signal?: AbortSignal,
 ): Promise<Response> {
-  await connection;
+  await ready();
   const response = await fetch(`${baseUrl}/api/platform${path}`, {
     method: body ? "POST" : "GET",
     headers: {
@@ -112,7 +123,7 @@ export const downloadArtifact = (id: string, projectId: string) =>
     "scientific-public-export.json",
   );
 export async function downloadResource(path: string, filename: string) {
-  await connection;
+  await ready();
   const response = await fetch(`${baseUrl}/api/platform${path}`, {
     headers: sessionToken ? { "X-FusionLab-Token": sessionToken } : {},
   });

@@ -10,16 +10,18 @@ import struct
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--wheel-dir',type=Path,help='Retain the built project wheel here')
+    parser.add_argument('--profile',choices=['windows','web-linux'],default='windows')
     args=parser.parse_args()
     repo=Path(__file__).resolve().parents[1]
-    config=json.loads((repo/'requirements/release-toolchain.json').read_text())
-    if sys.platform!='win32' or struct.calcsize('P')!=8 or '.'.join(map(str,sys.version_info[:3]))!=config['python']:
-        raise SystemExit('This release lock supports Windows x64 / Python '+config['python']+'. Compatibility test environments are separate.')
+    config=json.loads((repo/'requirements'/('web-toolchain.json' if args.profile=='web-linux' else 'release-toolchain.json')).read_text())
+    platform='linux' if args.profile=='web-linux' else 'win32'
+    if sys.platform!=platform or struct.calcsize('P')!=8 or '.'.join(map(str,sys.version_info[:3]))!=config['python']:
+        raise SystemExit('This lock supports '+config['platform']+' / Python '+config['python']+'. Compatibility environments are separate.')
     if sys.prefix==sys.base_prefix:
         raise SystemExit('Create and activate a virtual environment before installing the release.')
     def run(*command):subprocess.run(command,cwd=repo,check=True)
-    run(sys.executable,'-B','-m','pip','install','--no-cache-dir','--no-compile','-r',str(repo/'requirements.txt'))
-    run(sys.executable,'-B',str(repo/'scripts/verify_release_lock.py'),'--installed')
+    run(sys.executable,'-B','-m','pip','install','--no-cache-dir','--no-compile','-r',str(repo/config['runtime_lock']),'-r',str(repo/config['build_lock']))
+    run(sys.executable,'-B',str(repo/'scripts/verify_release_lock.py'),'--installed','--profile',args.profile)
     if args.wheel_dir:
         args.wheel_dir.mkdir(parents=True,exist_ok=True)
         run(sys.executable,'-m','pip','wheel','--no-deps','--no-build-isolation','--wheel-dir',str(args.wheel_dir.resolve()),str(repo))

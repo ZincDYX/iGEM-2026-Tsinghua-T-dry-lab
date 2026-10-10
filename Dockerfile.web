@@ -1,0 +1,26 @@
+# Reproducible local single-user Web/CLI build; no Rust or prediction weights.
+FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS node
+FROM python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS build
+ENV PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+COPY --from=node /usr/local/ /usr/local/
+WORKDIR /source
+COPY requirements/ requirements/
+RUN python -m pip install --no-cache-dir --no-compile -r requirements/web-linux-py312.lock -r requirements/build-py313.lock
+COPY pyproject.toml setup.py MANIFEST.in LICENSE NOTICE ./
+COPY src/ src/
+COPY configs/ configs/
+COPY scripts/ scripts/
+COPY software/dashboard/ software/dashboard/
+RUN npm install --global pnpm@10.30.3 && python -B scripts/verify_release_lock.py --installed --profile web-linux && python -B scripts/build_web.py --output /wheels
+
+FROM python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e
+ENV PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+COPY requirements/web-linux-py312.lock /tmp/runtime.lock
+RUN python -m pip install --no-cache-dir --no-compile -r /tmp/runtime.lock
+COPY --from=build /wheels/ /tmp/wheels/
+RUN python -m pip install --no-cache-dir --no-compile --no-deps /tmp/wheels/*.whl && python -m pip check
+RUN mkdir -p /workspace && chown 1000:1000 /workspace
+# Linux host networking keeps the browser bootstrap truly loopback-only.
+# Do not publish this local-user service on a public interface.
+WORKDIR /workspace
+CMD ["fusionlab", "--data-dir", "/workspace", "serve", "--port", "8780"]

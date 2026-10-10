@@ -3,6 +3,15 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { useDocuments } from "./useDocuments";
 
 beforeEach(() => localStorage.clear());
+it('starts a new workspace with Inputs only and restores the last selected document', () => {
+  const first=renderHook(()=>useDocuments('new-workspace',false,vi.fn()));
+  expect(first.result.current.tab).toBe('inputs');
+  expect(first.result.current.openDocuments).toEqual(['inputs']);
+  act(()=>first.result.current.setTab('plan'));
+  first.unmount();
+  const restored=renderHook(()=>useDocuments('new-workspace',false,vi.fn()));
+  expect(restored.result.current.tab).toBe('plan');
+});
 it("keeps Settings and Plugins open across navigation and restores the workspace", () => {
   const blocked = vi.fn();
   const first = renderHook(() => useDocuments("workspace-a", false, blocked));

@@ -31,8 +31,9 @@ Server-only tests: `test_web_cli_scientific_admission.py`,
 `test_r19_er_equations.py`, `test_r19_er_stage_bindings.py`,
 `test_r19_membrane_geometry.py`. Fixtures are explicitly synthetic mathematical
 oracles, not project measurements, real predictor jobs or experimental validation.
-Initial 24-test run passed after fixing residual scaling; final expanded suite
-and full regression results are recorded separately at delivery.
+Initial 24-test run passed after fixing residual scaling; the expanded four-file
+server suite passed 25 tests (4.82 s). This is targeted admission regression,
+not the entire scientific/author suite.
 
 Implementation references: [SciPy null_space](https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.null_space.html)
 and [bounded least_squares](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html).
@@ -40,12 +41,58 @@ The source methods remain the four existing implementation contracts and
 the independently versioned ER contracts; these numerical-library references do
 not provide or replace biological parameters.
 
+## Batch 1: shared application and installed local browser entry
+
+Project saving, import preview, input checks, workflow validation, approved run
+creation and CLI execution now use `software/application.py`, the existing
+PlanningService/store and the same WorkflowEngine. The old import parser was
+moved, not copied into a competing CLI implementation. Typed import transactions
+and the remaining HTTP-only service operations are subsequent work.
+
+`fusionlab` exposes project/import/check/plan/inspect/decide/run/watch/export/serve
+commands with JSON output and distinct blocked/run-failed return codes. It binds
+approval to the saved revision; repeating an approved run returns the same job.
+The source Web builder uses exact Node/pnpm and Python packaging pins but no
+Rust. Its wheel carries the built SPA. Same-origin relative API requests receive
+an origin-checked private HttpOnly loopback cookie; unknown API/assets remain
+404. Existing optional desktop transport is retained. This bootstrap is not
+public hosted authentication or a host-shell grant.
+
+Evidence collected for this batch:
+
+- Windows software-only HTTP/session/CLI persistence/lock suite: 18 passed.
+- Frontend unit suite: 61 passed in 23 files. The initial failure was an obsolete
+  App navigation fixture that did not accept the schema query parameter; fixed
+  the fixture, not the error assertion or API contract.
+- Compute-server shared-service/admission suite: 34 passed, 10.62 s. The first
+  snapshot omitted generated contracts and failed one schema-file test; after
+  shipping the actual generated source, the complete suite passed.
+- Real UniProt P42212 (238 aa) CLI run, explicit approval, idempotent repeat,
+  original-precision CSV/JSON export, independent ProtParam molecular-weight
+  oracle and Web read after restart passed on the server. Sequence descriptors
+  are not formal M1 screening, transfer-case validation or LLPS evidence.
+- Actual built-wheel browser test outside the checkout passed (17.4 s): Inputs
+  is the only initial tab; no token entry/desktop bridge; HttpOnly cookie; real
+  annotated GenBank preview/save/reload/original-byte export; no browser errors;
+  missing asset remains 404. A 1280x800 screenshot and video were recorded.
+  This is software acceptance by the developer, not five independent novices.
+- Linux CPython 3.12.14 actual installed dependency closure: 49 runtime pins
+  verified. It is a pre-existing configured server environment, not a fresh
+  machine installation. Linux GitLab CI now consumes this independent lock.
+- Docker/compose source pins verified registry manifest identities and restricts
+  the service to Linux host-loopback networking. Image build, new clean-machine
+  install, published download/image and hosted deployment are **not yet verified**.
+
+Implementation sources: [Starlette cookie responses](https://starlette.dev/responses/)
+and [Docker image pinning/build guidance](https://docs.docker.com/build/building/best-practices/).
+No screenshot/test result substitutes for the remaining review criteria.
+
 ## Remaining review acceptance tasks
 
-| ID | Required outcome | Status at batch 0 |
+| ID | Required outcome | Current status |
 |---|---|---|
-| WEB-01 | Authenticated same-origin local Web package, Linux lock, container and clean startup | Pending |
-| CLI-01 / ARCH-01 | Shared application services and durable CLI workflow | Pending |
+| WEB-01 | Authenticated same-origin local Web package, Linux lock, container and clean startup | Local installed-wheel/browser and existing Linux closure verified; container/clean deployment pending |
+| CLI-01 / ARCH-01 | Shared application services and durable CLI workflow | Core project/approval/run parity verified; remaining service extraction and typed imports pending |
 | IN-01 | Inputs first, two regions, default project and single import controller | Pending |
 | IN-02 | Typed format registry, transactions and ambiguity handling | Pending |
 | IN-03 | Contextual gaps with Add/Use/Defer actions | Pending |
@@ -61,7 +108,7 @@ not provide or replace biological parameters.
 | JOB-01 | Structured Jobs/Output/Problems and mode-safe terminal | Pending |
 | UI-01 / UI-02 / UI-03 | Single menu, inline tabs, contextual tree and English messages | Pending |
 | PERF-01 | Measured baseline, schema split, viewer/resource lifecycle | Pending |
-| Synthetic PS-v3 | Original corrected package, separate runner and inherited scope | Awaiting original package; no invented replacement |
+| Synthetic PS-v3 | Original corrected package, separate runner and inherited scope | Original corrected ZIP found and inspected; independent integration/runner pending |
 | Publication | Final designated repository, Wiki, Village and award registration | Owner confirmation required; no relocation/registration mutation |
 | Validation | Real independent experiment, real transfer case, five novice-user sessions | Requires corresponding data/people; software fixtures are not substitutes |
 

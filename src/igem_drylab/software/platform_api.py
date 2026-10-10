@@ -2,28 +2,22 @@
 from __future__ import annotations
 
 from hashlib import sha256
-from io import StringIO
-import csv
 import json
 from pathlib import Path
 from threading import Thread
 from typing import Any, Literal
 from uuid import uuid4
 
-from Bio import SeqIO
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import Field
 
-from igem_drylab.workflow.builtins import Goal, builtin_tools, recommend
-from igem_drylab.workflow.engine import WorkflowEngine
-from igem_drylab.workflow.disclosure import DisclosureBoundary
+from igem_drylab.workflow.builtins import Goal, recommend
 from igem_drylab.workflow.mcp_bridge import register_scientific_mcp
-from igem_drylab.workflow.models import Contract, PlanBinding, Project, SequenceRecord, Workflow, WorkflowError
+from igem_drylab.workflow.models import Contract, PlanBinding, Project, Workflow, WorkflowError
 from igem_drylab.workflow.pathway import Pathway
-from igem_drylab.workflow.plugins import PluginManager
-from igem_drylab.workflow.store import WorkflowStore, plan_binding
-from igem_drylab.workflow.planning import PlanningService, ProposalRequest, ProposalDecision
+from igem_drylab.workflow.store import plan_binding
+from igem_drylab.workflow.planning import ProposalRequest, ProposalDecision
 from igem_drylab.workflow.declared_series import DeclaredColumn, DeclaredSeries, read_columns
 from igem_drylab.workflow.scientific_setup import ScientificSetupRequest
 from igem_drylab.workflow.annotation_binding import AnnotationBindingRequest, bind_annotation
@@ -110,33 +104,20 @@ class GithubPluginRequest(Contract):
 
 def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_backend=None, workflow_tools=None, runtime_tools=None) -> APIRouter:
     data_dir = data_dir.resolve()
-    store = WorkflowStore(data_dir / "platform.sqlite3")
-    tools = workflow_tools if workflow_tools is not None else builtin_tools()
-    engine = WorkflowEngine(store, tools, data_dir / "artifacts")
-    from igem_drylab.workflow.scheduler import RunDispatcher
-    dispatcher = RunDispatcher(engine)
-    boundary = engine.disclosure
-    backend_profile = None
-    if runtime_tools is not None:
-        from igem_drylab.workflow.runtime_profiles import RuntimeProfiles
-        backend_profile = RuntimeProfiles(store).install("backend-configured-tools", runtime_tools)
-        boundary.register_runtime(runtime_tools)
+    from .application import ApplicationService
+    application=ApplicationService(data_dir,workflow_tools=workflow_tools,planning_backend=planning_backend,runtime_tools=runtime_tools)
+    store,tools,engine=application.store,application.tools,application.engine
+    dispatcher,boundary=application.dispatcher,application.boundary
     from igem_drylab.workflow.views import PublicReads
     reads = PublicReads(store,boundary)
     from igem_drylab.workflow.display_resources import DisplayResources
     resources = DisplayResources(store, boundary)
     from igem_drylab.workflow.lineage_compare import LineageComparison
     comparisons = LineageComparison(store, boundary)
-    planning = PlanningService(store,boundary,planning_backend,engine)
-    if planning_backend is not None:
-        private_client = getattr(planning_backend,"client",None)
-        for field in ("api_key","api_base"):
-            boundary.register_private(getattr(private_client,field,None))
-    boundary.register_private(str(data_dir))
-    plugins = PluginManager(data_dir / "plugins", store, tools, disclosure=boundary)
-    plugins.load_installed()
+    planning,plugins=application.planning,application.plugins
     router = APIRouter(prefix="/api/platform")
     router.store, router.engine, router.disclosure = store, engine, boundary
+    router.application=application
     capabilities = {"scientific_mcp": "checking" if discover_tools else "unavailable"}
 
     def discover() -> None:
@@ -159,9 +140,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.post("/proposals")
     def propose(request: ProposalRequest):
-        result = planning.propose(request)
-        if result.workflow: validate_workflow(result.workflow)
-        return result
+        return application.propose(request)
 
     @router.get("/proposals/{proposal_id}")
     def proposal(proposal_id: str):
@@ -187,10 +166,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.get("/projects/{project_id}/precheck")
     def scientific_precheck(project_id:str, through: Literal["m1", "m2", "m3", "m4", "m5"] | None = None):
-        from igem_drylab.workflow.precheck import precheck
-        result=precheck(store.project(project_id), through).model_dump(mode="json")
-        boundary.check(result)
-        return result
+        return application.check_inputs(project_id,through)
 
     @router.get("/projects/{project_id}/scientific-observation")
     def scientific_observation(project_id:str):
@@ -247,26 +223,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.post("/projects")
     def save_project(request: SaveProject) -> dict[str, Any]:
-        boundary.check(request.project.model_dump(mode="json"))
-        request.project = boundary.private_project(request.project)
-        if backend_profile is not None:
-            try:
-                store.project(request.project.id)
-            except KeyError:
-                request.project.runtime_profile_ref = backend_profile["id"]
-        if request.project.scientific_project is not None:
-            from igem_drylab.workflow.scientific_project import ScientificProject
-            ScientificProject.model_validate(request.project.scientific_project).verify()
-        if request.project.pathway is not None:
-            Pathway.model_validate(request.project.pathway)
-        for sequence in request.project.sequences:
-            from igem_drylab.constructs.linker_features import normalize_amino_acid_sequence
-            sequence.sequence = normalize_amino_acid_sequence(sequence.sequence)
-        for file in request.project.files:
-            path = Path(file["path"]).resolve()
-            if not path.is_relative_to(data_dir / "imports") or not path.is_file() or sha256(path.read_bytes()).hexdigest() != file["sha256"]:
-                raise ValueError("invalid_import_artifact")
-        return boundary.project(store.save_project(request.project, request.expected_revision))
+        return application.save_project(request.project,request.expected_revision)
 
     @router.get("/scientific-projects/form-schema")
     def scientific_form_schema(prepared_through: Literal["m1", "m2", "m3", "m4", "m5"] = "m5"):
@@ -488,79 +445,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.post("/imports/preview")
     def import_preview(request: ImportRequest) -> dict[str, Any]:
-        from igem_drylab.workflow.disclosure import check_import_content
-        check_import_content(request.filename, request.content.encode())
-        boundary.check_bytes(request.content.encode())
-        extension = Path(request.filename).suffix.lower()
-        digest = sha256(request.content.encode()).hexdigest()
-        root = data_dir / "imports"
-        root.mkdir(parents=True, exist_ok=True)
-        source = root / f"{digest}{extension}"
-        # Parse before storing. The project itself changes only after confirmation.
-        if extension in {".fasta", ".fa", ".faa", ".gb", ".gbk", ".genbank"}:
-            format_name = "genbank" if extension in {".gb", ".gbk", ".genbank"} else "fasta"
-            sequences: list[dict[str, Any]] = []
-            design_parts = None
-            if format_name == 'genbank':
-                from igem_drylab.workflow.genbank_design import import_design
-                summaries, bindings, proteins = import_design(request.content)
-                sequences = [item.model_dump() for item in proteins]
-                design_parts = (summaries, bindings)
-            else:
-                for record in SeqIO.parse(StringIO(request.content), format_name):
-                    sequences.append(SequenceRecord(id=record.id, sequence=str(record.seq)).model_dump())
-                if not sequences:
-                    raise ValueError("no_protein_sequences")
-            from igem_drylab.constructs.linker_features import normalize_amino_acid_sequence
-            for item in sequences:
-                item["sequence"] = normalize_amino_acid_sequence(item["sequence"])
-            Project(id="preview", name="preview", sequences=sequences)
-            patch: dict[str, Any] = {"sequences": sequences}
-            kind = "genbank_design" if design_parts is not None else "sequences"
-        elif extension == ".json" and request.input_kind == "wetlab":
-            from igem_drylab.wetlab.models import WetLabResult
-            raw = json.loads(request.content)
-            rows = raw.get("records") if isinstance(raw, dict) else raw
-            if not isinstance(rows, list) or not rows:
-                raise ValueError("wetlab_requires_nonempty_typed_records")
-            records = [WetLabResult.model_validate(row).model_dump(mode="json") for row in rows]
-            from igem_drylab.wetlab import quality_control
-            qc = quality_control([WetLabResult.model_validate(row) for row in records])
-            patch, kind = {"datasets": [{"id": digest, "name": request.filename, "kind": "wetlab",
-                "records": records, "qc": [item.model_dump(mode="json") for item in qc]}]}, "wetlab"
-        elif extension == ".json" and request.input_kind == "pathway":
-            pathway = Pathway.model_validate_json(request.content)
-            patch, kind = {"pathway": pathway.model_dump(mode="json")}, "pathway"
-        elif extension == ".json":
-            json.loads(request.content)
-            patch, kind = {}, "configuration_display_only"
-        elif extension in {".csv", ".tsv"}:
-            reader = csv.DictReader(StringIO(request.content), delimiter="\t" if extension == ".tsv" else ",")
-            if not reader.fieldnames or len(reader.fieldnames) > 128 or len(set(reader.fieldnames)) != len(reader.fieldnames) or any(not c for c in reader.fieldnames):
-                raise WorkflowError("table_columns_missing_or_duplicate")
-            count = 0
-            for row in reader:
-                if None in row or any(v is None for v in row.values()) or count >= 100_000:
-                    raise WorkflowError("table_row_budget_or_shape_invalid")
-                count += 1
-            if not count:
-                raise ValueError("empty_table")
-            patch, kind = {}, "dataset"
-        else:
-            raise ValueError("supported_imports: FASTA, annotated GenBank, explicit-role JSON, CSV, TSV")
-        source.write_bytes(request.content.encode("utf-8"))
-        file = boundary.asset(source, fresh=True, logical_name=request.filename)
-        if kind == 'genbank_design':
-            from igem_drylab.workflow.genbank_design import GenBankDesign
-            summaries, bindings = design_parts
-            design = GenBankDesign(id=file['id'], file_id=file['id'], name=request.filename,
-                records=summaries, cds_proteins=bindings)
-            patch['datasets'] = [design.model_dump(mode='json')]
-        for dataset in patch.get("datasets", []):
-            dataset["file_id"] = file["id"]
-        result = {"kind": kind, "patch": patch, "file": file}
-        boundary.check(result)
-        return result
+        return application.preview_import(request.filename,request.content,request.input_kind)
 
     @router.get('/projects/{project_id}/designs/{design_id}')
     def genbank_design(project_id: str, design_id: str, record_index: int = Query(0, ge=0),
@@ -600,29 +485,12 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.post("/workflows/validate")
     def validate_workflow(workflow: Workflow) -> Workflow:
-        boundary.check(workflow.model_dump(mode="json"))
-        from igem_drylab.workflow.scientific_project import validate_stage_bindings
-        validate_stage_bindings(workflow)
-        for node in workflow.nodes:
-            tools.get(node.tool_id)
-        return workflow
+        return application.validate_workflow(workflow)
 
     @router.post("/runs", status_code=202)
     def run(request: RunRequest) -> dict[str, Any]:
-        if request.project_id != request.confirmation.project_id:
-            raise WorkflowError("plan_project_mismatch", status_code=409)
-        request_id = request.request_id or sha256(request.confirmation.model_dump_json().encode()).hexdigest()
-        review_id = request.proposal_id if request.execution_type == "reviewed_proposal" else request.manual_review_id
-        if not review_id or (request.proposal_id and request.manual_review_id):
-            raise WorkflowError("accepted_proposal_binding_required",status_code=409)
-        manual = request.execution_type == "manual_review"
-        planning.authorize_run(review_id,request.confirmation,request.workflow,manual=manual)
-        run_id = engine.create_confirmed(request.confirmation, request.workflow, request_id,
-            authorize=lambda db,snapshot: planning.authorize_run(review_id,request.confirmation,request.workflow,db=db,snapshot=snapshot,manual=manual))
-        result = store.run(run_id)
-        if result["status"] == "queued": launch(run_id)
-        planning.started(review_id,run_id)
-        return boundary.run(result)
+        return application.start_run(**request.model_dump(exclude={'workflow','confirmation'}),
+            workflow=request.workflow,confirmation=request.confirmation)
 
     @router.post("/runs/{run_id}/iteration")
     def iteration(run_id: str):

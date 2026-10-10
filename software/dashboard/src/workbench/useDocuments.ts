@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 export type DocumentId = "plan" | "inputs" | "results" | "compare" | "settings" | "plugins" | "tools" | "artifacts";
 const valid: DocumentId[] = ["plan", "inputs", "results", "compare", "settings", "plugins", "tools", "artifacts"];
 type State = { active: DocumentId; open: DocumentId[] };
-const initial: State = { active: "plan", open: ["inputs", "plan", "results", "compare", "artifacts", "tools"] };
+const initial: State = { active: "inputs", open: ["inputs"] };
 
 function restore(key: string): State {
   try {
@@ -27,7 +27,7 @@ export function useDocuments(workspace: string, dirty: boolean, onBlockedClose: 
     if (id === "inputs" && dirty) { onBlockedClose(); return; }
     setState(current => {
       const open = current.open.filter(value => value !== id);
-      if (!open.length) open.push("plan");
+      if (!open.length) open.push("inputs");
       return { ...current, open, active: current.active === id ? open[0] : current.active };
     });
   }

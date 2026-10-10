@@ -289,6 +289,10 @@ li {
   background: var(--surface);
   box-shadow: inset 0 -2px var(--accent);
 }
+.workbench-tab { display:inline-flex;align-items:center;white-space:nowrap; }
+.workbench-tab.selected { background:var(--surface);box-shadow:inset 0 -2px var(--accent); }
+.workbench-tab [role="tab"] { border-right:0;box-shadow:none; }
+.workbench-tab > button:not([role="tab"]) { border:0;background:transparent;padding:3px 6px;margin-right:3px; }
 .panel-heading,
 .document-status {
   display: flex;

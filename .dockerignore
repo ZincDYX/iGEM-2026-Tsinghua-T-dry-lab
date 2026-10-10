@@ -1,0 +1,15 @@
+.git
+.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+software/dashboard/dist
+software/dashboard/test-results
+software/desktop
+outputs
+build
+dist
+third_party
+*.zip
+*.tar
+*.whl

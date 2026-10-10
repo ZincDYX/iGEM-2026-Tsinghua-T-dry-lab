@@ -240,6 +240,13 @@ export type Chain = string;
 export type Residues = [number | string, ...(number | string)[]];
 export type ContourLengthAngstrom = number;
 export type ContourLengthSource = string;
+export type Species = "OC" | "DMT";
+export type EnzymeConstructId = string;
+export type EnzymeFusionSequenceSha256 = string;
+export type LigandId = string;
+export type BindingDomain = string;
+export type BindingPairRef = string;
+export type SourceReference5 = string;
 export type SamplingMethod = string;
 export type SamplingScope = string;
 export type CoordinateTransformReference = string;
@@ -258,7 +265,7 @@ export type Value2 = number;
 export type Unit1 = "uM" | "umol" | "L" | "um2" | "copies/um2" | "1" | "L/h" | "1/h" | "umol/h";
 export type EntityBasis = string;
 export type ParameterId1 = string;
-export type SourceReference5 = string;
+export type SourceReference6 = string;
 export type DensityEntityBasis = "scaffold_monomer" | "complete_assembly" | "effective_anchor";
 export type SubunitsPerAssembly = number;
 export type AnchorsPerAssembly = number;
@@ -266,9 +273,9 @@ export type CompositionSource = string;
 export type UnanchoredScaffoldBinding = "included_in_droplet" | "excluded_with_evidence";
 export type UnanchoredScaffoldApplicabilitySource = string;
 export type SiteId = string;
-export type Species = "OC" | "DMT";
+export type Species1 = "OC" | "DMT";
 export type GeometryRef1 = string;
-export type BindingPairRef = string;
+export type BindingPairRef1 = string;
 export type Sites = BindingSite[];
 export type ConflictEdges = [unknown, unknown][];
 export type EntityBasis1 = "complete_assembly";
@@ -290,7 +297,7 @@ export type InterpolationReference = string | null;
 export type Lower2 = number | null;
 export type Upper2 = number | null;
 export type EmpiricalValues = number[];
-export type SourceReference6 = string;
+export type SourceReference7 = string;
 /**
  * @minItems 1
  */
@@ -380,7 +387,7 @@ export type SteadyMaxEvaluations = number;
 export type EvidenceMode = "conditional_model" | "reviewed_project_binding";
 export type ConstructId6 = string;
 export type ConditionId6 = string;
-export type SourceReference7 = string;
+export type SourceReference8 = string;
 export type ReviewedBy1 = string;
 /**
  * @minItems 1
@@ -405,7 +412,7 @@ export type C = number;
 export type Const = number;
 export type ThetaHydro = number;
 export type ThetaAro = number;
-export type SourceReference8 = string;
+export type SourceReference9 = string;
 export type ApplicableDomainReference = string;
 export type ReviewedBy2 = string;
 export type AssayMode = ("substrate_feeding_functional" | "full_pathway_production") | null;
@@ -831,6 +838,7 @@ export interface MembraneConformer {
   domains: Domains;
   pockets: Pockets;
   recruited_enzymes: RecruitedEnzymes;
+  site_identities: SiteIdentities;
   sampling_method: SamplingMethod;
   sampling_scope: SamplingScope;
   coordinate_transform_reference: CoordinateTransformReference;
@@ -878,6 +886,18 @@ export interface Pockets {
 }
 export interface RecruitedEnzymes {
   [k: string]: ResidueSelection;
+}
+export interface SiteIdentities {
+  [k: string]: MembraneSiteIdentity;
+}
+export interface MembraneSiteIdentity {
+  species: Species;
+  enzyme_construct_id: EnzymeConstructId;
+  enzyme_fusion_sequence_sha256: EnzymeFusionSequenceSha256;
+  ligand_id: LigandId;
+  binding_domain: BindingDomain;
+  binding_pair_ref: BindingPairRef;
+  source_reference: SourceReference5;
 }
 export interface M3Config {
   er_requests: ErRequests;
@@ -936,7 +956,7 @@ export interface ScientificQuantity {
   unit: Unit1;
   entity_basis: EntityBasis;
   parameter_id: ParameterId1;
-  source_reference: SourceReference5;
+  source_reference: SourceReference6;
 }
 export interface EnzymeTotalAmounts {
   [k: string]: ScientificQuantity;
@@ -954,10 +974,10 @@ export interface BindingGraph {
 }
 export interface BindingSite {
   site_id: SiteId;
-  species: Species;
+  species: Species1;
   kd: ScientificQuantity;
   geometry_ref: GeometryRef1;
-  binding_pair_ref: BindingPairRef;
+  binding_pair_ref: BindingPairRef1;
 }
 export interface AvidityBinding {
   method: Method;
@@ -976,7 +996,7 @@ export interface RangeEvidence {
   lower: Lower2;
   upper: Upper2;
   empirical_values: EmpiricalValues;
-  source_reference: SourceReference6;
+  source_reference: SourceReference7;
   parameter_ids: ParameterIds;
   reviewed_by: ReviewedBy;
 }
@@ -1135,7 +1155,7 @@ export interface M3M4JointSamples {
   construct_id: ConstructId6;
   condition_id: ConditionId6;
   source: ArtifactReference;
-  source_reference: SourceReference7;
+  source_reference: SourceReference8;
   reviewed_by: ReviewedBy1;
   columns: Columns;
   sample_basis: SampleBasis;
@@ -1166,7 +1186,7 @@ export interface IDRMappingEvidence {
   aromatic_counts: AromaticCounts;
   theta_hydro: ThetaHydro;
   theta_aro: ThetaAro;
-  source_reference: SourceReference8;
+  source_reference: SourceReference9;
   applicable_domain_reference: ApplicableDomainReference;
   reviewed_by: ReviewedBy2;
 }

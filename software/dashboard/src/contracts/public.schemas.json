@@ -7020,6 +7020,13 @@
             "title": "Recruited Enzymes",
             "type": "object"
           },
+          "site_identities": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneSiteIdentity"
+            },
+            "title": "Site Identities",
+            "type": "object"
+          },
           "sampling_method": {
             "minLength": 1,
             "title": "Sampling Method",
@@ -7046,6 +7053,7 @@
           "domains",
           "pockets",
           "recruited_enzymes",
+          "site_identities",
           "sampling_method",
           "sampling_scope",
           "coordinate_transform_reference"
@@ -7216,6 +7224,57 @@
           "clash_rule_source"
         ],
         "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneSiteIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "enzyme_construct_id": {
+            "title": "Enzyme Construct Id",
+            "type": "string"
+          },
+          "enzyme_fusion_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Enzyme Fusion Sequence Sha256",
+            "type": "string"
+          },
+          "ligand_id": {
+            "title": "Ligand Id",
+            "type": "string"
+          },
+          "binding_domain": {
+            "title": "Binding Domain",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species",
+          "enzyme_construct_id",
+          "enzyme_fusion_sequence_sha256",
+          "ligand_id",
+          "binding_domain",
+          "binding_pair_ref",
+          "source_reference"
+        ],
+        "title": "MembraneSiteIdentity",
         "type": "object"
       },
       "MembraneTopologyEvidence": {
@@ -15473,6 +15532,13 @@
             "title": "Recruited Enzymes",
             "type": "object"
           },
+          "site_identities": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneSiteIdentity"
+            },
+            "title": "Site Identities",
+            "type": "object"
+          },
           "sampling_method": {
             "minLength": 1,
             "title": "Sampling Method",
@@ -15499,6 +15565,7 @@
           "domains",
           "pockets",
           "recruited_enzymes",
+          "site_identities",
           "sampling_method",
           "sampling_scope",
           "coordinate_transform_reference"
@@ -15669,6 +15736,57 @@
           "clash_rule_source"
         ],
         "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneSiteIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "enzyme_construct_id": {
+            "title": "Enzyme Construct Id",
+            "type": "string"
+          },
+          "enzyme_fusion_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Enzyme Fusion Sequence Sha256",
+            "type": "string"
+          },
+          "ligand_id": {
+            "title": "Ligand Id",
+            "type": "string"
+          },
+          "binding_domain": {
+            "title": "Binding Domain",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species",
+          "enzyme_construct_id",
+          "enzyme_fusion_sequence_sha256",
+          "ligand_id",
+          "binding_domain",
+          "binding_pair_ref",
+          "source_reference"
+        ],
+        "title": "MembraneSiteIdentity",
         "type": "object"
       },
       "MembraneTopologyEvidence": {
@@ -20392,6 +20510,13 @@
             "title": "Recruited Enzymes",
             "type": "object"
           },
+          "site_identities": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneSiteIdentity"
+            },
+            "title": "Site Identities",
+            "type": "object"
+          },
           "sampling_method": {
             "minLength": 1,
             "title": "Sampling Method",
@@ -20418,6 +20543,7 @@
           "domains",
           "pockets",
           "recruited_enzymes",
+          "site_identities",
           "sampling_method",
           "sampling_scope",
           "coordinate_transform_reference"
@@ -20588,6 +20714,57 @@
           "clash_rule_source"
         ],
         "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneSiteIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "enzyme_construct_id": {
+            "title": "Enzyme Construct Id",
+            "type": "string"
+          },
+          "enzyme_fusion_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Enzyme Fusion Sequence Sha256",
+            "type": "string"
+          },
+          "ligand_id": {
+            "title": "Ligand Id",
+            "type": "string"
+          },
+          "binding_domain": {
+            "title": "Binding Domain",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species",
+          "enzyme_construct_id",
+          "enzyme_fusion_sequence_sha256",
+          "ligand_id",
+          "binding_domain",
+          "binding_pair_ref",
+          "source_reference"
+        ],
+        "title": "MembraneSiteIdentity",
         "type": "object"
       },
       "MembraneTopologyEvidence": {
@@ -25474,6 +25651,13 @@
             "title": "Recruited Enzymes",
             "type": "object"
           },
+          "site_identities": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneSiteIdentity"
+            },
+            "title": "Site Identities",
+            "type": "object"
+          },
           "sampling_method": {
             "minLength": 1,
             "title": "Sampling Method",
@@ -25500,6 +25684,7 @@
           "domains",
           "pockets",
           "recruited_enzymes",
+          "site_identities",
           "sampling_method",
           "sampling_scope",
           "coordinate_transform_reference"
@@ -25670,6 +25855,57 @@
           "clash_rule_source"
         ],
         "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneSiteIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "enzyme_construct_id": {
+            "title": "Enzyme Construct Id",
+            "type": "string"
+          },
+          "enzyme_fusion_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Enzyme Fusion Sequence Sha256",
+            "type": "string"
+          },
+          "ligand_id": {
+            "title": "Ligand Id",
+            "type": "string"
+          },
+          "binding_domain": {
+            "title": "Binding Domain",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species",
+          "enzyme_construct_id",
+          "enzyme_fusion_sequence_sha256",
+          "ligand_id",
+          "binding_domain",
+          "binding_pair_ref",
+          "source_reference"
+        ],
+        "title": "MembraneSiteIdentity",
         "type": "object"
       },
       "MembraneTopologyEvidence": {

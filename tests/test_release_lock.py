@@ -67,3 +67,16 @@ def test_root_requirements_reuses_the_release_locks_without_duplicate_pins():
     entries = [line.strip() for line in (repo/'requirements.txt').read_text().splitlines()
                if line.strip() and not line.lstrip().startswith('#')]
     assert entries == ['-r '+config['runtime_lock'], '-r '+config['build_lock']]
+
+
+def test_linux_web_lock_is_independent_and_covers_active_dependencies():
+    import json
+    import tomllib
+    repo=Path(__file__).parents[1]
+    config=json.loads((repo/'requirements/web-toolchain.json').read_text())
+    project=tomllib.loads((repo/'pyproject.toml').read_text())
+    environment={**default_environment(),'sys_platform':'linux','python_version':'3.12','python_full_version':'3.12.14'}
+    pins=lock.read_pins([repo/config['runtime_lock'],repo/config['build_lock']],environment)
+    required=project['project']['dependencies']+project['project']['optional-dependencies']['software']+project['build-system']['requires']
+    assert lock.verify(pins,required,environment=environment)['checked_pins']>=49
+    assert config['runtime_lock']!='requirements/runtime-py313-windows.lock'

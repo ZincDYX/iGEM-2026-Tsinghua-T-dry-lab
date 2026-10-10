@@ -59,9 +59,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--installed',action='store_true')
     parser.add_argument('--runtime-only',action='store_true')
+    parser.add_argument('--profile',choices=['windows','web-linux'],default='windows')
     args=parser.parse_args()
     repo=Path(__file__).resolve().parents[1]
-    config=json.loads((repo/'requirements/release-toolchain.json').read_text())
+    config=json.loads((repo/'requirements'/('web-toolchain.json' if args.profile=='web-linux' else 'release-toolchain.json')).read_text())
     project=tomllib.loads((repo/'pyproject.toml').read_text())
     locks=[repo/config['runtime_lock']]+([] if args.runtime_only else [repo/config['build_lock']])
     pins=read_pins(locks)
@@ -70,6 +71,8 @@ def main():
     installed={canonicalize_name(d.metadata['Name']):d for d in distributions()} if args.installed else None
     if args.installed and '.'.join(map(str,sys.version_info[:3]))!=config['python']:
         raise ValueError('Release Python differs from supported toolchain')
+    if args.installed and sys.platform!=('linux' if args.profile=='web-linux' else 'win32'):
+        raise ValueError('Release platform differs from supported toolchain')
     print(json.dumps(verify(pins,requirements,installed)))
 
 

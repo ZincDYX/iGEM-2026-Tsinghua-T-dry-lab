@@ -1,0 +1,7 @@
+{
+  "platform": "linux-x86_64",
+  "python": "3.12.14",
+  "runtime_lock": "requirements/web-linux-py312.lock",
+  "build_lock": "requirements/build-py313.lock",
+  "scope": "Web/CLI Linux runtime; pure Python packaging tools shared with the Windows build lock; predictors and weights remain separate"
+}

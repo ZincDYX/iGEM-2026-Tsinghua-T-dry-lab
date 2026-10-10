@@ -1,0 +1,16 @@
+services:
+  fusionlab:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: fusionlab-local:review-20261011
+    # Linux only. No exposed host API, raw host shell or team-specific address.
+    network_mode: host
+    user: "1000:1000"
+    volumes:
+      - fusionlab-workspace:/workspace
+    init: true
+    stop_grace_period: 30s
+    restart: "no"
+volumes:
+  fusionlab-workspace:

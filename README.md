@@ -24,6 +24,70 @@ The single [evidence index](docs/best_software_evidence.md) records submission,
 build, real-case and validation status. Eligibility and independent non-expert
 usability are not yet verified.
 
+## Local browser and CLI (no Rust required)
+
+An already built Web wheel includes the production React page. End users need
+the supported Python runtime, the platform lock and that wheel, not Node,
+pnpm, Rust or a model account. A public download/hosted demo is not yet provided.
+Install in a private virtual environment and run:
+
+```text
+fusionlab serve --open
+```
+
+The page and API share one origin. The browser receives a private HttpOnly
+session automatically, so there is no token to copy. The service listens only
+on 127.0.0.1. Stop with Ctrl+C; SQLite projects are retained in the user's
+FusionLab workspace. If the port is occupied use `fusionlab serve --open --port 0`.
+This is local single-user authentication, **not a public hosted login system**.
+
+For builders, use exact Node/pnpm versions below, but no Rust:
+
+```text
+python -B scripts/build_web.py --output build/web-new
+```
+
+Use a new output directory. This produces a Web/CLI wheel with built assets;
+it does not download scientific predictors. On Windows install the existing
+root requirements. Linux x86_64 uses CPython 3.12.14 and the separate
+`requirements/web-linux-py312.lock`, checked against an actual Linux runtime:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -B scripts/install_locked.py --profile web-linux
+.venv/bin/python -m pip install --no-deps build/web-new/igem_drylab_2026-0.1.0-py3-none-any.whl
+.venv/bin/fusionlab serve --open
+```
+
+Source installation alone does not contain a prebuilt page. For Linux Docker,
+`docker compose -f compose.web.yaml up --build` builds pinned base images and
+dependencies; open `http://127.0.0.1:8780`. Stop with Ctrl+C; the named data
+volume is retained. This route uses Linux host networking, **not Windows Docker
+port publishing**. Container build/clean-machine acceptance remains pending;
+no published/prebuilt image is claimed.
+
+CLI and Web share the same SQLite project/revision, approvals and engine:
+
+```text
+fusionlab project create --name Study
+fusionlab import examples/public_gfp/P42212.fasta --project <project-id>
+fusionlab plan --project <project-id> --method sequence-properties
+fusionlab workflow inspect <plan-id>
+fusionlab workflow decide <plan-id> --accept
+fusionlab workflow run <plan-id>
+fusionlab jobs watch <run-id>
+fusionlab results export <run-id> --format csv,json --output outputs/my-new-run
+```
+
+Use `fusionlab --json ...` for automation and `fusionlab --data-dir <workspace>
+...` to choose another durable workspace. Return codes are 0 for completion,
+2 for missing/invalid inputs or approval, and 3 for run failure/interruption.
+`check-inputs --project <id> --through M2` and method `galatea-m1-m2` use the
+existing scientific contracts; incomplete or unlicensed tools are not replaced
+with example outputs. Public GFP descriptors are not formal M1–M4 validation.
+See the [review acceptance ledger](docs/web_cli_review_20261011.md) for remaining
+requirements rather than treating this new entry point as full review completion.
+
 ## Start the desktop
 
 Obtain a verified Windows portable release from the team's distribution.
@@ -157,16 +221,14 @@ git clone --branch develop https://gitlab.igem.org/2026/software/tsinghua-t/gala
 cd galatea
 python -m venv .venv
 .venv/Scripts/python.exe -B scripts/install_locked.py
-.venv/Scripts/python.exe -m igem_drylab.cli software serve --port 8780
+.venv/Scripts/python.exe -B scripts/build_web.py --output build/web-new
+.venv/Scripts/python.exe -m pip install --no-deps build/web-new/igem_drylab_2026-0.1.0-py3-none-any.whl
+.venv/Scripts/fusionlab.exe serve --open
 ```
 
-For the browser frontend, in a second terminal:
-
-```powershell
-cd software/dashboard
-pnpm install --frozen-lockfile
-pnpm dev --host 127.0.0.1
-```
+The built browser route needs no second Vite terminal. Advanced frontend
+development uses the explicit local development API/proxy, not a public default
+token; the normal browser entry above remains authenticated.
 
 Build a portable release from a clean committed checkout at the root:
 

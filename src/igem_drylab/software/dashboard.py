@@ -108,7 +108,8 @@ class DashboardRuns:
 
 
 def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = None, session_token: str | None = None,
-               deployment_mode: Literal["authenticated", "development"] = "authenticated", discover_tools: bool = True, planning_backend=None, workflow_tools=None, runtime_tools=None) -> FastAPI:
+               deployment_mode: Literal["authenticated", "development"] = "authenticated", discover_tools: bool = True, planning_backend=None, workflow_tools=None, runtime_tools=None,
+               frontend_dir: Path | None = None,local_web_origin: str | None = None) -> FastAPI:
     """Build the durable platform API and retain deprecated legacy routes."""
     if deployment_mode == "authenticated" and not session_token:
         raise ValueError("authenticated_deployment_requires_private_session_token")
@@ -123,6 +124,7 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
     router = platform_router(data_dir or Path("outputs/platform"), discover_tools=discover_tools,planning_backend=planning_backend,workflow_tools=workflow_tools,runtime_tools=runtime_tools)
     app.include_router(router)
     app.state.platform_store, app.state.workflow_engine, app.state.disclosure = router.store, router.engine, router.disclosure
+    app.state.application=router.application
     if session_token:
         router.disclosure.register_private(session_token)
 
@@ -156,7 +158,7 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
     def invalid_contract(request: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": router.disclosure.diagnostic(exc, code="invalid_contract")})
     from .session import configure_session
-    configure_session(app, session_token)
+    configure_session(app, session_token,local_web_origin=local_web_origin)
 
     @app.get("/api/dashboard/dag", response_model=list[DashboardModule], deprecated=True)
     def get_dag() -> list[DashboardModule]:
@@ -188,6 +190,9 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
             raise HTTPException(status_code=404, detail={"code": "unknown_run", "message": f"Unknown run: {run_id}"})
         return run
 
+    if frontend_dir is not None:
+        from .web import mount_frontend
+        mount_frontend(app,frontend_dir)
     return app
 
 
@@ -220,6 +225,10 @@ def serve(*, host: str, port: int, data_dir: Path | None = None, development: bo
     except ImportError as exc:
         raise RuntimeError("Dashboard requires the optional dependency group: pip install -e '.[software]'") from exc
     import os
+    if not development and not os.environ.get(token_env) and host in {'127.0.0.1','localhost'}:
+        from .web import serve_local
+        serve_local(data_dir=data_dir,port=port)
+        return
     if development and host not in {"127.0.0.1", "::1"}:
         raise ValueError("anonymous_development_must_bind_loopback")
     token = None if development else os.environ.get(token_env)

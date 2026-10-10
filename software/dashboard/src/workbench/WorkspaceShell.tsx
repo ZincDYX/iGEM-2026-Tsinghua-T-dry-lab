@@ -92,7 +92,7 @@ function Tabs({
       }}
     >
       {values.map((tab) => (
-        <span key={tab.id}>
+        <span key={tab.id} className={`workbench-tab ${selected===tab.id?'selected':''}`}>
         <button
           role="tab"
           key={tab.id}

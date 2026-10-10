@@ -22,7 +22,7 @@ vi.mock("./api", () => ({
   requestJson: vi.fn(async (path: string) => {
     // Navigation-only stub. Real schema/setup validation is covered via HTTP
     // and the production browser, not this empty-project App fixture.
-    if (path === "/scientific-projects/form-schema")
+    if (path.split("?")[0] === "/scientific-projects/form-schema")
       return { $defs: {}, properties: {} };
     throw Error("Unexpected App fixture request: " + path);
   }),

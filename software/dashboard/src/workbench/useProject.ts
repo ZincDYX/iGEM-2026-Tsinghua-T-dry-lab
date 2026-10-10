@@ -9,11 +9,13 @@ type State = {
   loading: boolean;
 };
 type Action =
+  | { type: "blank" }
   | { type: "load"; value?: ProjectView }
   | { type: "edit"; value: ProjectView }
   | { type: "saved"; value: ProjectView; unchanged: boolean }
   | { type: "loading" };
 function reducer(state: State, action: Action): State {
+  if (action.type==='blank') return {draft:newProject(),dirty:false,loading:false};
   if (action.type === "loading") return { dirty: false, loading: true };
   if (action.type === "load")
     return {
@@ -104,6 +106,7 @@ export function useProject(fail: (reason: unknown) => void) {
             (row) => row.id === localStorage.getItem("fusionlab.project"),
           ) ?? values[0];
         if (selected && generation.current === stamp) void choose(selected.id);
+        else if (!selected && generation.current === stamp) dispatch({type:'blank'});
       })
       .catch((reason) => {
         if (!controller.signal.aborted) fail(reason);
