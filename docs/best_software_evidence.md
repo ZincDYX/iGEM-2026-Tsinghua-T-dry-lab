@@ -30,8 +30,12 @@ Local validation: all 51 installed runtime versions and closure match the lock;
 14 release-lock/size/packaging/inventory software tests passed. This is an installed
 environment check, not an independent-user installation study. The locked Windows
 source build passed for mirror commit `6818798` in [run 38050926720](https://github.com/ZincDYX/iGEM-2026-Tsinghua-T-dry-lab/actions/runs/38050926720), using the shared build entry and producing the portable artifact.
-Official GitLab pipeline 746585 was pending at the latest check; no official CI
-pass is claimed. Existing floating compatibility tests remain
+The later GenBank source freeze `5aac3ba` also passed the [same locked Windows entry](https://github.com/ZincDYX/iGEM-2026-Tsinghua-T-dry-lab/actions/runs/38052245982)
+and [compatibility regression](https://github.com/ZincDYX/iGEM-2026-Tsinghua-T-dry-lab/actions/runs/38052246040).
+Official GitLab pipeline 746607 was pending at the latest check: shared runners
+are disabled and the job has no assigned runner; runner-list access returns 403,
+so availability of dedicated/group runners is unknown. No official CI pass is
+claimed. Existing floating compatibility tests remain
 separate and do not establish exact release reproducibility. Historical Python
 3.10/SciPy 1.10.1 records are not current runtime install instructions.
 
@@ -40,10 +44,12 @@ worker-start timeouts and is not a pass; rerunning with two workers passed all
 58 tests in 22 files; the later GenBank batch passed 59 tests. No assertions were removed or relaxed. Locked Windows CI
 uses that explicit worker budget. This is not a whole-app performance benchmark.
 
-Last previously verified desktop: commit `640bf75`, built native local window,
-embedded production assets, authenticated owned backend/MCP, saved-state restart
-and process cleanup passed. It predates this licensing/release batch; do not
-mistake its successful launch for validation of this new build entry.
+Verified desktop source freeze: `5aac3ba`, native embedded production assets,
+authenticated owned backend/MCP, actual GenBank import/browse/original export,
+saved-state restart and normal-close process cleanup passed. The test did not
+mock the desktop bridge or execute scientific models. Portable ZIP about 90.15 MB,
+unpacked content about 240.34 MB; this is not a signed installer. Documentation
+updates after this freeze do not constitute a new binary/scientific validation.
 
 ## Real cases and external tools
 
