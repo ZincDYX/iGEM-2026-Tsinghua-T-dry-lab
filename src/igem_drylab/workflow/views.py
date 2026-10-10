@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from pydantic import Field
 
 from .disclosure import ArtifactView
 from .models import Contract, WorkflowError, Workflow
@@ -55,6 +56,7 @@ class RunSummaryView(Contract):
     tools: dict[str, Any]
     nodes: list[NodeStateView]
     artifacts: list[ArtifactView]
+    scientific_assessment: dict[str,str] = Field(default_factory=dict)
 
 
 class PublicReads:
@@ -103,9 +105,30 @@ class PublicReads:
                         FROM nodes,json_each(nodes.output,'$.records') WHERE run_id=? AND nodes.id=?
                         GROUP BY json_extract(value,'$.status')""", (run_id,node["id"])).fetchall()
                     scientific = ScientificStageSummary(module=node["module"], claim_scope=node["claim_scope"], status_counts={str(r["status"]):r["count"] for r in statuses}, **dict(counts)).model_dump(mode="json")
+                elif node['output_schema']=='synthetic-ps-v3-run-v1' and definition.get('tool_id')=='synthetic.ps_v3':
+                    counts=db.execute("""SELECT COUNT(*) AS n,
+                        COALESCE(SUM(json_extract(value,'$.m4.result.status')='numerically_solved'
+                            AND json_extract(value,'$.m4.result.numerical_admission.conservation_valid')=1),0) AS solved
+                        FROM nodes,json_each(nodes.output,'$.cases') WHERE run_id=? AND nodes.id=?""",(run_id,node['id'])).fetchone()
+                    gaps=db.execute("SELECT COALESCE(json_array_length(output,'$.E3.missing_inputs'),0) FROM nodes WHERE run_id=? AND id=?",(run_id,node['id'])).fetchone()[0]
+                    scientific=ScientificStageSummary(module='synthetic_m3_m4',record_count=counts['n']+1,
+                        status_counts={'recorded_synthetic_scenarios':counts['n'],'blocked_E3':1},
+                        numerically_solved_count=counts['solved'],evidence_ready_count=0,
+                        missing_input_count=gaps,claim_scope=node['claim_scope']).model_dump(mode='json')
                 result["nodes"].append({**{k:node[k] for k in ("id","parent_id","status","attempts")},"tool_id":definition.get("tool_id"),"label":definition.get("label",node["id"]), "scientific_summary":scientific})
             result["artifacts"] = [{**dict(row),"upstream":json.loads(row["upstream"]),"metadata":json.loads(row["metadata"]),"name":"result.json"}
                 for row in db.execute("SELECT id,run_id,node_id,hash,upstream,metadata FROM artifacts WHERE run_id=?",(run_id,))]
+        summaries=[node['scientific_summary'] for node in result['nodes'] if node['scientific_summary'] is not None]
+        count=sum(s['record_count'] for s in summaries)
+        numeric=sum(s['numerically_solved_count'] for s in summaries)
+        evidence=sum(s['evidence_ready_count'] for s in summaries)
+        missing=sum(s['missing_input_count'] for s in summaries)
+        result['scientific_assessment']={
+            'numerical_state':'all_recorded_solved' if count and numeric==count else 'partial_or_blocked' if count else 'not_recorded',
+            'evidence_state':'all_recorded_ready' if count and evidence==count and not missing else 'partial_or_blocked' if count else 'not_recorded',
+            # No verified independent experimental-validation contract is connected
+            # yet. Job success and parameter approval cannot establish this state.
+            'experimental_validation':'not_established'}
         result = RunSummaryView.model_validate(result).model_dump(mode="json")
         self.boundary.check(result)
         return result

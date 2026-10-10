@@ -326,6 +326,13 @@ export function WorkspaceShell() {
       ),
     );
   }
+  async function proposeMethod(method:'ps-v3-demo') {
+    await action(()=>planController.guarded(project.generation,project.save,
+      saved=>client.planMethod((saved as import('../contracts/generated').ProjectView).id,method),
+      value=>{setProposal(value);setTab('plan');setInspector('agent');setInspectorOpen(true);
+        setSelection(value.workflow?{kind:'proposal-node',proposalId:value.id,nodeId:value.workflow.nodes[0].id}:undefined);}
+    ));
+  }
   async function decide(decision: "accept" | "reject") {
     if (!proposal) return;
     const stamp = planGeneration.current;
@@ -866,6 +873,7 @@ export function WorkspaceShell() {
                 onLocate={openInput}
                 inputTarget={inputTarget}
                 onOpenResource={openResource}
+                onPlanMethod={method=>void proposeMethod(method)}
               />
             </div>
           ) : tab === "inputs" ? (

@@ -58,7 +58,7 @@ class StructureResource(DisplayResource):
 
 class SeriesResource(DisplayResource):
     kind: Literal["series"] = "series"
-    result_schema_version: Literal["m4-prediction-v2", "display-series-source-v1"] = "m4-prediction-v2"
+    result_schema_version: Literal["m4-prediction-v2", "display-series-source-v1", "m4-compartment-amount-v1"] = "m4-prediction-v2"
     role: Literal["prediction_contract", "declared_source_series"] = "prediction_contract"
 
 
@@ -113,6 +113,10 @@ class SeriesPage(Contract):
     time: list[float]
     series: list[SeriesDescriptor]
     values: dict[str, list[float | None]]
+    claim_scope: str | None = None
+    source_type: str | None = None
+    formal_prediction_allowed: bool | None = None
+    pool_volumes: dict[str,dict] = Field(default_factory=dict)
 
 
 class ResidueIdentity(Contract):
@@ -324,7 +328,11 @@ class DisplayResources:
             elif extension in {".pdb", ".cif", ".mmcif", ".bcif"}:
                 items.append(StructureResource(**common, format="pdb" if extension == ".pdb" else "mmcif"))
             elif extension == ".json":
-                if isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
+                from .compartment_display import unwrap_recorded_result
+                compartment,_=unwrap_recorded_result(data)
+                if compartment is not None:
+                    items.append(SeriesResource(**common,result_schema_version='m4-compartment-amount-v1'))
+                elif isinstance(data, dict) and isinstance(data.get("prediction_contract"), dict) and data["prediction_contract"].get("schema_version") == "m4-prediction-v2":
                     items.append(SeriesResource(**common))
                 elif isinstance(data, dict) and data.get("schema_version") == "display-series-source-v1":
                     items.append(SeriesResource(**common, result_schema_version="display-series-source-v1", role="declared_source_series"))
@@ -366,6 +374,8 @@ class DisplayResources:
                 "m5-comparison-series-v1": "m5"}.get(schema, "table")
         if isinstance(prediction, dict) and prediction.get("schema_version") == "m4-prediction-v2":
             kind = "series"
+        from .compartment_display import unwrap_recorded_result
+        if unwrap_recorded_result(data)[0] is not None: kind='series'
         with self.store.connection() as db:
             db.execute("INSERT OR REPLACE INTO display_resource_kinds VALUES(?,?,?)",
                 (row["id"], identity.source_sha256, kind))
@@ -414,7 +424,10 @@ class DisplayResources:
                 contract = read_columns(target_path, declaration)
             else:
                 contract = data.get("prediction_contract") if isinstance(data, dict) else None
-            if not isinstance(contract, dict) or contract.get("schema_version") not in {"m4-prediction-v2", "display-series-source-v1"}:
+                from .compartment_display import compartment_series
+                compartment=compartment_series(data)
+                if compartment is not None: contract=compartment
+            if not isinstance(contract, dict) or contract.get("schema_version") not in {"m4-prediction-v2", "display-series-source-v1", "m4-compartment-amount-v1"}:
                 raise WorkflowError("unsupported_trajectory_contract")
             time = contract.get("time")
             concentrations = contract.get("concentrations")
@@ -435,11 +448,16 @@ class DisplayResources:
                     identifier = str(len(columns))
                     columns[identifier] = values
                     declared_column = next((c for c in declaration.columns if c.key == name and c.compartment == compartment), None) if declaration else None
-                    descriptors.append(SeriesDescriptor(id=identifier, compartment=compartment, species=declared_column.species if declared_column else name, unit=declared_column.unit if declared_column else contract["concentration_unit"]).model_dump())
+                    unit=declared_column.unit if declared_column else contract['column_units'][compartment][name] if 'column_units' in contract else contract['concentration_unit']
+                    descriptors.append(SeriesDescriptor(id=identifier, compartment=compartment, species=declared_column.species if declared_column else name, unit=unit).model_dump())
             if len(columns) > MAX_SERIES:
                 raise WorkflowError("display_source_budget_exceeded")
             meta = {key: contract[key] for key in ("schema_version", "model_kind", "formula_version", "time_unit")}
             meta.update(total=len(time), series=descriptors, declaration=declaration.model_dump(mode="json") if declaration else None)
+            from .compartment_display import unwrap_recorded_result
+            inherited=unwrap_recorded_result(data)[1] if data is not None else {}
+            meta.update({key:contract.get(key,inherited.get(key)) for key in ('claim_scope','source_type','formal_prediction_allowed')})
+            meta['pool_volumes']=contract.get('pool_volumes',{})
             self.boundary.check(meta)
             with self.store.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -458,6 +476,7 @@ class DisplayResources:
             points = db.execute("SELECT time,values_json FROM display_series_points WHERE file_id=? AND hash=? AND schema=? AND ordinal>=? ORDER BY ordinal LIMIT ?", (*key, offset, limit)).fetchall()
         values = [json.loads(p[1]) for p in points]
         result = SeriesPage(identity=identity, result_schema_version=meta["schema_version"], model_kind=meta["model_kind"], formula_version=meta["formula_version"], time_unit=meta["time_unit"], data_source_sha256=data_sha, source_reference=declaration.source_reference if declaration else None, offset=offset, total=meta["total"], has_more=offset + len(points) < meta["total"], time=[p[0] for p in points], series=selected, values={s["id"]: [p[s["id"]] for p in values] for s in selected}).model_dump(mode="json")
+        result.update({key:meta.get(key) for key in ('claim_scope','source_type','formal_prediction_allowed')},pool_volumes=meta.get('pool_volumes',{}))
         self.boundary.check(result)
         return result
 

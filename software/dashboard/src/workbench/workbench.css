@@ -6,6 +6,9 @@
   font-size: 13px;
   line-height: 1.5;
 }
+.run-assessment {display:grid;grid-template-columns:max-content 1fr;gap:4px 16px}
+.run-assessment dd {margin:0}
+.scope-warning {border-left:3px solid var(--accent);padding-left:10px}
 * {
   box-sizing: border-box;
 }

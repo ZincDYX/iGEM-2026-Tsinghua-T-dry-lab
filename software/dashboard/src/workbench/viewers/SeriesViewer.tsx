@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { requestJson } from "../../api";
+import { requestJson,downloadResource } from "../../api";
 import { parsePublic } from "../../contracts/validation";
 import type { SeriesPage } from "../../contracts/generated";
 import { displayEnvelope } from "./displayEnvelope";
@@ -132,6 +132,11 @@ export function SeriesViewer({
   return (
     <section>
       {error && <p role="alert">{error}</p>}
+      {page.source_type==='synthetic'&&<p className="scope-warning"><strong>Synthetic demo.</strong> Not a project prediction or experimental validation.</p>}
+      {Object.keys(page.pool_volumes).length>0&&<details><summary>Actual pool volumes</summary>
+        {Object.entries(page.pool_volumes).map(([id,pool])=><p key={id}>{id}: {String(pool.volume_L)} L ({String(pool.role)}). Amount divided by this pool's volume gives its concentration.</p>)}
+      </details>}
+      <button onClick={()=>void downloadResource(`/files/${encodeURIComponent(fileId)}/series.csv?project_id=${encodeURIComponent(projectId)}`,'recorded-series.csv').catch(()=>setError('Recorded CSV export unavailable.'))}>Export exact recorded CSV</button>
       <details>
         <summary>Series provenance</summary>
         <p>

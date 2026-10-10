@@ -63,6 +63,10 @@ def pathway_analysis(payload: PathwayInput, context: NodeContext) -> dict[str, A
 
 def builtin_tools() -> WorkflowTools:
     tools = WorkflowTools()
+    from .synthetic_ps import SyntheticPSInput,run_ps_tool
+    tools.register(ToolDefinition('synthetic.ps_v3','PS-v3 synthetic demonstration','Recompute canonical synthetic inputs with the original M3 and amount-model kernels. Not formal prediction or validation.',
+        '1',SyntheticPSInput,run_ps_tool,'synthetic_demonstration',implementation_files=(Path(__file__).with_name('synthetic_ps.py'),
+        Path(__file__).parents[1]/'m3_equilibrium.py',Path(__file__).parents[1]/'m4_compartments.py')))
     for tool in (
         ToolDefinition("fusion.sequence_metrics", "Fusion sequence statistics", "Compute recorded sequence composition/features and ProtParam statistics.", "2", SequenceInput, sequence_analysis, "sequence_analysis", implementation_files=(Path(linker_features.__file__),)),
         ToolDefinition("assembly.inventory", "Assembly inventory", "Check declared subunit references and inventory molecular weights.", "1", AssemblyInput, assembly_inventory, "assembly_inventory"),

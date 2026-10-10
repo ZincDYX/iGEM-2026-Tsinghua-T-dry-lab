@@ -150,7 +150,7 @@ export const uploadScientific = (
 export const importFile = async (file: File, inputKind: string) => {
   if (file.size > 20_000_000)
     throw new Error("Import exceeds the 20 MB source budget.");
-  if (/\.(png|jpe?g|pdb|cif|mmcif|bcif)$/i.test(file.name))
+  if (/\.(png|jpe?g|pdb|cif|mmcif|bcif|zip)$/i.test(file.name))
     return parsePublic(
       "ImportView",
       await (
@@ -172,6 +172,8 @@ export const bindMeasurement = (id: string, revision: number, fileId: string) =>
     expected_revision: revision,
     file_id: fileId,
   });
+export const planMethod=(projectId:string,method:'sequence-properties'|'galatea-m1-m2'|'ps-v3-demo')=>
+  read('ProposalView','/method-plans',{project_id:projectId,method});
 export const linkStructureAnnotations = (value: {
   project_id: string;
   expected_revision: number;

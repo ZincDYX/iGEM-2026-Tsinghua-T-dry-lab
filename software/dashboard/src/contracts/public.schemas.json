@@ -2510,7 +2510,8 @@
             "default": "m4-prediction-v2",
             "enum": [
               "m4-prediction-v2",
-              "display-series-source-v1"
+              "display-series-source-v1",
+              "m4-compartment-amount-v1"
             ],
             "title": "Result Schema Version",
             "type": "string"
@@ -3041,6 +3042,50 @@
         },
         "title": "Values",
         "type": "object"
+      },
+      "claim_scope": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Claim Scope"
+      },
+      "source_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Source Type"
+      },
+      "formal_prediction_allowed": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Formal Prediction Allowed"
+      },
+      "pool_volumes": {
+        "additionalProperties": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Pool Volumes",
+        "type": "object"
       }
     },
     "required": [
@@ -3058,7 +3103,11 @@
       "display_policy",
       "time",
       "series",
-      "values"
+      "values",
+      "claim_scope",
+      "source_type",
+      "formal_prediction_allowed",
+      "pool_volumes"
     ],
     "title": "SeriesPage",
     "type": "object"
@@ -9619,6 +9668,13 @@
         },
         "title": "Artifacts",
         "type": "array"
+      },
+      "scientific_assessment": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Scientific Assessment",
+        "type": "object"
       }
     },
     "required": [
@@ -9637,7 +9693,8 @@
       "workflow",
       "tools",
       "nodes",
-      "artifacts"
+      "artifacts",
+      "scientific_assessment"
     ],
     "title": "RunSummaryView",
     "type": "object"

@@ -9,7 +9,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import Field
 
 from igem_drylab.workflow.builtins import Goal, recommend
@@ -62,6 +62,11 @@ class PlanRequest(Contract):
     project_id: str
     goal: Goal
     objective: str = ""
+
+
+class MethodPlanRequest(Contract):
+    project_id: str
+    method: Literal['sequence-properties','galatea-m1-m2','ps-v3-demo']
 
 
 class RunRequest(Contract):
@@ -141,6 +146,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.post("/proposals")
     def propose(request: ProposalRequest):
         return application.propose(request)
+
+    @router.post('/method-plans')
+    def method_plan(request: MethodPlanRequest):
+        return application.plan(request.project_id,request.method)
 
     @router.get("/proposals/{proposal_id}")
     def proposal(proposal_id: str):
@@ -340,6 +349,13 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def display_series(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=100_000), series_id: list[str] | None = Query(None)):
         return resources.series(project_id, file_id, offset, limit, series_id)
 
+    @router.get('/files/{file_id}/series.csv')
+    def export_series(file_id: str,project_id: str):
+        from igem_drylab.workflow.series_export import series_csv
+        resources.series(project_id,file_id,0,1)  # Verify identity/format before sending headers.
+        return StreamingResponse(series_csv(resources,project_id,file_id),media_type='text/csv',
+            headers={'Content-Disposition':'attachment; filename="recorded-series.csv"','Cache-Control':'no-store'})
+
     @router.get("/files/{file_id}/table")
     def display_table(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=1000)):
         from igem_drylab.workflow.table_display import table_page
@@ -395,13 +411,16 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.post("/imports/display-file")
     async def display_import(request: Request, filename: str):
         extension = Path(filename).suffix.lower()
-        if extension not in {".png", ".jpg", ".jpeg", ".pdb", ".cif", ".mmcif", ".bcif"}:
+        if extension not in {".png", ".jpg", ".jpeg", ".pdb", ".cif", ".mmcif", ".bcif", ".zip"}:
             raise WorkflowError("unsupported_display_import")
         raw = bytearray()
         async for chunk in request.stream():
             if len(raw) + len(chunk) > 20_000_000:
                 raise WorkflowError("display_source_budget_exceeded", status_code=413)
             raw.extend(chunk)
+        if extension=='.zip':
+            from igem_drylab.workflow.synthetic_ps import preview_ps_archive
+            return preview_ps_archive(application,filename,bytes(raw))
         from igem_drylab.workflow.disclosure import check_import_content
         check_import_content(filename, bytes(raw))
         boundary.check_bytes(bytes(raw))
@@ -534,6 +553,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             raise WorkflowError("file_project_mismatch",status_code=403)
         path = Path(boundary.resolve_asset(file_id,project_id))
         page = resources.series(project_id, file_id, offset, limit)
+        if page['result_schema_version']=='m4-compartment-amount-v1':
+            return page  # Typed units per column; never flatten amounts into cytosol concentration.
         concentrations = {}
         for descriptor in page["series"]:
             concentrations.setdefault(descriptor["compartment"], {})[descriptor["species"]] = page["values"][descriptor["id"]]

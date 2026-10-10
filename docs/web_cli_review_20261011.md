@@ -87,6 +87,52 @@ Implementation sources: [Starlette cookie responses](https://starlette.dev/respo
 and [Docker image pinning/build guidance](https://docs.docker.com/build/building/best-practices/).
 No screenshot/test result substitutes for the remaining review criteria.
 
+## Batch 4 (partial) and independent PS-v3 integration
+
+Amount-model output now records each actual pool volume and its original typed
+source. A single typed projection checks amount/concentration against those
+volumes and the declared numerical tolerance; tables, plots and CSV use this
+same recorded projection. Missing data remain missing. Outer synthetic flags
+survive nested valid results. Conditional real data are not relabelled synthetic.
+No biological equation or parameter was changed for display.
+
+Run summaries distinguish job state, recorded numerical checks, evidence state
+and experimental validation. PS-v3 explicitly includes blocked E3 alongside
+the four solved demonstration scenarios. No experiment is claimed validated.
+
+The corrected external package is not redistributed in Git. Only canonical
+parameters and solver-input templates are read: uploaded scripts, archived
+material and reference outputs are not executed or treated as new results.
+The existing approved WorkflowEngine runs the original M3 and competitive
+amount-model M4 kernels. The formal evidence path rejects synthetic input,
+including synthetic outer wrappers containing an inner valid result.
+
+Actual compute-server evidence:
+
+- Corrected C1/C2/E1/E2 endpoints (µmol, 240 h): 2380.9388642547897,
+  2937.4999999999973, 2838.2776234100697, 2937.4999999999995.
+- Independent rounded endpoint oracles and canonical-only perturbation: two
+  real-kernel tests passed. Conservation and M3 mass recovery, idempotent run,
+  pool-aware display and original-precision CSV were checked by the runner.
+- Scientific admission/ER and format suite: 34 passed. This is not the full
+  author/scientific regression suite.
+- The first engine run rejected absolute artifact paths at the disclosure
+  boundary. Native synthetic outputs now use the existing registered-asset
+  projection, not a weakened disclosure check; the rerun succeeded.
+- Actual browser import → proposal → explicit accept → server computation →
+  E1 M3 table/Plotly time course → CSV passed in 9.7 s. The first browser attempt
+  computed successfully but used a nonexistent Results button; corrected the
+  test to the actual result navigation. Screenshot/video were recorded.
+- Local software boundary/execution suite: 56 passed; subsequent projection,
+  archive and display checks: 29 passed. Frontend: 61 tests and production build
+  passed. These do not establish real WebGL/20-cycle or novice-user acceptance.
+
+`scripts/reproduce_ps_v3.py` refuses an existing output directory and retains
+the synthetic scope in JSON/CSV. Use the compute deployment, not a workstation
+where scientific regression is prohibited. E3 and all formal experimental
+claims remain blocked. General typed import transactions and the remaining
+Results/structure acceptance requirements are still pending.
+
 ## Remaining review acceptance tasks
 
 | ID | Required outcome | Current status |
@@ -100,15 +146,15 @@ No screenshot/test result substitutes for the remaining review criteria.
 | WF-01 | Graph/List editing of one workflow revision | Pending |
 | WF-02 | Versioned full method formulas, tools and parameter records | Pending |
 | WF-03 | Save/review/run and controls only in Workflow | Pending |
-| RES-01 / SCI-06 | Grouped results, independent job/numeric/evidence/validation status | Pending |
-| RES-02 / SCI-07 | Pool-aware ER tables/curves and actual viewer acceptance | Pending |
+| RES-01 / SCI-06 | Grouped results, independent job/numeric/evidence/validation status | Four-state summary and synthetic tables verified; general module grouping pending |
+| RES-02 / SCI-07 | Pool-aware ER tables/curves and actual viewer acceptance | Typed actual-volume projection and CSV verified; real structure/WebGL/lifecycle acceptance pending |
 | AG-01 / AG-02 | Persistent conversational proposals/diffs/decisions using existing engine | Pending |
 | AG-03 | Tools, plugins and skills with real capability tests | Pending |
 | AG-04 | Model settings, write-only secrets, local/hosted endpoint boundaries | Pending |
 | JOB-01 | Structured Jobs/Output/Problems and mode-safe terminal | Pending |
 | UI-01 / UI-02 / UI-03 | Single menu, inline tabs, contextual tree and English messages | Pending |
 | PERF-01 | Measured baseline, schema split, viewer/resource lifecycle | Pending |
-| Synthetic PS-v3 | Original corrected package, separate runner and inherited scope | Original corrected ZIP found and inspected; independent integration/runner pending |
+| Synthetic PS-v3 | Original corrected package, separate runner and inherited scope | Original kernels, independent endpoints, canonical perturbation and browser/server chain verified; separate synthetic scope, E3 blocked |
 | Publication | Final designated repository, Wiki, Village and award registration | Owner confirmation required; no relocation/registration mutation |
 | Validation | Real independent experiment, real transfer case, five novice-user sessions | Requires corresponding data/people; software fixtures are not substitutes |
 

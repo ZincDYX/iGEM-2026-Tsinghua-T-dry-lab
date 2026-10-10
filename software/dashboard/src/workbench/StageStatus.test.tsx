@@ -27,6 +27,7 @@ it("keeps job completion separate from missing evidence and revision-bound prech
     ],
   };
   const run: RunSummaryView = {
+    scientific_assessment:{numerical_state:'partial_or_blocked',evidence_state:'partial_or_blocked',experimental_validation:'not_established'},
     id: "run",
     name: "Recorded software run",
     project_id: "p",

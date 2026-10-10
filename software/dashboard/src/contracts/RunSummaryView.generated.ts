@@ -84,6 +84,7 @@ export interface RunSummaryView {
   tools: Tools;
   nodes: Nodes1;
   artifacts: Artifacts;
+  scientific_assessment: ScientificAssessment;
 }
 export interface Workflow {
   id: Id1;
@@ -177,4 +178,7 @@ export interface ArtifactView {
 }
 export interface Metadata {
   [k: string]: unknown;
+}
+export interface ScientificAssessment {
+  [k: string]: string;
 }

@@ -39,6 +39,7 @@ export function InputEditor({
   onLocate,
   onOpenResource,
   inputTarget,
+  onPlanMethod,
 }: {
   project: ProjectView;
   busy: boolean;
@@ -52,6 +53,7 @@ export function InputEditor({
   onLocate: (issue: InputIssue) => void;
   onOpenResource: (fileId: string) => void;
   inputTarget?: InputIssue;
+  onPlanMethod?: (method:'ps-v3-demo')=>void;
 }) {
   const [kind, setKind] = useState("auto");
   const [preview, setPreview] = useState<ImportView>();
@@ -140,7 +142,7 @@ export function InputEditor({
           <input
             aria-label="Import data file"
             type="file"
-            accept=".fasta,.fa,.faa,.gb,.gbk,.genbank,.json,.csv,.tsv,.png,.jpg,.jpeg,.pdb,.cif,.mmcif,.bcif"
+            accept=".fasta,.fa,.faa,.gb,.gbk,.genbank,.json,.csv,.tsv,.png,.jpg,.jpeg,.pdb,.cif,.mmcif,.bcif,.zip"
             disabled={busy}
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -161,6 +163,7 @@ export function InputEditor({
                 Preview: {preview.kind} · {preview.file.name}
               </p>
               {preview.kind === 'genbank_design' && <p>Original DNA, feature locations, directions and qualifiers will be retained. Missing CDS translations remain explicit gaps; no proteins are inferred from DNA.</p>}
+              {preview.kind==='synthetic_ps_v3'&&<p><strong>Synthetic demo.</strong> Four closed reference scenarios; not formal prediction, actual M2 geometry or experimental validation. Uploaded scripts are never executed.</p>}
               {incomingSequences.length > 0 ? (
                 <>
                   <p>
@@ -227,6 +230,11 @@ export function InputEditor({
           />
         </section>
         <GenBankDesigns project={project} dirty={dirty} action={action}/>
+        {project.datasets.some(row=>row.kind==='synthetic_ps_v3')&&<section>
+          <h3>Synthetic reference demonstration</h3>
+          <p>Original M3/competitive amount-model kernels recompute canonical inputs. E3 remains blocked; there is no fermentation or ER advantage claim.</p>
+          <button disabled={busy||editing} onClick={()=>onPlanMethod?.('ps-v3-demo')}>Review synthetic demonstration workflow</button>
+        </section>}
         <section id="input-conditions" className="input-section">
           {!scope && (
             <ScientificSetup

@@ -3,6 +3,7 @@ import { ScientificResults } from "../ScientificResults";
 import { downloadArtifact } from "../api";
 import { show } from "../contracts/resultAdapters";
 import { SequenceMapTable } from "./SequenceMapTable";
+import {RunAssessment} from './RunAssessment';
 
 export function SelectedResult({
   run,
@@ -39,6 +40,7 @@ export function SelectedResult({
   visit(data.node.output);
   return (
     <section>
+      <RunAssessment run={run}/>
       <p>
         {run.name} · Saved inputs {run.project_revision}
       </p>

@@ -13,6 +13,32 @@ MAX_BYTES = 20_000_000
 MAX_FILES = 256
 
 
+def validate_archive_members(infos):
+    """One byte/name policy shared by importers, including read-only previews."""
+    if len(infos) > MAX_FILES or sum(i.file_size for i in infos) > MAX_BYTES:
+        raise WorkflowError('scientific_upload_budget_exceeded', status_code=413)
+    names = set()
+    for item in infos:
+        name = item.orig_filename
+        mode = item.external_attr >> 16
+        parts = PurePosixPath(name).parts
+        if (not name or '\\' in name or PurePosixPath(name).is_absolute()
+            or PureWindowsPath(name).drive
+            or any(p in {'..', '.', ''} for p in name.rstrip('/').split('/'))
+            or stat.S_ISLNK(mode) or stat.S_IFMT(mode) not in {0, stat.S_IFREG, stat.S_IFDIR}
+            or item.flag_bits & 1):
+            raise WorkflowError('invalid_upload_identity')
+        if any(':' in p or '\x00' in p or p.endswith(('.', ' '))
+               or p.split('.', 1)[0].casefold() in {'con', 'prn', 'aux', 'nul',
+                   *(f'com{i}' for i in range(1, 10)), *(f'lpt{i}' for i in range(1, 10))}
+               for p in parts):
+            raise WorkflowError('invalid_upload_identity')
+        folded = name.rstrip('/').casefold()
+        if folded in names:
+            raise WorkflowError('invalid_upload_identity')
+        names.add(folded)
+
+
 async def receive_bundle(request, imports: Path, config_filename: str, publish):
     imports.mkdir(parents=True, exist_ok=True)
     if shutil.disk_usage(imports).free < MAX_BYTES * 3:
@@ -34,27 +60,14 @@ async def receive_bundle(request, imports: Path, config_filename: str, publish):
         hashes = {}
         try:
             with ZipFile(archive) as bundle:
-                names = set()
                 infos = bundle.infolist()
-                if len(infos) > MAX_FILES:
-                    raise WorkflowError("scientific_upload_budget_exceeded", status_code=413)
-                if sum(i.file_size for i in infos) > MAX_BYTES:
-                    raise WorkflowError("scientific_upload_budget_exceeded", status_code=413)
+                validate_archive_members(infos)
                 total = 0
                 for item in infos:
                     # ZipInfo normalizes platform separators on Windows;
                     # authorize the original central-directory name, not its repair.
                     name = item.orig_filename
-                    mode = item.external_attr >> 16
                     parts = PurePosixPath(name).parts
-                    if not name or "\\" in name or PurePosixPath(name).is_absolute() or PureWindowsPath(name).drive or any(p in {"..", ".", ""} for p in name.rstrip("/").split("/")) or stat.S_ISLNK(mode) or (stat.S_IFMT(mode) not in {0, stat.S_IFREG, stat.S_IFDIR}) or item.flag_bits & 1:
-                        raise WorkflowError("invalid_upload_identity")
-                    folded = name.rstrip("/").casefold()
-                    if any(":" in p or "\x00" in p or p.endswith((".", " ")) or p.split(".", 1)[0].casefold() in {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))} for p in parts):
-                        raise WorkflowError("invalid_upload_identity")
-                    if folded in names:
-                        raise WorkflowError("invalid_upload_identity")
-                    names.add(folded)
                     if item.is_dir():
                         continue
                     target = root.joinpath(*parts)

@@ -75,7 +75,12 @@ class ApplicationService:
     def import_files(self,project_id,paths,input_kind='auto'):
         public=self.boundary.project(self.store.project(project_id))
         revision=public['revision']
-        previews=[self.preview_import(path.name,path.read_text(encoding='utf-8'),input_kind) for path in paths]
+        previews=[]
+        for path in paths:
+            if path.suffix.lower()=='.zip':
+                from igem_drylab.workflow.synthetic_ps import preview_ps_archive
+                previews.append(preview_ps_archive(self,path.name,path.read_bytes()))
+            else: previews.append(self.preview_import(path.name,path.read_text(encoding='utf-8'),input_kind))
         for preview in previews:
             for incoming in preview['patch'].get('sequences',[]):
                 existing=next((row for row in public['sequences'] if row['id']==incoming['id']),None)
@@ -102,7 +107,15 @@ class ApplicationService:
 
     def plan(self,project_id,method):
         project=self.store.project(project_id)
-        if method=='sequence-properties': workflow=recommend(project,'fusion_screen')
+        if method=='ps-v3-demo':
+            from igem_drylab.workflow.models import WorkflowNode,ProjectInput
+            packages=[(index,file) for index,file in enumerate(project.files) if any(d.get('kind')=='synthetic_ps_v3' and d.get('file_id')==file['id'] for d in project.datasets)]
+            if len(packages)!=1: raise WorkflowError('select_one_synthetic_ps_package')
+            workflow=Workflow(id=str(uuid4()),name='PS-v3 synthetic demonstration',
+                description='Four closed reference scenarios; ideal unverified sites, no fermentation or ER advantage. E3 remains blocked.',
+                nodes=[WorkflowNode(id='synthetic-demo',label='Synthetic M3/M4 reference scenarios',tool_id='synthetic.ps_v3',
+                    inputs={'package_file':ProjectInput(path=['files',packages[0][0],'path'])})])
+        elif method=='sequence-properties': workflow=recommend(project,'fusion_screen')
         elif method=='galatea-m1-m2':
             workflow=recommend(project,'scientific_pipeline')
             selected={'m1','m2'}

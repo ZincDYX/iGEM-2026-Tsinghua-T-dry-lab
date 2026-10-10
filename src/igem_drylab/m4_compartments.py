@@ -313,7 +313,8 @@ def solve_compartment_network(payload: CompartmentNetworkInput) -> dict:
     invariant_limit = n.amount_absolute_tolerance_umol+n.relative_tolerance*max(float(initial.sum()),n.amount_absolute_tolerance_umol)
     conservation_valid = bool(np.all(np.abs(conservation) <= conservation_limit)
         and np.all(np.abs(invariant_residual) <= invariant_limit))
-    pools = {pool.pool_id:{"amounts_umol":{c:amounts[index[pool.pool_id,c]].tolist() for c in COMPOUNDS},
+    pools = {pool.pool_id:{"role":pool.role,"volume_L":pool.volume.value,"volume_source":pool.volume.model_dump(mode='json'),
+        "amounts_umol":{c:amounts[index[pool.pool_id,c]].tolist() for c in COMPOUNDS},
         "concentrations_um":{c:(amounts[index[pool.pool_id,c]]/pool.volume.value).tolist() for c in COMPOUNDS}} for pool in payload.pools}
     flux_rows = [evaluate(solved.y[:size,i]) for i in range(len(payload.time_grid_h))]
     steady = []

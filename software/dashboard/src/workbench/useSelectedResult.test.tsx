@@ -15,6 +15,7 @@ function run(
   projectId = "project-a",
 ): RunSummaryView {
   return {
+    scientific_assessment:{},
     id,
     name: "Recorded software run",
     project_id: projectId,

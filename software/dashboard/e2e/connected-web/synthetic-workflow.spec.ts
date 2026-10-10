@@ -1,0 +1,36 @@
+import {test,expect} from '@playwright/test';
+import fs from 'node:fs';
+
+test('corrected package imports, approved real kernels execute and synthetic scope reaches plot and CSV',async({page})=>{
+  const packagePath=process.env.FUSIONLAB_PS_V3_PACKAGE;
+  test.skip(!packagePath,'External corrected package absent: actual synthetic workflow not verified.');
+  const errors:string[]=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/');
+  await expect(page.getByRole('tab',{name:'Inputs',exact:true})).toHaveAttribute('aria-selected','true');
+  await page.getByText('File',{exact:true}).click();
+  await page.getByRole('menuitem',{name:'New project',exact:true}).click();
+  await page.getByLabel('Project name').fill('PS-v3 browser acceptance');
+  await page.getByLabel('Import data file').setInputFiles(packagePath!);
+  await expect(page.getByText('Synthetic demo.',{exact:true}).first()).toBeVisible();
+  await page.getByRole('button',{name:'Confirm import into draft',exact:true}).click();
+  await page.getByRole('button',{name:'Review synthetic demonstration workflow',exact:true}).click();
+  await expect(page.getByRole('tab',{name:'Workflow',exact:true})).toHaveAttribute('aria-selected','true');
+  await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
+  await page.getByRole('button',{name:'Start run',exact:true}).click();
+  await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible({timeout:60000});
+  await page.getByLabel('Project and run tree').getByRole('button',{name:'Synthetic M3/M4 reference scenarios',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Synthetic M3/M4 reference demonstration'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'E3: ER anchoring remains blocked'})).toBeVisible();
+  await page.getByLabel('Synthetic scenario').selectOption('E1');
+  await expect(page.getByText('Complete recorded range',{exact:false})).toBeVisible();
+  await expect(page.locator('.js-plotly-plot')).toBeVisible();
+  await expect(page.getByLabel('Independent run assessments')).toContainText('Not established');
+  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Export exact recorded CSV',exact:true}).click()]);
+  const csv=fs.readFileSync((await download.path())!,'utf8');
+  expect(csv).toContain('Synthetic demo; not experimental validation');
+  expect(csv).toContain('Compound 15 amount (umol)');
+  expect(csv.trim().split('\n').length).toBe(50);
+  expect(errors).toEqual([]);
+  await page.screenshot({path:'test-results/ps-v3-real-kernel-results.png',fullPage:false});
+});

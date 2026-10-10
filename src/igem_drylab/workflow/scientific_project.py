@@ -99,6 +99,10 @@ class ScientificProject(Contract):
             raise ValueError("scientific_project_has_unbound_input_files")
         for item in bound.values():
             item.verify(verified)
+            if self.config.execution.mode=='real' and self.config.execution.analysis_grade=='formal_measured' and item.path.suffix.lower() in {'.json','.yaml','.yml'}:
+                from .synthetic_ps import reject_synthetic_formal_input
+                import yaml
+                reject_synthetic_formal_input(yaml.safe_load(item.path.read_bytes()))
 
 
 def load_scientific_project(path: Path, *, allowed_roots: tuple[Path, ...] | None = None) -> ScientificProject:

@@ -27,6 +27,9 @@ export type Compartment = string;
 export type Species = string;
 export type Unit = string;
 export type Series = SeriesDescriptor[];
+export type ClaimScope = string | null;
+export type SourceType = string | null;
+export type FormalPredictionAllowed = boolean | null;
 
 export interface SeriesPage {
   schema_version: SchemaVersion;
@@ -44,6 +47,10 @@ export interface SeriesPage {
   time: Time;
   series: Series;
   values: Values;
+  claim_scope: ClaimScope;
+  source_type: SourceType;
+  formal_prediction_allowed: FormalPredictionAllowed;
+  pool_volumes: PoolVolumes;
 }
 export interface ResourceIdentity {
   project_id: ProjectId;
@@ -65,4 +72,9 @@ export interface SeriesDescriptor {
 }
 export interface Values {
   [k: string]: (number | null)[];
+}
+export interface PoolVolumes {
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
