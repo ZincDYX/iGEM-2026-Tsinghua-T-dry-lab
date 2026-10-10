@@ -1,4 +1,6 @@
 # Observed passing server reference environment, CPython 3.12.14.
+# Reference-task snapshot only, not the complete current software runtime.
+# ihm/msgpack and native desktop tools are intentionally outside this record.
 # Install this repository separately from its tested commit.
 # Exact versions; not a wheel-hash lock or supply-chain security certification.
 annotated-doc==0.0.5

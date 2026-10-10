@@ -1,0 +1,16 @@
+{
+  "accession": "P42212",
+  "protein": "Aequorea victoria green fluorescent protein",
+  "fasta_url": "https://rest.uniprot.org/uniprotkb/P42212.fasta",
+  "metadata_url": "https://rest.uniprot.org/uniprotkb/P42212.json",
+  "source_entry_version": 195,
+  "source_sequence_version": 1,
+  "source_last_sequence_update": "1995-11-01",
+  "retrieved_date": "2026-10-10",
+  "sequence_length": 238,
+  "source_sequence_md5": "F4AB4243622DDCC76E0B9B6D249B172A",
+  "primary_sequence_paper": "https://doi.org/10.1016/0378-1119(92)90691-H",
+  "license": "CC-BY-4.0, UniProt Consortium; not relicensed as Apache-2.0",
+  "license_url": "https://www.uniprot.org/help/license",
+  "scope": "Canonical real protein sequence properties only; not a fusion LLPS assay, formal M1 pass, or 1EMA coordinate mapping"
+}

@@ -1,0 +1,9 @@
+FusionLab
+Copyright 2026 FusionLab contributors.
+
+Project-authored source code is licensed under the Apache License, Version 2.0.
+Third-party software, upstream submodules, research data, model weights, and
+external services remain subject to their own licenses and terms. This notice
+does not relicense those materials or grant access to restricted services.
+Bundled third-party notices are provided in software/dashboard/THIRD_PARTY_NOTICES.txt and in the
+release inventory. Original upstream attribution notices must be retained.

@@ -74,7 +74,7 @@ def extract_runtime_sources(source_tar, resources):
         for member in archive.getmembers():
             if member.isdir():
                 continue  # git archive emits directories; files create their parents.
-            if not (member.name.startswith("src/") or member.name in {"configs/m1_feature_definitions.yaml", "configs/m1_rules_v3.yaml", "LICENSE", "pyproject.toml", "software/dashboard/THIRD_PARTY_NOTICES.txt"}):
+            if not (member.name.startswith("src/") or member.name in {"configs/m1_feature_definitions.yaml", "configs/m1_rules_v3.yaml", "LICENSE", "NOTICE", "pyproject.toml", "requirements/runtime-py313-windows.lock", "requirements/release-toolchain.json", "software/dashboard/THIRD_PARTY_NOTICES.txt"}):
                 continue
             target = (resources/member.name).resolve()
             if not target.is_relative_to(resources.resolve()) or not member.isfile():
@@ -85,6 +85,7 @@ def extract_runtime_sources(source_tar, resources):
 
 def main():
     import tomllib  # Windows release builder uses CPython 3.13.
+    from verify_release_lock import read_pins
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--exe',type=Path,required=True)
     parser.add_argument('--source-tar',type=Path,required=True)
@@ -109,6 +110,8 @@ def main():
     resources = root/'resources'; resources.mkdir()
     # Full source/tests/operations stay in the bundle, not the runtime.
     extract_runtime_sources(args.source_tar, resources)
+    for notice in ('LICENSE', 'NOTICE'):
+        shutil.copy2(resources/notice, root/notice)
     python = root/'python'; python.mkdir()
     with zipfile.ZipFile(args.python_archive) as archive:
         for member in archive.infolist():
@@ -118,6 +121,11 @@ def main():
     # Wheel-native dependencies already installed in the matching CPython ABI.
     # Do not ship editable source pointers, caches or workstation paths.
     project_metadata = tomllib.loads((resources/'pyproject.toml').read_text(encoding='utf-8'))['project']
+    selected = runtime_distributions(project_metadata, args.site_packages)
+    release_config = json.loads((resources/'requirements/release-toolchain.json').read_text())
+    pins = read_pins([resources/release_config['runtime_lock']])
+    if {name: dist.version for name, dist in selected.items()} != pins:
+        raise ValueError('runtime_dependency_closure_differs_from_release_lock')
     selected_dependencies = copy_runtime_dependencies(project_metadata, args.site_packages, python/'Lib/site-packages')
     for module in ('venv','ensurepip'):
         shutil.copytree(args.stdlib/module,python/'Lib'/module,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
@@ -158,28 +166,34 @@ with tempfile.TemporaryDirectory(prefix="fusionlab-plugin-runtime-") as owned:
             commit = report['metadata']['component']['version'] if name == 'SBOM.cdx.json' else report['commit']
             if commit != args.commit: raise ValueError('release_inventory_commit_mismatch')
             shutil.copy2(source,root/name)
-    (root/'使用说明.txt').write_text(
-        'FusionLab Windows x64 便携版\n\n解压完整目录后双击 FusionLab.exe；不要单独移动 exe。\n'
-        '默认使用随包 Python 后台、本机 SQLite，前端资源内置；不默认连接任何服务器。\n'
-        '可选远程模式：Settings 中填写兼容 FusionLab 的 HTTPS API 基地址及访问令牌，保存后重启。\n'
-        '本地用户数据与连接设置在 Windows 用户应用数据目录，不在程序源码中。\n'
-        '关闭窗口结束本地后台/插件子进程；不管理或关闭任何远程后台。\n'
-        '需要 Microsoft WebView2 Runtime。该便携版未做商业代码签名。\n'
-        '许可预测器、GPU 模型权重、作者私有数据不随包提供；相关作业缺工具或数据时必须明确阻断。\n'
-        '令牌由 Windows 用户级 DPAPI 加密保存，不返回前端；HTTPS 校验证书和主机名，不尝试匿名连接。\n'
-        '私有 CA 可在连接设置中指定 PEM 文件；留空使用系统信任。远程模式不迁移本机项目。\n'
-        '默认本地可启动不代表全部外部工具已安装或真实项目已实验验证。\n',encoding='utf-8')
+    (root/'START_HERE.txt').write_text(
+        'FusionLab Windows x64 portable desktop\n\n'
+        'Extract the complete folder, then double-click FusionLab.exe. Keep python and resources beside it.\n'
+        'Default: bundled local Python backend and SQLite; no server connection is required.\n'
+        'Requires Microsoft WebView2 Runtime. This portable release is not a code-signed installer.\n'
+        'Import your sequence/design, confirm its role, then choose an available task in Tools or Workflow.\n'
+        'Sequence properties are not a complete formal M1 screen or evidence of assembly, LLPS, or activity.\n'
+        'Missing tools, licenses, or scientific parameters remain explicit gaps; no substitute values are generated.\n'
+        'Optional remote mode: enter your compatible HTTPS API URL and access token in Settings, save and restart.\n'
+        'Tokens use Windows user-level DPAPI; certificate and hostname checks remain enabled.\n'
+        'For a private CA, select a PEM file in Settings; otherwise system trust is used.\n'
+        'Projects and settings stay in your Windows application-data directory, not in source code.\n'
+        'Remote mode does not migrate local projects. Closing the app stops its own local processes, not a remote service.\n'
+        'Restricted predictors, GPU weights and private research data are not bundled.\n'
+        'Project-authored code: Apache-2.0 (LICENSE and NOTICE). Third-party materials keep their own terms.\n'
+        'Source and evidence index: https://gitlab.igem.org/2026/software/tsinghua-t/galatea\n'
+        'See docs/best_software_evidence.md in the source for verification scope and remaining limitations.\n',encoding='utf-8')
     files = [p for p in sorted(root.rglob('*')) if p.is_file()]
     records = [{'path':p.relative_to(root).as_posix(),'bytes':p.stat().st_size,'sha256':sha256(p.read_bytes()).hexdigest()} for p in files]
     manifest = dict(commit=args.commit,platform='windows-x86_64',default_mode='local',bundled_frontend=True,
-        runtime_dependency_selection='pyproject backend + software extra, transitive wheel RECORD closure',
+        runtime_dependency_selection='exact release lock matched to pyproject backend + software extra transitive wheel RECORD closure',
         selected_runtime_distributions=selected_dependencies,
         omitted_runtime_content=['unselected development distributions', 'numpy/scipy upstream tests', 'bytecode/editable workstation pointers'],
         python_archive_sha256=args.python_archive_sha256,source_archive_sha256=sha256(args.source_tar.read_bytes()).hexdigest(),
         viewer_dependencies={'plotly.js-strict-dist-min':'4.1.2','molstar':'5.13.0','fflate':'0.8.3'},
         viewer_dependency_scope='direct_viewer_manifest_not_complete_SBOM',
         release_inventory_scope='dated_component_inventory_not_binary_reachability_or_license_compliance' if args.release_inventory else 'not_provided',
-        scope='portable_software_package_not_scientific_validation',runtime_allowlist=['src/','configs/m1_feature_definitions.yaml','configs/m1_rules_v3.yaml','LICENSE','pyproject.toml','software/dashboard/THIRD_PARTY_NOTICES.txt'], files=records,total_bytes=sum(p['bytes'] for p in records))
+        scope='portable_software_package_not_scientific_validation',runtime_allowlist=['src/','configs/m1_feature_definitions.yaml','configs/m1_rules_v3.yaml','LICENSE','NOTICE','pyproject.toml','requirements/runtime-py313-windows.lock','requirements/release-toolchain.json','software/dashboard/THIRD_PARTY_NOTICES.txt'], files=records,total_bytes=sum(p['bytes'] for p in records))
     (root/'PACKAGE_MANIFEST.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
     with zipfile.ZipFile(root.with_suffix('.zip'),'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(root.rglob('*')):

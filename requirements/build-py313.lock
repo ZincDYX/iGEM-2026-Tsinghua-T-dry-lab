@@ -1,0 +1,6 @@
+# Build frontend is separately pinned by pnpm-lock.yaml; native by Cargo.lock.
+# These backend build tools match the verified reference wheel builder.
+pip==26.2.1
+setuptools==84.0.0
+wheel==0.48.0
+packaging==26.3

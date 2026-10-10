@@ -1,0 +1,39 @@
+name: Locked Windows source release
+on: [push, pull_request]
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.13'
+          architecture: x64
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - name: Exact frontend and native build tools
+        run: |
+          npm install --global pnpm@10.30.3
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+      - name: Build through the shared locked release entry
+        run: |
+          python -m venv .venv
+          .venv/Scripts/python.exe -B scripts/build_release.py --output "${{ runner.temp }}/FusionLab" --download-cache "${{ runner.temp }}/release-cache"
+      - name: Full-history size and frontend behavior
+        run: |
+          .venv/Scripts/python.exe -B scripts/check_submission_size.py --report-only
+          pnpm --dir software/dashboard test --maxWorkers=2
+      - name: Real public input through MCP (software scope)
+        run: .venv/Scripts/python.exe -B scripts/reproduce_public_case.py --output "${{ runner.temp }}/public-case"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-portable-and-public-case
+          path: |
+            ${{ runner.temp }}/FusionLab.zip
+            ${{ runner.temp }}/public-case

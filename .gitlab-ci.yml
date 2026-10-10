@@ -1,0 +1,33 @@
+image: python:3.13.13-slim
+
+variables:
+  GIT_DEPTH: '0'
+  GIT_SUBMODULE_STRATEGY: none
+  PYTHONDONTWRITEBYTECODE: '1'
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+
+stages:
+  - verify
+
+locked-backend-and-public-case:
+  stage: verify
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git
+    - python -m pip install --no-cache-dir --no-compile -r requirements/runtime-py313-windows.lock -r requirements/build-py313.lock
+  script:
+    - python -B scripts/verify_release_lock.py --installed
+    - python -B scripts/check_submission_size.py --output outputs/submission-size.json
+    - python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
+    - python -m pip install --no-deps dist/*.whl
+    - python -m pip check
+    - python -B scripts/reproduce_public_case.py --output outputs/public-gfp
+  artifacts:
+    when: always
+    paths:
+      - outputs/submission-size.json
+      - outputs/public-gfp/
+      - dist/
+
+# This job checks the locked backend source/wheel on a Linux runner, not the
+# Windows GUI. The supported Windows release uses build_release.py and the
+# separate locked-release workflow; do not label Linux CI a native UI test.

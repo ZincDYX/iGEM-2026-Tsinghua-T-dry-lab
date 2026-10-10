@@ -1,4 +1,6 @@
 # Tested Windows x64 / Python 3.10 dependency snapshot (2026-10-04).
+# HISTORICAL ONLY: scipy==1.10.1 does not satisfy the current project's floor.
+# This is not the current software install lock; use runtime-py313-windows.lock.
 # Install the separately built project wheel after these dependencies.
 # Not a cross-platform or all-external-tools deployment lock.
 annotated-doc==0.0.5

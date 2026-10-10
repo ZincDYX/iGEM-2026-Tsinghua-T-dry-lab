@@ -1,24 +1,29 @@
-# FusionLab frontend / desktop shell
+# FusionLab frontend and desktop shell
 
-Use Python >= 3.10 with the repository's `.[software]` dependencies, Node supported by Vite, and pnpm **10.30.3** (fixed in package.json).
+Use the [root README](../../README.md) for supported versions, locked installation,
+build and public-case commands. The single [evidence index](../../docs/best_software_evidence.md)
+records actual verification and remaining limitations.
 
-```powershell
-# Repository root
-.venv/Scripts/python -m igem_drylab.cli software serve --port 8780 --data-dir outputs/platform
+From this directory: pnpm install --frozen-lockfile, pnpm dev --host 127.0.0.1,
+pnpm test and pnpm build. Start the Python backend separately for browser
+development. pnpm test:e2e uses the maintained HTTP/workbench configuration
+and an existing Edge browser; FUSIONLAB_TEST_DATA selects a dedicated test
+database. Legacy scientific browser fixtures are a separate configuration.
 
-# A second terminal, in software/dashboard
-pnpm install --frozen-lockfile
-pnpm dev --host 127.0.0.1
-```
+pnpm desktop is native development; pnpm desktop:build embeds production assets.
+The root release entry uses cargo build --release --locked --features
+custom-protocol, then the existing portable packager. Plain release without
+custom-protocol is not the packaged desktop. Preserve FusionLab.exe, python
+and resources together. WebView2 is required; other OS builds are unverified.
 
-`pnpm build` and `pnpm test` verify the frontend. `pnpm test:e2e` uses an existing Edge browser and dedicated local test services (ports 8789/5189). `FUSIONLAB_TEST_DATA` selects a test database directory; tests add their own projects and do not delete existing projects.
+Desktop defaults to Local with its owned Python backend and SQLite.
+Optional remote settings use an existing compatible HTTPS API and access token,
+not SSH. Settings stay in user application data. Windows DPAPI protects tokens;
+private CA PEM is explicit. Closing stops owned local processes, not remote services.
 
-`pnpm desktop` starts the Tauri development shell. `pnpm desktop:build` builds with local frontend resources. Desktop mode defaults to **local**, without any built-in server. Rust supervises the same Python backend, not another scientific implementation. A portable distribution uses sibling `python/python.exe` and `resources/src`; source development expects `.venv` at the repository root. `FUSIONLAB_PYTHON`, `FUSIONLAB_ROOT` and `FUSIONLAB_DATA_DIR` explicitly select the environment/source/data when needed.
+The frontend calls the same backend methods and displays typed objects.
+Unknown evidence stays unknown. Licensed predictors, GPU weights and private
+data are not bundled. Optional LLM proposals do not replace scientific review.
 
-The desktop Settings page offers an optional SSH backend. Users supply their own SSH alias and remote API port, save, then restart. Settings are stored in the user's application data directory, never the repository. OpenSSH uses existing authentication/known_hosts and refuses unknown/changed host keys; private keys are never packaged. The desktop owns only its tunnel, not the remote backend, and does not start remote services. Closing the desktop ends its own local backend/process group or its own tunnel. No previous browser/port-forward process is required.
-
-Build a portable Windows package with `scripts/package_windows_desktop.py` using a byte-exact committed source tar, an official CPython Windows embeddable archive, a matching ABI dependency directory and the built native exe. Preserve `FusionLab.exe`, `python` and `resources` together; this is a portable folder/ZIP, not a single-file runtime or signed installer. WebView2 is required. Licensed predictors, GPU weights and private project data are not distributed; unavailable jobs retain explicit errors. Other OS native builds are unverified.
-
-The default Scientist view hides raw workflows/configuration. Developer mode exposes typed bindings, dynamic shards, node errors, immutable snapshots and provenance. Natural-language task text is recorded, but this initial UI does not claim an LLM is connected. Sequence properties, declared assembly composition and the explicit supported pathway model can run without an LLM.
-
-Full design, formula boundaries, license details and remaining features: [platform guide](../../docs/fusionlab_platform.md).
+Project-authored frontend/native code: Apache-2.0. Third-party attribution:
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
