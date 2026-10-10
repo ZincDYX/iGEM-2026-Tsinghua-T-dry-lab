@@ -13,6 +13,7 @@ import { PrecheckPanel, type InputIssue } from "./PrecheckPanel";
 import { ScientificBundleImporter } from "./ScientificBundleImporter";
 import { ScientificInputForms } from "./ScientificInputForms";
 import { StructureAnnotationLinker } from "./StructureAnnotationLinker";
+import {GenBankDesigns} from './GenBankDesigns';
 import {
   importedSequences,
   sequenceConflicts,
@@ -159,6 +160,7 @@ export function InputEditor({
               <p>
                 Preview: {preview.kind} · {preview.file.name}
               </p>
+              {preview.kind === 'genbank_design' && <p>Original DNA, feature locations, directions and qualifiers will be retained. Missing CDS translations remain explicit gaps; no proteins are inferred from DNA.</p>}
               {incomingSequences.length > 0 ? (
                 <>
                   <p>
@@ -224,6 +226,7 @@ export function InputEditor({
             onPreview={setPreview}
           />
         </section>
+        <GenBankDesigns project={project} dirty={dirty} action={action}/>
         <section id="input-conditions" className="input-section">
           {!scope && (
             <ScientificSetup

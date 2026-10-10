@@ -33,6 +33,7 @@ export function mergeImportDraft(
   const patch = preview.patch;
   const sequences = [...project.sequences];
   const incoming = importedSequences(project, preview);
+  const linkedIds = new Map(incoming.map(item => [item.id, item.id as string | null]));
   if (new Set(incoming.map((item) => item.id)).size !== incoming.length)
     throw new Error(
       "Imported sequence identifiers must be unique within a file.",
@@ -47,6 +48,7 @@ export function mergeImportDraft(
     const choice = choices[item.id];
     if (!choice) throw new Error(`Choose how to resolve sequence ${item.id}.`);
     if (choice === "replace") sequences[index] = item;
+    if (choice === 'keep') linkedIds.set(item.id, null);
     if (choice === "separate") {
       let suffix = 2;
       while (
@@ -56,6 +58,7 @@ export function mergeImportDraft(
       )
         ++suffix;
       sequences.push({ ...item, id: `${item.id}-import-${suffix}` });
+      linkedIds.set(item.id, `${item.id}-import-${suffix}`);
     }
   }
   return parsePublic("ProjectView", {
@@ -66,7 +69,12 @@ export function mergeImportDraft(
       ? project.files
       : [...project.files, preview.file],
     datasets: Array.isArray(patch.datasets)
-      ? [...project.datasets, ...patch.datasets]
+      ? [...project.datasets, ...patch.datasets.map((row) => {
+          if (row.kind !== 'genbank_design') return row;
+          const design = parsePublic('GenBankDesign', row);
+          return {...design, cds_proteins: design.cds_proteins.map(binding => ({...binding,
+            sequence_id: binding.sequence_id === null ? null : linkedIds.get(binding.sequence_id) ?? null}))};
+        })]
       : project.datasets,
   });
 }

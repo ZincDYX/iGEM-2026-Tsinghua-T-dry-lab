@@ -16,9 +16,10 @@ activity, LLPS, assembly, or improved yield.
 
 Official source: [iGEM GitLab](https://gitlab.igem.org/2026/software/tsinghua-t/galatea).
 Development mirror: [GitHub](https://github.com/ZincDYX/iGEM-2026-Tsinghua-T-dry-lab).
-The requested FusionLab develop branch is not yet pushed: authenticated GitLab
-access is pending. Main contains an independently changed version and will not
-be overwritten. Check the exact branch/commit before installation.
+Complete FusionLab source is on **develop**. Main contains an independently
+changed version and has been preserved. Check the exact branch/commit before
+installation; the development mirror's oversized historical LFS archive is
+not part of the official source history.
 The single [evidence index](docs/best_software_evidence.md) records submission,
 build, real-case and validation status. Eligibility and independent non-expert
 usability are not yet verified.
@@ -69,7 +70,7 @@ pnpm **10.30.3**, Rust **1.95.0**, and WebView2.
 runtime/build locks, pnpm-lock.yaml and Cargo.lock are consumed by the common
 release entry. Compatibility ranges are not release locks.
 
-After the develop branch is synchronized and reviewed:
+Clone the official develop branch:
 
 ```powershell
 git clone --branch develop https://gitlab.igem.org/2026/software/tsinghua-t/galatea.git
@@ -79,8 +80,6 @@ python -m venv .venv
 .venv/Scripts/python.exe -m igem_drylab.cli software serve --port 8780
 ```
 
-Until then, these new scripts are on the development mirror branch
-feature/m1-m4-markdown-contract, not necessarily GitLab main.
 For the browser frontend, in a second terminal:
 
 ```powershell
@@ -104,6 +103,14 @@ Its actual acceptance status is in the evidence index; other OS native builds
 and independent clean-machine acceptance are not claimed.
 
 ## Methods and extensions
+
+Annotated GenBank import retains the original nucleotide records, full source
+annotations, strand, fuzzy/compound locations and CDS-to-protein references.
+Only source-supplied CDS translations create proteins; DNA-only/contig-only
+records remain designs, not guessed protein sequences. Inputs provides paged
+DNA/features and exports the unchanged original GenBank. Editing a protein
+does not edit its source DNA: disagreement is shown explicitly. This is source
+preservation, not a redesigned-DNA writer, SBOL or SBML implementation.
 
 - [M1 V3](docs/m1_v3_implementation_contract.md): exact descriptors and
   evidence-dependent negative screens.

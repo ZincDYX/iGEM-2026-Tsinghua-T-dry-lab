@@ -28814,5 +28814,309 @@
     ],
     "title": "ScientificObservation",
     "type": "object"
+  },
+  "GenBankDesign": {
+    "$defs": {
+      "CDSProteinBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "record_index": {
+            "minimum": 0,
+            "title": "Record Index",
+            "type": "integer"
+          },
+          "feature_index": {
+            "minimum": 0,
+            "title": "Feature Index",
+            "type": "integer"
+          },
+          "sequence_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence Id"
+          },
+          "source_protein_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Protein Id"
+          }
+        },
+        "required": [
+          "record_index",
+          "feature_index",
+          "sequence_id",
+          "source_protein_id"
+        ],
+        "title": "CDSProteinBinding",
+        "type": "object"
+      },
+      "GenBankRecordRef": {
+        "additionalProperties": false,
+        "properties": {
+          "record_index": {
+            "minimum": 0,
+            "title": "Record Index",
+            "type": "integer"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "nucleotide_count": {
+            "title": "Nucleotide Count",
+            "type": "integer"
+          },
+          "feature_count": {
+            "title": "Feature Count",
+            "type": "integer"
+          },
+          "untranslated_cds_count": {
+            "title": "Untranslated Cds Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_index",
+          "record_id",
+          "nucleotide_count",
+          "feature_count",
+          "untranslated_cds_count"
+        ],
+        "title": "GenBankRecordRef",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "kind": {
+        "const": "genbank_design",
+        "default": "genbank_design",
+        "title": "Kind",
+        "type": "string"
+      },
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "file_id": {
+        "title": "File Id",
+        "type": "string"
+      },
+      "records": {
+        "items": {
+          "$ref": "#/$defs/GenBankRecordRef"
+        },
+        "title": "Records",
+        "type": "array"
+      },
+      "cds_proteins": {
+        "items": {
+          "$ref": "#/$defs/CDSProteinBinding"
+        },
+        "title": "Cds Proteins",
+        "type": "array"
+      }
+    },
+    "required": [
+      "kind",
+      "id",
+      "name",
+      "file_id",
+      "records",
+      "cds_proteins"
+    ],
+    "title": "GenBankDesign",
+    "type": "object"
+  },
+  "GenBankPage": {
+    "$defs": {
+      "GenBankFeatureView": {
+        "additionalProperties": false,
+        "properties": {
+          "feature_index": {
+            "title": "Feature Index",
+            "type": "integer"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "parts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "qualifiers": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Qualifiers",
+            "type": "object"
+          },
+          "linked_sequence_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Sequence Id"
+          },
+          "translation_status": {
+            "title": "Translation Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feature_index",
+          "type",
+          "location",
+          "parts",
+          "qualifiers",
+          "linked_sequence_id",
+          "translation_status"
+        ],
+        "title": "GenBankFeatureView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "design_id": {
+        "title": "Design Id",
+        "type": "string"
+      },
+      "file_id": {
+        "title": "File Id",
+        "type": "string"
+      },
+      "record_index": {
+        "title": "Record Index",
+        "type": "integer"
+      },
+      "record_id": {
+        "title": "Record Id",
+        "type": "string"
+      },
+      "record_count": {
+        "title": "Record Count",
+        "type": "integer"
+      },
+      "description": {
+        "title": "Description",
+        "type": "string"
+      },
+      "molecule_type": {
+        "title": "Molecule Type",
+        "type": "string"
+      },
+      "annotations": {
+        "additionalProperties": true,
+        "title": "Annotations",
+        "type": "object"
+      },
+      "dbxrefs": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Dbxrefs",
+        "type": "array"
+      },
+      "nucleotide_count": {
+        "title": "Nucleotide Count",
+        "type": "integer"
+      },
+      "nucleotide_start_1based": {
+        "title": "Nucleotide Start 1Based",
+        "type": "integer"
+      },
+      "nucleotide_fragment": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Nucleotide Fragment"
+      },
+      "feature_offset": {
+        "title": "Feature Offset",
+        "type": "integer"
+      },
+      "feature_total": {
+        "title": "Feature Total",
+        "type": "integer"
+      },
+      "features": {
+        "items": {
+          "$ref": "#/$defs/GenBankFeatureView"
+        },
+        "title": "Features",
+        "type": "array"
+      },
+      "export_scope": {
+        "const": "unchanged_original_annotated_genbank",
+        "default": "unchanged_original_annotated_genbank",
+        "title": "Export Scope",
+        "type": "string"
+      }
+    },
+    "required": [
+      "design_id",
+      "file_id",
+      "record_index",
+      "record_id",
+      "record_count",
+      "description",
+      "molecule_type",
+      "annotations",
+      "dbxrefs",
+      "nucleotide_count",
+      "nucleotide_start_1based",
+      "nucleotide_fragment",
+      "feature_offset",
+      "feature_total",
+      "features",
+      "export_scope"
+    ],
+    "title": "GenBankPage",
+    "type": "object"
   }
 }

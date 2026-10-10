@@ -29,3 +29,5 @@ export function PredictionToolView(value:unknown):value is import("./PredictionT
 export function SequencePage(value:unknown):value is import("./SequencePage.generated").SequencePage;
 export function Workflow(value:unknown):value is import("./Workflow.generated").Workflow;
 export function ScientificObservation(value:unknown):value is import("./ScientificObservation.generated").ScientificObservation;
+export function GenBankDesign(value:unknown):value is import("./GenBankDesign.generated").GenBankDesign;
+export function GenBankPage(value:unknown):value is import("./GenBankPage.generated").GenBankPage;

@@ -77,3 +77,19 @@ it("links identical IDs without duplicating and reserves a new separate identifi
   );
   expect(result.sequences.at(-1)?.id).toBe("conflict-import-3");
 });
+
+it('preserves DNA source references while remapping or clearing conflicting protein links', () => {
+  const imported = preview([sequence('conflict', 'CCC')]);
+  imported.patch.datasets = [{kind:'genbank_design',id:'new-file',file_id:'new-file',name:'source.gb',
+    records:[{record_index:0,record_id:'DNA_SOURCE',nucleotide_count:9,feature_count:1,untranslated_cds_count:0}],
+    cds_proteins:[{record_index:0,feature_index:0,sequence_id:'conflict',source_protein_id:'conflict'}]}];
+  const original = project();
+  const separate = mergeImportDraft(original, imported, {conflict:'separate'});
+  const design = parsePublic('GenBankDesign', separate.datasets[0]);
+  expect(design.file_id).toBe('new-file');
+  expect(design.cds_proteins[0].source_protein_id).toBe('conflict');
+  expect(design.cds_proteins[0].sequence_id).toBe('conflict-import-2');
+  const kept = mergeImportDraft(original, imported, {conflict:'keep'});
+  expect(parsePublic('GenBankDesign', kept.datasets[0]).cds_proteins[0].sequence_id).toBeNull();
+  expect(kept.sequences[1].sequence).toBe('GGG');
+});

@@ -1,0 +1,26 @@
+LOCUS       SOFTWARE_FIXTURE          12 bp    DNA     linear   SYN 01-JAN-2000
+DEFINITION  Hand-authored software fixture, not experimental evidence.
+ACCESSION   SOFTWARE_FIXTURE
+VERSION     SOFTWARE_FIXTURE.1
+KEYWORDS    .
+SOURCE      synthetic construct
+  ORGANISM  synthetic construct
+            other sequences; artificial sequences.
+REFERENCE   1  (bases 1 to 12)
+  AUTHORS   Software,Fixture.
+  TITLE     Independent metadata test
+  JOURNAL   Unpublished
+FEATURES             Location/Qualifiers
+     source          1..12
+                     /organism="synthetic construct"
+     gene            complement(<1..9)
+                     /gene="reverse_fixture"
+     CDS             1..9
+                     /protein_id="FIXTURE.1"
+                     /translation="MAA"
+                     /note="Source-annotated protein, never inferred"
+     CDS             join(1..3,7..9)
+                     /note="Intentionally no source translation"
+ORIGIN
+        1 atggctgctt aa
+//

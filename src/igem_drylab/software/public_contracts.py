@@ -22,6 +22,7 @@ from igem_drylab.workflow.scan_display import ScanPage
 from igem_drylab.workflow.table_display import TablePage
 from igem_drylab.pipeline.config import ConstructDefinition
 from igem_drylab.parameters import ParameterRecord
+from igem_drylab.workflow.genbank_design import GenBankDesign, GenBankPage
 
 
 class AssetIdentity(Contract):
@@ -200,6 +201,8 @@ PUBLIC_MODELS = {model.__name__:model for model in (ScientificRecordView, TableP
 
 
 PUBLIC_MODELS["ScientificObservation"] = ScientificObservation
+PUBLIC_MODELS['GenBankDesign'] = GenBankDesign
+PUBLIC_MODELS['GenBankPage'] = GenBankPage
 
 
 def public_schemas():

@@ -9,10 +9,10 @@ over a description of intended behavior.
 
 | Item | Current evidence / limitation |
 |---|---|
-| Official software repository | [Assigned GitLab](https://gitlab.igem.org/2026/software/tsinghua-t/galatea). Anonymous full clone succeeds; main was `012781e7f2528a01b8bc3d8a01512c40a715280f` when checked on 2026-10-10. It is an independently changed tree, not the current FusionLab desktop release. The user authorized a new develop branch; main will be preserved. A replacement user credential passed authentication and a develop push dry-run. Actual source synchronization/official freeze are recorded after publication, not inferred from a dry-run. |
+| Official software repository | [Develop](https://gitlab.igem.org/2026/software/tsinghua-t/galatea/-/tree/develop) was published on 2026-10-10. Initial complete-source commit `458b233` has the identical tracked tree to mirror `6818798`; official main `012781e7f2528a01b8bc3d8a01512c40a715280f` was preserved. Subsequent modules use normal fast-forward develop commits, not force pushes. Official submission freeze remains unverified. |
 | Award eligibility | Team Village, award selection and software standard-page URL have not been supplied/verified. Using AI does not identify the Village. No eligibility claim. |
 | Project license | Team approved Apache-2.0 for project-authored code. Root LICENSE/NOTICE and Python/frontend/native metadata carry it. Third-party/data/weights keep their original terms. Public GFP data are CC-BY-4.0, not Apache-2.0. |
-| Size | `scripts/check_submission_size.py` measures source, complete common Git storage, reachable large blobs/LFS payloads and submodule pins separately. The development mirror history references a 127,471,861-byte LFS evidence CSV and is not a compliant submission. The official main full clone is 1,108,062 bytes of Git storage, with 2,879,705 bytes of tracked source. Current source will be ported as a normal commit on official develop, preserving all official main history, not importing obsolete mirror archives or rewriting history. A fresh complete official clone must be remeasured after publication. 50,000,000 bytes is a conservative internal rule; official backend accounting remains unknown. Portable ZIP/runtime sizes are not repository sizes. |
+| Size | Initial published develop: GitLab API reports repository 2,668,277 bytes and LFS 0. A fresh full-history clone (not shallow) measures 2,659,248 bytes Git storage + 7,554,580 bytes tracked source = 10,213,828 bytes conservative internal total, below 50,000,000. The mirror still references an old 127,471,861-byte LFS evidence CSV and is not the eligible repository; that history was not imported or rewritten. Recheck after every release. Portable ZIP/runtime sizes are not repository sizes. |
 
 ## Build and run
 
@@ -28,14 +28,16 @@ The packager must match its selected runtime closure to the same release lock.
 
 Local validation: all 51 installed runtime versions and closure match the lock;
 14 release-lock/size/packaging/inventory software tests passed. This is an installed
-environment check, not a clean-machine installation proof. The new locked CI
-build has not yet completed. Existing floating compatibility tests remain
+environment check, not an independent-user installation study. The locked Windows
+source build passed for mirror commit `6818798` in [run 38050926720](https://github.com/ZincDYX/iGEM-2026-Tsinghua-T-dry-lab/actions/runs/38050926720), using the shared build entry and producing the portable artifact.
+Official GitLab pipeline 746585 was pending at the latest check; no official CI
+pass is claimed. Existing floating compatibility tests remain
 separate and do not establish exact release reproducibility. Historical Python
 3.10/SciPy 1.10.1 records are not current runtime install instructions.
 
 Frontend production build passed. The first default-worker test run had 11
 worker-start timeouts and is not a pass; rerunning with two workers passed all
-58 tests in 22 files. No assertions were removed or relaxed. Locked Windows CI
+58 tests in 22 files; the later GenBank batch passed 59 tests. No assertions were removed or relaxed. Locked Windows CI
 uses that explicit worker budget. This is not a whole-app performance benchmark.
 
 Last previously verified desktop: commit `640bf75`, built native local window,
@@ -64,10 +66,16 @@ mistake its successful launch for validation of this new build entry.
 
 ## Standards, usability, experiments and performance
 
-FASTA, native structure/confidence and table workflows exist. The current
-GenBank import still extracts translated CDS proteins; complete typed DNA/design
-mapping and independently verified annotation round-trip are unfinished. SBOL
-and SBML are not implemented; a partial export is not standards compliance.
+FASTA, native structure/confidence and table workflows exist. GenBank import now
+retains original DNA/record annotations/fuzzy and compound features/strand/CDS
+bindings through typed views using the existing dataset/file model, without a
+second DNA copy in snapshots. Source-provided translations alone create proteins;
+missing translations/bases remain gaps. Software tests check manually authored
+expected metadata, protein-edit mismatch and ownership; actual built-browser
+HTTP import/save/view/reload/export passed with byte-identical original export.
+This preserves original records, not edited-design round-trip generation.
+An independent external GenBank-tool interoperability study remains pending.
+SBOL and SBML are not implemented; a partial export is not standards compliance.
 
 UI/browser tests establish selected software behavior, not independent novice
 usability. Non-developer task study, external-project fusion validation and

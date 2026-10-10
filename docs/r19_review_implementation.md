@@ -1,6 +1,6 @@
 # r19 review implementation and acceptance ledger
 
-Source: user-supplied `current_status_review_r18_ER_agent_20261009 (1).md`,
+Source: user-supplied `current_status_review_r18_ER_agent_20261009 (1).md` and `(2).md`,
 review of commit `635b5db`. This ledger is not a declaration of complete delivery.
 The original M1–M4 mathematical contracts remain authoritative for cytosolic
 calculations. Proposed ER equations have a separate implementation/version and
@@ -120,3 +120,28 @@ and body/pocket orientation; membrane/assembly ensembles; actual host-scoped
 amounts, areas, volumes, affinities, transport and catalytic measurements;
 independent physical calibration. These gaps must never be filled by labels,
 guessed constants or author protein values transplanted into this fusion.
+
+## Best Software / standards delivery follow-up
+
+Apache-2.0, complete official develop source, exact runtime/build/frontend/native
+locks, shared clean-source Windows build and a real public GFP stdio-MCP case
+are implemented. The locked Windows CI passed for `6818798`; official GitLab
+CI was pending. Qualification and independent wet-lab/user validation are not
+inferred from these software results. The maintained [evidence index](best_software_evidence.md)
+contains the requirement mapping and source/build commands.
+
+GenBank designs use the existing canonical uploaded asset and dataset reference,
+not duplicated DNA state. Full source annotations, uncertain positions, compound
+features, strand, citations and supplied CDS translations remain available;
+missing translations/bases are not generated. Protein edits and collision choices
+cannot silently relabel DNA. Original GenBank export is byte-preserving; it is
+not an edited-DNA writer or SBOL/SBML claim. Four local software API tests and
+one production-asset browser/HTTP import/save/view/export/reload test passed.
+Independent external-reader interoperability remains pending.
+
+The frozen server batch after these changes passed **847 tests, 9 skipped**,
+**105 real-tool tests**, and **53 installed-wheel tests**. Counts overlap;
+the optional skips remain explicit. These are numerical/software regressions,
+not independent biological validation. Frontend passed **59 tests** and the
+production TypeScript/Vite build. No new external scientific dependency was
+installed for GenBank preservation.

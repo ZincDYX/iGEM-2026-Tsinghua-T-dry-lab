@@ -29,3 +29,5 @@ export type { PredictionToolView } from "./PredictionToolView.generated";
 export type { SequencePage } from "./SequencePage.generated";
 export type { Workflow } from "./Workflow.generated";
 export type { ScientificObservation } from "./ScientificObservation.generated";
+export type { GenBankDesign } from "./GenBankDesign.generated";
+export type { GenBankPage } from "./GenBankPage.generated";

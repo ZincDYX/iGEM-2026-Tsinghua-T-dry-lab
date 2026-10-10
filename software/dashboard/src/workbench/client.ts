@@ -30,6 +30,8 @@ export const history = (id: string, offset = 0, signal?: AbortSignal) =>
   );
 export const project = (id: string, signal?: AbortSignal) =>
   read("ProjectView", `/projects/${encodeURIComponent(id)}`, undefined, signal);
+export const genbankDesign = (projectId: string, designId: string, recordIndex = 0, featureOffset = 0, nucleotideOffset = 0) =>
+  read('GenBankPage', `/projects/${encodeURIComponent(projectId)}/designs/${encodeURIComponent(designId)}?record_index=${recordIndex}&feature_offset=${featureOffset}&nucleotide_offset=${nucleotideOffset}`);
 export const precheck = (id: string, signal?: AbortSignal) =>
   read(
     "ScientificPrecheckView",

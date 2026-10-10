@@ -499,23 +499,24 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         # Parse before storing. The project itself changes only after confirmation.
         if extension in {".fasta", ".fa", ".faa", ".gb", ".gbk", ".genbank"}:
             format_name = "genbank" if extension in {".gb", ".gbk", ".genbank"} else "fasta"
-            records = list(SeqIO.parse(StringIO(request.content), format_name))
             sequences: list[dict[str, Any]] = []
-            for record in records:
-                if format_name == "fasta":
+            design_parts = None
+            if format_name == 'genbank':
+                from igem_drylab.workflow.genbank_design import import_design
+                summaries, bindings, proteins = import_design(request.content)
+                sequences = [item.model_dump() for item in proteins]
+                design_parts = (summaries, bindings)
+            else:
+                for record in SeqIO.parse(StringIO(request.content), format_name):
                     sequences.append(SequenceRecord(id=record.id, sequence=str(record.seq)).model_dump())
-                else:
-                    for index, feature in enumerate(record.features):
-                        if feature.type == "CDS" and "translation" in feature.qualifiers:
-                            sequences.append(SequenceRecord(id=feature.qualifiers.get("protein_id", [f"{record.id}_CDS_{index}"])[0], sequence=feature.qualifiers["translation"][0]).model_dump())
-            if not sequences:
-                raise ValueError("no_protein_sequences; GenBank requires annotated CDS translations")
+                if not sequences:
+                    raise ValueError("no_protein_sequences")
             from igem_drylab.constructs.linker_features import normalize_amino_acid_sequence
             for item in sequences:
                 item["sequence"] = normalize_amino_acid_sequence(item["sequence"])
             Project(id="preview", name="preview", sequences=sequences)
             patch: dict[str, Any] = {"sequences": sequences}
-            kind = "sequences"
+            kind = "genbank_design" if design_parts is not None else "sequences"
         elif extension == ".json" and request.input_kind == "wetlab":
             from igem_drylab.wetlab.models import WetLabResult
             raw = json.loads(request.content)
@@ -549,9 +550,33 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             raise ValueError("supported_imports: FASTA, annotated GenBank, explicit-role JSON, CSV, TSV")
         source.write_bytes(request.content.encode("utf-8"))
         file = boundary.asset(source, fresh=True, logical_name=request.filename)
+        if kind == 'genbank_design':
+            from igem_drylab.workflow.genbank_design import GenBankDesign
+            summaries, bindings = design_parts
+            design = GenBankDesign(id=file['id'], file_id=file['id'], name=request.filename,
+                records=summaries, cds_proteins=bindings)
+            patch['datasets'] = [design.model_dump(mode='json')]
         for dataset in patch.get("datasets", []):
             dataset["file_id"] = file["id"]
         result = {"kind": kind, "patch": patch, "file": file}
+        boundary.check(result)
+        return result
+
+    @router.get('/projects/{project_id}/designs/{design_id}')
+    def genbank_design(project_id: str, design_id: str, record_index: int = Query(0, ge=0),
+                       feature_offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500),
+                       nucleotide_offset: int = Query(0, ge=0)):
+        from igem_drylab.workflow.genbank_design import GenBankDesign, design_page
+        project = store.project(project_id)
+        row = next((item for item in project.datasets if item.get('kind') == 'genbank_design' and item.get('id') == design_id), None)
+        if row is None:
+            raise WorkflowError('genbank_design_not_found', status_code=404)
+        design = GenBankDesign.model_validate(row)
+        if design.file_id not in {item.get('id') for item in project.files}:
+            raise WorkflowError('genbank_design_file_not_attached', status_code=403)
+        source = Path(boundary.resolve_asset(design.file_id, project_id))
+        result = design_page(source.read_text(encoding='utf-8'), design, project.sequences,
+            record_index, feature_offset, limit, nucleotide_offset).model_dump(mode='json')
         boundary.check(result)
         return result
 
