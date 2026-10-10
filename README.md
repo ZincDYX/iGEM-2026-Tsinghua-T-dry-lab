@@ -62,7 +62,65 @@ selected numerical figures and reanalyses published assays, not all omics, MD
 or wet experiments. Source links, commands and discrepancies are recorded there.
 Its historical environment must not be replaced by the product release lock.
 
-## Locked source installation and build
+## Build your own Windows desktop
+
+The official repository contains the complete source. Its Releases/Package
+Registry are currently disabled, so it does not yet provide a desktop download.
+You can build a portable desktop yourself; you do not need to edit code or connect
+to a team server. Use Windows x64 and allow internet access for dependencies.
+
+Install these build prerequisites once, then reopen PowerShell:
+
+1. [Git for Windows](https://git-scm.com/downloads/win).
+2. [Python 3.13.13 x64](https://www.python.org/downloads/release/python-31313/).
+3. [Node 24.19.0 x64](https://nodejs.org/dist/v24.19.0/).
+4. [Rustup](https://rustup.rs/), with the Windows MSVC host. The command below
+   prepares Rust 1.95.0 if missing without changing your global default.
+5. [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/):
+   select **Desktop development with C++**, including the Windows SDK.
+6. [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+   to run the desktop. It may already be installed. This is a runtime prerequisite,
+   not a compiler. See the [official Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows).
+
+From PowerShell:
+
+```powershell
+git clone --branch develop https://gitlab.igem.org/2026/software/tsinghua-t/galatea.git
+cd galatea
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
+```
+
+That single build command creates/reuses `.venv`, prepares pinned pnpm/Rust,
+installs the locked Python/frontend dependencies, builds the production frontend
+and native window, and calls the existing single release packager. It does not
+install scientific predictors, run scientific models, change the global Rust
+default, or silently install the large Microsoft compiler workload. Initial
+compilation can take substantially longer than opening a prebuilt desktop;
+you need free disk space for the compiler/dependencies/build cache. The final
+package size is not the peak build workspace size. No build-time benchmark is
+claimed.
+
+After success, double-click **build/releases/FusionLab/FusionLab.exe**. To share
+the software, use **build/releases/FusionLab.zip**; recipients extract the entire
+folder and do not need Python, Node, Rust, Git or C++ Build Tools installed.
+They still need WebView2. The exe is not a signed installer and must remain next
+to its `python` and `resources` directories. Heavy/licensed predictors remain
+optional and separately configured.
+
+To check prerequisites without installing/building:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1 -Check
+```
+
+For multiple Python installations, add `-Python "C:/path/to/python.exe"`.
+To keep an old package and build another, add `-Output "C:/FusionLab-new"`.
+Use a clean committed Git checkout, not the automatically downloaded source ZIP:
+the existing packager records and archives the actual Git commit. The script
+does not delete dirty files or overwrite an old release. `ExecutionPolicy Bypass`
+applies only to the new PowerShell process, not the machine/user policy.
+
+## Locked backend installation and advanced build
 
 Supported desktop target: Windows x64, Python **3.13.13**, Node **24.19.0**,
 pnpm **10.30.3**, Rust **1.95.0**, and WebView2.

@@ -21,10 +21,10 @@ jobs:
           npm install --global pnpm@10.30.3
           rustup toolchain install 1.95.0 --profile minimal
           rustup default 1.95.0
-      - name: Build through the shared locked release entry
+      - name: Build through the user-facing Windows command
         run: |
-          python -m venv .venv
-          .venv/Scripts/python.exe -B scripts/build_release.py --output "${{ runner.temp }}/FusionLab" --download-cache "${{ runner.temp }}/release-cache"
+          ./build-desktop.ps1 -Python python -Check
+          ./build-desktop.ps1 -Python python -Output "${{ runner.temp }}/FusionLab" -DownloadCache "${{ runner.temp }}/release-cache"
       - name: Full-history size and frontend behavior
         run: |
           .venv/Scripts/python.exe -B scripts/check_submission_size.py --report-only
