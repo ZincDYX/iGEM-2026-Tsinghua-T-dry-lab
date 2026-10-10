@@ -69,6 +69,29 @@ export type DomainOrder = string[];
 export type FusionOrientation = string | null;
 export type LocalizationContext = ("cytosolic" | "er_anchored") | null;
 export type LocalizationDesignEvidence = string | null;
+export type EvidenceId = string;
+export type ConstructId = string;
+export type ConstructVersion = string;
+export type ConditionId = string;
+export type InputSequenceSha256 = string;
+export type Start = number;
+export type End = number;
+export type AnchorSourceRecord = string;
+export type Tool = "DeepTMHMM";
+export type ToolVersion = string;
+export type NativeRecordId = string;
+export type Path1 = string;
+export type Sha2561 = string;
+export type BodySide = "cytosolic" | "luminal" | "unknown";
+export type OrientationSource = string | null;
+export type CleavageState = "not_cleaved" | "cleaved" | "unknown";
+export type BodyRemovedByCleavage = boolean | null;
+export type CleavageSource = string | null;
+export type EvidenceLevel = "predicted" | "experimentally_supported";
+/**
+ * @minItems 1
+ */
+export type RawReferences = [ArtifactReference, ...ArtifactReference[]];
 export type M1Review = {
   [k: string]: unknown;
 } | null;
@@ -91,7 +114,7 @@ export type ReferenceAccession = string;
 export type DeletedReferenceResidues = [number, ...number[]];
 export type SourceReference = string;
 export type Constructs = ConstructDefinition[];
-export type ConstructId = string;
+export type ConstructId1 = string;
 export type ConstructType = string;
 export type Proteins = string[];
 export type Host1 = string | null;
@@ -128,7 +151,7 @@ export type Id10 = string;
 export type ProteinConstructIds = [string, ...string[]];
 export type RequiredEnzymeIds = string[];
 export type Host2 = string | null;
-export type ConditionId = string | null;
+export type ConditionId1 = string | null;
 export type Designs = DesignConfig[];
 export type ParameterId = string;
 export type Name3 = string;
@@ -138,8 +161,8 @@ export type SpeciesId = string | null;
 export type EnzymeId = string | null;
 export type SubstrateId = string | null;
 export type ProductId = string | null;
-export type ConstructId1 = string | null;
-export type ConditionId1 = string | null;
+export type ConstructId2 = string | null;
+export type ConditionId2 = string | null;
 export type ParameterType =
   | "kcat"
   | "km"
@@ -189,7 +212,7 @@ export type Transform = "identity" | "absolute";
 export type Operator = "lt" | "le" | "gt" | "ge" | "inside" | "outside";
 export type Lower1 = number;
 export type Upper1 = number | null;
-export type Tool = "FuzDrop" | "catGRANULE_2016" | "PSPredictor" | "PScore" | "Mpipi_original";
+export type Tool1 = "FuzDrop" | "catGRANULE_2016" | "PSPredictor" | "PScore" | "Mpipi_original";
 export type NormalizationMinimum = number;
 export type NormalizationMaximum = number;
 export type HighDirection = "greater_equal" | "less_equal";
@@ -198,9 +221,89 @@ export type Weight = number;
 export type PredictorRules = PredictorRule[];
 export type SortKeys = ("risk" | "consensus" | "rank_score")[];
 export type RankingFormulaReference = string | null;
+export type FormulaVersion = "m2-er-membrane-v1-2026-10-10";
+export type ConstructId3 = string;
+export type ConditionId3 = string;
+export type AssemblyApplicabilitySource = string;
+export type AnchorCountBasis = "explicit_subunit_composition";
+/**
+ * @minItems 1
+ */
+export type Conformers = [MembraneConformer, ...MembraneConformer[]];
+export type ModelId = string;
+export type ConformerId = string;
+export type Path2 = string;
+export type ModelId1 = number | null;
+export type Altloc = string | null;
+export type SourceKind = "experimental" | "prediction";
+export type SourceReference3 = string;
+export type ConfidenceFile = string | null;
+export type ExpectedSequence = string | null;
+export type FrameId = string;
+/**
+ * @minItems 3
+ * @maxItems 3
+ */
+export type OriginAngstrom = [unknown, unknown, unknown];
+/**
+ * @minItems 3
+ * @maxItems 3
+ */
+export type UnitNormal = [unknown, unknown, unknown];
+export type ThicknessAngstrom = number;
+export type PositiveSide = "cytosolic" | "luminal";
+export type BodySide1 = "cytosolic" | "luminal" | "unknown";
+export type SourceReference4 = string;
+/**
+ * @minItems 1
+ */
+export type Tethers = [TetherGeometry, ...TetherGeometry[]];
+export type SubunitId = string;
+export type Chain = string;
+/**
+ * @minItems 1
+ */
+export type Residues = [number | string, ...(number | string)[]];
+export type ContourLengthAngstrom = number;
+export type ContourLengthSource = string;
+export type SamplingMethod = string;
+export type SamplingScope = string;
+export type CoordinateTransformReference = string;
+export type HeavyAtomClashCutoffAngstrom = number;
+export type ClashRuleSource = string;
 export type StructureMetricsFile = string | null;
 export type RegionAssessmentsFile = string | null;
 export type CalculationRequestsFile = string | null;
+export type FormulaVersion1 = "m3-er-amount-independent-set-v1-2026-10-10";
+export type ConstructId4 = string;
+export type ConditionId4 = string;
+export type TopologyEvidenceRef = string;
+export type BodySide2 = "cytosolic" | "luminal" | "unknown";
+export type GeometryRef = string;
+export type Value2 = number;
+export type Unit1 = "uM" | "umol" | "L" | "um2" | "copies/um2" | "1" | "L/h" | "1/h" | "umol/h";
+export type EntityBasis = string;
+export type ParameterId1 = string;
+export type SourceReference5 = string;
+export type DensityEntityBasis = "scaffold_monomer" | "complete_assembly" | "effective_anchor";
+export type SubunitsPerAssembly = number;
+export type AnchorsPerAssembly = number;
+export type CompositionSource = string;
+export type UnanchoredScaffoldBinding = "included_in_droplet" | "excluded_with_evidence";
+export type UnanchoredScaffoldApplicabilitySource = string;
+export type SiteId = string;
+export type Species = "OC" | "DMT";
+export type GeometryRef1 = string;
+export type BindingPairRef = string;
+export type Sites = BindingSite[];
+export type ConflictEdges = [unknown, unknown][];
+export type EntityBasis1 = "complete_assembly";
+export type GeometryRef2 = string;
+export type MethodAssumption = "hard_exclusion_no_additional_cooperativity";
+export type ApplicabilityReference = string;
+export type MaxPartitionStates = number;
+export type SolverMaxEvaluations = number;
+export type RelativeMassTolerance = number;
 export type Method = "statistical_factor" | "alpha" | "free_energy";
 export type ParameterName = string;
 /**
@@ -213,7 +316,7 @@ export type InterpolationReference = string | null;
 export type Lower2 = number | null;
 export type Upper2 = number | null;
 export type EmpiricalValues = number[];
-export type SourceReference3 = string;
+export type SourceReference6 = string;
 /**
  * @minItems 1
  */
@@ -244,6 +347,63 @@ export type OcScale = number;
 export type DmtScale = number;
 export type Source1 = "published_author_model" | "explicit_sensitivity_input";
 export type Interpretation = "relative_enzyme_scale_not_measured_abundance";
+export type FormulaVersion2 = "m4-compartment-amount-v1-2026-10-10";
+export type ConstructId5 = string;
+export type ConditionId5 = string;
+export type Scenario = "no_LLPS" | "cytosolic_LLPS" | "ER_anchored_LLPS";
+export type TopologyEvidenceRef1 = string | null;
+export type ReactionLocationReference = string;
+/**
+ * @minItems 1
+ */
+export type Pools = [ReactionPool, ...ReactionPool[]];
+export type PoolId = string;
+export type Role2 = "cytosol" | "anchored_droplet" | "er_lumen" | "extracellular";
+export type GeometryRef3 = string;
+export type InterfaceId = string;
+export type FirstPool = string;
+export type SecondPool = string;
+export type Mode1 = "finite_exchange" | "rapid_equilibrium";
+export type Conductance = {
+  [k: string]: ScientificQuantity;
+} | null;
+export type ApplicabilityReference1 = string;
+export type TimescaleEvidenceReference = string | null;
+export type Interfaces = ExchangeInterface[];
+export type ReactionId = string;
+export type Enzyme = "PTR" | "PT" | "OC" | "DMT";
+export type Substrate = string;
+export type Product = string;
+export type KcatPerH = number;
+export type KmUm = number;
+/**
+ * @minItems 2
+ */
+export type ParameterIds1 = [string, string, ...string[]];
+export type Reactions = M4ReactionInput[];
+export type BoundaryId = string;
+export type PoolId1 = string;
+export type Compound = "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15";
+export type Kind1 = "constant_feed" | "first_order_loss";
+export type Normalization = "physical_amount";
+export type Boundaries = AmountBoundary[];
+/**
+ * @minItems 2
+ */
+export type TimeGridH = [number, number, ...number[]];
+export type SteadyInitialGuessesUmol = {
+  [k: string]: {
+    [k: string]: number;
+  };
+}[];
+export type Method1 = "BDF" | "Radau" | "LSODA";
+export type RelativeTolerance = number;
+export type AmountAbsoluteToleranceUmol = number;
+export type SteadyRelativeTolerance = number;
+export type SteadyAbsoluteToleranceUmolPerH = number;
+export type EigenvalueTolerancePerH = number;
+export type SteadyMaxEvaluations = number;
+export type EvidenceMode = "conditional_model" | "reviewed_project_binding";
 export type LocalParameterNames = string[];
 export type Ranges1 = RangeEvidence[];
 export type Samples1 = number;
@@ -256,7 +416,7 @@ export type C = number;
 export type Const = number;
 export type ThetaHydro = number;
 export type ThetaAro = number;
-export type SourceReference4 = string;
+export type SourceReference7 = string;
 export type ApplicableDomainReference = string;
 export type ReviewedBy1 = string;
 export type AssayMode = ("substrate_feeding_functional" | "full_pathway_production") | null;
@@ -265,7 +425,7 @@ export type ExpressionMode = ("constitutive" | "induced") | null;
 export type FeedingTimeH = number | null;
 export type NetworkVariant = "full_ten" | "oc_dmt_verified_absence";
 export type Artifact = string;
-export type Sha2561 = string;
+export type Sha2562 = string;
 export type ReviewedBy2 = string;
 export type SteadyStateObservationReference = string | null;
 export type TargetProduct = string;
@@ -287,10 +447,10 @@ export type OnTime = number;
 export type OffTime = number | null;
 export type Basal = number;
 export type Induced = number;
-export type Mode1 = "step" | "sigmoid";
+export type Mode2 = "step" | "sigmoid";
 export type TransitionWidth = number;
 export type TimeUnit = "h" | "author_native_day_axis";
-export type ConditionId2 = string | null;
+export type ConditionId6 = string | null;
 export type MaxSideProductFraction13 = number;
 export type Min13Reduction = number;
 export type Min15Improvement = number;
@@ -314,7 +474,7 @@ export type IntracellularVolumeL = number | null;
 export type ExtracellularVolumeL = number | null;
 export type VolumeSourceReference = string | null;
 export type TransportRatioSourceReference = string | null;
-export type FormulaVersion = string;
+export type FormulaVersion3 = string;
 export type RateParameterId = string;
 export type IntracellularVolumeParameterId = string;
 export type ExtracellularVolumeParameterId = string;
@@ -469,6 +629,7 @@ export interface ConstructDefinition {
   fusion_orientation: FusionOrientation;
   localization_context: LocalizationContext;
   localization_design_evidence: LocalizationDesignEvidence;
+  membrane_topology: MembraneTopologyEvidence | null;
   m1_review: M1Review;
   linker_ids: LinkerIds;
   scaffold_id: ScaffoldId;
@@ -489,6 +650,38 @@ export interface OrderedPartConfig {
   kind: Kind;
   sequence: Sequence2;
 }
+export interface MembraneTopologyEvidence {
+  evidence_id: EvidenceId;
+  construct_id: ConstructId;
+  construct_version: ConstructVersion;
+  condition_id: ConditionId;
+  input_sequence_sha256: InputSequenceSha256;
+  anchor: ResidueRange;
+  anchor_source_record: AnchorSourceRecord;
+  tool: Tool;
+  tool_version: ToolVersion;
+  native_record_id: NativeRecordId;
+  native_output: ArtifactReference;
+  body_side: BodySide;
+  orientation_source: OrientationSource;
+  cleavage_state: CleavageState;
+  body_removed_by_cleavage: BodyRemovedByCleavage;
+  cleavage_source: CleavageSource;
+  evidence_level: EvidenceLevel;
+  raw_references: RawReferences;
+  review_parameter_ids: ReviewParameterIds;
+}
+export interface ResidueRange {
+  start: Start;
+  end: End;
+}
+export interface ArtifactReference {
+  path: Path1;
+  sha256: Sha2561;
+}
+export interface ReviewParameterIds {
+  [k: string]: string;
+}
 export interface Sequences1 {
   [k: string]: string;
 }
@@ -505,7 +698,7 @@ export interface ReferenceToFusion {
   [k: string]: number;
 }
 export interface ConstructRecord {
-  construct_id: ConstructId;
+  construct_id: ConstructId1;
   construct_type: ConstructType;
   proteins: Proteins;
   sequences: Sequences2;
@@ -554,7 +747,7 @@ export interface DesignConfig {
   host: Host2;
   promoters: Promoters;
   integration_sites: IntegrationSites;
-  condition_id: ConditionId;
+  condition_id: ConditionId1;
 }
 export interface Promoters {
   [k: string]: string;
@@ -571,8 +764,8 @@ export interface ParameterRecord {
   enzyme_id: EnzymeId;
   substrate_id: SubstrateId;
   product_id: ProductId;
-  construct_id: ConstructId1;
-  condition_id: ConditionId1;
+  construct_id: ConstructId2;
+  condition_id: ConditionId2;
   parameter_type: ParameterType;
   source_type: SourceType1;
   derivation_type: DerivationType;
@@ -639,7 +832,7 @@ export interface RiskPredicate {
   upper: Upper1;
 }
 export interface PredictorRule {
-  tool: Tool;
+  tool: Tool1;
   normalization_minimum: NormalizationMinimum;
   normalization_maximum: NormalizationMaximum;
   high_direction: HighDirection;
@@ -647,11 +840,92 @@ export interface PredictorRule {
   weight: Weight;
 }
 export interface M2Config {
+  membrane_requests: MembraneRequests;
   structure_metrics_file: StructureMetricsFile;
   region_assessments_file: RegionAssessmentsFile;
   calculation_requests_file: CalculationRequestsFile;
 }
+export interface MembraneRequests {
+  [k: string]: MembraneGeometryInput;
+}
+/**
+ * ER M2 membrane ensemble with explicit geometry and subunit composition.
+ */
+export interface MembraneGeometryInput {
+  formula_version: FormulaVersion;
+  construct_id: ConstructId3;
+  condition_id: ConditionId3;
+  topology: MembraneTopologyEvidence;
+  subunit_composition: SubunitComposition;
+  assembly_applicability_source: AssemblyApplicabilitySource;
+  anchor_count_basis: AnchorCountBasis;
+  conformers: Conformers;
+  heavy_atom_clash_cutoff_angstrom: HeavyAtomClashCutoffAngstrom;
+  clash_rule_source: ClashRuleSource;
+}
+export interface SubunitComposition {
+  [k: string]: boolean;
+}
+export interface MembraneConformer {
+  model_id: ModelId;
+  conformer_id: ConformerId;
+  structure: StructureInput;
+  frame: MembraneFrame;
+  tethers: Tethers;
+  scaffold: ResidueSelection;
+  domains: Domains;
+  pockets: Pockets;
+  recruited_enzymes: RecruitedEnzymes;
+  sampling_method: SamplingMethod;
+  sampling_scope: SamplingScope;
+  coordinate_transform_reference: CoordinateTransformReference;
+}
+export interface StructureInput {
+  path: Path2;
+  model_id: ModelId1;
+  altloc: Altloc;
+  source_kind: SourceKind;
+  source_reference: SourceReference3;
+  confidence_file: ConfidenceFile;
+  expected_sequence: ExpectedSequence;
+}
+export interface MembraneFrame {
+  frame_id: FrameId;
+  origin_angstrom: OriginAngstrom;
+  unit_normal: UnitNormal;
+  thickness_angstrom: ThicknessAngstrom;
+  positive_side: PositiveSide;
+  body_side: BodySide1;
+  source_reference: SourceReference4;
+  raw_reference: ArtifactReference;
+  atom_radii_angstrom: AtomRadiiAngstrom;
+}
+export interface AtomRadiiAngstrom {
+  [k: string]: number;
+}
+export interface TetherGeometry {
+  subunit_id: SubunitId;
+  anchor: ResidueSelection;
+  linker: ResidueSelection;
+  attached_body: ResidueSelection;
+  contour_length_angstrom: ContourLengthAngstrom;
+  contour_length_source: ContourLengthSource;
+}
+export interface ResidueSelection {
+  chain: Chain;
+  residues: Residues;
+}
+export interface Domains {
+  [k: string]: ResidueSelection;
+}
+export interface Pockets {
+  [k: string]: ResidueSelection;
+}
+export interface RecruitedEnzymes {
+  [k: string]: ResidueSelection;
+}
 export interface M3Config {
+  er_requests: ErRequests;
   avidity_sh3: AvidityBinding | null;
   avidity_pdz: AvidityBinding | null;
   uncertainty: M3UncertaintySettings | null;
@@ -667,6 +941,68 @@ export interface M3Config {
   recruitment_bias_oc_vs_dmt: RecruitmentBiasOcVsDmt;
   ptr_pt_phase_handling: PtrPtPhaseHandling;
   author_native_inputs: AuthorNativeEnzymeScales | null;
+}
+export interface ErRequests {
+  [k: string]: ERRecruitmentInput;
+}
+/**
+ * Proposed ER M3 method with explicit physical amounts and geometry.
+ */
+export interface ERRecruitmentInput {
+  formula_version: FormulaVersion1;
+  construct_id: ConstructId4;
+  condition_id: ConditionId4;
+  topology_evidence_ref: TopologyEvidenceRef;
+  body_side: BodySide2;
+  geometry_ref: GeometryRef;
+  cytosol_volume: ScientificQuantity;
+  droplet_volume: ScientificQuantity;
+  er_area: ScientificQuantity;
+  scaffold_surface_density: ScientificQuantity;
+  density_entity_basis: DensityEntityBasis;
+  subunits_per_assembly: SubunitsPerAssembly;
+  anchors_per_assembly: AnchorsPerAssembly;
+  composition_source: CompositionSource;
+  total_scaffold_monomer_amount: ScientificQuantity;
+  unanchored_scaffold_binding: UnanchoredScaffoldBinding;
+  unanchored_scaffold_applicability_source: UnanchoredScaffoldApplicabilitySource;
+  enzyme_total_amounts: EnzymeTotalAmounts;
+  free_enzyme_partition: FreeEnzymePartition;
+  binding_graph: BindingGraph;
+  max_partition_states: MaxPartitionStates;
+  solver_max_evaluations: SolverMaxEvaluations;
+  relative_mass_tolerance: RelativeMassTolerance;
+}
+/**
+ * Canonical value with a registry binding; numerical controls are separate.
+ */
+export interface ScientificQuantity {
+  value: Value2;
+  unit: Unit1;
+  entity_basis: EntityBasis;
+  parameter_id: ParameterId1;
+  source_reference: SourceReference5;
+}
+export interface EnzymeTotalAmounts {
+  [k: string]: ScientificQuantity;
+}
+export interface FreeEnzymePartition {
+  [k: string]: ScientificQuantity;
+}
+export interface BindingGraph {
+  sites: Sites;
+  conflict_edges: ConflictEdges;
+  entity_basis: EntityBasis1;
+  geometry_ref: GeometryRef2;
+  method_assumption: MethodAssumption;
+  applicability_reference: ApplicabilityReference;
+}
+export interface BindingSite {
+  site_id: SiteId;
+  species: Species;
+  kd: ScientificQuantity;
+  geometry_ref: GeometryRef1;
+  binding_pair_ref: BindingPairRef;
 }
 export interface AvidityBinding {
   method: Method;
@@ -685,7 +1021,7 @@ export interface RangeEvidence {
   lower: Lower2;
   upper: Upper2;
   empirical_values: EmpiricalValues;
-  source_reference: SourceReference3;
+  source_reference: SourceReference6;
   parameter_ids: ParameterIds;
   reviewed_by: ReviewedBy;
 }
@@ -708,6 +1044,7 @@ export interface AuthorNativeEnzymeScales {
   interpretation: Interpretation;
 }
 export interface M4Config {
+  compartment_requests: CompartmentRequests;
   analysis: M4AnalysisConfig | null;
   assay_mode: AssayMode;
   measurement_compartment: MeasurementCompartment;
@@ -728,7 +1065,7 @@ export interface M4Config {
   pt_gate: InductionGateConfig | null;
   oc_gate: InductionGateConfig | null;
   dmt_gate: InductionGateConfig | null;
-  condition_id: ConditionId2;
+  condition_id: ConditionId6;
   max_side_product_fraction_13: MaxSideProductFraction13;
   min_13_reduction: Min13Reduction;
   min_15_improvement: Min15Improvement;
@@ -750,6 +1087,91 @@ export interface M4Config {
   solver_points: SolverPoints;
   transport_outside_over_inside: TransportOutsideOverInside;
 }
+export interface CompartmentRequests {
+  [k: string]: CompartmentNetworkInput;
+}
+/**
+ * ER M4 amount-state network; original cytosolic secretion is unchanged.
+ */
+export interface CompartmentNetworkInput {
+  formula_version: FormulaVersion2;
+  construct_id: ConstructId5;
+  condition_id: ConditionId5;
+  scenario: Scenario;
+  topology_evidence_ref: TopologyEvidenceRef1;
+  reaction_location_reference: ReactionLocationReference;
+  pools: Pools;
+  interfaces: Interfaces;
+  reactions: Reactions;
+  reaction_locations: ReactionLocations;
+  boundaries: Boundaries;
+  initial_amounts_umol: InitialAmountsUmol;
+  time_grid_h: TimeGridH;
+  steady_initial_guesses_umol: SteadyInitialGuessesUmol;
+  numerics: CompartmentNumerics;
+  evidence_mode: EvidenceMode;
+}
+export interface ReactionPool {
+  pool_id: PoolId;
+  role: Role2;
+  volume: ScientificQuantity;
+  geometry_ref: GeometryRef3;
+  enzyme_amounts: EnzymeAmounts;
+  enzyme_activity_ratios: EnzymeActivityRatios;
+}
+export interface EnzymeAmounts {
+  [k: string]: ScientificQuantity;
+}
+export interface EnzymeActivityRatios {
+  [k: string]: ScientificQuantity;
+}
+export interface ExchangeInterface {
+  interface_id: InterfaceId;
+  first_pool: FirstPool;
+  second_pool: SecondPool;
+  mode: Mode1;
+  second_over_first_partition: SecondOverFirstPartition;
+  conductance: Conductance;
+  applicability_reference: ApplicabilityReference1;
+  timescale_evidence_reference: TimescaleEvidenceReference;
+}
+export interface SecondOverFirstPartition {
+  [k: string]: ScientificQuantity;
+}
+export interface M4ReactionInput {
+  reaction_id: ReactionId;
+  enzyme: Enzyme;
+  substrate: Substrate;
+  product: Product;
+  kcat_per_h: KcatPerH;
+  km_um: KmUm;
+  parameter_ids: ParameterIds1;
+}
+export interface ReactionLocations {
+  [k: string]: string[];
+}
+export interface AmountBoundary {
+  boundary_id: BoundaryId;
+  pool_id: PoolId1;
+  compound: Compound;
+  kind: Kind1;
+  quantity: ScientificQuantity;
+  normalization: Normalization;
+}
+export interface InitialAmountsUmol {
+  [k: string]: {
+    [k: string]: ScientificQuantity;
+  };
+}
+export interface CompartmentNumerics {
+  method: Method1;
+  relative_tolerance: RelativeTolerance;
+  amount_absolute_tolerance_umol: AmountAbsoluteToleranceUmol;
+  steady_relative_tolerance: SteadyRelativeTolerance;
+  steady_absolute_tolerance_umol_per_h: SteadyAbsoluteToleranceUmolPerH;
+  eigenvalue_tolerance_per_h: EigenvalueTolerancePerH;
+  steady_max_evaluations: SteadyMaxEvaluations;
+}
 export interface M4AnalysisConfig {
   local_parameter_names: LocalParameterNames;
   ranges: Ranges1;
@@ -768,7 +1190,7 @@ export interface IDRMappingEvidence {
   aromatic_counts: AromaticCounts;
   theta_hydro: ThetaHydro;
   theta_aro: ThetaAro;
-  source_reference: SourceReference4;
+  source_reference: SourceReference7;
   applicable_domain_reference: ApplicableDomainReference;
   reviewed_by: ReviewedBy1;
 }
@@ -783,7 +1205,7 @@ export interface ConfirmedAbsentEnzymes {
 }
 export interface AbsenceEvidenceBinding {
   artifact: Artifact;
-  sha256: Sha2561;
+  sha256: Sha2562;
   reviewed_by: ReviewedBy2;
 }
 export interface InitialStateConfig {
@@ -800,13 +1222,13 @@ export interface InitialStateConfig {
 export interface FullNetworkInitialStateConfig {
   concentration_unit: ConcentrationUnit1;
   intracellular: Intracellular;
-  parameter_ids: ParameterIds1;
+  parameter_ids: ParameterIds2;
   extracellular: Extracellular;
 }
 export interface Intracellular {
   [k: string]: number;
 }
-export interface ParameterIds1 {
+export interface ParameterIds2 {
   [k: string]: string;
 }
 export interface Extracellular {
@@ -817,12 +1239,12 @@ export interface InductionGateConfig {
   off_time: OffTime;
   basal: Basal;
   induced: Induced;
-  mode: Mode1;
+  mode: Mode2;
   transition_width: TransitionWidth;
   time_unit: TimeUnit;
 }
 export interface TransportEvidenceBinding {
-  formula_version: FormulaVersion;
+  formula_version: FormulaVersion3;
   rate_parameter_id: RateParameterId;
   intracellular_volume_parameter_id: IntracellularVolumeParameterId;
   extracellular_volume_parameter_id: ExtracellularVolumeParameterId;

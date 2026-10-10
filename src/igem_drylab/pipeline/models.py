@@ -41,6 +41,7 @@ class PipelineManifest(BaseModel):
 
 
 class M1Candidate(ScientificResult):
+    membrane_topology_report: dict[str,Any] | None = None
     candidate_id: str
     construct_id: str
     construct_definition: dict[str, Any]
@@ -68,6 +69,8 @@ class M1Candidate(ScientificResult):
 
 
 class M2FusionAssessment(ScientificResult):
+    membrane_geometry_report: dict[str,Any] | None = None
+    membrane_geometry_sha256: str | None = None
     candidate_id: str
     construct_id: str
     construct_definition: dict[str, Any]
@@ -114,6 +117,8 @@ class M2FusionAssessment(ScientificResult):
 
 
 class M3ConcentrationAssessment(ScientificResult):
+    compartment_result: dict[str,Any] | None = None
+    compartment_result_sha256: str | None = None
     avidity_corrections: dict[str, Any] = Field(default_factory=dict)
     uncertainty_report: dict[str, Any] | None = None
     phi_source: Literal["measured_input", "S4_lever_rule"] | None = None
@@ -172,6 +177,7 @@ class M4CandidateContext(BaseModel):
 
 
 class M4ReactionPrediction(ScientificResult):
+    compartment_result: dict[str,Any] | None = None
     experimental_contract: dict[str, Any] = Field(default_factory=dict)
     transport_report: dict[str, Any] = Field(default_factory=dict)
     analysis_result: dict[str, Any] | None = None

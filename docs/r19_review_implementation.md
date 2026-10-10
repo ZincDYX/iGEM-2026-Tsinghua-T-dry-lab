@@ -10,11 +10,11 @@ must never be silently substituted into author regression.
 
 | Review requirement | Implementation state | Independent acceptance / outstanding work |
 |---|---|---|
-| 3.2 ER propagation and no cytosolic fallback | Implemented safety gate | `test_r19_er_routing.py`: anchored scaffold in a multi-ORF design; old/default M3 result cannot bypass M4 guard. ER quantitative solver remains separate work. |
-| 3.3 typed topology and exact anchor checks | Pending | Actual 888-aa construct, native topology output, unknown orientation and cleavage retained. |
-| 3.4 membrane/tether/assembly ensemble | Pending | Rigid-frame invariance, membrane exclusion, complete subunit composition, confidence-aware decisions. |
-| 3.5 conserved ER recruitment / graph occupancy | Pending | Independent partition function and no-edge original E1 oracle; 96-site bounded computation. |
-| 3.6–3.7 ER amounts / exchange / stability / matched controls | Pending | Closed-system mass invariant; explicit reaction locations; no forced equilibrium plus finite exchange on the same interface. |
+| 3.2 ER propagation and no cytosolic fallback | Implemented versioned routing | ER requests run through the existing M2→M3→M4 chain. Missing requests, mismatched upstream identities and missing reviewed bindings block explicitly. Historical cytosolic outputs remain separate. |
+| 3.3 typed topology and exact anchor checks | Implemented; actual topology job/data absent | Original source/range/native TM segments/body side/cleavage/evidence preserved. Expected anchor is not rejected. A caller's experimentally_supported label never grants formal approval: scoped reviewed experimental records are required. |
+| 3.4 membrane/tether/assembly ensemble | Implemented static ensemble method; actual membrane placement absent | Joint rigid-frame invariance; atomic-radius membrane exclusion; every anchored subunit has a tether; exact model/frame/mapping references, domain/pocket side and enzyme conflicts. This is not conformational contact probability or global biological rejection. |
+| 3.5 conserved ER recruitment / graph occupancy | Implemented; actual physical inputs absent | Surface density entity basis explicitly converted to amounts; unanchored scaffold accounted for or explicitly excluded with evidence; coupled mass balance uses exact independent-set partition. 96 isolated sites factorize; exhausted budgets do not approximate. M2 graph and approved parameter applicability checked. |
+| 3.6–3.7 ER amounts / exchange / stability / matched controls | Implemented fixed-geometry conditional method; actual project binding absent | Existing exact ten-reaction competitive kernel reused with explicit pool locations, volumes, amount conservation, finite/rapid exchange, exact local Jacobian and explicit multistart search. Matched four-enzyme controls separate from original dilute PTR/PT comparison. No global uniqueness claim. Variable volumes, 2D membrane enzyme kinetics and experimental control applicability are not implemented by this fixed-geometry method. |
 | 4 S1–S4 native tools, formal M2 chain and coupled occupancy | Existing pieces; closure pending | Do not promote diagnostic output to formal acceptance or MILP capacity to affinity. |
 | 4 S5 joint M3→M4 uncertainty | Pending | Each supplied joint sample recalculates M3 before M4; preserve supplied correlations. |
 | 4 S6–S10 scientific boundaries | Preserve existing methods; UI and physical control extension pending | No global uniqueness claim, no abundance→kcat change, no invented Kp or channeling gain. |
@@ -45,3 +45,26 @@ as project physical parameters or wet-lab observations.
 
 No new Agent framework, runtime platform, guessed physical parameters or
 alternative scientific tool has been introduced in the initial safety batch.
+
+## ER method acceptance
+
+Server-only independent tests: 21 passed for equation, membrane geometry,
+stage binding and routing probes. This includes an actual MCP stdio call to
+the ER M3 method, not only registration-name inspection. Synthetic fixtures
+are explicitly not project biological data. Full original author/scientific
+regression and the software release remain separate acceptance steps. The ER
+batch subsequently passed the full original/server suite: 808 passed, 9
+skipped (optional environment-dependent checks); the installed-wheel probe
+passed 41 tests. Frontend: 58 tests passed and TypeScript compilation passed.
+
+The real auxiliary FASTA contains `ER_anchor_FUSn_SH3x3_PDZ_FTH1` (888 aa).
+Its real ColabFold 1.6.2 execution produced five ranked models, each checked
+against all 888 original residues and its paired confidence record. Whole-model
+mean pLDDT spans 59.74–63.63, and anchor residues 2–73 span 62.24–67.60.
+These are predicted confidence observations, not an experimental measurement
+or permission to treat the flexible full assembly as a rigid validated cage.
+Verification of all model/confidence pairs is retained separately; a successful prediction does
+not establish ER side, intact anchor retention, 24-mer assembly, LLPS or
+fusion enzymatic activity. The original full K25 Mpipi author run also finished
+all 500,000,000 requested steps; this is an author-method reproduction, not
+a simulation of this fusion.

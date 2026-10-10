@@ -1,13 +1,23 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: R19_ER_AMOUNT_ORACLES_AND_SOURCE_BINDINGS
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_r19_er_equations.py", "tests/test_r19_membrane_geometry.py", "tests/test_r19_er_stage_bindings.py"]
+    requirement_or_formula_source: r18 ER review 3.3 through 3.7
+    oracle_type: independent_closed_form_quadratic_exponential_partition_and_rigid_transform
+    fixture_scope: synthetic_mathematical_sources_server_only_not_project_evidence
+    formula_version: ER_independently_versioned_membrane_graph_and_amount_v1
+    units: [uM, umol, L, um2, copies/um2, L/h, 1/h, umol/h, angstrom]
+    tolerance_basis: exact_scope_identity_and_declared_solver_tolerances_against_analytic_oracles
+    expected_faults: [expected_anchor_rejected, one_tether_per_cage, graph_edges_ignored, exponential_96_site_enumeration, missing_data_filled, reaction_flux_not_volume_weighted, simultaneous_rapid_and_finite_exchange, native_parameter_bound_to_fusion, forged_approval_or_upstream_amounts]
   - risk_id: R19_ER_NO_CYTOSOLIC_FALLBACK
     group: scientific_algorithm
     test_nodeids: ["tests/test_r19_er_routing.py::test_whole_design_er_localization_cannot_be_lost_by_default_upstream_result", "tests/test_r19_er_routing.py::test_explicit_er_result_cannot_be_reinterpreted_as_cytosolic_config"]
     requirement_or_formula_source: r18 ER review 3.2 and batch 1
     oracle_type: explicit_compartment_identity_and_absence_of_calculated_concentrations
     fixture_scope: synthetic_routing_only_not_biology_server_only
-    formula_version: original_cytosolic_unchanged_ER_explicitly_unsupported
+    formula_version: original_cytosolic_unchanged_ER_versioned_request_or_explicit_block
     units: none
     tolerance_basis: exact_routing_and_blocker
     expected_faults: [ER_design_falls_into_cytosolic_solver, forged_or_old_result_unlocks_ER_M4]

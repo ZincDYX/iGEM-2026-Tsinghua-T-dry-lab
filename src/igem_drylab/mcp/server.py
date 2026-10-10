@@ -14,6 +14,9 @@ from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeo
 from igem_drylab.fusion_tool_import import FusionImportInput
 from igem_drylab.m1_prioritization import M1PrioritizationInput
 from igem_drylab.mpipi import MpipiAnalysisInput
+from igem_drylab.membrane_geometry import MembraneGeometryInput
+from igem_drylab.m3_er import ERRecruitmentInput
+from igem_drylab.m4_compartments import CompartmentNetworkInput, CompartmentComparisonInput
 
 server = MCPServer(
     name="igem-drylab-2026",
@@ -38,6 +41,26 @@ def _call_local(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         error = result.structured_content.get("error", {})
         raise ValueError(str(error.get("message", "local tool failed")))
     return result.structured_content
+
+
+@server.tool(name="igem.m2.membrane_geometry", title="ER membrane-constrained M2 conformations", structured_output=True)
+def m2_membrane_geometry(payload: MembraneGeometryInput) -> dict[str, Any]:
+    return _call_local("igem.m2.membrane_geometry", {"payload":payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m3.er_recruitment", title="Versioned ER graph recruitment and amount conservation", structured_output=True)
+def m3_er_recruitment(payload: ERRecruitmentInput) -> dict[str, Any]:
+    return _call_local("igem.m3.er_recruitment", {"payload":payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m4.compartment_amounts", title="Amount-based compartment network and exchange", structured_output=True)
+def m4_compartment_amounts(payload: CompartmentNetworkInput) -> dict[str, Any]:
+    return _call_local("igem.m4.compartment_amounts", {"payload":payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m4.compare_compartments", title="Matched physical no-LLPS / cytosolic / ER controls", structured_output=True)
+def m4_compare_compartments(payload: CompartmentComparisonInput) -> dict[str, Any]:
+    return _call_local("igem.m4.compare_compartments", {"payload":payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m4.report", title="Original M4 three-scenario F1/F2/F3 report", structured_output=True)

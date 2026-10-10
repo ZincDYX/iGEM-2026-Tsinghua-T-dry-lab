@@ -160,7 +160,7 @@ def sequence_prediction_tools():
         Path(__file__).parents[1] / "fusion_tool_import.py",Path(__file__).parents[1]/"tango_runner.py")
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
-        implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu")
+        implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False)
         for name, label in (("iupred2a", "IUPred2 disorder prediction"), ("seg", "SEG low-complexity prediction"),
                             ("colabfold", "ColabFold enzyme / fusion prediction"),
                             ("pscore", "Original PScore — diagnostic LLPS propensity"),

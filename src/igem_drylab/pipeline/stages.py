@@ -110,6 +110,17 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
                 flags.append(f"{identifier}:missing_required_M1_predictor_evidence")
             missing_predictors.extend(f"{identifier}:{name}" for name in screened.missing_required_evidence)
         fusion_screen = {}
+        membrane_topology_report = None
+        if construct.localization_context == "er_anchored":
+            if construct.membrane_topology and qc.full_protein_sequence:
+                from igem_drylab.compartments import evaluate_topology
+                try:
+                    if construct.membrane_topology.construct_id != construct.id:
+                        raise ValueError("ER_topology_construct_identity_mismatch")
+                    membrane_topology_report = evaluate_topology(construct.membrane_topology,qc.full_protein_sequence)
+                    # Unknown side is a quantitative block, not sequence rejection.
+                except (ValueError,OSError) as error:
+                    flags.append(str(error))
         if qc.full_protein_sequence is not None:
             full = _screen_m1_sequence(qc.full_protein_sequence, "full_fusion", evidence.get(construct.id, {}),
                 evidence.get(construct.id, {}), definitions, digest, rules, settings, config, qc.protein_sha256, construct)
@@ -143,6 +154,7 @@ def run_m1(config: ProjectConfig, run_dir: Path) -> tuple[list[M1Candidate], Sta
             feature_definitions_sha256=digest, sequence_sha256=first_features["sequence_sha256"] if first_features else None,
             full_sequence_sha256=qc.protein_sha256, sequence_qc=qc.model_dump(mode="json"),
             sequence_screen_verdict="reject" if rejected else ("review" if any(flag.startswith("M1_review_pending") for flag in flags) else ("blocked" if flags else ("review" if missing_predictors else "pass"))),
+            membrane_topology_report=membrane_topology_report,
             screen_flags=sorted(set(flags)), missing_predictor_evidence=sorted(set(missing_predictors)),
             engineering_priority_score=None, recommended_for_m2=eligible, retrospective_only=retrospective,
             eligibility="eligible" if eligible else ("retrospective_only" if retrospective else ("rejected" if rejected else "blocked")),
@@ -370,6 +382,8 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     from igem_drylab.compartments import scenario_for_construct
     for row in assessments:
         row.compartment_scenario = scenario_for_construct(config, row.construct_id, row.construct_definition)
+    from .er_stages import attach_membrane_geometry
+    attach_membrane_geometry(config,candidates,assessments,stage_dir)
     write_models(stage_dir, "fusion_assessments", assessments)
     return assessments, _stage_output("m2_structure_screen", stage_dir, "fusion_assessments", len(assessments))
 
@@ -508,11 +522,8 @@ def run_m3(config: ProjectConfig, run_dir: Path, assessments: list[M2FusionAsses
         from igem_drylab.compartments import scenario_for_construct
         scenario = scenario_for_construct(config, assessment.construct_id, assessment.construct_definition)
         if scenario == "er_anchored" or assessment.compartment_scenario == "er_anchored":
-            records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id,
-                construct_id=assessment.construct_id, compartment_scenario="er_anchored",
-                status="insufficient_data", missing_inputs=["unsupported_compartment_model:er_anchored"],
-                recommended_next_action=["Supply an independently versioned ER topology, geometry and amount-conserving model binding."],
-                notes="ER sequence/structure results are preserved; no cytosolic fallback or concentrations were generated."))
+            from .er_stages import run_er_m3
+            records.append(run_er_m3(config,assessment))
             continue
         if any(assessment.construct_id in design.protein_construct_ids for design in config.inputs.designs):
             records.append(M3ConcentrationAssessment(candidate_id=assessment.candidate_id, construct_id=assessment.construct_id,
@@ -938,8 +949,8 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
     for item in assessments:
         scenario = scenario_for_construct(config, item.construct_id)
         if scenario == "er_anchored" or item.compartment_scenario == "er_anchored":
-            row = _m4_insufficient(item.candidate_id, config, ["unsupported_compartment_model:er_anchored"], construct_id=item.construct_id)
-            row.compartment_scenario = "er_anchored"
+            from .er_stages import run_er_m4
+            row = run_er_m4(config,item,run_dir/"m4_er_amounts")
             blocked.append(row)
         else:
             permitted.append(item)
@@ -964,7 +975,8 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
             "network_variant":settings.network_variant,
             "steady_state_observation_reference":settings.steady_state_observation_reference,
             "claim_scope":record.claim_scope,
-            "approximation_scope":"rapid_phase_partition_and_independent_site_binding_not_experimental_validation"}
+            "approximation_scope":("explicit_ER_amounts_graph_occupancy_and_declared_exchange_not_experimental_validation"
+                if record.compartment_scenario == "er_anchored" else "rapid_phase_partition_and_independent_site_binding_not_experimental_validation")}
         contract = record.simulation_inputs.get("prediction_contract")
         if contract:
             contract["experiment_context"] = record.experimental_contract
@@ -979,6 +991,10 @@ def run_m4(config: ProjectConfig, run_dir: Path, assessments: list[M3Concentrati
         from igem_drylab.design_analysis import analyze_prediction
         for record in records:
             if record.status != "valid":
+                continue
+            if record.compartment_scenario == "er_anchored":
+                record.missing_inputs.append("ER_joint_uncertainty_requires_ER_specific_samples_not_cytosolic_replay")
+                record.notes += " Original cytosolic uncertainty replay was not applied to ER results."
                 continue
             try:
                 for evidence in config.stages.m4_reaction.analysis.ranges:
@@ -1628,6 +1644,8 @@ def _formal_analysis_missing(config: ProjectConfig) -> list[str]:
 
 def _label_scientific_results(config: ProjectConfig, records: list[object]) -> None:
     for record in records:
+        if record.compartment_scenario == "er_anchored":
+            continue  # Independently versioned ER adapters own their evidence scope.
         record.numerically_solved = record.status == "valid"
         record.evidence_ready = record.numerically_solved and _is_formal(config)
         record.claim_scope = ("author_native_sensitivity" if config.stages.m4_reaction.unit_mode == "author_native_sensitivity" else

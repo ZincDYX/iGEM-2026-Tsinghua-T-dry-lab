@@ -59,6 +59,20 @@ def precheck(project: Project, through: str | None = None) -> ScientificPrecheck
             if int(stage[1:]) > target:
                 continue
             for construct_id,condition_id in scopes:
+                from igem_drylab.compartments import scenario_for_construct
+                if construct_id and scenario_for_construct(config,construct_id) == "er_anchored":
+                    request = (config.stages.m3_concentration.er_requests if stage == "m3" else
+                        config.stages.m4_reaction.compartment_requests).get(construct_id)
+                    if request is None:
+                        missing.append(KnownMissingInput(stage=stage,code="ER_versioned_request",field_path="scientific_project.config.stages."+
+                            ("m3_concentration.er_requests" if stage=="m3" else "m4_reaction.compartment_requests"),
+                            construct_id=construct_id,condition_id=condition_id,reason_codes=["not_declared"],source_kind="ER_topology_geometry_amount_model"))
+                    else:
+                        from igem_drylab.pipeline.er_stages import registry_gaps
+                        for reason in registry_gaps(config,request):
+                            missing.append(KnownMissingInput(stage=stage,code="ER_parameter_binding",field_path="scientific_project.config.parameters",
+                                construct_id=construct_id,condition_id=request.condition_id,reason_codes=[reason],source_kind="reviewed_ER_entity_condition_method_parameter"))
+                    continue  # Never ask an ER design for cytosolic phi/anchor Kd.
                 for requirement in requirements_for_stage(config,stage):
                     result=resolve_requirement(registry,requirement,config.experimental_context,
                         allow_assumptions=config.execution.allow_assumptions,construct_id=construct_id,condition_id=condition_id,

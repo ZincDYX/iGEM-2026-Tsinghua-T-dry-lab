@@ -1,6 +1,27 @@
 {
   "ScientificRecordView": {
     "$defs": {
+      "ArtifactReference": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "title": "ArtifactReference",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -70,6 +91,17 @@
             ],
             "default": null,
             "title": "Localization Design Evidence"
+          },
+          "membrane_topology": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MembraneTopologyEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "m1_review": {
             "anyOf": [
@@ -212,6 +244,7 @@
           "fusion_orientation",
           "localization_context",
           "localization_design_evidence",
+          "membrane_topology",
           "m1_review",
           "linker_ids",
           "scaffold_id",
@@ -228,6 +261,161 @@
           "oc_truncation_mapping"
         ],
         "title": "ConstructDefinition",
+        "type": "object"
+      },
+      "MembraneTopologyEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "construct_version": {
+            "title": "Construct Version",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "input_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Sequence Sha256",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueRange"
+          },
+          "anchor_source_record": {
+            "minLength": 1,
+            "title": "Anchor Source Record",
+            "type": "string"
+          },
+          "tool": {
+            "const": "DeepTMHMM",
+            "title": "Tool",
+            "type": "string"
+          },
+          "tool_version": {
+            "minLength": 1,
+            "title": "Tool Version",
+            "type": "string"
+          },
+          "native_record_id": {
+            "title": "Native Record Id",
+            "type": "string"
+          },
+          "native_output": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "orientation_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation Source"
+          },
+          "cleavage_state": {
+            "enum": [
+              "not_cleaved",
+              "cleaved",
+              "unknown"
+            ],
+            "title": "Cleavage State",
+            "type": "string"
+          },
+          "body_removed_by_cleavage": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Removed By Cleavage"
+          },
+          "cleavage_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleavage Source"
+          },
+          "evidence_level": {
+            "enum": [
+              "predicted",
+              "experimentally_supported"
+            ],
+            "title": "Evidence Level",
+            "type": "string"
+          },
+          "raw_references": {
+            "items": {
+              "$ref": "#/$defs/ArtifactReference"
+            },
+            "minItems": 1,
+            "title": "Raw References",
+            "type": "array"
+          },
+          "review_parameter_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "body_side",
+                "cleavage_state",
+                "body_retained"
+              ]
+            },
+            "title": "Review Parameter Ids",
+            "type": "object"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "construct_id",
+          "construct_version",
+          "condition_id",
+          "input_sequence_sha256",
+          "anchor",
+          "anchor_source_record",
+          "tool",
+          "tool_version",
+          "native_record_id",
+          "native_output",
+          "body_side",
+          "orientation_source",
+          "cleavage_state",
+          "body_removed_by_cleavage",
+          "cleavage_source",
+          "evidence_level",
+          "raw_references",
+          "review_parameter_ids"
+        ],
+        "title": "MembraneTopologyEvidence",
         "type": "object"
       },
       "OrderedPartConfig": {
@@ -667,6 +855,27 @@
           "upper",
           "type"
         ]
+      },
+      "ResidueRange": {
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "minimum": 1,
+            "title": "Start",
+            "type": "integer"
+          },
+          "end": {
+            "minimum": 1,
+            "title": "End",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ResidueRange",
+        "type": "object"
       },
       "TruncationMapping": {
         "additionalProperties": false,
@@ -3615,6 +3824,80 @@
         "title": "AbsenceEvidenceBinding",
         "type": "object"
       },
+      "AmountBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "boundary_id": {
+            "title": "Boundary Id",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "compound": {
+            "enum": [
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15"
+            ],
+            "title": "Compound",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "constant_feed",
+              "first_order_loss"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "quantity": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "normalization": {
+            "const": "physical_amount",
+            "title": "Normalization",
+            "type": "string"
+          }
+        },
+        "required": [
+          "boundary_id",
+          "pool_id",
+          "compound",
+          "kind",
+          "quantity",
+          "normalization"
+        ],
+        "title": "AmountBoundary",
+        "type": "object"
+      },
+      "ArtifactReference": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "title": "ArtifactReference",
+        "type": "object"
+      },
       "AssemblyRecord": {
         "additionalProperties": false,
         "properties": {
@@ -3752,6 +4035,307 @@
         "title": "AvidityBinding",
         "type": "object"
       },
+      "BindingGraph": {
+        "additionalProperties": false,
+        "properties": {
+          "sites": {
+            "items": {
+              "$ref": "#/$defs/BindingSite"
+            },
+            "title": "Sites",
+            "type": "array"
+          },
+          "conflict_edges": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Conflict Edges",
+            "type": "array"
+          },
+          "entity_basis": {
+            "const": "complete_assembly",
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "method_assumption": {
+            "const": "hard_exclusion_no_additional_cooperativity",
+            "title": "Method Assumption",
+            "type": "string"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sites",
+          "conflict_edges",
+          "entity_basis",
+          "geometry_ref",
+          "method_assumption",
+          "applicability_reference"
+        ],
+        "title": "BindingGraph",
+        "type": "object"
+      },
+      "BindingSite": {
+        "additionalProperties": false,
+        "properties": {
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "kd": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "species",
+          "kd",
+          "geometry_ref",
+          "binding_pair_ref"
+        ],
+        "title": "BindingSite",
+        "type": "object"
+      },
+      "CompartmentNetworkInput": {
+        "additionalProperties": false,
+        "description": "ER M4 amount-state network; original cytosolic secretion is unchanged.",
+        "properties": {
+          "formula_version": {
+            "const": "m4-compartment-amount-v1-2026-10-10",
+            "default": "m4-compartment-amount-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "scenario": {
+            "enum": [
+              "no_LLPS",
+              "cytosolic_LLPS",
+              "ER_anchored_LLPS"
+            ],
+            "title": "Scenario",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topology Evidence Ref"
+          },
+          "reaction_location_reference": {
+            "minLength": 1,
+            "title": "Reaction Location Reference",
+            "type": "string"
+          },
+          "pools": {
+            "items": {
+              "$ref": "#/$defs/ReactionPool"
+            },
+            "minItems": 1,
+            "title": "Pools",
+            "type": "array"
+          },
+          "interfaces": {
+            "items": {
+              "$ref": "#/$defs/ExchangeInterface"
+            },
+            "title": "Interfaces",
+            "type": "array"
+          },
+          "reactions": {
+            "items": {
+              "$ref": "#/$defs/M4ReactionInput"
+            },
+            "title": "Reactions",
+            "type": "array"
+          },
+          "reaction_locations": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Reaction Locations",
+            "type": "object"
+          },
+          "boundaries": {
+            "items": {
+              "$ref": "#/$defs/AmountBoundary"
+            },
+            "title": "Boundaries",
+            "type": "array"
+          },
+          "initial_amounts_umol": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/$defs/ScientificQuantity"
+              },
+              "type": "object"
+            },
+            "title": "Initial Amounts Umol",
+            "type": "object"
+          },
+          "time_grid_h": {
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "title": "Time Grid H",
+            "type": "array"
+          },
+          "steady_initial_guesses_umol": {
+            "items": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "title": "Steady Initial Guesses Umol",
+            "type": "array"
+          },
+          "numerics": {
+            "$ref": "#/$defs/CompartmentNumerics"
+          },
+          "evidence_mode": {
+            "enum": [
+              "conditional_model",
+              "reviewed_project_binding"
+            ],
+            "title": "Evidence Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "scenario",
+          "topology_evidence_ref",
+          "reaction_location_reference",
+          "pools",
+          "interfaces",
+          "reactions",
+          "reaction_locations",
+          "boundaries",
+          "initial_amounts_umol",
+          "time_grid_h",
+          "steady_initial_guesses_umol",
+          "numerics",
+          "evidence_mode"
+        ],
+        "title": "CompartmentNetworkInput",
+        "type": "object"
+      },
+      "CompartmentNumerics": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "BDF",
+              "Radau",
+              "LSODA"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Tolerance",
+            "type": "number"
+          },
+          "amount_absolute_tolerance_umol": {
+            "exclusiveMinimum": 0,
+            "title": "Amount Absolute Tolerance Umol",
+            "type": "number"
+          },
+          "steady_relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Steady Relative Tolerance",
+            "type": "number"
+          },
+          "steady_absolute_tolerance_umol_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Steady Absolute Tolerance Umol Per H",
+            "type": "number"
+          },
+          "eigenvalue_tolerance_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Eigenvalue Tolerance Per H",
+            "type": "number"
+          },
+          "steady_max_evaluations": {
+            "minimum": 1,
+            "title": "Steady Max Evaluations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "relative_tolerance",
+          "amount_absolute_tolerance_umol",
+          "steady_relative_tolerance",
+          "steady_absolute_tolerance_umol_per_h",
+          "eigenvalue_tolerance_per_h",
+          "steady_max_evaluations"
+        ],
+        "title": "CompartmentNumerics",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -3821,6 +4405,17 @@
             ],
             "default": null,
             "title": "Localization Design Evidence"
+          },
+          "membrane_topology": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MembraneTopologyEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "m1_review": {
             "anyOf": [
@@ -3963,6 +4558,7 @@
           "fusion_orientation",
           "localization_context",
           "localization_design_evidence",
+          "membrane_topology",
           "m1_review",
           "linker_ids",
           "scaffold_id",
@@ -4377,6 +4973,155 @@
         "title": "DesignConfig",
         "type": "object"
       },
+      "ERRecruitmentInput": {
+        "additionalProperties": false,
+        "description": "Proposed ER M3 method with explicit physical amounts and geometry.",
+        "properties": {
+          "formula_version": {
+            "const": "m3-er-amount-independent-set-v1-2026-10-10",
+            "default": "m3-er-amount-independent-set-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "title": "Topology Evidence Ref",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "cytosol_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "droplet_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "er_area": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "scaffold_surface_density": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "density_entity_basis": {
+            "enum": [
+              "scaffold_monomer",
+              "complete_assembly",
+              "effective_anchor"
+            ],
+            "title": "Density Entity Basis",
+            "type": "string"
+          },
+          "subunits_per_assembly": {
+            "minimum": 1,
+            "title": "Subunits Per Assembly",
+            "type": "integer"
+          },
+          "anchors_per_assembly": {
+            "minimum": 1,
+            "title": "Anchors Per Assembly",
+            "type": "integer"
+          },
+          "composition_source": {
+            "minLength": 1,
+            "title": "Composition Source",
+            "type": "string"
+          },
+          "total_scaffold_monomer_amount": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "unanchored_scaffold_binding": {
+            "enum": [
+              "included_in_droplet",
+              "excluded_with_evidence"
+            ],
+            "title": "Unanchored Scaffold Binding",
+            "type": "string"
+          },
+          "unanchored_scaffold_applicability_source": {
+            "minLength": 1,
+            "title": "Unanchored Scaffold Applicability Source",
+            "type": "string"
+          },
+          "enzyme_total_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Total Amounts",
+            "type": "object"
+          },
+          "free_enzyme_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Free Enzyme Partition",
+            "type": "object"
+          },
+          "binding_graph": {
+            "$ref": "#/$defs/BindingGraph"
+          },
+          "max_partition_states": {
+            "minimum": 1,
+            "title": "Max Partition States",
+            "type": "integer"
+          },
+          "solver_max_evaluations": {
+            "minimum": 1,
+            "title": "Solver Max Evaluations",
+            "type": "integer"
+          },
+          "relative_mass_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Mass Tolerance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology_evidence_ref",
+          "body_side",
+          "geometry_ref",
+          "cytosol_volume",
+          "droplet_volume",
+          "er_area",
+          "scaffold_surface_density",
+          "density_entity_basis",
+          "subunits_per_assembly",
+          "anchors_per_assembly",
+          "composition_source",
+          "total_scaffold_monomer_amount",
+          "unanchored_scaffold_binding",
+          "unanchored_scaffold_applicability_source",
+          "enzyme_total_amounts",
+          "free_enzyme_partition",
+          "binding_graph",
+          "max_partition_states",
+          "solver_max_evaluations",
+          "relative_mass_tolerance"
+        ],
+        "title": "ERRecruitmentInput",
+        "type": "object"
+      },
       "EnzymeConfig": {
         "additionalProperties": false,
         "properties": {
@@ -4426,6 +5171,80 @@
           "sequence_sha256"
         ],
         "title": "EnzymeConfig",
+        "type": "object"
+      },
+      "ExchangeInterface": {
+        "additionalProperties": false,
+        "properties": {
+          "interface_id": {
+            "title": "Interface Id",
+            "type": "string"
+          },
+          "first_pool": {
+            "title": "First Pool",
+            "type": "string"
+          },
+          "second_pool": {
+            "title": "Second Pool",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "finite_exchange",
+              "rapid_equilibrium"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "second_over_first_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Second Over First Partition",
+            "type": "object"
+          },
+          "conductance": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ScientificQuantity"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conductance"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          },
+          "timescale_evidence_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timescale Evidence Reference"
+          }
+        },
+        "required": [
+          "interface_id",
+          "first_pool",
+          "second_pool",
+          "mode",
+          "second_over_first_partition",
+          "conductance",
+          "applicability_reference",
+          "timescale_evidence_reference"
+        ],
+        "title": "ExchangeInterface",
         "type": "object"
       },
       "ExecutionConfig": {
@@ -5077,6 +5896,13 @@
       "M2Config": {
         "additionalProperties": false,
         "properties": {
+          "membrane_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneGeometryInput"
+            },
+            "title": "Membrane Requests",
+            "type": "object"
+          },
           "structure_metrics_file": {
             "anyOf": [
               {
@@ -5120,6 +5946,7 @@
         "title": "M2Config",
         "type": "object",
         "required": [
+          "membrane_requests",
           "structure_metrics_file",
           "region_assessments_file",
           "calculation_requests_file"
@@ -5128,6 +5955,13 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "er_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ERRecruitmentInput"
+            },
+            "title": "Er Requests",
+            "type": "object"
+          },
           "avidity_sh3": {
             "anyOf": [
               {
@@ -5291,6 +6125,7 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "er_requests",
           "avidity_sh3",
           "avidity_pdz",
           "uncertainty",
@@ -5426,6 +6261,13 @@
       "M4Config": {
         "additionalProperties": false,
         "properties": {
+          "compartment_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/CompartmentNetworkInput"
+            },
+            "title": "Compartment Requests",
+            "type": "object"
+          },
           "analysis": {
             "anyOf": [
               {
@@ -5862,6 +6704,7 @@
         "title": "M4Config",
         "type": "object",
         "required": [
+          "compartment_requests",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -5904,6 +6747,62 @@
           "solver_points",
           "transport_outside_over_inside"
         ]
+      },
+      "M4ReactionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "reaction_id": {
+            "title": "Reaction Id",
+            "type": "string"
+          },
+          "enzyme": {
+            "enum": [
+              "PTR",
+              "PT",
+              "OC",
+              "DMT"
+            ],
+            "title": "Enzyme",
+            "type": "string"
+          },
+          "substrate": {
+            "title": "Substrate",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "kcat_per_h": {
+            "minimum": 0,
+            "title": "Kcat Per H",
+            "type": "number"
+          },
+          "km_um": {
+            "exclusiveMinimum": 0,
+            "title": "Km Um",
+            "type": "number"
+          },
+          "parameter_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "title": "Parameter Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reaction_id",
+          "enzyme",
+          "substrate",
+          "product",
+          "kcat_per_h",
+          "km_um",
+          "parameter_ids"
+        ],
+        "title": "M4ReactionInput",
+        "type": "object"
       },
       "M5Config": {
         "additionalProperties": false,
@@ -5959,6 +6858,408 @@
           "discrepancy_threshold_configured",
           "fit_plan"
         ]
+      },
+      "MembraneConformer": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "conformer_id": {
+            "title": "Conformer Id",
+            "type": "string"
+          },
+          "structure": {
+            "$ref": "#/$defs/StructureInput"
+          },
+          "frame": {
+            "$ref": "#/$defs/MembraneFrame"
+          },
+          "tethers": {
+            "items": {
+              "$ref": "#/$defs/TetherGeometry"
+            },
+            "minItems": 1,
+            "title": "Tethers",
+            "type": "array"
+          },
+          "scaffold": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "domains": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Domains",
+            "type": "object"
+          },
+          "pockets": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Pockets",
+            "type": "object"
+          },
+          "recruited_enzymes": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Recruited Enzymes",
+            "type": "object"
+          },
+          "sampling_method": {
+            "minLength": 1,
+            "title": "Sampling Method",
+            "type": "string"
+          },
+          "sampling_scope": {
+            "minLength": 1,
+            "title": "Sampling Scope",
+            "type": "string"
+          },
+          "coordinate_transform_reference": {
+            "minLength": 1,
+            "title": "Coordinate Transform Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "conformer_id",
+          "structure",
+          "frame",
+          "tethers",
+          "scaffold",
+          "domains",
+          "pockets",
+          "recruited_enzymes",
+          "sampling_method",
+          "sampling_scope",
+          "coordinate_transform_reference"
+        ],
+        "title": "MembraneConformer",
+        "type": "object"
+      },
+      "MembraneFrame": {
+        "additionalProperties": false,
+        "properties": {
+          "frame_id": {
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "origin_angstrom": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Origin Angstrom",
+            "type": "array"
+          },
+          "unit_normal": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Unit Normal",
+            "type": "array"
+          },
+          "thickness_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Thickness Angstrom",
+            "type": "number"
+          },
+          "positive_side": {
+            "enum": [
+              "cytosolic",
+              "luminal"
+            ],
+            "title": "Positive Side",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "raw_reference": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "atom_radii_angstrom": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Atom Radii Angstrom",
+            "type": "object"
+          }
+        },
+        "required": [
+          "frame_id",
+          "origin_angstrom",
+          "unit_normal",
+          "thickness_angstrom",
+          "positive_side",
+          "body_side",
+          "source_reference",
+          "raw_reference",
+          "atom_radii_angstrom"
+        ],
+        "title": "MembraneFrame",
+        "type": "object"
+      },
+      "MembraneGeometryInput": {
+        "additionalProperties": false,
+        "description": "ER M2 membrane ensemble with explicit geometry and subunit composition.",
+        "properties": {
+          "formula_version": {
+            "const": "m2-er-membrane-v1-2026-10-10",
+            "default": "m2-er-membrane-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology": {
+            "$ref": "#/$defs/MembraneTopologyEvidence"
+          },
+          "subunit_composition": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Subunit Composition",
+            "type": "object"
+          },
+          "assembly_applicability_source": {
+            "minLength": 1,
+            "title": "Assembly Applicability Source",
+            "type": "string"
+          },
+          "anchor_count_basis": {
+            "const": "explicit_subunit_composition",
+            "title": "Anchor Count Basis",
+            "type": "string"
+          },
+          "conformers": {
+            "items": {
+              "$ref": "#/$defs/MembraneConformer"
+            },
+            "minItems": 1,
+            "title": "Conformers",
+            "type": "array"
+          },
+          "heavy_atom_clash_cutoff_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Heavy Atom Clash Cutoff Angstrom",
+            "type": "number"
+          },
+          "clash_rule_source": {
+            "minLength": 1,
+            "title": "Clash Rule Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology",
+          "subunit_composition",
+          "assembly_applicability_source",
+          "anchor_count_basis",
+          "conformers",
+          "heavy_atom_clash_cutoff_angstrom",
+          "clash_rule_source"
+        ],
+        "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneTopologyEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "construct_version": {
+            "title": "Construct Version",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "input_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Sequence Sha256",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueRange"
+          },
+          "anchor_source_record": {
+            "minLength": 1,
+            "title": "Anchor Source Record",
+            "type": "string"
+          },
+          "tool": {
+            "const": "DeepTMHMM",
+            "title": "Tool",
+            "type": "string"
+          },
+          "tool_version": {
+            "minLength": 1,
+            "title": "Tool Version",
+            "type": "string"
+          },
+          "native_record_id": {
+            "title": "Native Record Id",
+            "type": "string"
+          },
+          "native_output": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "orientation_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation Source"
+          },
+          "cleavage_state": {
+            "enum": [
+              "not_cleaved",
+              "cleaved",
+              "unknown"
+            ],
+            "title": "Cleavage State",
+            "type": "string"
+          },
+          "body_removed_by_cleavage": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Removed By Cleavage"
+          },
+          "cleavage_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleavage Source"
+          },
+          "evidence_level": {
+            "enum": [
+              "predicted",
+              "experimentally_supported"
+            ],
+            "title": "Evidence Level",
+            "type": "string"
+          },
+          "raw_references": {
+            "items": {
+              "$ref": "#/$defs/ArtifactReference"
+            },
+            "minItems": 1,
+            "title": "Raw References",
+            "type": "array"
+          },
+          "review_parameter_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "body_side",
+                "cleavage_state",
+                "body_retained"
+              ]
+            },
+            "title": "Review Parameter Ids",
+            "type": "object"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "construct_id",
+          "construct_version",
+          "condition_id",
+          "input_sequence_sha256",
+          "anchor",
+          "anchor_source_record",
+          "tool",
+          "tool_version",
+          "native_record_id",
+          "native_output",
+          "body_side",
+          "orientation_source",
+          "cleavage_state",
+          "body_removed_by_cleavage",
+          "cleavage_source",
+          "evidence_level",
+          "raw_references",
+          "review_parameter_ids"
+        ],
+        "title": "MembraneTopologyEvidence",
+        "type": "object"
       },
       "OrderedPartConfig": {
         "additionalProperties": false,
@@ -6628,6 +7929,56 @@
         "title": "RangeEvidence",
         "type": "object"
       },
+      "ReactionPool": {
+        "additionalProperties": false,
+        "properties": {
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "cytosol",
+              "anchored_droplet",
+              "er_lumen",
+              "extracellular"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "enzyme_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Amounts",
+            "type": "object"
+          },
+          "enzyme_activity_ratios": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Activity Ratios",
+            "type": "object"
+          }
+        },
+        "required": [
+          "pool_id",
+          "role",
+          "volume",
+          "geometry_ref",
+          "enzyme_amounts",
+          "enzyme_activity_ratios"
+        ],
+        "title": "ReactionPool",
+        "type": "object"
+      },
       "RecruitmentConfig": {
         "additionalProperties": false,
         "properties": {
@@ -6668,6 +8019,57 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "ResidueRange": {
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "minimum": 1,
+            "title": "Start",
+            "type": "integer"
+          },
+          "end": {
+            "minimum": 1,
+            "title": "End",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ResidueRange",
+        "type": "object"
+      },
+      "ResidueSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "chain": {
+            "title": "Chain",
+            "type": "string"
+          },
+          "residues": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "minItems": 1,
+            "title": "Residues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chain",
+          "residues"
+        ],
+        "title": "ResidueSelection",
         "type": "object"
       },
       "RiskPredicate": {
@@ -6848,6 +8250,56 @@
         "title": "ScientificInputsView",
         "type": "object"
       },
+      "ScientificQuantity": {
+        "additionalProperties": false,
+        "description": "Canonical value with a registry binding; numerical controls are separate.",
+        "properties": {
+          "value": {
+            "minimum": 0,
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "enum": [
+              "uM",
+              "umol",
+              "L",
+              "um2",
+              "copies/um2",
+              "1",
+              "L/h",
+              "1/h",
+              "umol/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "entity_basis": {
+            "minLength": 1,
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "entity_basis",
+          "parameter_id",
+          "source_reference"
+        ],
+        "title": "ScientificQuantity",
+        "type": "object"
+      },
       "SequenceIndexView": {
         "additionalProperties": false,
         "properties": {
@@ -6954,6 +8406,127 @@
           "m4_reaction",
           "m5_feedback"
         ]
+      },
+      "StructureInput": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "altloc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Altloc"
+          },
+          "source_kind": {
+            "enum": [
+              "experimental",
+              "prediction"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "confidence_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence File"
+          },
+          "expected_sequence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Sequence"
+          }
+        },
+        "required": [
+          "path",
+          "model_id",
+          "altloc",
+          "source_kind",
+          "source_reference",
+          "confidence_file",
+          "expected_sequence"
+        ],
+        "title": "StructureInput",
+        "type": "object"
+      },
+      "TetherGeometry": {
+        "additionalProperties": false,
+        "properties": {
+          "subunit_id": {
+            "title": "Subunit Id",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "linker": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "attached_body": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "contour_length_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Contour Length Angstrom",
+            "type": "number"
+          },
+          "contour_length_source": {
+            "minLength": 1,
+            "title": "Contour Length Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subunit_id",
+          "anchor",
+          "linker",
+          "attached_body",
+          "contour_length_angstrom",
+          "contour_length_source"
+        ],
+        "title": "TetherGeometry",
+        "type": "object"
       },
       "TransportEvidenceBinding": {
         "additionalProperties": false,
@@ -9642,6 +11215,80 @@
         "title": "AbsenceEvidenceBinding",
         "type": "object"
       },
+      "AmountBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "boundary_id": {
+            "title": "Boundary Id",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "compound": {
+            "enum": [
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15"
+            ],
+            "title": "Compound",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "constant_feed",
+              "first_order_loss"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "quantity": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "normalization": {
+            "const": "physical_amount",
+            "title": "Normalization",
+            "type": "string"
+          }
+        },
+        "required": [
+          "boundary_id",
+          "pool_id",
+          "compound",
+          "kind",
+          "quantity",
+          "normalization"
+        ],
+        "title": "AmountBoundary",
+        "type": "object"
+      },
+      "ArtifactReference": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "title": "ArtifactReference",
+        "type": "object"
+      },
       "AssetIdentity": {
         "additionalProperties": false,
         "properties": {
@@ -9751,6 +11398,307 @@
         "title": "AvidityBinding",
         "type": "object"
       },
+      "BindingGraph": {
+        "additionalProperties": false,
+        "properties": {
+          "sites": {
+            "items": {
+              "$ref": "#/$defs/BindingSite"
+            },
+            "title": "Sites",
+            "type": "array"
+          },
+          "conflict_edges": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Conflict Edges",
+            "type": "array"
+          },
+          "entity_basis": {
+            "const": "complete_assembly",
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "method_assumption": {
+            "const": "hard_exclusion_no_additional_cooperativity",
+            "title": "Method Assumption",
+            "type": "string"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sites",
+          "conflict_edges",
+          "entity_basis",
+          "geometry_ref",
+          "method_assumption",
+          "applicability_reference"
+        ],
+        "title": "BindingGraph",
+        "type": "object"
+      },
+      "BindingSite": {
+        "additionalProperties": false,
+        "properties": {
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "kd": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "species",
+          "kd",
+          "geometry_ref",
+          "binding_pair_ref"
+        ],
+        "title": "BindingSite",
+        "type": "object"
+      },
+      "CompartmentNetworkInput": {
+        "additionalProperties": false,
+        "description": "ER M4 amount-state network; original cytosolic secretion is unchanged.",
+        "properties": {
+          "formula_version": {
+            "const": "m4-compartment-amount-v1-2026-10-10",
+            "default": "m4-compartment-amount-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "scenario": {
+            "enum": [
+              "no_LLPS",
+              "cytosolic_LLPS",
+              "ER_anchored_LLPS"
+            ],
+            "title": "Scenario",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topology Evidence Ref"
+          },
+          "reaction_location_reference": {
+            "minLength": 1,
+            "title": "Reaction Location Reference",
+            "type": "string"
+          },
+          "pools": {
+            "items": {
+              "$ref": "#/$defs/ReactionPool"
+            },
+            "minItems": 1,
+            "title": "Pools",
+            "type": "array"
+          },
+          "interfaces": {
+            "items": {
+              "$ref": "#/$defs/ExchangeInterface"
+            },
+            "title": "Interfaces",
+            "type": "array"
+          },
+          "reactions": {
+            "items": {
+              "$ref": "#/$defs/M4ReactionInput"
+            },
+            "title": "Reactions",
+            "type": "array"
+          },
+          "reaction_locations": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Reaction Locations",
+            "type": "object"
+          },
+          "boundaries": {
+            "items": {
+              "$ref": "#/$defs/AmountBoundary"
+            },
+            "title": "Boundaries",
+            "type": "array"
+          },
+          "initial_amounts_umol": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/$defs/ScientificQuantity"
+              },
+              "type": "object"
+            },
+            "title": "Initial Amounts Umol",
+            "type": "object"
+          },
+          "time_grid_h": {
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "title": "Time Grid H",
+            "type": "array"
+          },
+          "steady_initial_guesses_umol": {
+            "items": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "title": "Steady Initial Guesses Umol",
+            "type": "array"
+          },
+          "numerics": {
+            "$ref": "#/$defs/CompartmentNumerics"
+          },
+          "evidence_mode": {
+            "enum": [
+              "conditional_model",
+              "reviewed_project_binding"
+            ],
+            "title": "Evidence Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "scenario",
+          "topology_evidence_ref",
+          "reaction_location_reference",
+          "pools",
+          "interfaces",
+          "reactions",
+          "reaction_locations",
+          "boundaries",
+          "initial_amounts_umol",
+          "time_grid_h",
+          "steady_initial_guesses_umol",
+          "numerics",
+          "evidence_mode"
+        ],
+        "title": "CompartmentNetworkInput",
+        "type": "object"
+      },
+      "CompartmentNumerics": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "BDF",
+              "Radau",
+              "LSODA"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Tolerance",
+            "type": "number"
+          },
+          "amount_absolute_tolerance_umol": {
+            "exclusiveMinimum": 0,
+            "title": "Amount Absolute Tolerance Umol",
+            "type": "number"
+          },
+          "steady_relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Steady Relative Tolerance",
+            "type": "number"
+          },
+          "steady_absolute_tolerance_umol_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Steady Absolute Tolerance Umol Per H",
+            "type": "number"
+          },
+          "eigenvalue_tolerance_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Eigenvalue Tolerance Per H",
+            "type": "number"
+          },
+          "steady_max_evaluations": {
+            "minimum": 1,
+            "title": "Steady Max Evaluations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "relative_tolerance",
+          "amount_absolute_tolerance_umol",
+          "steady_relative_tolerance",
+          "steady_absolute_tolerance_umol_per_h",
+          "eigenvalue_tolerance_per_h",
+          "steady_max_evaluations"
+        ],
+        "title": "CompartmentNumerics",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -9820,6 +11768,17 @@
             ],
             "default": null,
             "title": "Localization Design Evidence"
+          },
+          "membrane_topology": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MembraneTopologyEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "m1_review": {
             "anyOf": [
@@ -9962,6 +11921,7 @@
           "fusion_orientation",
           "localization_context",
           "localization_design_evidence",
+          "membrane_topology",
           "m1_review",
           "linker_ids",
           "scaffold_id",
@@ -10376,6 +12336,155 @@
         "title": "DesignConfig",
         "type": "object"
       },
+      "ERRecruitmentInput": {
+        "additionalProperties": false,
+        "description": "Proposed ER M3 method with explicit physical amounts and geometry.",
+        "properties": {
+          "formula_version": {
+            "const": "m3-er-amount-independent-set-v1-2026-10-10",
+            "default": "m3-er-amount-independent-set-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "title": "Topology Evidence Ref",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "cytosol_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "droplet_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "er_area": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "scaffold_surface_density": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "density_entity_basis": {
+            "enum": [
+              "scaffold_monomer",
+              "complete_assembly",
+              "effective_anchor"
+            ],
+            "title": "Density Entity Basis",
+            "type": "string"
+          },
+          "subunits_per_assembly": {
+            "minimum": 1,
+            "title": "Subunits Per Assembly",
+            "type": "integer"
+          },
+          "anchors_per_assembly": {
+            "minimum": 1,
+            "title": "Anchors Per Assembly",
+            "type": "integer"
+          },
+          "composition_source": {
+            "minLength": 1,
+            "title": "Composition Source",
+            "type": "string"
+          },
+          "total_scaffold_monomer_amount": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "unanchored_scaffold_binding": {
+            "enum": [
+              "included_in_droplet",
+              "excluded_with_evidence"
+            ],
+            "title": "Unanchored Scaffold Binding",
+            "type": "string"
+          },
+          "unanchored_scaffold_applicability_source": {
+            "minLength": 1,
+            "title": "Unanchored Scaffold Applicability Source",
+            "type": "string"
+          },
+          "enzyme_total_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Total Amounts",
+            "type": "object"
+          },
+          "free_enzyme_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Free Enzyme Partition",
+            "type": "object"
+          },
+          "binding_graph": {
+            "$ref": "#/$defs/BindingGraph"
+          },
+          "max_partition_states": {
+            "minimum": 1,
+            "title": "Max Partition States",
+            "type": "integer"
+          },
+          "solver_max_evaluations": {
+            "minimum": 1,
+            "title": "Solver Max Evaluations",
+            "type": "integer"
+          },
+          "relative_mass_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Mass Tolerance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology_evidence_ref",
+          "body_side",
+          "geometry_ref",
+          "cytosol_volume",
+          "droplet_volume",
+          "er_area",
+          "scaffold_surface_density",
+          "density_entity_basis",
+          "subunits_per_assembly",
+          "anchors_per_assembly",
+          "composition_source",
+          "total_scaffold_monomer_amount",
+          "unanchored_scaffold_binding",
+          "unanchored_scaffold_applicability_source",
+          "enzyme_total_amounts",
+          "free_enzyme_partition",
+          "binding_graph",
+          "max_partition_states",
+          "solver_max_evaluations",
+          "relative_mass_tolerance"
+        ],
+        "title": "ERRecruitmentInput",
+        "type": "object"
+      },
       "EnzymeConfig": {
         "additionalProperties": false,
         "properties": {
@@ -10425,6 +12534,80 @@
           "sequence_sha256"
         ],
         "title": "EnzymeConfig",
+        "type": "object"
+      },
+      "ExchangeInterface": {
+        "additionalProperties": false,
+        "properties": {
+          "interface_id": {
+            "title": "Interface Id",
+            "type": "string"
+          },
+          "first_pool": {
+            "title": "First Pool",
+            "type": "string"
+          },
+          "second_pool": {
+            "title": "Second Pool",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "finite_exchange",
+              "rapid_equilibrium"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "second_over_first_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Second Over First Partition",
+            "type": "object"
+          },
+          "conductance": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ScientificQuantity"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conductance"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          },
+          "timescale_evidence_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timescale Evidence Reference"
+          }
+        },
+        "required": [
+          "interface_id",
+          "first_pool",
+          "second_pool",
+          "mode",
+          "second_over_first_partition",
+          "conductance",
+          "applicability_reference",
+          "timescale_evidence_reference"
+        ],
+        "title": "ExchangeInterface",
         "type": "object"
       },
       "ExecutionConfig": {
@@ -11076,6 +13259,13 @@
       "M2Config": {
         "additionalProperties": false,
         "properties": {
+          "membrane_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneGeometryInput"
+            },
+            "title": "Membrane Requests",
+            "type": "object"
+          },
           "structure_metrics_file": {
             "anyOf": [
               {
@@ -11119,6 +13309,7 @@
         "title": "M2Config",
         "type": "object",
         "required": [
+          "membrane_requests",
           "structure_metrics_file",
           "region_assessments_file",
           "calculation_requests_file"
@@ -11127,6 +13318,13 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "er_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ERRecruitmentInput"
+            },
+            "title": "Er Requests",
+            "type": "object"
+          },
           "avidity_sh3": {
             "anyOf": [
               {
@@ -11290,6 +13488,7 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "er_requests",
           "avidity_sh3",
           "avidity_pdz",
           "uncertainty",
@@ -11425,6 +13624,13 @@
       "M4Config": {
         "additionalProperties": false,
         "properties": {
+          "compartment_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/CompartmentNetworkInput"
+            },
+            "title": "Compartment Requests",
+            "type": "object"
+          },
           "analysis": {
             "anyOf": [
               {
@@ -11861,6 +14067,7 @@
         "title": "M4Config",
         "type": "object",
         "required": [
+          "compartment_requests",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -11903,6 +14110,62 @@
           "solver_points",
           "transport_outside_over_inside"
         ]
+      },
+      "M4ReactionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "reaction_id": {
+            "title": "Reaction Id",
+            "type": "string"
+          },
+          "enzyme": {
+            "enum": [
+              "PTR",
+              "PT",
+              "OC",
+              "DMT"
+            ],
+            "title": "Enzyme",
+            "type": "string"
+          },
+          "substrate": {
+            "title": "Substrate",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "kcat_per_h": {
+            "minimum": 0,
+            "title": "Kcat Per H",
+            "type": "number"
+          },
+          "km_um": {
+            "exclusiveMinimum": 0,
+            "title": "Km Um",
+            "type": "number"
+          },
+          "parameter_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "title": "Parameter Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reaction_id",
+          "enzyme",
+          "substrate",
+          "product",
+          "kcat_per_h",
+          "km_um",
+          "parameter_ids"
+        ],
+        "title": "M4ReactionInput",
+        "type": "object"
       },
       "M5Config": {
         "additionalProperties": false,
@@ -11958,6 +14221,408 @@
           "discrepancy_threshold_configured",
           "fit_plan"
         ]
+      },
+      "MembraneConformer": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "conformer_id": {
+            "title": "Conformer Id",
+            "type": "string"
+          },
+          "structure": {
+            "$ref": "#/$defs/StructureInput"
+          },
+          "frame": {
+            "$ref": "#/$defs/MembraneFrame"
+          },
+          "tethers": {
+            "items": {
+              "$ref": "#/$defs/TetherGeometry"
+            },
+            "minItems": 1,
+            "title": "Tethers",
+            "type": "array"
+          },
+          "scaffold": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "domains": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Domains",
+            "type": "object"
+          },
+          "pockets": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Pockets",
+            "type": "object"
+          },
+          "recruited_enzymes": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Recruited Enzymes",
+            "type": "object"
+          },
+          "sampling_method": {
+            "minLength": 1,
+            "title": "Sampling Method",
+            "type": "string"
+          },
+          "sampling_scope": {
+            "minLength": 1,
+            "title": "Sampling Scope",
+            "type": "string"
+          },
+          "coordinate_transform_reference": {
+            "minLength": 1,
+            "title": "Coordinate Transform Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "conformer_id",
+          "structure",
+          "frame",
+          "tethers",
+          "scaffold",
+          "domains",
+          "pockets",
+          "recruited_enzymes",
+          "sampling_method",
+          "sampling_scope",
+          "coordinate_transform_reference"
+        ],
+        "title": "MembraneConformer",
+        "type": "object"
+      },
+      "MembraneFrame": {
+        "additionalProperties": false,
+        "properties": {
+          "frame_id": {
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "origin_angstrom": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Origin Angstrom",
+            "type": "array"
+          },
+          "unit_normal": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Unit Normal",
+            "type": "array"
+          },
+          "thickness_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Thickness Angstrom",
+            "type": "number"
+          },
+          "positive_side": {
+            "enum": [
+              "cytosolic",
+              "luminal"
+            ],
+            "title": "Positive Side",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "raw_reference": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "atom_radii_angstrom": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Atom Radii Angstrom",
+            "type": "object"
+          }
+        },
+        "required": [
+          "frame_id",
+          "origin_angstrom",
+          "unit_normal",
+          "thickness_angstrom",
+          "positive_side",
+          "body_side",
+          "source_reference",
+          "raw_reference",
+          "atom_radii_angstrom"
+        ],
+        "title": "MembraneFrame",
+        "type": "object"
+      },
+      "MembraneGeometryInput": {
+        "additionalProperties": false,
+        "description": "ER M2 membrane ensemble with explicit geometry and subunit composition.",
+        "properties": {
+          "formula_version": {
+            "const": "m2-er-membrane-v1-2026-10-10",
+            "default": "m2-er-membrane-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology": {
+            "$ref": "#/$defs/MembraneTopologyEvidence"
+          },
+          "subunit_composition": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Subunit Composition",
+            "type": "object"
+          },
+          "assembly_applicability_source": {
+            "minLength": 1,
+            "title": "Assembly Applicability Source",
+            "type": "string"
+          },
+          "anchor_count_basis": {
+            "const": "explicit_subunit_composition",
+            "title": "Anchor Count Basis",
+            "type": "string"
+          },
+          "conformers": {
+            "items": {
+              "$ref": "#/$defs/MembraneConformer"
+            },
+            "minItems": 1,
+            "title": "Conformers",
+            "type": "array"
+          },
+          "heavy_atom_clash_cutoff_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Heavy Atom Clash Cutoff Angstrom",
+            "type": "number"
+          },
+          "clash_rule_source": {
+            "minLength": 1,
+            "title": "Clash Rule Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology",
+          "subunit_composition",
+          "assembly_applicability_source",
+          "anchor_count_basis",
+          "conformers",
+          "heavy_atom_clash_cutoff_angstrom",
+          "clash_rule_source"
+        ],
+        "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneTopologyEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "construct_version": {
+            "title": "Construct Version",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "input_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Sequence Sha256",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueRange"
+          },
+          "anchor_source_record": {
+            "minLength": 1,
+            "title": "Anchor Source Record",
+            "type": "string"
+          },
+          "tool": {
+            "const": "DeepTMHMM",
+            "title": "Tool",
+            "type": "string"
+          },
+          "tool_version": {
+            "minLength": 1,
+            "title": "Tool Version",
+            "type": "string"
+          },
+          "native_record_id": {
+            "title": "Native Record Id",
+            "type": "string"
+          },
+          "native_output": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "orientation_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation Source"
+          },
+          "cleavage_state": {
+            "enum": [
+              "not_cleaved",
+              "cleaved",
+              "unknown"
+            ],
+            "title": "Cleavage State",
+            "type": "string"
+          },
+          "body_removed_by_cleavage": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Removed By Cleavage"
+          },
+          "cleavage_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleavage Source"
+          },
+          "evidence_level": {
+            "enum": [
+              "predicted",
+              "experimentally_supported"
+            ],
+            "title": "Evidence Level",
+            "type": "string"
+          },
+          "raw_references": {
+            "items": {
+              "$ref": "#/$defs/ArtifactReference"
+            },
+            "minItems": 1,
+            "title": "Raw References",
+            "type": "array"
+          },
+          "review_parameter_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "body_side",
+                "cleavage_state",
+                "body_retained"
+              ]
+            },
+            "title": "Review Parameter Ids",
+            "type": "object"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "construct_id",
+          "construct_version",
+          "condition_id",
+          "input_sequence_sha256",
+          "anchor",
+          "anchor_source_record",
+          "tool",
+          "tool_version",
+          "native_record_id",
+          "native_output",
+          "body_side",
+          "orientation_source",
+          "cleavage_state",
+          "body_removed_by_cleavage",
+          "cleavage_source",
+          "evidence_level",
+          "raw_references",
+          "review_parameter_ids"
+        ],
+        "title": "MembraneTopologyEvidence",
+        "type": "object"
       },
       "OrderedPartConfig": {
         "additionalProperties": false,
@@ -12627,6 +15292,56 @@
         "title": "RangeEvidence",
         "type": "object"
       },
+      "ReactionPool": {
+        "additionalProperties": false,
+        "properties": {
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "cytosol",
+              "anchored_droplet",
+              "er_lumen",
+              "extracellular"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "enzyme_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Amounts",
+            "type": "object"
+          },
+          "enzyme_activity_ratios": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Activity Ratios",
+            "type": "object"
+          }
+        },
+        "required": [
+          "pool_id",
+          "role",
+          "volume",
+          "geometry_ref",
+          "enzyme_amounts",
+          "enzyme_activity_ratios"
+        ],
+        "title": "ReactionPool",
+        "type": "object"
+      },
       "RecruitmentConfig": {
         "additionalProperties": false,
         "properties": {
@@ -12667,6 +15382,57 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "ResidueRange": {
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "minimum": 1,
+            "title": "Start",
+            "type": "integer"
+          },
+          "end": {
+            "minimum": 1,
+            "title": "End",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ResidueRange",
+        "type": "object"
+      },
+      "ResidueSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "chain": {
+            "title": "Chain",
+            "type": "string"
+          },
+          "residues": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "minItems": 1,
+            "title": "Residues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chain",
+          "residues"
+        ],
+        "title": "ResidueSelection",
         "type": "object"
       },
       "RiskPredicate": {
@@ -12847,6 +15613,56 @@
         "title": "ScientificInputsView",
         "type": "object"
       },
+      "ScientificQuantity": {
+        "additionalProperties": false,
+        "description": "Canonical value with a registry binding; numerical controls are separate.",
+        "properties": {
+          "value": {
+            "minimum": 0,
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "enum": [
+              "uM",
+              "umol",
+              "L",
+              "um2",
+              "copies/um2",
+              "1",
+              "L/h",
+              "1/h",
+              "umol/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "entity_basis": {
+            "minLength": 1,
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "entity_basis",
+          "parameter_id",
+          "source_reference"
+        ],
+        "title": "ScientificQuantity",
+        "type": "object"
+      },
       "SequenceIndexView": {
         "additionalProperties": false,
         "properties": {
@@ -12927,6 +15743,127 @@
           "m4_reaction",
           "m5_feedback"
         ]
+      },
+      "StructureInput": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "altloc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Altloc"
+          },
+          "source_kind": {
+            "enum": [
+              "experimental",
+              "prediction"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "confidence_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence File"
+          },
+          "expected_sequence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Sequence"
+          }
+        },
+        "required": [
+          "path",
+          "model_id",
+          "altloc",
+          "source_kind",
+          "source_reference",
+          "confidence_file",
+          "expected_sequence"
+        ],
+        "title": "StructureInput",
+        "type": "object"
+      },
+      "TetherGeometry": {
+        "additionalProperties": false,
+        "properties": {
+          "subunit_id": {
+            "title": "Subunit Id",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "linker": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "attached_body": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "contour_length_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Contour Length Angstrom",
+            "type": "number"
+          },
+          "contour_length_source": {
+            "minLength": 1,
+            "title": "Contour Length Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subunit_id",
+          "anchor",
+          "linker",
+          "attached_body",
+          "contour_length_angstrom",
+          "contour_length_source"
+        ],
+        "title": "TetherGeometry",
+        "type": "object"
       },
       "TransportEvidenceBinding": {
         "additionalProperties": false,
@@ -13057,6 +15994,80 @@
         "title": "AbsenceEvidenceBinding",
         "type": "object"
       },
+      "AmountBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "boundary_id": {
+            "title": "Boundary Id",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "compound": {
+            "enum": [
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15"
+            ],
+            "title": "Compound",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "constant_feed",
+              "first_order_loss"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "quantity": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "normalization": {
+            "const": "physical_amount",
+            "title": "Normalization",
+            "type": "string"
+          }
+        },
+        "required": [
+          "boundary_id",
+          "pool_id",
+          "compound",
+          "kind",
+          "quantity",
+          "normalization"
+        ],
+        "title": "AmountBoundary",
+        "type": "object"
+      },
+      "ArtifactReference": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "title": "ArtifactReference",
+        "type": "object"
+      },
       "AssemblyRecord": {
         "additionalProperties": false,
         "properties": {
@@ -13194,6 +16205,307 @@
         "title": "AvidityBinding",
         "type": "object"
       },
+      "BindingGraph": {
+        "additionalProperties": false,
+        "properties": {
+          "sites": {
+            "items": {
+              "$ref": "#/$defs/BindingSite"
+            },
+            "title": "Sites",
+            "type": "array"
+          },
+          "conflict_edges": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Conflict Edges",
+            "type": "array"
+          },
+          "entity_basis": {
+            "const": "complete_assembly",
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "method_assumption": {
+            "const": "hard_exclusion_no_additional_cooperativity",
+            "title": "Method Assumption",
+            "type": "string"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sites",
+          "conflict_edges",
+          "entity_basis",
+          "geometry_ref",
+          "method_assumption",
+          "applicability_reference"
+        ],
+        "title": "BindingGraph",
+        "type": "object"
+      },
+      "BindingSite": {
+        "additionalProperties": false,
+        "properties": {
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "kd": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "species",
+          "kd",
+          "geometry_ref",
+          "binding_pair_ref"
+        ],
+        "title": "BindingSite",
+        "type": "object"
+      },
+      "CompartmentNetworkInput": {
+        "additionalProperties": false,
+        "description": "ER M4 amount-state network; original cytosolic secretion is unchanged.",
+        "properties": {
+          "formula_version": {
+            "const": "m4-compartment-amount-v1-2026-10-10",
+            "default": "m4-compartment-amount-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "scenario": {
+            "enum": [
+              "no_LLPS",
+              "cytosolic_LLPS",
+              "ER_anchored_LLPS"
+            ],
+            "title": "Scenario",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topology Evidence Ref"
+          },
+          "reaction_location_reference": {
+            "minLength": 1,
+            "title": "Reaction Location Reference",
+            "type": "string"
+          },
+          "pools": {
+            "items": {
+              "$ref": "#/$defs/ReactionPool"
+            },
+            "minItems": 1,
+            "title": "Pools",
+            "type": "array"
+          },
+          "interfaces": {
+            "items": {
+              "$ref": "#/$defs/ExchangeInterface"
+            },
+            "title": "Interfaces",
+            "type": "array"
+          },
+          "reactions": {
+            "items": {
+              "$ref": "#/$defs/M4ReactionInput"
+            },
+            "title": "Reactions",
+            "type": "array"
+          },
+          "reaction_locations": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Reaction Locations",
+            "type": "object"
+          },
+          "boundaries": {
+            "items": {
+              "$ref": "#/$defs/AmountBoundary"
+            },
+            "title": "Boundaries",
+            "type": "array"
+          },
+          "initial_amounts_umol": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/$defs/ScientificQuantity"
+              },
+              "type": "object"
+            },
+            "title": "Initial Amounts Umol",
+            "type": "object"
+          },
+          "time_grid_h": {
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "title": "Time Grid H",
+            "type": "array"
+          },
+          "steady_initial_guesses_umol": {
+            "items": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "title": "Steady Initial Guesses Umol",
+            "type": "array"
+          },
+          "numerics": {
+            "$ref": "#/$defs/CompartmentNumerics"
+          },
+          "evidence_mode": {
+            "enum": [
+              "conditional_model",
+              "reviewed_project_binding"
+            ],
+            "title": "Evidence Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "scenario",
+          "topology_evidence_ref",
+          "reaction_location_reference",
+          "pools",
+          "interfaces",
+          "reactions",
+          "reaction_locations",
+          "boundaries",
+          "initial_amounts_umol",
+          "time_grid_h",
+          "steady_initial_guesses_umol",
+          "numerics",
+          "evidence_mode"
+        ],
+        "title": "CompartmentNetworkInput",
+        "type": "object"
+      },
+      "CompartmentNumerics": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "BDF",
+              "Radau",
+              "LSODA"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Tolerance",
+            "type": "number"
+          },
+          "amount_absolute_tolerance_umol": {
+            "exclusiveMinimum": 0,
+            "title": "Amount Absolute Tolerance Umol",
+            "type": "number"
+          },
+          "steady_relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Steady Relative Tolerance",
+            "type": "number"
+          },
+          "steady_absolute_tolerance_umol_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Steady Absolute Tolerance Umol Per H",
+            "type": "number"
+          },
+          "eigenvalue_tolerance_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Eigenvalue Tolerance Per H",
+            "type": "number"
+          },
+          "steady_max_evaluations": {
+            "minimum": 1,
+            "title": "Steady Max Evaluations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "relative_tolerance",
+          "amount_absolute_tolerance_umol",
+          "steady_relative_tolerance",
+          "steady_absolute_tolerance_umol_per_h",
+          "eigenvalue_tolerance_per_h",
+          "steady_max_evaluations"
+        ],
+        "title": "CompartmentNumerics",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -13263,6 +16575,17 @@
             ],
             "default": null,
             "title": "Localization Design Evidence"
+          },
+          "membrane_topology": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MembraneTopologyEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "m1_review": {
             "anyOf": [
@@ -13405,6 +16728,7 @@
           "fusion_orientation",
           "localization_context",
           "localization_design_evidence",
+          "membrane_topology",
           "m1_review",
           "linker_ids",
           "scaffold_id",
@@ -13819,6 +17143,155 @@
         "title": "DesignConfig",
         "type": "object"
       },
+      "ERRecruitmentInput": {
+        "additionalProperties": false,
+        "description": "Proposed ER M3 method with explicit physical amounts and geometry.",
+        "properties": {
+          "formula_version": {
+            "const": "m3-er-amount-independent-set-v1-2026-10-10",
+            "default": "m3-er-amount-independent-set-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "title": "Topology Evidence Ref",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "cytosol_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "droplet_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "er_area": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "scaffold_surface_density": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "density_entity_basis": {
+            "enum": [
+              "scaffold_monomer",
+              "complete_assembly",
+              "effective_anchor"
+            ],
+            "title": "Density Entity Basis",
+            "type": "string"
+          },
+          "subunits_per_assembly": {
+            "minimum": 1,
+            "title": "Subunits Per Assembly",
+            "type": "integer"
+          },
+          "anchors_per_assembly": {
+            "minimum": 1,
+            "title": "Anchors Per Assembly",
+            "type": "integer"
+          },
+          "composition_source": {
+            "minLength": 1,
+            "title": "Composition Source",
+            "type": "string"
+          },
+          "total_scaffold_monomer_amount": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "unanchored_scaffold_binding": {
+            "enum": [
+              "included_in_droplet",
+              "excluded_with_evidence"
+            ],
+            "title": "Unanchored Scaffold Binding",
+            "type": "string"
+          },
+          "unanchored_scaffold_applicability_source": {
+            "minLength": 1,
+            "title": "Unanchored Scaffold Applicability Source",
+            "type": "string"
+          },
+          "enzyme_total_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Total Amounts",
+            "type": "object"
+          },
+          "free_enzyme_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Free Enzyme Partition",
+            "type": "object"
+          },
+          "binding_graph": {
+            "$ref": "#/$defs/BindingGraph"
+          },
+          "max_partition_states": {
+            "minimum": 1,
+            "title": "Max Partition States",
+            "type": "integer"
+          },
+          "solver_max_evaluations": {
+            "minimum": 1,
+            "title": "Solver Max Evaluations",
+            "type": "integer"
+          },
+          "relative_mass_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Mass Tolerance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology_evidence_ref",
+          "body_side",
+          "geometry_ref",
+          "cytosol_volume",
+          "droplet_volume",
+          "er_area",
+          "scaffold_surface_density",
+          "density_entity_basis",
+          "subunits_per_assembly",
+          "anchors_per_assembly",
+          "composition_source",
+          "total_scaffold_monomer_amount",
+          "unanchored_scaffold_binding",
+          "unanchored_scaffold_applicability_source",
+          "enzyme_total_amounts",
+          "free_enzyme_partition",
+          "binding_graph",
+          "max_partition_states",
+          "solver_max_evaluations",
+          "relative_mass_tolerance"
+        ],
+        "title": "ERRecruitmentInput",
+        "type": "object"
+      },
       "EnzymeConfig": {
         "additionalProperties": false,
         "properties": {
@@ -13868,6 +17341,80 @@
           "sequence_sha256"
         ],
         "title": "EnzymeConfig",
+        "type": "object"
+      },
+      "ExchangeInterface": {
+        "additionalProperties": false,
+        "properties": {
+          "interface_id": {
+            "title": "Interface Id",
+            "type": "string"
+          },
+          "first_pool": {
+            "title": "First Pool",
+            "type": "string"
+          },
+          "second_pool": {
+            "title": "Second Pool",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "finite_exchange",
+              "rapid_equilibrium"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "second_over_first_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Second Over First Partition",
+            "type": "object"
+          },
+          "conductance": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ScientificQuantity"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conductance"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          },
+          "timescale_evidence_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timescale Evidence Reference"
+          }
+        },
+        "required": [
+          "interface_id",
+          "first_pool",
+          "second_pool",
+          "mode",
+          "second_over_first_partition",
+          "conductance",
+          "applicability_reference",
+          "timescale_evidence_reference"
+        ],
+        "title": "ExchangeInterface",
         "type": "object"
       },
       "ExecutionConfig": {
@@ -14519,6 +18066,13 @@
       "M2Config": {
         "additionalProperties": false,
         "properties": {
+          "membrane_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneGeometryInput"
+            },
+            "title": "Membrane Requests",
+            "type": "object"
+          },
           "structure_metrics_file": {
             "anyOf": [
               {
@@ -14562,6 +18116,7 @@
         "title": "M2Config",
         "type": "object",
         "required": [
+          "membrane_requests",
           "structure_metrics_file",
           "region_assessments_file",
           "calculation_requests_file"
@@ -14570,6 +18125,13 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "er_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ERRecruitmentInput"
+            },
+            "title": "Er Requests",
+            "type": "object"
+          },
           "avidity_sh3": {
             "anyOf": [
               {
@@ -14733,6 +18295,7 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "er_requests",
           "avidity_sh3",
           "avidity_pdz",
           "uncertainty",
@@ -14868,6 +18431,13 @@
       "M4Config": {
         "additionalProperties": false,
         "properties": {
+          "compartment_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/CompartmentNetworkInput"
+            },
+            "title": "Compartment Requests",
+            "type": "object"
+          },
           "analysis": {
             "anyOf": [
               {
@@ -15304,6 +18874,7 @@
         "title": "M4Config",
         "type": "object",
         "required": [
+          "compartment_requests",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -15346,6 +18917,62 @@
           "solver_points",
           "transport_outside_over_inside"
         ]
+      },
+      "M4ReactionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "reaction_id": {
+            "title": "Reaction Id",
+            "type": "string"
+          },
+          "enzyme": {
+            "enum": [
+              "PTR",
+              "PT",
+              "OC",
+              "DMT"
+            ],
+            "title": "Enzyme",
+            "type": "string"
+          },
+          "substrate": {
+            "title": "Substrate",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "kcat_per_h": {
+            "minimum": 0,
+            "title": "Kcat Per H",
+            "type": "number"
+          },
+          "km_um": {
+            "exclusiveMinimum": 0,
+            "title": "Km Um",
+            "type": "number"
+          },
+          "parameter_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "title": "Parameter Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reaction_id",
+          "enzyme",
+          "substrate",
+          "product",
+          "kcat_per_h",
+          "km_um",
+          "parameter_ids"
+        ],
+        "title": "M4ReactionInput",
+        "type": "object"
       },
       "M5Config": {
         "additionalProperties": false,
@@ -15401,6 +19028,408 @@
           "discrepancy_threshold_configured",
           "fit_plan"
         ]
+      },
+      "MembraneConformer": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "conformer_id": {
+            "title": "Conformer Id",
+            "type": "string"
+          },
+          "structure": {
+            "$ref": "#/$defs/StructureInput"
+          },
+          "frame": {
+            "$ref": "#/$defs/MembraneFrame"
+          },
+          "tethers": {
+            "items": {
+              "$ref": "#/$defs/TetherGeometry"
+            },
+            "minItems": 1,
+            "title": "Tethers",
+            "type": "array"
+          },
+          "scaffold": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "domains": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Domains",
+            "type": "object"
+          },
+          "pockets": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Pockets",
+            "type": "object"
+          },
+          "recruited_enzymes": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Recruited Enzymes",
+            "type": "object"
+          },
+          "sampling_method": {
+            "minLength": 1,
+            "title": "Sampling Method",
+            "type": "string"
+          },
+          "sampling_scope": {
+            "minLength": 1,
+            "title": "Sampling Scope",
+            "type": "string"
+          },
+          "coordinate_transform_reference": {
+            "minLength": 1,
+            "title": "Coordinate Transform Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "conformer_id",
+          "structure",
+          "frame",
+          "tethers",
+          "scaffold",
+          "domains",
+          "pockets",
+          "recruited_enzymes",
+          "sampling_method",
+          "sampling_scope",
+          "coordinate_transform_reference"
+        ],
+        "title": "MembraneConformer",
+        "type": "object"
+      },
+      "MembraneFrame": {
+        "additionalProperties": false,
+        "properties": {
+          "frame_id": {
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "origin_angstrom": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Origin Angstrom",
+            "type": "array"
+          },
+          "unit_normal": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Unit Normal",
+            "type": "array"
+          },
+          "thickness_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Thickness Angstrom",
+            "type": "number"
+          },
+          "positive_side": {
+            "enum": [
+              "cytosolic",
+              "luminal"
+            ],
+            "title": "Positive Side",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "raw_reference": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "atom_radii_angstrom": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Atom Radii Angstrom",
+            "type": "object"
+          }
+        },
+        "required": [
+          "frame_id",
+          "origin_angstrom",
+          "unit_normal",
+          "thickness_angstrom",
+          "positive_side",
+          "body_side",
+          "source_reference",
+          "raw_reference",
+          "atom_radii_angstrom"
+        ],
+        "title": "MembraneFrame",
+        "type": "object"
+      },
+      "MembraneGeometryInput": {
+        "additionalProperties": false,
+        "description": "ER M2 membrane ensemble with explicit geometry and subunit composition.",
+        "properties": {
+          "formula_version": {
+            "const": "m2-er-membrane-v1-2026-10-10",
+            "default": "m2-er-membrane-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology": {
+            "$ref": "#/$defs/MembraneTopologyEvidence"
+          },
+          "subunit_composition": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Subunit Composition",
+            "type": "object"
+          },
+          "assembly_applicability_source": {
+            "minLength": 1,
+            "title": "Assembly Applicability Source",
+            "type": "string"
+          },
+          "anchor_count_basis": {
+            "const": "explicit_subunit_composition",
+            "title": "Anchor Count Basis",
+            "type": "string"
+          },
+          "conformers": {
+            "items": {
+              "$ref": "#/$defs/MembraneConformer"
+            },
+            "minItems": 1,
+            "title": "Conformers",
+            "type": "array"
+          },
+          "heavy_atom_clash_cutoff_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Heavy Atom Clash Cutoff Angstrom",
+            "type": "number"
+          },
+          "clash_rule_source": {
+            "minLength": 1,
+            "title": "Clash Rule Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology",
+          "subunit_composition",
+          "assembly_applicability_source",
+          "anchor_count_basis",
+          "conformers",
+          "heavy_atom_clash_cutoff_angstrom",
+          "clash_rule_source"
+        ],
+        "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneTopologyEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "construct_version": {
+            "title": "Construct Version",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "input_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Sequence Sha256",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueRange"
+          },
+          "anchor_source_record": {
+            "minLength": 1,
+            "title": "Anchor Source Record",
+            "type": "string"
+          },
+          "tool": {
+            "const": "DeepTMHMM",
+            "title": "Tool",
+            "type": "string"
+          },
+          "tool_version": {
+            "minLength": 1,
+            "title": "Tool Version",
+            "type": "string"
+          },
+          "native_record_id": {
+            "title": "Native Record Id",
+            "type": "string"
+          },
+          "native_output": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "orientation_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation Source"
+          },
+          "cleavage_state": {
+            "enum": [
+              "not_cleaved",
+              "cleaved",
+              "unknown"
+            ],
+            "title": "Cleavage State",
+            "type": "string"
+          },
+          "body_removed_by_cleavage": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Removed By Cleavage"
+          },
+          "cleavage_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleavage Source"
+          },
+          "evidence_level": {
+            "enum": [
+              "predicted",
+              "experimentally_supported"
+            ],
+            "title": "Evidence Level",
+            "type": "string"
+          },
+          "raw_references": {
+            "items": {
+              "$ref": "#/$defs/ArtifactReference"
+            },
+            "minItems": 1,
+            "title": "Raw References",
+            "type": "array"
+          },
+          "review_parameter_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "body_side",
+                "cleavage_state",
+                "body_retained"
+              ]
+            },
+            "title": "Review Parameter Ids",
+            "type": "object"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "construct_id",
+          "construct_version",
+          "condition_id",
+          "input_sequence_sha256",
+          "anchor",
+          "anchor_source_record",
+          "tool",
+          "tool_version",
+          "native_record_id",
+          "native_output",
+          "body_side",
+          "orientation_source",
+          "cleavage_state",
+          "body_removed_by_cleavage",
+          "cleavage_source",
+          "evidence_level",
+          "raw_references",
+          "review_parameter_ids"
+        ],
+        "title": "MembraneTopologyEvidence",
+        "type": "object"
       },
       "OrderedPartConfig": {
         "additionalProperties": false,
@@ -16207,6 +20236,56 @@
         "title": "RangeEvidence",
         "type": "object"
       },
+      "ReactionPool": {
+        "additionalProperties": false,
+        "properties": {
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "cytosol",
+              "anchored_droplet",
+              "er_lumen",
+              "extracellular"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "enzyme_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Amounts",
+            "type": "object"
+          },
+          "enzyme_activity_ratios": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Activity Ratios",
+            "type": "object"
+          }
+        },
+        "required": [
+          "pool_id",
+          "role",
+          "volume",
+          "geometry_ref",
+          "enzyme_amounts",
+          "enzyme_activity_ratios"
+        ],
+        "title": "ReactionPool",
+        "type": "object"
+      },
       "RecruitmentConfig": {
         "additionalProperties": false,
         "properties": {
@@ -16247,6 +20326,57 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "ResidueRange": {
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "minimum": 1,
+            "title": "Start",
+            "type": "integer"
+          },
+          "end": {
+            "minimum": 1,
+            "title": "End",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ResidueRange",
+        "type": "object"
+      },
+      "ResidueSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "chain": {
+            "title": "Chain",
+            "type": "string"
+          },
+          "residues": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "minItems": 1,
+            "title": "Residues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chain",
+          "residues"
+        ],
+        "title": "ResidueSelection",
         "type": "object"
       },
       "RiskPredicate": {
@@ -16427,6 +20557,56 @@
         "title": "ScientificInputsView",
         "type": "object"
       },
+      "ScientificQuantity": {
+        "additionalProperties": false,
+        "description": "Canonical value with a registry binding; numerical controls are separate.",
+        "properties": {
+          "value": {
+            "minimum": 0,
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "enum": [
+              "uM",
+              "umol",
+              "L",
+              "um2",
+              "copies/um2",
+              "1",
+              "L/h",
+              "1/h",
+              "umol/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "entity_basis": {
+            "minLength": 1,
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "entity_basis",
+          "parameter_id",
+          "source_reference"
+        ],
+        "title": "ScientificQuantity",
+        "type": "object"
+      },
       "SequenceIndexView": {
         "additionalProperties": false,
         "properties": {
@@ -16533,6 +20713,127 @@
           "m4_reaction",
           "m5_feedback"
         ]
+      },
+      "StructureInput": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "altloc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Altloc"
+          },
+          "source_kind": {
+            "enum": [
+              "experimental",
+              "prediction"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "confidence_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence File"
+          },
+          "expected_sequence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Sequence"
+          }
+        },
+        "required": [
+          "path",
+          "model_id",
+          "altloc",
+          "source_kind",
+          "source_reference",
+          "confidence_file",
+          "expected_sequence"
+        ],
+        "title": "StructureInput",
+        "type": "object"
+      },
+      "TetherGeometry": {
+        "additionalProperties": false,
+        "properties": {
+          "subunit_id": {
+            "title": "Subunit Id",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "linker": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "attached_body": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "contour_length_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Contour Length Angstrom",
+            "type": "number"
+          },
+          "contour_length_source": {
+            "minLength": 1,
+            "title": "Contour Length Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subunit_id",
+          "anchor",
+          "linker",
+          "attached_body",
+          "contour_length_angstrom",
+          "contour_length_source"
+        ],
+        "title": "TetherGeometry",
+        "type": "object"
       },
       "TransportEvidenceBinding": {
         "additionalProperties": false,
@@ -16663,6 +20964,80 @@
         "title": "AbsenceEvidenceBinding",
         "type": "object"
       },
+      "AmountBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "boundary_id": {
+            "title": "Boundary Id",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "compound": {
+            "enum": [
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15"
+            ],
+            "title": "Compound",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "constant_feed",
+              "first_order_loss"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "quantity": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "normalization": {
+            "const": "physical_amount",
+            "title": "Normalization",
+            "type": "string"
+          }
+        },
+        "required": [
+          "boundary_id",
+          "pool_id",
+          "compound",
+          "kind",
+          "quantity",
+          "normalization"
+        ],
+        "title": "AmountBoundary",
+        "type": "object"
+      },
+      "ArtifactReference": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "title": "ArtifactReference",
+        "type": "object"
+      },
       "AssemblyRecord": {
         "additionalProperties": false,
         "properties": {
@@ -16800,6 +21175,307 @@
         "title": "AvidityBinding",
         "type": "object"
       },
+      "BindingGraph": {
+        "additionalProperties": false,
+        "properties": {
+          "sites": {
+            "items": {
+              "$ref": "#/$defs/BindingSite"
+            },
+            "title": "Sites",
+            "type": "array"
+          },
+          "conflict_edges": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Conflict Edges",
+            "type": "array"
+          },
+          "entity_basis": {
+            "const": "complete_assembly",
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "method_assumption": {
+            "const": "hard_exclusion_no_additional_cooperativity",
+            "title": "Method Assumption",
+            "type": "string"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sites",
+          "conflict_edges",
+          "entity_basis",
+          "geometry_ref",
+          "method_assumption",
+          "applicability_reference"
+        ],
+        "title": "BindingGraph",
+        "type": "object"
+      },
+      "BindingSite": {
+        "additionalProperties": false,
+        "properties": {
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "species": {
+            "enum": [
+              "OC",
+              "DMT"
+            ],
+            "title": "Species",
+            "type": "string"
+          },
+          "kd": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "minLength": 1,
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "binding_pair_ref": {
+            "minLength": 1,
+            "title": "Binding Pair Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "species",
+          "kd",
+          "geometry_ref",
+          "binding_pair_ref"
+        ],
+        "title": "BindingSite",
+        "type": "object"
+      },
+      "CompartmentNetworkInput": {
+        "additionalProperties": false,
+        "description": "ER M4 amount-state network; original cytosolic secretion is unchanged.",
+        "properties": {
+          "formula_version": {
+            "const": "m4-compartment-amount-v1-2026-10-10",
+            "default": "m4-compartment-amount-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "scenario": {
+            "enum": [
+              "no_LLPS",
+              "cytosolic_LLPS",
+              "ER_anchored_LLPS"
+            ],
+            "title": "Scenario",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topology Evidence Ref"
+          },
+          "reaction_location_reference": {
+            "minLength": 1,
+            "title": "Reaction Location Reference",
+            "type": "string"
+          },
+          "pools": {
+            "items": {
+              "$ref": "#/$defs/ReactionPool"
+            },
+            "minItems": 1,
+            "title": "Pools",
+            "type": "array"
+          },
+          "interfaces": {
+            "items": {
+              "$ref": "#/$defs/ExchangeInterface"
+            },
+            "title": "Interfaces",
+            "type": "array"
+          },
+          "reactions": {
+            "items": {
+              "$ref": "#/$defs/M4ReactionInput"
+            },
+            "title": "Reactions",
+            "type": "array"
+          },
+          "reaction_locations": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Reaction Locations",
+            "type": "object"
+          },
+          "boundaries": {
+            "items": {
+              "$ref": "#/$defs/AmountBoundary"
+            },
+            "title": "Boundaries",
+            "type": "array"
+          },
+          "initial_amounts_umol": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/$defs/ScientificQuantity"
+              },
+              "type": "object"
+            },
+            "title": "Initial Amounts Umol",
+            "type": "object"
+          },
+          "time_grid_h": {
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "title": "Time Grid H",
+            "type": "array"
+          },
+          "steady_initial_guesses_umol": {
+            "items": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "title": "Steady Initial Guesses Umol",
+            "type": "array"
+          },
+          "numerics": {
+            "$ref": "#/$defs/CompartmentNumerics"
+          },
+          "evidence_mode": {
+            "enum": [
+              "conditional_model",
+              "reviewed_project_binding"
+            ],
+            "title": "Evidence Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "scenario",
+          "topology_evidence_ref",
+          "reaction_location_reference",
+          "pools",
+          "interfaces",
+          "reactions",
+          "reaction_locations",
+          "boundaries",
+          "initial_amounts_umol",
+          "time_grid_h",
+          "steady_initial_guesses_umol",
+          "numerics",
+          "evidence_mode"
+        ],
+        "title": "CompartmentNetworkInput",
+        "type": "object"
+      },
+      "CompartmentNumerics": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "BDF",
+              "Radau",
+              "LSODA"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Tolerance",
+            "type": "number"
+          },
+          "amount_absolute_tolerance_umol": {
+            "exclusiveMinimum": 0,
+            "title": "Amount Absolute Tolerance Umol",
+            "type": "number"
+          },
+          "steady_relative_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Steady Relative Tolerance",
+            "type": "number"
+          },
+          "steady_absolute_tolerance_umol_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Steady Absolute Tolerance Umol Per H",
+            "type": "number"
+          },
+          "eigenvalue_tolerance_per_h": {
+            "exclusiveMinimum": 0,
+            "title": "Eigenvalue Tolerance Per H",
+            "type": "number"
+          },
+          "steady_max_evaluations": {
+            "minimum": 1,
+            "title": "Steady Max Evaluations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "relative_tolerance",
+          "amount_absolute_tolerance_umol",
+          "steady_relative_tolerance",
+          "steady_absolute_tolerance_umol_per_h",
+          "eigenvalue_tolerance_per_h",
+          "steady_max_evaluations"
+        ],
+        "title": "CompartmentNumerics",
+        "type": "object"
+      },
       "ConstructDefinition": {
         "additionalProperties": false,
         "description": "A wet-lab construct description; no fusion topology is inferred by code.",
@@ -16869,6 +21545,17 @@
             ],
             "default": null,
             "title": "Localization Design Evidence"
+          },
+          "membrane_topology": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MembraneTopologyEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "m1_review": {
             "anyOf": [
@@ -17011,6 +21698,7 @@
           "fusion_orientation",
           "localization_context",
           "localization_design_evidence",
+          "membrane_topology",
           "m1_review",
           "linker_ids",
           "scaffold_id",
@@ -17425,6 +22113,155 @@
         "title": "DesignConfig",
         "type": "object"
       },
+      "ERRecruitmentInput": {
+        "additionalProperties": false,
+        "description": "Proposed ER M3 method with explicit physical amounts and geometry.",
+        "properties": {
+          "formula_version": {
+            "const": "m3-er-amount-independent-set-v1-2026-10-10",
+            "default": "m3-er-amount-independent-set-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology_evidence_ref": {
+            "title": "Topology Evidence Ref",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "cytosol_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "droplet_volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "er_area": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "scaffold_surface_density": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "density_entity_basis": {
+            "enum": [
+              "scaffold_monomer",
+              "complete_assembly",
+              "effective_anchor"
+            ],
+            "title": "Density Entity Basis",
+            "type": "string"
+          },
+          "subunits_per_assembly": {
+            "minimum": 1,
+            "title": "Subunits Per Assembly",
+            "type": "integer"
+          },
+          "anchors_per_assembly": {
+            "minimum": 1,
+            "title": "Anchors Per Assembly",
+            "type": "integer"
+          },
+          "composition_source": {
+            "minLength": 1,
+            "title": "Composition Source",
+            "type": "string"
+          },
+          "total_scaffold_monomer_amount": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "unanchored_scaffold_binding": {
+            "enum": [
+              "included_in_droplet",
+              "excluded_with_evidence"
+            ],
+            "title": "Unanchored Scaffold Binding",
+            "type": "string"
+          },
+          "unanchored_scaffold_applicability_source": {
+            "minLength": 1,
+            "title": "Unanchored Scaffold Applicability Source",
+            "type": "string"
+          },
+          "enzyme_total_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Total Amounts",
+            "type": "object"
+          },
+          "free_enzyme_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Free Enzyme Partition",
+            "type": "object"
+          },
+          "binding_graph": {
+            "$ref": "#/$defs/BindingGraph"
+          },
+          "max_partition_states": {
+            "minimum": 1,
+            "title": "Max Partition States",
+            "type": "integer"
+          },
+          "solver_max_evaluations": {
+            "minimum": 1,
+            "title": "Solver Max Evaluations",
+            "type": "integer"
+          },
+          "relative_mass_tolerance": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Relative Mass Tolerance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology_evidence_ref",
+          "body_side",
+          "geometry_ref",
+          "cytosol_volume",
+          "droplet_volume",
+          "er_area",
+          "scaffold_surface_density",
+          "density_entity_basis",
+          "subunits_per_assembly",
+          "anchors_per_assembly",
+          "composition_source",
+          "total_scaffold_monomer_amount",
+          "unanchored_scaffold_binding",
+          "unanchored_scaffold_applicability_source",
+          "enzyme_total_amounts",
+          "free_enzyme_partition",
+          "binding_graph",
+          "max_partition_states",
+          "solver_max_evaluations",
+          "relative_mass_tolerance"
+        ],
+        "title": "ERRecruitmentInput",
+        "type": "object"
+      },
       "EnzymeConfig": {
         "additionalProperties": false,
         "properties": {
@@ -17474,6 +22311,80 @@
           "sequence_sha256"
         ],
         "title": "EnzymeConfig",
+        "type": "object"
+      },
+      "ExchangeInterface": {
+        "additionalProperties": false,
+        "properties": {
+          "interface_id": {
+            "title": "Interface Id",
+            "type": "string"
+          },
+          "first_pool": {
+            "title": "First Pool",
+            "type": "string"
+          },
+          "second_pool": {
+            "title": "Second Pool",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "finite_exchange",
+              "rapid_equilibrium"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "second_over_first_partition": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Second Over First Partition",
+            "type": "object"
+          },
+          "conductance": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ScientificQuantity"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conductance"
+          },
+          "applicability_reference": {
+            "minLength": 1,
+            "title": "Applicability Reference",
+            "type": "string"
+          },
+          "timescale_evidence_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timescale Evidence Reference"
+          }
+        },
+        "required": [
+          "interface_id",
+          "first_pool",
+          "second_pool",
+          "mode",
+          "second_over_first_partition",
+          "conductance",
+          "applicability_reference",
+          "timescale_evidence_reference"
+        ],
+        "title": "ExchangeInterface",
         "type": "object"
       },
       "ExecutionConfig": {
@@ -18125,6 +23036,13 @@
       "M2Config": {
         "additionalProperties": false,
         "properties": {
+          "membrane_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/MembraneGeometryInput"
+            },
+            "title": "Membrane Requests",
+            "type": "object"
+          },
           "structure_metrics_file": {
             "anyOf": [
               {
@@ -18168,6 +23086,7 @@
         "title": "M2Config",
         "type": "object",
         "required": [
+          "membrane_requests",
           "structure_metrics_file",
           "region_assessments_file",
           "calculation_requests_file"
@@ -18176,6 +23095,13 @@
       "M3Config": {
         "additionalProperties": false,
         "properties": {
+          "er_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ERRecruitmentInput"
+            },
+            "title": "Er Requests",
+            "type": "object"
+          },
           "avidity_sh3": {
             "anyOf": [
               {
@@ -18339,6 +23265,7 @@
         "title": "M3Config",
         "type": "object",
         "required": [
+          "er_requests",
           "avidity_sh3",
           "avidity_pdz",
           "uncertainty",
@@ -18474,6 +23401,13 @@
       "M4Config": {
         "additionalProperties": false,
         "properties": {
+          "compartment_requests": {
+            "additionalProperties": {
+              "$ref": "#/$defs/CompartmentNetworkInput"
+            },
+            "title": "Compartment Requests",
+            "type": "object"
+          },
           "analysis": {
             "anyOf": [
               {
@@ -18910,6 +23844,7 @@
         "title": "M4Config",
         "type": "object",
         "required": [
+          "compartment_requests",
           "analysis",
           "assay_mode",
           "measurement_compartment",
@@ -18952,6 +23887,62 @@
           "solver_points",
           "transport_outside_over_inside"
         ]
+      },
+      "M4ReactionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "reaction_id": {
+            "title": "Reaction Id",
+            "type": "string"
+          },
+          "enzyme": {
+            "enum": [
+              "PTR",
+              "PT",
+              "OC",
+              "DMT"
+            ],
+            "title": "Enzyme",
+            "type": "string"
+          },
+          "substrate": {
+            "title": "Substrate",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "kcat_per_h": {
+            "minimum": 0,
+            "title": "Kcat Per H",
+            "type": "number"
+          },
+          "km_um": {
+            "exclusiveMinimum": 0,
+            "title": "Km Um",
+            "type": "number"
+          },
+          "parameter_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "title": "Parameter Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reaction_id",
+          "enzyme",
+          "substrate",
+          "product",
+          "kcat_per_h",
+          "km_um",
+          "parameter_ids"
+        ],
+        "title": "M4ReactionInput",
+        "type": "object"
       },
       "M5Config": {
         "additionalProperties": false,
@@ -19007,6 +23998,408 @@
           "discrepancy_threshold_configured",
           "fit_plan"
         ]
+      },
+      "MembraneConformer": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "conformer_id": {
+            "title": "Conformer Id",
+            "type": "string"
+          },
+          "structure": {
+            "$ref": "#/$defs/StructureInput"
+          },
+          "frame": {
+            "$ref": "#/$defs/MembraneFrame"
+          },
+          "tethers": {
+            "items": {
+              "$ref": "#/$defs/TetherGeometry"
+            },
+            "minItems": 1,
+            "title": "Tethers",
+            "type": "array"
+          },
+          "scaffold": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "domains": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Domains",
+            "type": "object"
+          },
+          "pockets": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Pockets",
+            "type": "object"
+          },
+          "recruited_enzymes": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ResidueSelection"
+            },
+            "title": "Recruited Enzymes",
+            "type": "object"
+          },
+          "sampling_method": {
+            "minLength": 1,
+            "title": "Sampling Method",
+            "type": "string"
+          },
+          "sampling_scope": {
+            "minLength": 1,
+            "title": "Sampling Scope",
+            "type": "string"
+          },
+          "coordinate_transform_reference": {
+            "minLength": 1,
+            "title": "Coordinate Transform Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "conformer_id",
+          "structure",
+          "frame",
+          "tethers",
+          "scaffold",
+          "domains",
+          "pockets",
+          "recruited_enzymes",
+          "sampling_method",
+          "sampling_scope",
+          "coordinate_transform_reference"
+        ],
+        "title": "MembraneConformer",
+        "type": "object"
+      },
+      "MembraneFrame": {
+        "additionalProperties": false,
+        "properties": {
+          "frame_id": {
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "origin_angstrom": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Origin Angstrom",
+            "type": "array"
+          },
+          "unit_normal": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Unit Normal",
+            "type": "array"
+          },
+          "thickness_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Thickness Angstrom",
+            "type": "number"
+          },
+          "positive_side": {
+            "enum": [
+              "cytosolic",
+              "luminal"
+            ],
+            "title": "Positive Side",
+            "type": "string"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "raw_reference": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "atom_radii_angstrom": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Atom Radii Angstrom",
+            "type": "object"
+          }
+        },
+        "required": [
+          "frame_id",
+          "origin_angstrom",
+          "unit_normal",
+          "thickness_angstrom",
+          "positive_side",
+          "body_side",
+          "source_reference",
+          "raw_reference",
+          "atom_radii_angstrom"
+        ],
+        "title": "MembraneFrame",
+        "type": "object"
+      },
+      "MembraneGeometryInput": {
+        "additionalProperties": false,
+        "description": "ER M2 membrane ensemble with explicit geometry and subunit composition.",
+        "properties": {
+          "formula_version": {
+            "const": "m2-er-membrane-v1-2026-10-10",
+            "default": "m2-er-membrane-v1-2026-10-10",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "topology": {
+            "$ref": "#/$defs/MembraneTopologyEvidence"
+          },
+          "subunit_composition": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Subunit Composition",
+            "type": "object"
+          },
+          "assembly_applicability_source": {
+            "minLength": 1,
+            "title": "Assembly Applicability Source",
+            "type": "string"
+          },
+          "anchor_count_basis": {
+            "const": "explicit_subunit_composition",
+            "title": "Anchor Count Basis",
+            "type": "string"
+          },
+          "conformers": {
+            "items": {
+              "$ref": "#/$defs/MembraneConformer"
+            },
+            "minItems": 1,
+            "title": "Conformers",
+            "type": "array"
+          },
+          "heavy_atom_clash_cutoff_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Heavy Atom Clash Cutoff Angstrom",
+            "type": "number"
+          },
+          "clash_rule_source": {
+            "minLength": 1,
+            "title": "Clash Rule Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula_version",
+          "construct_id",
+          "condition_id",
+          "topology",
+          "subunit_composition",
+          "assembly_applicability_source",
+          "anchor_count_basis",
+          "conformers",
+          "heavy_atom_clash_cutoff_angstrom",
+          "clash_rule_source"
+        ],
+        "title": "MembraneGeometryInput",
+        "type": "object"
+      },
+      "MembraneTopologyEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "construct_id": {
+            "title": "Construct Id",
+            "type": "string"
+          },
+          "construct_version": {
+            "title": "Construct Version",
+            "type": "string"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "string"
+          },
+          "input_sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Sequence Sha256",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueRange"
+          },
+          "anchor_source_record": {
+            "minLength": 1,
+            "title": "Anchor Source Record",
+            "type": "string"
+          },
+          "tool": {
+            "const": "DeepTMHMM",
+            "title": "Tool",
+            "type": "string"
+          },
+          "tool_version": {
+            "minLength": 1,
+            "title": "Tool Version",
+            "type": "string"
+          },
+          "native_record_id": {
+            "title": "Native Record Id",
+            "type": "string"
+          },
+          "native_output": {
+            "$ref": "#/$defs/ArtifactReference"
+          },
+          "body_side": {
+            "enum": [
+              "cytosolic",
+              "luminal",
+              "unknown"
+            ],
+            "title": "Body Side",
+            "type": "string"
+          },
+          "orientation_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation Source"
+          },
+          "cleavage_state": {
+            "enum": [
+              "not_cleaved",
+              "cleaved",
+              "unknown"
+            ],
+            "title": "Cleavage State",
+            "type": "string"
+          },
+          "body_removed_by_cleavage": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Removed By Cleavage"
+          },
+          "cleavage_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleavage Source"
+          },
+          "evidence_level": {
+            "enum": [
+              "predicted",
+              "experimentally_supported"
+            ],
+            "title": "Evidence Level",
+            "type": "string"
+          },
+          "raw_references": {
+            "items": {
+              "$ref": "#/$defs/ArtifactReference"
+            },
+            "minItems": 1,
+            "title": "Raw References",
+            "type": "array"
+          },
+          "review_parameter_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "body_side",
+                "cleavage_state",
+                "body_retained"
+              ]
+            },
+            "title": "Review Parameter Ids",
+            "type": "object"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "construct_id",
+          "construct_version",
+          "condition_id",
+          "input_sequence_sha256",
+          "anchor",
+          "anchor_source_record",
+          "tool",
+          "tool_version",
+          "native_record_id",
+          "native_output",
+          "body_side",
+          "orientation_source",
+          "cleavage_state",
+          "body_removed_by_cleavage",
+          "cleavage_source",
+          "evidence_level",
+          "raw_references",
+          "review_parameter_ids"
+        ],
+        "title": "MembraneTopologyEvidence",
+        "type": "object"
       },
       "OrderedPartConfig": {
         "additionalProperties": false,
@@ -19813,6 +25206,56 @@
         "title": "RangeEvidence",
         "type": "object"
       },
+      "ReactionPool": {
+        "additionalProperties": false,
+        "properties": {
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "cytosol",
+              "anchored_droplet",
+              "er_lumen",
+              "extracellular"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "volume": {
+            "$ref": "#/$defs/ScientificQuantity"
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "enzyme_amounts": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Amounts",
+            "type": "object"
+          },
+          "enzyme_activity_ratios": {
+            "additionalProperties": {
+              "$ref": "#/$defs/ScientificQuantity"
+            },
+            "title": "Enzyme Activity Ratios",
+            "type": "object"
+          }
+        },
+        "required": [
+          "pool_id",
+          "role",
+          "volume",
+          "geometry_ref",
+          "enzyme_amounts",
+          "enzyme_activity_ratios"
+        ],
+        "title": "ReactionPool",
+        "type": "object"
+      },
       "RecruitmentConfig": {
         "additionalProperties": false,
         "properties": {
@@ -19853,6 +25296,57 @@
           "hill_coefficient_parameter"
         ],
         "title": "RecruitmentConfig",
+        "type": "object"
+      },
+      "ResidueRange": {
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "minimum": 1,
+            "title": "Start",
+            "type": "integer"
+          },
+          "end": {
+            "minimum": 1,
+            "title": "End",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ResidueRange",
+        "type": "object"
+      },
+      "ResidueSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "chain": {
+            "title": "Chain",
+            "type": "string"
+          },
+          "residues": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "minItems": 1,
+            "title": "Residues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chain",
+          "residues"
+        ],
+        "title": "ResidueSelection",
         "type": "object"
       },
       "RiskPredicate": {
@@ -20033,6 +25527,56 @@
         "title": "ScientificInputsView",
         "type": "object"
       },
+      "ScientificQuantity": {
+        "additionalProperties": false,
+        "description": "Canonical value with a registry binding; numerical controls are separate.",
+        "properties": {
+          "value": {
+            "minimum": 0,
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "enum": [
+              "uM",
+              "umol",
+              "L",
+              "um2",
+              "copies/um2",
+              "1",
+              "L/h",
+              "1/h",
+              "umol/h"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "entity_basis": {
+            "minLength": 1,
+            "title": "Entity Basis",
+            "type": "string"
+          },
+          "parameter_id": {
+            "minLength": 1,
+            "title": "Parameter Id",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "entity_basis",
+          "parameter_id",
+          "source_reference"
+        ],
+        "title": "ScientificQuantity",
+        "type": "object"
+      },
       "SequenceIndexView": {
         "additionalProperties": false,
         "properties": {
@@ -20139,6 +25683,127 @@
           "m4_reaction",
           "m5_feedback"
         ]
+      },
+      "StructureInput": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "format": "path",
+            "title": "Path",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "altloc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Altloc"
+          },
+          "source_kind": {
+            "enum": [
+              "experimental",
+              "prediction"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_reference": {
+            "minLength": 1,
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "confidence_file": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence File"
+          },
+          "expected_sequence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Sequence"
+          }
+        },
+        "required": [
+          "path",
+          "model_id",
+          "altloc",
+          "source_kind",
+          "source_reference",
+          "confidence_file",
+          "expected_sequence"
+        ],
+        "title": "StructureInput",
+        "type": "object"
+      },
+      "TetherGeometry": {
+        "additionalProperties": false,
+        "properties": {
+          "subunit_id": {
+            "title": "Subunit Id",
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "linker": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "attached_body": {
+            "$ref": "#/$defs/ResidueSelection"
+          },
+          "contour_length_angstrom": {
+            "exclusiveMinimum": 0,
+            "title": "Contour Length Angstrom",
+            "type": "number"
+          },
+          "contour_length_source": {
+            "minLength": 1,
+            "title": "Contour Length Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subunit_id",
+          "anchor",
+          "linker",
+          "attached_body",
+          "contour_length_angstrom",
+          "contour_length_source"
+        ],
+        "title": "TetherGeometry",
+        "type": "object"
       },
       "TransportEvidenceBinding": {
         "additionalProperties": false,

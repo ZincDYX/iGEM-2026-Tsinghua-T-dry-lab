@@ -22,7 +22,7 @@ def test_whole_design_er_localization_cannot_be_lost_by_default_upstream_result(
         recommended_for_m3=True)  # Old record has the historical cytosolic default.
     result, output = run_m3(project, tmp_path, [upstream])
     assert result[0].compartment_scenario == "er_anchored"
-    assert result[0].missing_inputs == ["unsupported_compartment_model:er_anchored"]
+    assert result[0].missing_inputs == ["ER_recruitment_request_not_supplied"]
     assert not result[0].concentrations and not result[0].recommended_for_m4
     assert output.json_file.is_file()
     forged = M3ConcentrationAssessment(candidate_id="software-fixture", construct_id="whole_design",
@@ -30,7 +30,7 @@ def test_whole_design_er_localization_cannot_be_lost_by_default_upstream_result(
     predictions, output = run_m4(project, tmp_path, [forged])
     assert predictions[0].compartment_scenario == "er_anchored"
     assert predictions[0].status == "insufficient_data"
-    assert predictions[0].missing_inputs == ["unsupported_compartment_model:er_anchored"]
+    assert predictions[0].missing_inputs == ["ER_amount_network_request_not_supplied"]
     assert output.record_count == 1 and output.json_file.is_file()
 
 
@@ -39,4 +39,4 @@ def test_explicit_er_result_cannot_be_reinterpreted_as_cytosolic_config(tmp_path
     upstream = M2FusionAssessment(candidate_id="software-fixture", construct_id="soluble_enzyme", construct_definition={},
         compartment_scenario="er_anchored", recommended_for_m3=True)
     result, _ = run_m3(project, tmp_path, [upstream])
-    assert result[0].missing_inputs == ["unsupported_compartment_model:er_anchored"]
+    assert result[0].missing_inputs == ["ER_recruitment_request_not_supplied"]

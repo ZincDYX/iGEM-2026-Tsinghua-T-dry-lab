@@ -8,6 +8,9 @@ from igem_drylab.template_geometry import (AssemblyExpansionInput, expand_actual
 from igem_drylab.fusion_tool_import import FusionImportInput, import_fusion_tools
 from igem_drylab.m1_prioritization import M1PrioritizationInput, prioritize_m1
 from igem_drylab.mpipi import MpipiAnalysisInput, parse_mpipi
+from igem_drylab.membrane_geometry import MembraneGeometryInput, calculate_membrane_geometry
+from igem_drylab.m3_er import ERRecruitmentInput, solve_er_recruitment
+from igem_drylab.m4_compartments import CompartmentNetworkInput, solve_compartment_network, CompartmentComparisonInput, compare_compartment_controls
 
 
 def binding(name, title, contract, calculate):
@@ -37,4 +40,8 @@ BINDINGS.extend([
     binding("igem.m1.import_fusion_results","Import actual native full-fusion results",FusionImportInput,import_fusion_tools),
     binding("igem.m1.prioritize","Apply reviewed original risk and ranking policy",M1PrioritizationInput,prioritize_m1),
     binding("igem.m1.parse_mpipi", "Inspect original Mpipi raw observations without inventing an LLPS score", MpipiAnalysisInput, parse_mpipi),
+    binding("igem.m2.membrane_geometry", "Evaluate sourced ER membrane and tether conformations", MembraneGeometryInput, calculate_membrane_geometry),
+    binding("igem.m3.er_recruitment", "Solve proposed ER amount-conserving graph recruitment", ERRecruitmentInput, solve_er_recruitment),
+    binding("igem.m4.compartment_amounts", "Solve explicit compartment amounts and exchange", CompartmentNetworkInput, solve_compartment_network),
+    binding("igem.m4.compare_compartments", "Compare matched physical four-enzyme controls", CompartmentComparisonInput, compare_compartment_controls),
 ])

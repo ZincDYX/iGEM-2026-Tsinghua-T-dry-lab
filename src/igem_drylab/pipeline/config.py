@@ -15,6 +15,10 @@ from igem_drylab.active_network import AbsenceEvidenceBinding
 from igem_drylab.m1_prioritization import PrioritizationPolicy
 from igem_drylab.avidity_binding import AvidityBinding
 from igem_drylab.m3_workflow import M3UncertaintySettings
+from igem_drylab.compartments import MembraneTopologyEvidence, resolve_contract_paths
+from igem_drylab.membrane_geometry import MembraneGeometryInput
+from igem_drylab.m3_er import ERRecruitmentInput
+from igem_drylab.m4_compartments import CompartmentNetworkInput
 
 
 DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
@@ -107,6 +111,7 @@ class ConstructDefinition(BaseModel):
     fusion_orientation: str | None = None
     localization_context: Literal["cytosolic", "er_anchored"] | None = None
     localization_design_evidence: str | None = None
+    membrane_topology: MembraneTopologyEvidence | None = None
     m1_review: dict[str, Any] | None = None
     linker_ids: list[str] = Field(default_factory=list)
     scaffold_id: str | None = None
@@ -179,6 +184,7 @@ class M1Config(StrictScientificConfig):
 
 
 class M2Config(StrictScientificConfig):
+    membrane_requests: dict[str,MembraneGeometryInput] = Field(default_factory=dict)
     structure_metrics_file: Path | None = None
     region_assessments_file: Path | None = None
     calculation_requests_file: Path | None = None
@@ -196,6 +202,7 @@ class AuthorNativeEnzymeScales(StrictScientificConfig):
 
 
 class M3Config(StrictScientificConfig):
+    er_requests: dict[str,ERRecruitmentInput] = Field(default_factory=dict)
     avidity_sh3: AvidityBinding | None = None
     avidity_pdz: AvidityBinding | None = None
     uncertainty: M3UncertaintySettings | None = None
@@ -282,6 +289,7 @@ class InductionGateConfig(StrictScientificConfig):
 
 
 class M4Config(StrictScientificConfig):
+    compartment_requests: dict[str,CompartmentNetworkInput] = Field(default_factory=dict)
     analysis: M4AnalysisConfig | None = None
     assay_mode: Literal["substrate_feeding_functional", "full_pathway_production"] | None = None
     measurement_compartment: Literal["intracellular", "extracellular", "total_extract"] | None = None
@@ -531,6 +539,12 @@ def _resolve_path(path: Path | None, base_dir: Path) -> Path | None:
 
 
 def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectConfig:
+    for definition in config.inputs.constructs:
+        if definition.membrane_topology:
+            resolve_contract_paths(definition.membrane_topology,base_dir)
+    resolve_contract_paths(config.stages.m2_fusion.membrane_requests,base_dir)
+    resolve_contract_paths(config.stages.m3_concentration.er_requests,base_dir)
+    resolve_contract_paths(config.stages.m4_reaction.compartment_requests,base_dir)
     config.inputs.protein_fasta = _resolve_path(config.inputs.protein_fasta, base_dir)  # type: ignore[assignment]
     for ligand in config.inputs.ligands:
         ligand.sdf = _resolve_path(ligand.sdf, base_dir)  # type: ignore[assignment]

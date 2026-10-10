@@ -11,6 +11,29 @@ export type DomainOrder = string[];
 export type FusionOrientation = string | null;
 export type LocalizationContext = ("cytosolic" | "er_anchored") | null;
 export type LocalizationDesignEvidence = string | null;
+export type EvidenceId = string;
+export type ConstructId = string;
+export type ConstructVersion = string;
+export type ConditionId = string;
+export type InputSequenceSha256 = string;
+export type Start = number;
+export type End = number;
+export type AnchorSourceRecord = string;
+export type Tool = "DeepTMHMM";
+export type ToolVersion = string;
+export type NativeRecordId = string;
+export type Path = string;
+export type Sha256 = string;
+export type BodySide = "cytosolic" | "luminal" | "unknown";
+export type OrientationSource = string | null;
+export type CleavageState = "not_cleaved" | "cleaved" | "unknown";
+export type BodyRemovedByCleavage = boolean | null;
+export type CleavageSource = string | null;
+export type EvidenceLevel = "predicted" | "experimentally_supported";
+/**
+ * @minItems 1
+ */
+export type RawReferences = [ArtifactReference, ...ArtifactReference[]];
 export type M1Review = {
   [k: string]: unknown;
 } | null;
@@ -40,8 +63,8 @@ export type SpeciesId = string | null;
 export type EnzymeId = string | null;
 export type SubstrateId = string | null;
 export type ProductId = string | null;
-export type ConstructId = string | null;
-export type ConditionId = string | null;
+export type ConstructId1 = string | null;
+export type ConditionId1 = string | null;
 export type ParameterType =
   | "kcat"
   | "km"
@@ -92,6 +115,7 @@ export interface ConstructDefinition {
   fusion_orientation: FusionOrientation;
   localization_context: LocalizationContext;
   localization_design_evidence: LocalizationDesignEvidence;
+  membrane_topology: MembraneTopologyEvidence | null;
   m1_review: M1Review;
   linker_ids: LinkerIds;
   scaffold_id: ScaffoldId;
@@ -111,6 +135,38 @@ export interface OrderedPartConfig {
   id: Id1;
   kind: Kind1;
   sequence: Sequence;
+}
+export interface MembraneTopologyEvidence {
+  evidence_id: EvidenceId;
+  construct_id: ConstructId;
+  construct_version: ConstructVersion;
+  condition_id: ConditionId;
+  input_sequence_sha256: InputSequenceSha256;
+  anchor: ResidueRange;
+  anchor_source_record: AnchorSourceRecord;
+  tool: Tool;
+  tool_version: ToolVersion;
+  native_record_id: NativeRecordId;
+  native_output: ArtifactReference;
+  body_side: BodySide;
+  orientation_source: OrientationSource;
+  cleavage_state: CleavageState;
+  body_removed_by_cleavage: BodyRemovedByCleavage;
+  cleavage_source: CleavageSource;
+  evidence_level: EvidenceLevel;
+  raw_references: RawReferences;
+  review_parameter_ids: ReviewParameterIds;
+}
+export interface ResidueRange {
+  start: Start;
+  end: End;
+}
+export interface ArtifactReference {
+  path: Path;
+  sha256: Sha256;
+}
+export interface ReviewParameterIds {
+  [k: string]: string;
 }
 export interface Sequences {
   [k: string]: string;
@@ -136,8 +192,8 @@ export interface ParameterRecord {
   enzyme_id: EnzymeId;
   substrate_id: SubstrateId;
   product_id: ProductId;
-  construct_id: ConstructId;
-  condition_id: ConditionId;
+  construct_id: ConstructId1;
+  condition_id: ConditionId1;
   parameter_type: ParameterType;
   source_type: SourceType;
   derivation_type: DerivationType;
