@@ -78,3 +78,25 @@ def test_saved_parameter_raw_value_and_source_cannot_be_overwritten_via_project_
         public['scientific_project']['config']['parameters'][0]['value']=.2
         public['scientific_project']['config']['parameters'][0]['source_reference']='CHANGED_SOURCE'
         assert client.post('/api/platform/projects',json={'project':public,'expected_revision':project.revision}).status_code==409
+
+
+def test_partial_record_defaults_are_persisted_and_legacy_read_does_not_prevent_append(tmp_path):
+    app=fixture_app(tmp_path)
+    project=app.state.platform_store.project('software-fixture')
+    project.scientific_project['config']['parameters']=[{'parameter_id':'partial','name':'phi','value':.2,'unit':'1','parameter_type':'phi','source_type':'assumption'}]
+    # Legacy fixture bypasses the normal save normalizer; no science is run.
+    project=app.state.platform_store.save_project(project,project.revision)
+    with TestClient(app) as client:
+        public=client.get('/api/platform/projects/software-fixture').json()
+        old=dict(public['scientific_project']['config']['parameters'][0])
+        public['scientific_project']['config']['parameters'].append({**old,'parameter_id':'new','supersedes':'partial','parameter_version':2,'value':.3})
+        response=client.post('/api/platform/projects',json={'project':public,'expected_revision':project.revision})
+        assert response.status_code==200,response.text
+        saved=response.json()
+        assert saved['scientific_project']['config']['parameters'][0]==old
+        persisted=app.state.platform_store.project(project.id)
+        assert persisted.scientific_project['config']['parameters'][0]['created_at']==old['created_at']
+        again=client.post('/api/platform/projects',json={'project':saved,'expected_revision':saved['revision']})
+        assert again.status_code==200,again.text
+        assert again.json()['scientific_project']['config']['parameters'][0]==old
+        assert app.state.fixture_calls==[] and app.state.platform_store.runs()==[]

@@ -67,12 +67,12 @@ test('owned server executes reviewed scalar version and renders frozen unvalidat
   expect(newRun).not.toBe(oldRun);
   const fresh=await (await context.request.get(`/api/platform/runs/${newRun}/nodes/formula/result`)).json();
   const old=await (await context.request.get(`/api/platform/runs/${oldRun}/nodes/formula/result`)).json();
-  expect(fresh.output.value).toBe(.25);
-  expect(old.output.value).toBe(.5);
-  expect(fresh.output.method.spec.variables.k.value).toBe(1.5);
-  expect(old.output.method.spec.variables.k.value).toBe(.5);
-  expect(fresh.output.method.method_version).toBe(2);
-  expect(old.output.method.method_version).toBe(1);
+  expect(fresh.node.output.value).toBe(.25);
+  expect(old.node.output.value).toBe(.5);
+  expect(fresh.node.output.method.spec.variables.k.value).toBe(1.5);
+  expect(old.node.output.method.spec.variables.k.value).toBe(.5);
+  expect(fresh.node.output.method.method_version).toBe(2);
+  expect(old.node.output.method.method_version).toBe(1);
   await page.getByLabel('Run version').selectOption(oldRun);
   await expect(page.getByLabel('Custom formula result')).toContainText('0.5 1');
   await page.getByRole('tab',{name:'Workflow',exact:true}).click();

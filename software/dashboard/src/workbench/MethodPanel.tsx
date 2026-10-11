@@ -133,7 +133,7 @@ export function MethodPanel({project, toolId, runId, workflowId, nodeId, disable
           onPlan={value.scalar_method?next=>{void onWorkflowChange(next).then(()=>setUpdated(count=>count+1)).catch(reason=>setError(String(reason)));}:onPlan} initial={value.scalar_method??undefined}/></details>}
       </>}
       {tab === 'parameters' && <><fieldset disabled={disabled}><ModuleParameters project={project} method={value} frozen={!!runId} onChange={onChange} onScalarChange={saveScalar}/>
-          {!runId&&(toolId === 'project.m3' || toolId === 'project.m4') && project.scientific_project && <section aria-label="Human parameter review">
+          {!runId&&(toolId === 'project.m3' || toolId === 'project.m4') && project.scientific_project && value.parameter_records.some(record=>!record.binding_read_only&&['extracted','validated'].includes(String(record.review_status))) && <section aria-label="Human parameter review">
             <h4>Review a saved candidate</h4><p>Backend checks the actual requirement, units, identity, condition and source. Accepting an Assistant proposal does not perform this review.</p>
             <label>Candidate parameter<select aria-label="Candidate parameter" value={parameter} onChange={event => setParameter(event.target.value)}><option value="">Choose candidate</option>
               {project.scientific_project.config.parameters.filter(p => value.parameter_records.some(record=>record.parameter_id===p.parameter_id&&!record.binding_read_only) && ['extracted','validated'].includes(p.review_status)).map(p => <option key={p.parameter_id} value={p.parameter_id}>{p.name} · version {p.parameter_version} · {p.source_reference ?? 'Missing source'}</option>)}</select></label>

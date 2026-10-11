@@ -38,8 +38,11 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   const current=await (await context.request.get(`/api/platform/projects/${project.id}`)).json();
   current.scientific_project.config.parameters.push({parameter_id:'browser-phi',name:'phi',value:.2,unit:'1',parameter_type:'phi',
     source_type:'assumption',source_reference:'SOFTWARE_ONLY input editor fixture',review_status:'extracted'});
-  const seed=await context.request.post('/api/platform/projects',{data:{project:current,expected_revision:current.revision}});
-  expect(seed.status(),await seed.text()).toBe(200);
+  const seed=await page.evaluate(async current=>{
+    const response=await fetch('/api/platform/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:current,expected_revision:current.revision})});
+    return {status:response.status,text:await response.text()};
+  },current);
+  expect(seed.status,seed.text).toBe(200);
   await page.reload();
   await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   await page.getByLabel('Open saved workflow').selectOption('method-display');
