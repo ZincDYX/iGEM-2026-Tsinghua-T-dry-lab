@@ -115,7 +115,6 @@ def test_skill_is_plain_instructions_revision_bound_and_not_scientific_authority
 def test_workspace_client_rejects_truncated_json_even_if_fragment_is_parseable():
     from igem_drylab.workflow.assistant_settings import WorkspaceChatClient
     from igem_drylab.workflow.models import WorkflowError
-    from contextlib import contextmanager
     client=WorkspaceChatClient({'secret':'','endpoint':'https://software-fixture.invalid/chat/completions','model':'fixture'},'')
     captured={}
     class Response:

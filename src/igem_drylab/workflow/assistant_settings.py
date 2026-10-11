@@ -113,6 +113,8 @@ class WorkspaceChatClient:
                 raise WorkflowError('assistant_response_truncated', status_code=422)
             content = choice['message']['content']
             return json.loads(content)
+        except WorkflowError:
+            raise
         except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
             raise WorkflowError('assistant_response_invalid', status_code=422) from None
 
