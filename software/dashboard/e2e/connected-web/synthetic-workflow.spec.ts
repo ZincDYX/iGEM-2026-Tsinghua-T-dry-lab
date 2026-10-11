@@ -16,6 +16,12 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await page.getByRole('button',{name:'Confirm import',exact:true}).click();
   await page.getByRole('button',{name:'Review synthetic demonstration workflow',exact:true}).click();
   await expect(page.getByRole('tab',{name:'Workflow',exact:true})).toHaveAttribute('aria-selected','true');
+  await page.getByLabel('Tool call budget').fill('2');
+  await expect(page.getByLabel('Run through module')).toBeEnabled();
+  await page.getByLabel('Run through module').selectOption('synthetic-demo');
+  await expect(page.getByRole('button',{name:'Review plan',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Review plan',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
   await page.getByRole('button',{name:'Start run',exact:true}).click();
   await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible({timeout:60000});
@@ -40,6 +46,12 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await expect(module).toContainText('Numerical results: 4/5 solved');
   await expect(module).toContainText('Evidence: 0/5 ready');
   await expect(module).toContainText('Run experimental validation: not established');
+  await expect(page.getByLabel('Tool call budget')).toHaveValue('2');
+  await expect(page.getByLabel('Tool call budget')).toBeDisabled();
+  await expect(page.getByLabel('Run through module')).toHaveValue('synthetic-demo');
+  await expect(page.getByLabel('Run through module')).toBeDisabled();
+  await expect(page.getByLabel('Workflow run controls').getByRole('button',{name:'Review plan',exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('Workflow run controls').getByRole('button',{name:'Start run',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'List',exact:true}).click();
   await expect(page.getByRole('table').filter({has:page.getByText('Numerical results: 4/5 solved',{exact:true})})).toContainText('Evidence: 0/5 ready');
   await page.getByRole('button',{name:'Graph',exact:true}).click();

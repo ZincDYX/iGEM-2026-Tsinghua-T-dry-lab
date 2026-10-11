@@ -6,10 +6,10 @@ import { WorkflowGraph, defaultPositions } from './WorkflowGraph';
 
 /** One persisted WorkflowDocument; Graph and List never own separate nodes. */
 export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, document, run, inputCheck, selected, busy, frozen,
-  onDocument, onSelect, onReview}: {
+  onDocument, onSelect}: {
   projectId?: string; projectRevision?: number; seedId?: string; seed?: Workflow; document?: WorkflowDocument;
   run?: RunSummaryView; inputCheck?: ScientificPrecheckView; selected: string; busy: boolean; frozen: boolean;
-  onDocument: (value: WorkflowDocument) => void; onSelect: (id: string) => void; onReview: (workflow: Workflow) => Promise<void>;
+  onDocument: (value: WorkflowDocument) => void; onSelect: (id: string) => void;
 }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -113,8 +113,6 @@ export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, doc
           <button disabled={disabled || workflow.nodes.length === 1} onClick={() => revise(w => {w.nodes = w.nodes.filter(n => n.id !== selected) as Workflow['nodes'];})}>Delete selected module</button>
           <p>Required upstream modules cannot be deleted while their data or execution scope is still referenced. The backend retains the previous valid revision on rejection.</p>
         </>}
-        <button disabled={disabled} onClick={() => void onReview(document.workflow)}>Review workflow changes</button>
-        <p>This creates a new proposal, not a run or scientific parameter approval.</p>
       </section>}
     </> : <p>No workflow yet. Choose a method in Inputs, create a proposal, or open a saved workflow.</p>}
   </section>;

@@ -14,11 +14,11 @@ const workflow: Workflow = {id:'fixture', name:'Software graph', description:'No
   {id:'c', label:'Right branch', tool_id:'workflow.gather', inputs:{results:{kind:'node', node_id:'a', path:['results']}}, depends_on:[], map:null},
 ], execution_policy:{target_node_id:null, max_completed_stages:null, checkpoints_before:[], checkpoints_after:[], allowed_tools:['workflow.gather'], max_tool_calls:10, stop_after_seconds:null, memory_limit_mb:null}};
 function document(): WorkflowDocument {return {id:'review', project_id:'p', project_revision:1, revision:1, semantic_revision:1, layout_revision:1, workflow, layout:{}, selected_node_id:'a', view:'graph'};}
-function Harness({review=vi.fn()}:{review?: (workflow:Workflow)=>Promise<void>}) {
+function Harness() {
   const [value, setValue] = useState<WorkflowDocument>();
   const [selected,setSelected]=useState('a');
   return <WorkflowWorkspace projectId="p" projectRevision={1} seedId="review" seed={workflow} document={value}
-    selected={selected} onSelect={setSelected} onDocument={setValue} onReview={review} busy={false} frozen={false}/>;
+    selected={selected} onSelect={setSelected} onDocument={setValue} busy={false} frozen={false}/>;
 }
 it('shows actual fan-out edges and Graph/List share persisted selection without changing nodes',async()=>{
   vi.mocked(client.workflowDocuments).mockResolvedValue([document()]);
@@ -94,7 +94,7 @@ it('a delayed reopen cannot overwrite a newer policy save for the same document'
     const [value,setValue]=useState(document());
     return <><button onClick={()=>setValue(latest)}>Policy save completed</button>
       <WorkflowWorkspace projectId="p" projectRevision={1} seedId="review" seed={workflow} document={value} selected="a"
-        onSelect={vi.fn()} onDocument={doc=>{accepted(doc);setValue(doc);}} onReview={vi.fn()} busy={false} frozen={false}/></>;
+        onSelect={vi.fn()} onDocument={doc=>{accepted(doc);setValue(doc);}} busy={false} frozen={false}/></>;
   }
   render(<ConcurrentParent/>);
   await screen.findByRole('option',{name:'Software graph (revision 1)'});
@@ -110,13 +110,13 @@ it('reopening the Workflow tab adopts the newer server revision instead of its r
   vi.mocked(client.workflowDocuments).mockResolvedValue([latest]);
   const onDocument=vi.fn();
   render(<WorkflowWorkspace projectId="p" projectRevision={1} seedId="review" seed={workflow} document={document()} selected="a"
-    onSelect={vi.fn()} onDocument={onDocument} onReview={vi.fn()} busy={false} frozen={false}/>);
+    onSelect={vi.fn()} onDocument={onDocument} busy={false} frozen={false}/>);
   await waitFor(()=>expect(onDocument).toHaveBeenCalledWith(latest));
   expect(client.saveWorkflowDocument).not.toHaveBeenCalled();
 });
 it('frozen runs have Graph/List selection but no editing or document writes',()=>{
   render(<WorkflowWorkspace projectId="p" projectRevision={1} seedId="run" seed={workflow} selected="b"
-    onSelect={vi.fn()} onDocument={vi.fn()} onReview={vi.fn()} busy={false} frozen={true}/>);
+    onSelect={vi.fn()} onDocument={vi.fn()} busy={false} frozen={true}/>);
   fireEvent.click(screen.getByRole('button',{name:'List'}));
   expect(screen.getByRole('button',{name:'Left branch'}).getAttribute('aria-pressed')).toBe('true');
   expect(screen.queryByRole('button',{name:'Connect modules'})).toBeNull();

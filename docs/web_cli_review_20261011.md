@@ -343,6 +343,65 @@ remained pending without an assigned runner, with shared runners disabled and
 runner-list access denied. CI success is not established; repository-owner
 runner configuration is separate from local test success.
 
+## Batch 3c: explicit execution scope, one review action and frozen settings
+
+The obsolete stage-step and selected-stage review shortcuts are removed. Run
+through module and pause/checkpoint settings use the existing execution policy;
+they do not create another plan, scheduler or scientific gate. Workflow has one
+Review plan action, whether checking inputs, awaiting acceptance or revising an
+accepted plan. It submits the current saved graph to the existing custom-proposal
+service instead of replacing that graph with a generated template. Review is not
+run submission or scientific parameter approval.
+
+Frozen run settings now come directly from that run's immutable workflow, not
+from the editable draft policy. Completed frozen runs cannot show another draft's
+Start or Review action. Actual pause/cancel/retry/resume controls are retained when
+appropriate. Checkpoints display module names instead of internal identifier lists.
+The document title/language is English; this does not establish the remaining
+whole-product language audit.
+
+The first full software run was interrupted after abnormally long execution and
+test failures; the underlying workstation interruption is not established as the
+cause of every failure. A new frozen-input test also incorrectly checked an input's
+own disabled property instead of its actual disabled state inherited from the
+fieldset. That assertion is corrected, not removed. The targeted 12-test App and
+control suite passed (93.87 s), covering the frozen snapshot, preservation of custom
+dependencies/scope in review, stale acceptance and existing request-race guards.
+The full frontend suite passed 80 tests in 26 files (301.07 s). TypeScript then
+found two unsupported Testing Library query options in the new test; they were
+corrected. The App/control suite passed again, 12 tests (58.63 s), after removing
+the redundant review-eligibility prop (already determined by frozen state).
+TypeScript and production build passed. Final installed-browser acceptance is
+recorded below when complete. No backend,
+scientific equation, biological parameter, numerical tolerance or tool changed.
+
+Batch-3b official source/history/LFS conservative size passed at 40,323,100 bytes.
+The subsequent read-only GitLab status/runner query failed with TLS EOF; current
+pipeline success is not established. Previous pending/unassigned-runner evidence
+cannot be reported as the latest pipeline outcome.
+
+The latest own Web wheel is 3,228,846 bytes; installed local browser acceptance
+passed four tasks (1.6 min). Beyond the prior import/editor tasks, it actually
+saved the call budget and target module, reviewed that same custom graph without
+template replacement, retained its two modules, and reopened the later backend
+revision. No job was created, and no solver ran on the workstation. Production
+installation needs no Node/Rust, but the clean locked release and updated desktop
+EXE are still not validated by this batch.
+
+No external tool/dependency was installed. Using the same declared audit baseline
+and conservative active acceptance additions, the new total is 14,981,628,197 bytes
+(server package 11,917,527; current UI 10,095,710; local installed package 12,385,841),
+below 15,000,000,000 bytes. This is the runtime/tools scope, not total disk usage.
+
+The latest installed-UI server browser task passed (37.6 s / 44.8 s total): it
+edited the call budget and target module, reviewed/accepted the exact current
+workflow, ran original synthetic M3/M4 kernels, rendered the real Plotly curve and
+exported all recorded CSV points. The recorded run displayed its frozen budget
+and target as disabled, with no draft Start/Review action. Graph/List retained
+4/5 solved, 0/5 evidence-ready, not-established run validation and blocked E3.
+These are actual server computations within explicitly synthetic scope, not
+wet-lab validation or completion of formal M1–M4/ER inputs.
+
 ## Remaining review acceptance tasks
 
 | ID | Required outcome | Current status |
@@ -355,7 +414,7 @@ runner configuration is separate from local test success.
 | IN-04 | Server-calculated asset identity, no user SHA entry | Registered typed file references obtain hashes server-side; ownership/conflicting identities still rejected |
 | WF-01 | Graph/List editing of one workflow revision | Shared persisted graph/list, movement, selection/recovery, revision, backend status counts and dependency rejection verified; general typed module/binding creation and full IO compatibility pending |
 | WF-02 | Versioned full method formulas, tools and parameter records | Pending |
-| WF-03 | Save/review/run and controls only in Workflow | Existing-engine review, graph/policy stale-approval protection and Workflow-only location implemented; obsolete stage-review shortcuts still need consolidation into explicit scope settings |
+| WF-03 | Save/review/run and controls only in Workflow | Existing-engine review, graph/policy stale-approval protection, one review action and explicit scope/checkpoints implemented; batch acceptance separates draft settings from frozen run settings |
 | RES-01 / SCI-06 | Grouped results, independent job/numeric/evidence/validation status | Four-state summary and synthetic tables verified; general module grouping pending |
 | RES-02 / SCI-07 | Pool-aware ER tables/curves and actual viewer acceptance | Typed actual-volume projection and CSV verified; real structure/WebGL/lifecycle acceptance pending |
 | AG-01 / AG-02 | Persistent conversational proposals/diffs/decisions using existing engine | Pending |

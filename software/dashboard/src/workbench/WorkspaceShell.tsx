@@ -183,6 +183,7 @@ export function WorkspaceShell() {
       ? run?.workflow
       : (workflowDocument?.workflow ?? proposal?.workflow ?? run?.workflow);
   const workflowChanged = !!workflowDocument && JSON.stringify(workflowDocument.workflow) !== JSON.stringify(proposal?.workflow);
+  const visiblePolicy = runSelected && run ? run.workflow.execution_policy : policy;
   const node = workflow?.nodes.find((value) => value.id === selected);
   const stopped =
     run &&
@@ -495,14 +496,12 @@ export function WorkspaceShell() {
   async function runPrimary() {
     if (primary === "resume") return control("resume");
     if (primary === "start") return start();
-    if (primary === "review") return propose();
+    if (primary === "review") return reviewWorkflow();
     if (primary === "check") return checkInputs();
   }
-  async function reviewScope(scope: Partial<ExecutionPolicy>) {
-    if (!workflow) return propose({...policy, ...scope});
-    const revised = structuredClone(workflow);
-    revised.execution_policy = {...revised.execution_policy, ...scope};
-    await importWorkflow(async () => revised);
+  async function reviewWorkflow() {
+    if (workflowDocument && !runSelected) return importWorkflow(async () => workflowDocument.workflow);
+    return propose();
   }
   async function checkInputs() {
     if (editing) return;
@@ -833,10 +832,9 @@ export function WorkspaceShell() {
                 startDisabled={workflowChanged || project.dirty} executing={!!executing && runSelected}
                 cancellable={!!run && runSelected && ['queued','running','paused','interrupted'].includes(run.status) && run.control!=='cancel'}
                 retryable={runSelected && ['failed','interrupted'].includes(run?.nodes.find(n=>n.id===selected)?.status??'')}
-                canSelectStage={!!node} onPrimary={()=>void runPrimary()} onPause={()=>void control('pause')}
+                frozen={runSelected} onPrimary={()=>void runPrimary()} onPause={()=>void control('pause')}
                 onCancel={()=>void control('cancel')} onRetry={()=>void control('retry')}
-                onStep={()=>void reviewScope({max_completed_stages:1,target_node_id:null})}
-                onTarget={()=>void reviewScope({target_node_id:selected,max_completed_stages:null})}/>
+                onReview={()=>void reviewWorkflow()}/>
               <p aria-label="Selection context">
                 {selection?.kind === "proposal-node"
                   ? "Draft proposal; no computed result yet."
@@ -852,7 +850,6 @@ export function WorkspaceShell() {
                 seed={selection?.kind === 'run-node' ? run?.workflow : proposal?.workflow ?? undefined}
                 document={workflowDocument}
                 onDocument={value=>{setWorkflowDocument(value);setPolicy(value.workflow.execution_policy);setSelection({kind:'proposal-node',proposalId:proposal?.id??value.id,nodeId:value.selected_node_id??value.workflow.nodes[0].id});}}
-                onReview={value=>importWorkflow(async()=>value)}
                 frozen={selection?.kind === 'run-node'}
                 busy={busy || project.dirty}
                 inputCheck={checkStale ? undefined : projectCheck}
@@ -862,11 +859,20 @@ export function WorkspaceShell() {
               />
               {workflowChanged && selection?.kind !== 'run-node' && <p role="status">Workflow changes are saved but not authorized. Review and accept a new proposal before running.</p>}
               <fieldset className="policy-editor" disabled={busy || editing || !!runSelected}>
-                <h3>Execution authorization and stop policy</h3>
+                <h3>Execution settings</h3>
+                <p>{runSelected ? 'Recorded settings for this frozen run; not the current draft.' : 'Choose the execution scope here, then Review plan. Changing these settings requires a new accepted proposal; it does not approve scientific evidence.'}</p>
+                <label>
+                  Run through module
+                  <select aria-label="Run through module" value={visiblePolicy.target_node_id ?? ''}
+                    onChange={event => updatePolicy({...policy, target_node_id: event.target.value || null})}>
+                    <option value="">All modules in this workflow</option>
+                    {workflow?.nodes.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}
+                  </select>
+                </label>
                 <label>
                   <input
                     type="checkbox"
-                    checked={policy.max_completed_stages === 1}
+                    checked={visiblePolicy.max_completed_stages === 1}
                     onChange={(e) =>
                       updatePolicy({
                         ...policy,
@@ -874,14 +880,14 @@ export function WorkspaceShell() {
                       })
                     }
                   />
-                  Pause after each stage
+                  Pause after each completed module
                 </label>
                 <label>
                   Tool call budget
                   <input
                     type="number"
                     min="1"
-                    value={policy.max_tool_calls}
+                    value={visiblePolicy.max_tool_calls}
                     onChange={(e) => {
                       const value = Number(e.target.value);
                       if (Number.isInteger(value) && value > 0)
@@ -895,7 +901,7 @@ export function WorkspaceShell() {
                   <input
                     type="number"
                     min="1"
-                    value={policy.stop_after_seconds ?? ""}
+                    value={visiblePolicy.stop_after_seconds ?? ""}
                     onChange={(e) => {
                       const value =
                         e.target.value === "" ? null : Number(e.target.value);
@@ -906,8 +912,9 @@ export function WorkspaceShell() {
                 </label>
                 {node && (
                   <>
-                    <button
-                      onClick={() =>
+                    <label>
+                      <input type="checkbox" checked={visiblePolicy.checkpoints_before.includes(selected)}
+                      onChange={() =>
                         updatePolicy({
                           ...policy,
                           checkpoints_before:
@@ -918,11 +925,12 @@ export function WorkspaceShell() {
                               : [...policy.checkpoints_before, selected],
                         })
                       }
-                    >
-                      Toggle before-stage checkpoint
-                    </button>
-                    <button
-                      onClick={() =>
+                      />
+                      Pause before {node.label}
+                    </label>
+                    <label>
+                      <input type="checkbox" checked={visiblePolicy.checkpoints_after.includes(selected)}
+                      onChange={() =>
                         updatePolicy({
                           ...policy,
                           checkpoints_after: policy.checkpoints_after.includes(
@@ -934,14 +942,13 @@ export function WorkspaceShell() {
                             : [...policy.checkpoints_after, selected],
                         })
                       }
-                    >
-                      Toggle after-stage checkpoint
-                    </button>
+                      />
+                      Pause after {node.label}
+                    </label>
                     <p>
-                      Draft checkpoints: before [
-                      {policy.checkpoints_before.join(", ")}] / after [
-                      {policy.checkpoints_after.join(", ")}]; regenerate and
-                      accept after changes. Frozen run snapshots do not change.
+                      Pauses before: {visiblePolicy.checkpoints_before.map(id => workflow?.nodes.find(value => value.id === id)?.label ?? 'Unavailable module').join(', ') || 'None'}.
+                      Pauses after: {visiblePolicy.checkpoints_after.map(id => workflow?.nodes.find(value => value.id === id)?.label ?? 'Unavailable module').join(', ') || 'None'}.
+                      Frozen run snapshots do not change.
                     </p>
                   </>
                 )}

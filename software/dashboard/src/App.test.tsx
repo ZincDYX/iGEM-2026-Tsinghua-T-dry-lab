@@ -8,7 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import * as client from "./workbench/client";
-import type { ProjectView, ProposalView } from "./contracts/generated";
+import type { ProjectView, ProposalView, RunSummaryView } from "./contracts/generated";
 
 // jsdom has no layout/scroll API; browser/native tests exercise actual scrolling.
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -39,8 +39,12 @@ vi.mock("./workbench/client", async (importOriginal) => {
     actions: vi.fn(),
     save: vi.fn(),
     propose: vi.fn(),
+    proposeCustom: vi.fn(),
     decide: vi.fn(),
     start: vi.fn(),
+    summary: vi.fn(),
+    events: vi.fn(),
+    node: vi.fn(),
     workflowDocuments: vi.fn(),
     saveWorkflowDocument: vi.fn(),
   };
@@ -166,6 +170,7 @@ describe("FusionLab scientific workbench", () => {
     });
     vi.mocked(client.save).mockResolvedValue({ ...project, revision: 2 });
     vi.mocked(client.propose).mockResolvedValue(proposal);
+    vi.mocked(client.proposeCustom).mockResolvedValue(proposal);
     vi.mocked(client.decide).mockResolvedValue({
       ...proposal,
       status: "accepted",
@@ -269,8 +274,45 @@ describe("FusionLab scientific workbench", () => {
     expect(policySave.workflow?.nodes.find(n=>n.id==='c')?.depends_on).toEqual(['a','b']);
     expect(policySave.workflow?.execution_policy.max_tool_calls).toBe(50);
     expect(screen.getByRole('button',{name:'Start run'})).toHaveProperty('disabled',true);
+    fireEvent.change(screen.getByLabelText('Run through module'),{target:{value:'c'}});
+    await vi.waitFor(()=>expect(screen.getByLabelText('Run through module')).toHaveProperty('value','c'));
+    expect(vi.mocked(client.saveWorkflowDocument).mock.calls.at(-1)![2].workflow?.execution_policy.target_node_id).toBe('c');
+    expect(screen.queryByRole('button',{name:'Review stage-by-stage plan'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'Review run to selected stage'})).toBeNull();
+    expect(screen.getAllByRole('button',{name:'Review plan'})).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button',{name:'Review plan'}));
+    await vi.waitFor(()=>expect(client.proposeCustom).toHaveBeenCalledWith('test',expect.objectContaining({
+      nodes:current.nodes,execution_policy:expect.objectContaining({target_node_id:'c',max_tool_calls:50}),
+    }),''));
+    expect(client.propose).toHaveBeenCalledTimes(1); // No template replacement of the edited graph.
+    expect(client.start).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button',{name:/^Inputs$/}));
     expect(screen.queryByLabelText('Workflow run controls')).toBeNull();
+  });
+  it('opening a recorded run displays its frozen execution scope instead of the draft policy',async()=>{
+    const recorded: RunSummaryView={id:'recorded',name:'Recorded software run',project_id:project.id,status:'succeeded',snapshot_hash:'fixture',
+      created_at:'fixture',updated_at:'fixture',project_revision:1,control:null,heartbeat:null,state_version:1,event_cursor:0,
+      workflow:{...proposal.workflow!,execution_policy:{...proposal.workflow!.execution_policy,max_tool_calls:7,target_node_id:'fixture',checkpoints_after:['fixture']}},
+      tools:{},artifacts:[],scientific_assessment:{experimental_validation:'not_established'},nodes:[{
+        id:'fixture',parent_id:null,status:'succeeded',attempts:1,tool_id:'fusion.sequence_metrics',label:'Recorded module',scientific_summary:null,
+      }]};
+    vi.mocked(client.history).mockResolvedValue([recorded]);
+    vi.mocked(client.summary).mockResolvedValue(recorded);
+    vi.mocked(client.events).mockResolvedValue({items:[],cursor:0,has_more:false});
+    vi.mocked(client.node).mockResolvedValue({node:{id:'fixture',parent_id:null,status:'succeeded',attempts:1,output:null,error:null,inputs:null},offset:0,limit:20,total_records:0,artifact:null,sequence_map:null});
+    render(<App/>);
+    await screen.findByText('Standalone sequences: 1',{exact:true});
+    fireEvent.click(within(screen.getByRole('navigation',{name:'Project navigation'})).getByRole('button',{name:'Results'}));
+    fireEvent.click(await screen.findByRole('button',{name:/^Recorded software run/}));
+    await vi.waitFor(()=>expect(client.summary).toHaveBeenCalled());
+    fireEvent.click(within(screen.getByRole('navigation',{name:'Project navigation'})).getByRole('button',{name:'Workflow'}));
+    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget')).toHaveProperty('value','7'));
+    expect(screen.getByLabelText('Tool call budget').matches(':disabled')).toBe(true);
+    expect(screen.getByLabelText('Run through module')).toHaveProperty('value','fixture');
+    expect(screen.getByRole('checkbox',{name:'Pause after 受控夹具Node'})).toHaveProperty('checked',true);
+    expect(screen.queryByRole('button',{name:'Review plan'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'Start run'})).toBeNull();
+    expect(client.saveWorkflowDocument).not.toHaveBeenCalled();
   });
   it("editing facts invalidates acceptance and cannot start an obsolete workflow", async () => {
     render(<App />);
