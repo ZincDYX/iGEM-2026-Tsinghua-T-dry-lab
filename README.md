@@ -85,8 +85,9 @@ Use `fusionlab --json ...` for automation and `fusionlab --data-dir <workspace>
 `check-inputs --project <id> --through M2` and method `galatea-m1-m2` use the
 existing scientific contracts; incomplete or unlicensed tools are not replaced
 with example outputs. Public GFP descriptors are not formal M1–M4 validation.
-See the [review acceptance ledger](docs/web_cli_review_20261011.md) for remaining
-requirements rather than treating this new entry point as full review completion.
+See the [current simplification and acceptance record](docs/review_r24_simplification_20261012.md)
+and [earlier review ledger](docs/web_cli_review_20261011.md) for actual validation
+and external blockers; an entry point is not full biological validation.
 
 File, folder and ZIP imports share one saved preview. Ambiguous FASTA asks for
 DNA, RNA or protein; nucleic acids are not translated automatically. In the

@@ -1,5 +1,9 @@
 # Web/CLI review implementation and acceptance ledger
 
+Current Results / formula / purple-interface changes and their acceptance are
+recorded in [r24](review_r24_simplification_20261012.md). The batches below retain
+their historical scope; their earlier UI descriptions are not current instructions.
+
 Review baseline: official develop `34e0f3ec366555bb4917dba6e641c60d8c332d6e`.
 Implementation starts from its byte-identical development mirror tree.
 This ledger is not a claim that the whole review or award criteria are satisfied.

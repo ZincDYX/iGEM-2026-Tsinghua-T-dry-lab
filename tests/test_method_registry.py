@@ -63,3 +63,28 @@ def test_frozen_module_parameters_use_actual_snapshot_not_live_draft(tmp_path):
         assert response.json()['project_revision']==project.revision
         assert client.get('/api/platform/projects/software-fixture/module-method?tool_id=project.m3').json()['parameter_records'][0]['value']==.9
         assert app.state.fixture_calls==[]
+
+
+def test_only_consumed_parameters_and_compatible_approved_source_choices_are_shown(tmp_path):
+    from test_parameter_review_service import seed
+    app=fixture_app(tmp_path)
+    project,_=seed(app)
+    records=project.scientific_project['config']['parameters']
+    original=records[0]
+    for identity,changes in (
+        ('same-source',{}),
+        ('wrong-unit',{'unit':'uM'}),
+        ('wrong-condition',{'condition_id':'different'}),
+        ('unapproved',{'review_status':'extracted','approved_by':None}),
+        ('not-consumed',{'name':'unused_display_parameter'}),
+    ):
+        records.append({**original,'parameter_id':identity,**changes})
+    app.state.platform_store.save_project(project,project.revision)
+    with TestClient(app) as client:
+        response=client.get('/api/platform/projects/software-fixture/module-method?tool_id=project.m3')
+        assert response.status_code==200,response.text
+        value=response.json()
+        assert 'phi' in {row['name'] for row in value['parameter_requirements']}
+        assert 'not-consumed' not in {row['parameter_id'] for row in value['parameter_records']}
+        assert value['parameter_source_options']['original']==['same-source']
+        assert app.state.fixture_calls==[] and app.state.platform_store.runs()==[]
