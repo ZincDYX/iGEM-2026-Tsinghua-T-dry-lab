@@ -16,6 +16,9 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await page.getByRole('button',{name:'Confirm import',exact:true}).click();
   await page.getByRole('button',{name:'Review synthetic demonstration workflow',exact:true}).click();
   await expect(page.getByRole('tab',{name:'Workflow',exact:true})).toHaveAttribute('aria-selected','true');
+  // Settings cannot invalidate a proposal while its first persisted workflow
+  // document is still being saved on a real remote connection.
+  await expect(page.getByRole('button',{name:'Module Synthetic M3/M4 reference scenarios',exact:true})).toBeVisible();
   await page.getByLabel('Tool call budget').fill('2');
   await expect(page.getByLabel('Run through module')).toBeEnabled();
   await page.getByLabel('Run through module').selectOption('synthetic-demo');

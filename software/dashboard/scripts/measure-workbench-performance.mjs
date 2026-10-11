@@ -11,7 +11,10 @@ const child=spawn(args['--python'],['-B','-m','igem_drylab.software.cli','--data
   {windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,PYTHONPATH:args['--package'],PYTHONDONTWRITEBYTECODE:'1',OPENBLAS_NUM_THREADS:'1',OMP_NUM_THREADS:'1'}});
 let output='';child.stdout.on('data',value=>{output+=value;});child.stderr.on('data',value=>{output+=value;});
 function processUsage() {
-  if(process.platform==='win32')return JSON.parse(execFileSync('powershell',['-NoProfile','-Command',`Get-Process -Id ${child.pid} | Select-Object CPU,WorkingSet64 | ConvertTo-Json -Compress`],{encoding:'utf8',windowsHide:true}));
+  // A Windows venv python.exe can be a small redirector process. Include its
+  // actual descendant Python server, not just that idle launcher's 4-MB RSS.
+  if(process.platform==='win32')return JSON.parse(execFileSync('powershell',['-NoProfile','-Command',
+    `$ids=[System.Collections.Generic.List[int]]::new(); $ids.Add(${child.pid}); for($i=0;$i -lt $ids.Count;$i++){ Get-CimInstance Win32_Process -Filter ('ParentProcessId = '+$ids[$i]) | ForEach-Object { $ids.Add([int]$_.ProcessId) } }; @(Get-Process -Id $ids.ToArray() | Select-Object Id,CPU,WorkingSet64) | ConvertTo-Json -Compress`],{encoding:'utf8',windowsHide:true}));
   return {stat:readFileSync(`/proc/${child.pid}/stat`,'utf8'),status:readFileSync(`/proc/${child.pid}/status`,'utf8').split('\n').filter(line=>line.startsWith('VmRSS:'))};
 }
 let browser;

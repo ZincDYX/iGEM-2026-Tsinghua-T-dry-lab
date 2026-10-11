@@ -893,8 +893,9 @@ export function WorkspaceShell() {
               {tab === 'plan' && node && currentProject && <Suspense fallback={<p>Loading method details…</p>}><MethodPanel
                 key={node.id} project={currentProject} toolId={node.tool_id} runId={runSelected ? run?.id : undefined}
                 disabled={busy || editing} onChange={value => {project.edit(value); invalidate();}} onReview={reviewParameter}/></Suspense>}
-              <fieldset className="policy-editor" disabled={busy || editing || !!runSelected}>
+              <fieldset className="policy-editor" disabled={busy || editing || !!runSelected || (!!proposal?.workflow && !workflowDocument)}>
                 <h3>Execution settings</h3>
+                {!!proposal?.workflow && !workflowDocument && !runSelected && <p role="status">Saving this workflow before execution settings can be edited.</p>}
                 <p>{runSelected ? 'Recorded settings for this frozen run; not the current draft.' : 'Choose the execution scope here, then Review plan. Changing these settings requires a new accepted proposal; it does not approve scientific evidence.'}</p>
                 <label>
                   Run through module

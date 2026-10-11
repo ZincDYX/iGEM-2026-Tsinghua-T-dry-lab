@@ -294,6 +294,28 @@ describe("FusionLab scientific workbench", () => {
     fireEvent.click(screen.getByRole('button',{name:/^Inputs$/}));
     expect(screen.queryByLabelText('Workflow run controls')).toBeNull();
   });
+  it('execution settings wait for the first durable document instead of dropping its proposal',async()=>{
+    let release!:()=>void;
+    const pending=new Promise<void>(resolve=>{release=resolve;});
+    vi.mocked(client.saveWorkflowDocument).mockImplementationOnce(async(projectId,id,value,revision)=>{
+      await pending;
+      return {...value,workflow:value.workflow??proposal.workflow!,id,project_id:projectId,project_revision:revision,
+        revision:1,semantic_revision:1,layout_revision:1};
+    });
+    render(<App/>);
+    await screen.findByText('Standalone sequences: 1',{exact:true});
+    fireEvent.click(screen.getByRole('button',{name:'Generate proposal'}));
+    await screen.findByText('可审阅分析');
+    expect(screen.getByLabelText('Tool call budget').matches(':disabled')).toBe(true);
+    expect(screen.getByLabelText('Run through module').matches(':disabled')).toBe(true);
+    release();
+    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget').matches(':disabled')).toBe(false));
+    fireEvent.change(screen.getByLabelText('Tool call budget'),{target:{value:'2'}});
+    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget')).toHaveProperty('value','2'));
+    expect(screen.getByLabelText('Run through module').querySelector('option[value="fixture"]')).not.toBeNull();
+    expect(screen.getByText('可审阅分析')).toBeTruthy();
+    expect(client.start).not.toHaveBeenCalled();
+  });
   it('opening a recorded run displays its frozen execution scope instead of the draft policy',async()=>{
     const recorded: RunSummaryView={id:'recorded',name:'Recorded software run',project_id:project.id,status:'succeeded',snapshot_hash:'fixture',
       created_at:'fixture',updated_at:'fixture',project_revision:1,control:null,heartbeat:null,state_version:1,event_cursor:0,

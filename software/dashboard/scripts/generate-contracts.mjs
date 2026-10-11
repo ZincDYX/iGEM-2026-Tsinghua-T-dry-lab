@@ -94,7 +94,10 @@ if(new Set(assigned).size!==assigned.length||Object.keys(schemas).some(name=>!as
 const loaders=[];
 for(const[family,names]of Object.entries(families)){
   const validation=standaloneCode(ajv,Object.fromEntries(names.map(name=>[name,name])));
-  await build({stdin:{contents:validation,resolveDir:fileURLToPath(new URL("..",import.meta.url)),loader:"js"},bundle:true,format:"esm",platform:"browser",write:true,
+  // Generated machine code has no editable scientific definitions. Compact
+  // it in source storage as well as the production bundle; keep the complete
+  // readable Python/JSON/TypeScript contracts and actual validator semantics.
+  await build({stdin:{contents:validation,resolveDir:fileURLToPath(new URL("..",import.meta.url)),loader:"js"},bundle:true,minify:true,format:"esm",platform:"browser",write:true,
     outfile:fileURLToPath(new URL(`../src/contracts/validators.${family}.generated.js`,import.meta.url))});
   await writeFile(new URL(`../src/contracts/validators.${family}.generated.d.ts`,import.meta.url),names.map(name=>`export function ${name}(value:unknown):value is import("./${name}.generated").${name};`).join('\n')+'\n');
   loaders.push(...names.map(name=>`${JSON.stringify(name)}:()=>import("./validators.${family}.generated.js"),`));
