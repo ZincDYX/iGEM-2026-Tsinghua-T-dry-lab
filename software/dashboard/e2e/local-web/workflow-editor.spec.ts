@@ -104,7 +104,10 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   await page.getByLabel('Open saved workflow').selectOption('browser-acceptance');
   await expect(page.getByRole('heading',{name:'Latest saved workflow',exact:true})).toBeVisible();
-  await expect(page.getByRole('option',{name:'Latest saved workflow (revision 5)'})).toHaveCount(1);
+  const reopened=await (await context.request.get(endpoint)).json();
+  expect(reopened.semantic_revision).toBe(current.semantic_revision+1);
+  expect(reopened.workflow.name).toBe('Latest saved workflow');
+  await expect(page.getByRole('option',{name:`Latest saved workflow (revision ${reopened.semantic_revision})`})).toHaveCount(1);
   expect(await (await context.request.get('/api/platform/runs')).json()).toEqual([]);
   await expect(graph.getByRole('button',{name:'Module Original inputs'})).toContainText('Numerical results: Not assessed');
   await expect(page.getByRole('tablist',{name:'Inspector tabs'}).getByRole('tab',{name:'Diagnostic',exact:true})).toHaveCount(0);

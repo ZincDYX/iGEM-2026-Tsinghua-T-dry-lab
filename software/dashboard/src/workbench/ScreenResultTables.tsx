@@ -65,7 +65,7 @@ export function M2Metrics({ record, onAddData }: { record: Record<string, unknow
     <h3>Structure calculation blocked</h3>
     <p>{show(record.status)}: {show(record.missing_inputs)}</p>
     {typeof record.reference_structure_id === 'string' && <p>Reference structure: {show(record.reference_structure_id)}. A reference does not replace a predicted fusion structure.</p>}
-    <p>Next: add the required fusion structure and its confidence / residue mapping evidence in Inputs.</p>{onAddData&&<button onClick={onAddData}>Add data</button>}
+    <p>Next: resolve the missing inputs listed above. Fusion structure assessment also requires matched confidence and residue mapping evidence.</p>{onAddData&&<button onClick={onAddData}>Add data</button>}
   </section>;
   return (
     <>

@@ -196,7 +196,6 @@ function StageResult({
           />
         </>
       )}
-      {object(record.provenance_summary)&&<details><summary>Sources</summary><dl>{object(record.provenance_summary)&&Object.entries(record.provenance_summary).map(([name,value])=><div key={name}><dt>{name}</dt><dd>{show(value)}</dd></div>)}</dl></details>}
     </section>
   );
 }
