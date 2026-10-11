@@ -5,7 +5,9 @@ import path from 'node:path';
 test('installed same-origin Web opens Inputs, authenticates without token entry and preserves GenBank',async({page,context})=>{
   // Software/HTTP import only; numerical computation is tested on a server.
   const errors:string[]=[];
+  const importStatuses:number[]=[];
   page.on('pageerror',error=>errors.push(error.message));
+  page.on('response',response=>{if(/\/projects\/[^/]+\/imports$/.test(new URL(response.url()).pathname))importStatuses.push(response.status());});
   await page.goto('/');
   await expect(page.getByRole('tab',{name:'Inputs',exact:true})).toHaveAttribute('aria-selected','true');
   expect(await page.getByRole('tablist',{name:'Workspace documents'}).getByRole('tab').count()).toBe(3);
@@ -37,6 +39,9 @@ test('installed same-origin Web opens Inputs, authenticates without token entry 
   const missing=await context.request.get('/assets/does-not-exist.js');
   expect(missing.status()).toBe(404);
   expect(errors).toEqual([]);
+  expect(importStatuses.length).toBeGreaterThan(0);
+  expect(importStatuses.every(status=>status>=200&&status<300)).toBe(true);
+  await expect(page.getByText('Saved import previews could not be loaded.',{exact:false})).toHaveCount(0);
   await page.screenshot({path:'test-results/local-web-inputs.png',fullPage:false});
 });
 
