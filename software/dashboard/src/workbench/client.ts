@@ -217,6 +217,8 @@ const documentPath = (projectId: string, documentId?: string) =>
   `/projects/${encodeURIComponent(projectId)}/workflow-documents${documentId ? `/${encodeURIComponent(documentId)}` : ''}`;
 export const workflowDocuments = (projectId: string, signal?: AbortSignal) =>
   list('WorkflowDocument', documentPath(projectId), signal);
+export const workflowDocument = (projectId: string, documentId: string) =>
+  read('WorkflowDocument', documentPath(projectId, documentId));
 export const saveWorkflowDocument = (
   projectId: string, documentId: string,
   value: Pick<import('../contracts/generated').WorkflowDocument, 'layout' | 'selected_node_id' | 'view'> & {workflow?: Workflow},

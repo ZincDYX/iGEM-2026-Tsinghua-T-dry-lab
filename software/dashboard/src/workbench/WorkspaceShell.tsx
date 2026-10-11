@@ -21,6 +21,7 @@ import * as client from "./client";
 import { useProject } from "./useProject";
 import { useRun } from "./useRun";
 import { dependencies, statusLabel } from "./PlanPanel";
+import { ModuleScientificStatus } from './ModuleStatus';
 import { WorkflowWorkspace } from './WorkflowWorkspace';
 import { WorkflowControls } from './WorkflowControls';
 import { AgentPanel } from "./AgentPanel";
@@ -623,7 +624,8 @@ export function WorkspaceShell() {
             {
               label: "Scientific boundaries",
               action: () => {
-                setInspector("diagnostics");
+                setTab('plan');
+                setInspector("evidence");
                 setInspectorOpen(true);
               },
             },
@@ -843,7 +845,7 @@ export function WorkspaceShell() {
                     : "Select a proposal or a frozen run."}
               </p>
               <WorkflowWorkspace
-                key={currentProject?.id}
+                key={`workflow:${currentProject?.id}`}
                 projectId={currentProject?.id}
                 projectRevision={currentProject?.revision}
                 seedId={selection?.kind === 'run-node' ? run?.id : proposal?.id}
@@ -950,7 +952,7 @@ export function WorkspaceShell() {
                 </p>
               </fieldset>
               <WorkflowImporter
-                key={currentProject?.id}
+                key={`workflow-import:${currentProject?.id}`}
                 busy={busy}
                 enabled={!!currentProject && !editing}
                 submit={importWorkflow}
@@ -1078,7 +1080,6 @@ export function WorkspaceShell() {
           values={[
             { id: "agent", label: "Agent" },
             { id: "evidence", label: "Inputs / Evidence" },
-            { id: "diagnostics", label: "Diagnostic" },
           ]}
           selected={inspector}
           onChange={setInspector}
@@ -1132,6 +1133,9 @@ export function WorkspaceShell() {
                     Tool: {node.tool_id} · Dependencies:{" "}
                     {dependencies(node).join(", ") || "None"}
                   </p>
+                  <p>Job completion, numerical results, evidence readiness and experimental validation are separate. Missing evidence remains blocked; an accepted plan does not approve scientific parameters.</p>
+                  <ModuleScientificStatus summary={runSelected ? run?.nodes.find(value => value.id === selected)?.scientific_summary : undefined}
+                    experimentalValidation={runSelected ? run?.scientific_assessment.experimental_validation : undefined}/>
                   <LazyJson
                     value={node.inputs}
                     label="Input bindings (not client scientific flags)"
@@ -1183,28 +1187,6 @@ export function WorkspaceShell() {
               >
                 Locate stage result
               </button>
-            </section>
-          )}
-          {inspector === "diagnostics" && (
-            <section>
-              <h2>Computation diagnostics</h2>
-              <p>
-                Job, numerical, evidence and experimental validation statuses
-                are independent. Missing records are not 0 or passed.
-              </p>
-              <LazyJson
-                value={nodeData?.node.error}
-                label="Safe error / diagnostic_id"
-              />
-              <LazyJson
-                value={nodeData?.node.output}
-                label="Selected scientific record / Original  warning code"
-              />
-              <p>
-                Non-idempotent interruptions require external job
-                reconciliation. Tool changes require iteration, not forced
-                resume.
-              </p>
             </section>
           )}
         </div>
@@ -1330,6 +1312,12 @@ export function WorkspaceShell() {
           )}
           {bottom === "problems" && (
             <>
+              {nodeData?.node.error && <section aria-label="Selected module problem">
+                <h3>{node?.label ?? 'Selected module'} — job problem</h3>
+                <p>{typeof nodeData.node.error.message === 'string' ? nodeData.node.error.message : 'The job failed; its private backend diagnostic is retained.'}</p>
+                {Array.isArray(nodeData.node.error.actions) && <ul>{nodeData.node.error.actions.filter((value): value is string => typeof value === 'string').map((value, index) => <li key={index}>{value}</li>)}</ul>}
+                <p>Non-idempotent interruptions require reconciliation of the original job. Tool or input changes require a new reviewed iteration.</p>
+              </section>}
               <InputIssues
                 result={projectCheck}
                 stale={checkStale}
@@ -1340,7 +1328,7 @@ export function WorkspaceShell() {
                   "No current public  API error; not proof of evidence completeness."}
               </p>
               <p>
-                Proposal: {proposal?.status ?? "Not Generate"} · Scientific
+                Proposal: {proposal?.status ?? "Not generated"} · Scientific
                 parameters/measurement approvals: only explicit existing records
                 apply; accepting a proposal does not approve parameters.
               </p>

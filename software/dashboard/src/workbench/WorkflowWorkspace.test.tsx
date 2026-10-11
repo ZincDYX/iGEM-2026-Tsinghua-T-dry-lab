@@ -5,7 +5,7 @@ import type { WorkflowDocument, Workflow } from '../contracts/generated';
 import { WorkflowWorkspace } from './WorkflowWorkspace';
 import { defaultPositions } from './WorkflowGraph';
 
-vi.mock('./client', () => ({workflowDocuments: vi.fn(), saveWorkflowDocument: vi.fn()}));
+vi.mock('./client', () => ({workflowDocuments: vi.fn(), workflowDocument: vi.fn(), saveWorkflowDocument: vi.fn()}));
 import * as client from './client';
 afterEach(() => {cleanup(); vi.resetAllMocks();});
 const workflow: Workflow = {id:'fixture', name:'Software graph', description:'No science is executed', version:'1', nodes:[
@@ -55,6 +55,64 @@ it('fan-out default layout follows dependencies, not source list order',()=>{
   expect(positions.a.x).toBe(24);
   expect(positions.b.x).toBe(284); expect(positions.c.x).toBe(284);
   expect(positions.b.y).not.toBe(positions.c.y);
+});
+it('arranging modules saves only layout, never the scientific definition or its revision',async()=>{
+  vi.mocked(client.workflowDocuments).mockResolvedValue([document()]);
+  vi.mocked(client.saveWorkflowDocument).mockImplementation(async (_p,_id,value)=>({...document(),...value,revision:2,layout_revision:2}));
+  render(<Harness/>);
+  await waitFor(()=>expect((screen.getByRole('button',{name:'Arrange modules'}) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button',{name:'Arrange modules'}));
+  await waitFor(()=>expect(client.saveWorkflowDocument).toHaveBeenCalled());
+  const request=vi.mocked(client.saveWorkflowDocument).mock.calls.at(-1)![2];
+  expect(request.workflow).toBeUndefined();
+  expect(request.layout).toEqual({a:{x:24,y:24},b:{x:284,y:24},c:{x:284,y:264}});
+});
+it('saved workflow labels advance after a semantic save and reopening fetches the latest server definition',async()=>{
+  vi.mocked(client.workflowDocuments).mockResolvedValue([{...document(),selected_node_id:'c'}]);
+  const changed={...document(),revision:2,semantic_revision:2,workflow:{...workflow,nodes:workflow.nodes.slice(0,2) as Workflow['nodes']}};
+  vi.mocked(client.saveWorkflowDocument).mockResolvedValue(changed);
+  const latest={...changed,revision:3,semantic_revision:3,workflow:{...changed.workflow,name:'Newer server definition'}};
+  vi.mocked(client.workflowDocument).mockResolvedValue(latest);
+  render(<Harness/>);
+  await waitFor(()=>expect((screen.getByRole('button',{name:'Delete selected module'}) as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByText(/Selected module:/).textContent).toContain('Right branch');
+  fireEvent.click(screen.getByRole('button',{name:'Delete selected module'}));
+  await screen.findByRole('option',{name:'Software graph (revision 2)'});
+  fireEvent.change(screen.getByLabelText('Open saved workflow'),{target:{value:'review'}});
+  await screen.findByRole('heading',{name:'Newer server definition'});
+  expect(client.workflowDocument).toHaveBeenCalledWith('p','review');
+  expect(screen.getByRole('option',{name:'Newer server definition (revision 3)'})).toBeTruthy();
+  expect(screen.queryByRole('button',{name:'Module Right branch'})).toBeNull();
+});
+it('a delayed reopen cannot overwrite a newer policy save for the same document',async()=>{
+  vi.mocked(client.workflowDocuments).mockResolvedValue([document()]);
+  let resolve!: (value:WorkflowDocument)=>void;
+  vi.mocked(client.workflowDocument).mockImplementation(()=>new Promise(done=>{resolve=done;}));
+  const latest={...document(),revision:3,semantic_revision:2,workflow:{...workflow,execution_policy:{...workflow.execution_policy,max_tool_calls:99}}};
+  const accepted=vi.fn();
+  function ConcurrentParent() {
+    const [value,setValue]=useState(document());
+    return <><button onClick={()=>setValue(latest)}>Policy save completed</button>
+      <WorkflowWorkspace projectId="p" projectRevision={1} seedId="review" seed={workflow} document={value} selected="a"
+        onSelect={vi.fn()} onDocument={doc=>{accepted(doc);setValue(doc);}} onReview={vi.fn()} busy={false} frozen={false}/></>;
+  }
+  render(<ConcurrentParent/>);
+  await screen.findByRole('option',{name:'Software graph (revision 1)'});
+  fireEvent.change(screen.getByLabelText('Open saved workflow'),{target:{value:'review'}});
+  await waitFor(()=>expect(client.workflowDocument).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole('button',{name:'Policy save completed'}));
+  resolve(document());
+  await waitFor(()=>expect(accepted).toHaveBeenCalledWith(latest));
+  expect(screen.getByText('Saved revision 2')).toBeTruthy();
+});
+it('reopening the Workflow tab adopts the newer server revision instead of its retained old document',async()=>{
+  const latest={...document(),revision:2,semantic_revision:2,workflow:{...workflow,name:'Externally revised workflow'}};
+  vi.mocked(client.workflowDocuments).mockResolvedValue([latest]);
+  const onDocument=vi.fn();
+  render(<WorkflowWorkspace projectId="p" projectRevision={1} seedId="review" seed={workflow} document={document()} selected="a"
+    onSelect={vi.fn()} onDocument={onDocument} onReview={vi.fn()} busy={false} frozen={false}/>);
+  await waitFor(()=>expect(onDocument).toHaveBeenCalledWith(latest));
+  expect(client.saveWorkflowDocument).not.toHaveBeenCalled();
 });
 it('frozen runs have Graph/List selection but no editing or document writes',()=>{
   render(<WorkflowWorkspace projectId="p" projectRevision={1} seedId="run" seed={workflow} selected="b"

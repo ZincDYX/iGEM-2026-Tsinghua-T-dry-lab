@@ -83,9 +83,10 @@ it("keeps job completion separate from missing evidence and revision-bound prech
     />,
   );
   expect(screen.getByText("Missing evidence")).toBeTruthy();
-  expect(
-    screen.getByText(/Numerically solved: 0\/2 · Evidence ready: 0\/2/),
-  ).toBeTruthy();
+  expect(screen.getByText('Job completed')).toBeTruthy();
+  expect(screen.getByText('Numerical results: 0/2 solved')).toBeTruthy();
+  expect(screen.getByText('Evidence: 0/2 ready')).toBeTruthy();
+  expect(screen.getByText('Run experimental validation: not established')).toBeTruthy();
   expect(screen.getByText("Not checked for these inputs")).toBeTruthy();
   expect(screen.queryByText(/validated|yield:|ranking:/i)).toBeNull();
 });

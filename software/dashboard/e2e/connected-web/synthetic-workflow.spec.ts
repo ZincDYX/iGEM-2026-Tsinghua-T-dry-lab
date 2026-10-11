@@ -25,13 +25,25 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await expect(page.getByRole('heading',{name:'E3: ER anchoring remains blocked'})).toBeVisible();
   await page.getByLabel('Synthetic scenario').selectOption('E1');
   await expect(page.getByText('Complete recorded range',{exact:false})).toBeVisible();
-  await expect(page.locator('.js-plotly-plot')).toBeVisible();
+  // Cold-loaded Plotly is an actual production chunk. This bounds UI loading,
+  // not solver tolerances or scientific acceptance; it must really render.
+  await expect(page.locator('.js-plotly-plot')).toBeVisible({timeout:20000});
   await expect(page.getByLabel('Independent run assessments')).toContainText('Not established');
   const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Export exact recorded CSV',exact:true}).click()]);
   const csv=fs.readFileSync((await download.path())!,'utf8');
   expect(csv).toContain('Synthetic demo; not experimental validation');
   expect(csv).toContain('Compound 15 amount (umol)');
   expect(csv.trim().split('\n').length).toBe(50);
+  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Workflow',exact:true}).click();
+  const module=page.getByRole('button',{name:'Module Synthetic M3/M4 reference scenarios',exact:true});
+  await expect(module).toContainText('Job: Job completed');
+  await expect(module).toContainText('Numerical results: 4/5 solved');
+  await expect(module).toContainText('Evidence: 0/5 ready');
+  await expect(module).toContainText('Run experimental validation: not established');
+  await page.getByRole('button',{name:'List',exact:true}).click();
+  await expect(page.getByRole('table').filter({has:page.getByText('Numerical results: 4/5 solved',{exact:true})})).toContainText('Evidence: 0/5 ready');
+  await page.getByRole('button',{name:'Graph',exact:true}).click();
+  await page.locator('.workspace-content').evaluate(element=>element.scrollTo(0,0));
+  await page.screenshot({path:'test-results/ps-v3-recorded-workflow-status.png',fullPage:false});
   expect(errors).toEqual([]);
-  await page.screenshot({path:'test-results/ps-v3-real-kernel-results.png',fullPage:false});
 });

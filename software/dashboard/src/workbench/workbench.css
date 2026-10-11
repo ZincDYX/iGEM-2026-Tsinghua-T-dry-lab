@@ -546,6 +546,8 @@ tr[aria-selected="true"] {
 .workflow-graph-node { position: absolute; width: 218px; min-height: 78px; text-align: left; touch-action: none; display: flex; flex-direction: column; gap: 4px; }
 .workflow-graph-node.selected { outline: 2px solid var(--accent); }
 .workflow-graph-node span { font-size: .85em; overflow-wrap: anywhere; }
+.module-status > span, .module-scientific-status > span { display: block; }
+.workflow-graph-node .module-status, .workflow-graph-node .module-scientific-status { font-size: inherit; }
 .workflow-view-switch, .workflow-edit-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .workflow-edit-controls h3, .workflow-edit-controls p { flex-basis: 100%; }
 .workflow-edit-controls label { min-width: 180px; }

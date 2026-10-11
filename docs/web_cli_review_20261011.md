@@ -262,6 +262,87 @@ schema-family lazy loading, real WebGL/lifecycle/performance acceptance and exte
 experimental/user/publication evidence. No new biological parameter, approximation,
 method equation or relaxed gate was introduced.
 
+## Batch 3b: one module-status presentation and contextual problems
+
+Graph and List now share backend-provided numerical/evidence counts and the
+run-level experimental-validation assessment. A completed job is not a passed
+scientific record. Missing records say Not assessed, not zero or approved. An
+edited semantic workflow cannot inherit a completed badge from a previous run
+with the same node identities. Input checks must match the run's project and
+revision; a similarly named tool does not inherit a native stage's omissions.
+
+The independent Diagnostic inspector tab is removed. Scientific boundaries
+open Workflow's source context; the selected module explains its recorded scope.
+Selected job errors and suggested actions appear in Problems, without dumping
+raw diagnostic identifiers or the result payload again. Full Jobs/Assistant and
+result redesigns remain pending. Two sibling workflow components had identical
+React keys; they now have distinct component identities. Existing saved layouts
+are preserved. Arrange modules is an explicit layout-only action, not a graph or
+scientific-method edit, and frozen runs cannot be rearranged in place.
+
+Actual browser inspection also found a stale saved-workflow selector: its cached
+option could show an older revision than the editor. Options now derive from the
+one current document, not another copied state. Reopening fetches the authoritative
+document; a late read cannot overwrite a newer saved revision. Reopening the tab
+also adopts newer backend revisions instead of unconditionally keeping stale root
+state. Browser acceptance changes the same document through the real API while
+the tab is closed, then verifies the new name, revision and intact graph on reopen.
+
+Final frontend suite: 76 passed in 25 files (190.51 s), one 384-MB-bounded worker.
+TypeScript and production build passed. Earlier full runs were interrupted under
+low available workstation RAM, or failed because the old status test expected
+the previous combined label. The updated test still requires completed job,
+zero solved/ready records, missing evidence, stale input check and unestablished
+experimental validation separately. No assertions or scientific gates were
+removed. A targeted App rerun used a longer software-test timeout, not a changed
+solver tolerance. These timings are not a controlled performance comparison.
+
+The retained server frontend installation lacks newer build/schema/viewer
+packages. A reuse-only attempt did not pass its dependency/type checks; it was
+not reported as a clean Linux frontend build and no packages were installed.
+Local build here used Node 24.13.1 with pinned package versions, not the specified
+Windows release-builder Node 24.19.0. Clean locked release/build acceptance is
+therefore still pending; this does not turn the tested wheel into a fully
+verified desktop release. The own Web wheel is 3,228,824 bytes, installed with
+no additional dependencies. No M1–M4 equation, parameter or backend changed in
+this UI-only batch; the batch-3a server scientific regressions are unchanged.
+
+Latest installed-wheel local browser acceptance: four passed (1.4 min), including
+actual Graph/List, fan-out, drag/keyboard movement, rejected invalid edits, latest
+backend revision on tab reopen, layout-only arrangement, contextual boundaries and
+no created jobs. No solver ran on the workstation. This is not an updated EXE.
+
+The first server-connected browser attempt could not connect to the expired
+private forwarding session; no scientific job started in that attempt. After
+restoring the owned test connection, actual kernels completed but the cold plot
+missed the default five-second UI wait. A separate real-browser probe of the
+recorded run rendered the actual Plotly chart in 7,235 ms after selecting E1,
+without page/request errors. It measured a 4,969,017-byte Plotly chunk and a
+1,089,876-byte initial API chunk; this confirms performance work remains, not
+that this UI batch made plotting faster. The plot wait is now bounded at 20 seconds
+for browser acceptance only; solver tolerances and scientific gates are unchanged.
+Final installed-UI server browser acceptance passed (26.5 s task / 33.4 s total):
+the corrected package ran original M3/M4 kernels, the actual plot rendered, exact
+CSV retained all 49 recorded points, and Graph/List both showed job completion,
+4/5 solved scenarios, 0/5 evidence-ready and run validation not established.
+E3 remains blocked; none of these synthetic results is a formal project prediction.
+
+No external dependency/tool was added in this batch. The prior declared installed
+runtime/tools audit was 14,947,229,119 bytes. Conservatively adding the owned active
+server acceptance package (11,917,527), latest frontend (10,095,231), and local test
+installation (12,385,364) gives 14,981,627,241 bytes, below the decimal 15-GB limit.
+This uses the documented runtime/tool scope, not total disk occupancy; inactive
+source/build archives and scientific output records are not installed tools.
+
+Official develop's batch-3a push was verified byte-identical to the source tree;
+main was preserved. Full local history/source/LFS conservative accounting was
+37,462,812 bytes, below the internal decimal 50-MB limit. The read-only GitLab
+API reported repository storage of 5,399,861 bytes, with no LFS payloads; its
+statistics are not official freeze/eligibility confirmation. The latest job
+remained pending without an assigned runner, with shared runners disabled and
+runner-list access denied. CI success is not established; repository-owner
+runner configuration is separate from local test success.
+
 ## Remaining review acceptance tasks
 
 | ID | Required outcome | Current status |
@@ -272,16 +353,16 @@ method equation or relaxed gate was introduced.
 | IN-02 | Typed format registry, transactions and ambiguity handling | Required core format/recovery/relative-binding paths verified; chemical profile, SBOL/SBML and full measurement/parameter binding pending |
 | IN-03 | Contextual gaps with Add/Use/Defer actions | Pending |
 | IN-04 | Server-calculated asset identity, no user SHA entry | Registered typed file references obtain hashes server-side; ownership/conflicting identities still rejected |
-| WF-01 | Graph/List editing of one workflow revision | Shared persisted graph/list, movement, selection/recovery, revision and dependency rejection verified; general typed module/binding creation and full IO compatibility pending |
+| WF-01 | Graph/List editing of one workflow revision | Shared persisted graph/list, movement, selection/recovery, revision, backend status counts and dependency rejection verified; general typed module/binding creation and full IO compatibility pending |
 | WF-02 | Versioned full method formulas, tools and parameter records | Pending |
-| WF-03 | Save/review/run and controls only in Workflow | Existing-engine review, graph/policy stale-approval protection and Workflow-only controls implemented; full final UI acceptance recorded per batch |
+| WF-03 | Save/review/run and controls only in Workflow | Existing-engine review, graph/policy stale-approval protection and Workflow-only location implemented; obsolete stage-review shortcuts still need consolidation into explicit scope settings |
 | RES-01 / SCI-06 | Grouped results, independent job/numeric/evidence/validation status | Four-state summary and synthetic tables verified; general module grouping pending |
 | RES-02 / SCI-07 | Pool-aware ER tables/curves and actual viewer acceptance | Typed actual-volume projection and CSV verified; real structure/WebGL/lifecycle acceptance pending |
 | AG-01 / AG-02 | Persistent conversational proposals/diffs/decisions using existing engine | Pending |
 | AG-03 | Tools, plugins and skills with real capability tests | Pending |
 | AG-04 | Model settings, write-only secrets, local/hosted endpoint boundaries | Pending |
 | JOB-01 | Structured Jobs/Output/Problems and mode-safe terminal | Pending |
-| UI-01 / UI-02 / UI-03 | Single menu, inline tabs, contextual tree and English messages | Single menu/inline tabs existed in batch 1; redundant top controls removed and primary context navigation added; full object selection, diagnostics consolidation and language/visual audit pending |
+| UI-01 / UI-02 / UI-03 | Single menu, inline tabs, contextual tree and English messages | Single menu/inline tabs existed in batch 1; redundant top controls and Diagnostic tab removed, contextual source/problems added; full object selection, Assistant and language/visual audit pending |
 | PERF-01 | Measured baseline, schema split, viewer/resource lifecycle | Pending |
 | Synthetic PS-v3 | Original corrected package, separate runner and inherited scope | Original kernels, independent endpoints, canonical perturbation and browser/server chain verified; separate synthetic scope, E3 blocked |
 | Publication | Final designated repository, Wiki, Village and award registration | Owner confirmation required; no relocation/registration mutation |

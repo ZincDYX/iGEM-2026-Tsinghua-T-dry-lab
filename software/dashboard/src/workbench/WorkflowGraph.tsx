@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import type { Workflow, WorkflowDocument } from '../contracts/generated';
+import type { Workflow, WorkflowDocument, RunSummaryView, ScientificPrecheckView } from '../contracts/generated';
 import { dependencies } from './PlanPanel';
+import { matchingRun, ModuleStatus, inputCheckLabel } from './ModuleStatus';
 
 type Position = {x: number; y: number};
 export function defaultPositions(workflow: Workflow): Record<string, Position> {
@@ -16,20 +17,22 @@ export function defaultPositions(workflow: Workflow): Record<string, Position> {
   return Object.fromEntries(workflow.nodes.map(node => {
     const column = depth(node.id), row = rows.get(column) ?? 0;
     rows.set(column, row + 1);
-    return [node.id, {x: 24 + column * 260, y: 24 + row * 120}];
+    return [node.id, {x: 24 + column * 260, y: 24 + row * 240}];
   }));
 }
 
-export function WorkflowGraph({workflow, layout, selected, disabled, onSelect, onMove}: {
+export function WorkflowGraph({workflow, layout, selected, disabled, onSelect, onMove, run, inputCheck}: {
   workflow: Workflow; layout?: WorkflowDocument['layout']; selected: string;
   disabled?: boolean; onSelect: (id: string) => void;
   onMove?: (id: string, position: Position) => void;
+  run?: RunSummaryView; inputCheck?: ScientificPrecheckView;
 }) {
+  const snapshot = matchingRun(workflow, run);
   const [drag, setDrag] = useState<{id: string; position: Position}>();
   const pointer = useRef<{id: string; x: number; y: number; start: Position; moved: boolean} | undefined>(undefined);
   const positions = {...defaultPositions(workflow), ...layout, ...(drag ? {[drag.id]: drag.position} : {})};
   const width = Math.max(600, ...Object.values(positions).map(p => p.x + 250));
-  const height = Math.max(280, ...Object.values(positions).map(p => p.y + 110));
+  const height = Math.max(280, ...Object.values(positions).map(p => p.y + 230));
   return <div className="workflow-graph-scroll" aria-label="Workflow graph">
     <div className="workflow-graph" style={{width, height}}>
       <svg width={width} height={height} aria-label="Module dependencies">
@@ -76,7 +79,10 @@ export function WorkflowGraph({workflow, layout, selected, disabled, onSelect, o
           setDrag(undefined);
         }}
         onPointerCancel={() => {pointer.current = undefined; setDrag(undefined);}}
-      ><strong>{node.label}</strong><span>{node.tool_id}</span><span>{node.map ? 'Fan-out over a collection' : 'Single module'}</span></button>)}
+      ><strong>{node.label}</strong><span>{node.tool_id}</span><span>{node.map ? 'Fan-out over a collection' : 'Single module'}</span>
+        <ModuleStatus run={snapshot} nodeId={node.id}/>
+        {inputCheck && <span>{inputCheckLabel(node.tool_id, inputCheck, run)}</span>}
+      </button>)}
     </div>
   </div>;
 }

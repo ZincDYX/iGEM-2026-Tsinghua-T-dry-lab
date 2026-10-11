@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Workflow, WorkflowDocument, RunSummaryView, ScientificPrecheckView } from '../contracts/generated';
 import * as client from './client';
 import { PlanPanel, dependencies } from './PlanPanel';
-import { WorkflowGraph } from './WorkflowGraph';
+import { WorkflowGraph, defaultPositions } from './WorkflowGraph';
 
 /** One persisted WorkflowDocument; Graph and List never own separate nodes. */
 export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, document, run, inputCheck, selected, busy, frozen,
@@ -21,6 +21,7 @@ export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, doc
   live.current = document;
   const workflow = frozen ? seed : document?.workflow ?? seed;
   const view = frozen ? frozenView : document?.view ?? 'graph';
+  const choices = document && !frozen ? [...saved.filter(value => value.id !== document.id), document] : saved;
   useEffect(() => {
     const stamp = ++epoch.current, controller = new AbortController();
     setError(''); setFrom(''); setTo(''); setSaved([]);
@@ -28,7 +29,12 @@ export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, doc
     void client.workflowDocuments(projectId, controller.signal).then(async values => {
       if (controller.signal.aborted || stamp !== epoch.current) return;
       setSaved(values);
-      if (live.current?.project_id === projectId) return;
+      const current = live.current;
+      if (current?.project_id === projectId) {
+        const newer = values.find(value => value.id === current.id && value.revision > current.revision);
+        if (newer) {live.current = newer; onDocument(newer); if (newer.selected_node_id) onSelect(newer.selected_node_id);}
+        return;
+      }
       const existing = values.find(d => d.id === seedId);
       if (existing) {onDocument(existing); if (existing.selected_node_id) onSelect(existing.selected_node_id);}
       else if (seed && seedId && projectRevision) {
@@ -40,6 +46,21 @@ export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, doc
     // Seed is immutable for this review ID; editor changes must not reload it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, seedId, frozen]);
+
+  async function open(id: string) {
+    if (!id || !projectId || locked.current || frozen) return;
+    const stamp = epoch.current;
+    locked.current = true; setSaving(true); setError('');
+    try {
+      const retrieved = await client.workflowDocument(projectId, id);
+      if (stamp !== epoch.current) return;
+      // A concurrent policy save can be newer than this read response.
+      const current = live.current;
+      const value = current?.id === id && current.revision > retrieved.revision ? current : retrieved;
+      live.current = value; onDocument(value); if (value.selected_node_id) onSelect(value.selected_node_id);
+    } catch (reason) {if (stamp === epoch.current) setError(reason instanceof Error ? reason.message : String(reason));}
+    finally {locked.current = false; if (stamp === epoch.current) setSaving(false);}
+  }
 
   async function persist(changes: Partial<Pick<WorkflowDocument, 'workflow'|'layout'|'selected_node_id'|'view'>>) {
     const current = live.current;
@@ -67,17 +88,17 @@ export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, doc
   return <section aria-label="Workflow editor">
     <header className="panel-heading"><h2>Workflow</h2>{document && !frozen && <span>Saved revision {document.semantic_revision}</span>}</header>
     <p>{frozen ? 'Frozen run: its tools, inputs and dependencies cannot be edited.' : 'Review modules and their bindings here. Moving a module changes only its saved layout; scientific changes require a new review.'}</p>
-    {!frozen && saved.length > 0 && <label>Open saved workflow<select aria-label="Open saved workflow" value={document?.id ?? ''} disabled={disabled && !!seed} onChange={event => {
-      const value = saved.find(d => d.id === event.target.value); if (value) {onDocument(value); if (value.selected_node_id) onSelect(value.selected_node_id);}
-    }}><option value="">Choose saved workflow</option>{saved.map(d => <option key={d.id} value={d.id}>{d.workflow.name} (revision {d.semantic_revision})</option>)}</select></label>}
+    {!frozen && choices.length > 0 && <label>Open saved workflow<select aria-label="Open saved workflow" value={document?.id ?? ''} disabled={busy || saving} onChange={event => void open(event.target.value)}><option value="">Choose saved workflow</option>{choices.map(d => <option key={d.id} value={d.id}>{d.workflow.name} (revision {d.semantic_revision})</option>)}</select></label>}
     {error && <p role="alert">{error}</p>}
     {workflow ? <>
       <h3>{workflow.name}</h3>
       <p>{workflow.description}</p>
       <div className="workflow-view-switch" role="group" aria-label="Workflow view">
         {(['graph','list'] as const).map(value => <button key={value} aria-pressed={view === value} disabled={disabled} onClick={() => frozen ? setFrozenView(value) : void persist({view: value})}>{value === 'graph' ? 'Graph' : 'List'}</button>)}
+        {!frozen && <button disabled={disabled} onClick={() => void persist({layout: defaultPositions(workflow)})}>Arrange modules</button>}
       </div>
       {view === 'graph' ? <WorkflowGraph workflow={workflow} layout={frozen ? undefined : document?.layout} selected={selected} disabled={disabled}
+        run={run} inputCheck={inputCheck}
         onSelect={select} onMove={frozen ? undefined : (id, position) => void persist({layout: {...document?.layout, [id]: position}, selected_node_id: id})}/>
         : <PlanPanel workflow={workflow} run={run} inputCheck={inputCheck} selected={selected} onSelect={select}/>}
       {!frozen && document && <section className="workflow-edit-controls">

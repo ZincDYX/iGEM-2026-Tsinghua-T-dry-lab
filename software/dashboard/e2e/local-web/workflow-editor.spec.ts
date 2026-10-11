@@ -58,8 +58,28 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   await page.getByRole('button',{name:'Delete selected module'}).click();
   await expect(graph.getByRole('button',{name:'Module Second branch'})).toHaveCount(0);
   saved=await (await context.request.get(endpoint)).json(); expect(saved.semantic_revision).toBe(2);
+  await expect(page.getByRole('option',{name:'Browser workflow acceptance (revision 2)'})).toHaveCount(1);
   expect(saved.workflow.nodes.map((n:{id:string})=>n.id)).toEqual(['a','b']);
+  await page.getByRole('button',{name:'Arrange modules',exact:true}).click();
+  await expect.poll(async()=> (await (await context.request.get(endpoint)).json()).layout.a).toEqual({x:24,y:24});
+  expect((await (await context.request.get(endpoint)).json()).semantic_revision).toBe(2);
+  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Inputs',exact:true}).click();
+  const current=await (await context.request.get(endpoint)).json();
+  const updated=await page.evaluate(async({url,data})=>{
+    const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    return {status:response.status,body:await response.text()};
+  },{url:endpoint,data:{workflow:{...current.workflow,name:'Latest saved workflow'},layout:current.layout,selected_node_id:current.selected_node_id,view:current.view,expected_revision:current.revision,expected_project_revision:project.revision}});
+  expect(updated.status,updated.body).toBe(200);
+  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Workflow',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Latest saved workflow',exact:true})).toBeVisible();
+  await expect(page.getByRole('option',{name:'Latest saved workflow (revision 3)'})).toHaveCount(1);
   expect(await (await context.request.get('/api/platform/runs')).json()).toEqual([]);
+  await expect(graph.getByRole('button',{name:'Module Original inputs'})).toContainText('Numerical results: Not assessed');
+  await expect(page.getByRole('tablist',{name:'Inspector tabs'}).getByRole('tab',{name:'Diagnostic',exact:true})).toHaveCount(0);
+  await page.getByText('Help',{exact:true}).click();
+  await page.getByRole('menuitem',{name:'Scientific boundaries',exact:true}).click();
+  await expect(page.getByRole('tab',{name:'Inputs / Evidence',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByText('Job completion, numerical results, evidence readiness and experimental validation are separate. Missing evidence remains blocked; an accepted plan does not approve scientific parameters.',{exact:true})).toBeVisible();
   await page.locator('.workspace-content').evaluate(element=>element.scrollTop=0);
   await expect(page.getByLabel('Workflow run controls').getByRole('button').first()).toBeVisible();
   await page.screenshot({path:'test-results/workflow-persisted-graph.png',fullPage:true});

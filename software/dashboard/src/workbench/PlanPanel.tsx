@@ -6,6 +6,7 @@ import type {
 import type { WorkflowNode } from "../contracts/Workflow.generated";
 
 import { jobLabels } from "./messages.en";
+import { matchingRun, ModuleScientificStatus, inputCheckLabel } from './ModuleStatus';
 export const statusLabel = (value: string) => jobLabels[value] ?? value;
 export function dependencies(node: WorkflowNode) {
   const values = [
@@ -44,6 +45,7 @@ export function PlanPanel({
         </p>
       </div>
     );
+  const snapshot = matchingRun(workflow, run);
   return (
     <section>
       <header className="panel-heading">
@@ -65,7 +67,7 @@ export function PlanPanel({
         </thead>
         <tbody>
           {workflow.nodes.map((node) => {
-            const state = run?.nodes.find((value) => value.id === node.id);
+            const state = snapshot?.nodes.find((value) => value.id === node.id);
             const policy = workflow.execution_policy;
             return (
               <tr
@@ -82,47 +84,13 @@ export function PlanPanel({
                 </td>
                 <td>{node.tool_id}</td>
                 <td>{dependencies(node).join(" → ") || "No dependencies"}</td>
-                <td>{statusLabel(state?.status ?? "pending")}</td>
+                <td>{state ? statusLabel(state.status) : 'Not started'}</td>
                 <td>
-                  {state?.scientific_summary ? (
-                    <>
-                      <p>
-                        {state.scientific_summary.record_count &&
-                        (state.scientific_summary.evidence_ready_count <
-                          state.scientific_summary.record_count ||
-                          state.scientific_summary.missing_input_count > 0)
-                          ? "Missing evidence"
-                          : "Recorded scientific state"}
-                      </p>
-                      <p>
-                        {Object.entries(state.scientific_summary.status_counts)
-                          .map(([status, count]) => `${status}: ${count}`)
-                          .join("; ") || "No scientific records"}
-                      </p>
-                      <p>
-                        Numerically solved:{" "}
-                        {state.scientific_summary.numerically_solved_count}/
-                        {state.scientific_summary.record_count} · Evidence
-                        ready: {state.scientific_summary.evidence_ready_count}/
-                        {state.scientific_summary.record_count} · Missing
-                        inputs: {state.scientific_summary.missing_input_count}
-                      </p>
-                      <details>
-                        <summary>Scope</summary>
-                        {state.scientific_summary.claim_scope ?? "Not recorded"}
-                      </details>
-                    </>
-                  ) : (
-                    "Not recorded"
-                  )}
+                  <ModuleScientificStatus summary={state?.scientific_summary}
+                    experimentalValidation={snapshot?.scientific_assessment.experimental_validation}/>
                 </td>
                 <td>
-                  {inputCheck &&
-                  (!run ||
-                    run.project_revision === inputCheck.project_revision) &&
-                  node.tool_id.startsWith("project.m")
-                    ? `${inputCheck.missing.filter((item) => node.tool_id === `project.${item.stage}`).length} known omissions · r${inputCheck.project_revision}`
-                    : "Not checked for these inputs"}
+                  {inputCheckLabel(node.tool_id, inputCheck, run)}
                 </td>
                 <td>
                   {[

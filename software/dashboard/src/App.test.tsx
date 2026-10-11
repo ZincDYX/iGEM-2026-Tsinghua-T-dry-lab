@@ -300,6 +300,17 @@ describe("FusionLab scientific workbench", () => {
     expect(screen.queryByRole("button", { name: "Start run" })).toBeNull();
     expect(client.start).not.toHaveBeenCalled();
   });
+  it('scientific boundaries open the Workflow source context without a second Diagnostic tab',async()=>{
+    render(<App/>);
+    await screen.findByText('Standalone sequences: 1',{exact:true});
+    expect(within(screen.getByRole('tablist',{name:'Inspector tabs'})).queryByRole('tab',{name:'Diagnostic'})).toBeNull();
+    fireEvent.click(screen.getByText('Help',{exact:true}));
+    fireEvent.click(screen.getByRole('menuitem',{name:'Scientific boundaries'}));
+    expect(screen.getByRole('tab',{name:'Workflow'}).getAttribute('aria-selected')).toBe('true');
+    expect(within(screen.getByRole('tablist',{name:'Inspector tabs'})).getByRole('tab',{name:'Inputs / Evidence'}).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('heading',{name:'Computation diagnostics'})).toBeNull();
+    expect(client.start).not.toHaveBeenCalled();
+  });
   it("a previous project's slow proposal cannot replace the current project", async () => {
     const other = { ...project, id: "other", name: "另一 Project" };
     vi.mocked(client.projectSummaries).mockResolvedValue([
