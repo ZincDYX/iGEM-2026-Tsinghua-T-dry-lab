@@ -118,21 +118,21 @@ class Workflow(Contract):
     def validate_graph(self) -> "Workflow":
         ids = [node.id for node in self.nodes]
         if len(set(ids)) != len(ids):
-            raise ValueError("duplicate_node_id")
+            raise WorkflowError("duplicate_node_id")
         policy = self.execution_policy
         selected = set(policy.checkpoints_before + policy.checkpoints_after)
         if policy.target_node_id: selected.add(policy.target_node_id)
-        if selected - set(ids): raise ValueError("unknown_policy_node")
-        if policy.memory_limit_mb is not None: raise ValueError("memory_limit_not_supported_by_process_backend")
+        if selected - set(ids): raise WorkflowError("unknown_policy_node")
+        if policy.memory_limit_mb is not None: raise WorkflowError("memory_limit_not_supported_by_process_backend")
         if not policy.allowed_tools: policy.allowed_tools = sorted({node.tool_id for node in self.nodes})
-        if {node.tool_id for node in self.nodes} - set(policy.allowed_tools): raise ValueError("tool_not_in_execution_authorization")
+        if {node.tool_id for node in self.nodes} - set(policy.allowed_tools): raise WorkflowError("tool_not_in_execution_authorization")
         remaining = {node.id: node.dependencies() for node in self.nodes}
         if any(dependencies - set(ids) for dependencies in remaining.values()):
-            raise ValueError("unknown_dependency")
+            raise WorkflowError("unknown_dependency")
         while remaining:
             ready = {key for key, dependencies in remaining.items() if not dependencies}
             if not ready:
-                raise ValueError("workflow_cycle")
+                raise WorkflowError("workflow_cycle")
             remaining = {key: dependencies - ready for key, dependencies in remaining.items() if key not in ready}
         return self
 

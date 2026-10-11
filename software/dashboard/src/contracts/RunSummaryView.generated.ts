@@ -107,10 +107,7 @@ export interface Inputs {
 }
 export interface LiteralInput {
   kind: Kind;
-  value: Value;
-}
-export interface Value {
-  [k: string]: unknown;
+  value: unknown;
 }
 export interface ProjectInput {
   kind: Kind1;

@@ -213,3 +213,14 @@ export const defaultPolicy = (): ExecutionPolicy => ({
   stop_after_seconds: null,
   memory_limit_mb: null,
 });
+const documentPath = (projectId: string, documentId?: string) =>
+  `/projects/${encodeURIComponent(projectId)}/workflow-documents${documentId ? `/${encodeURIComponent(documentId)}` : ''}`;
+export const workflowDocuments = (projectId: string, signal?: AbortSignal) =>
+  list('WorkflowDocument', documentPath(projectId), signal);
+export const saveWorkflowDocument = (
+  projectId: string, documentId: string,
+  value: Pick<import('../contracts/generated').WorkflowDocument, 'layout' | 'selected_node_id' | 'view'> & {workflow?: Workflow},
+  projectRevision: number, revision?: number,
+) => read('WorkflowDocument', documentPath(projectId, documentId), {
+  ...value, expected_project_revision: projectRevision, expected_revision: revision ?? null,
+});

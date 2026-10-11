@@ -194,6 +194,74 @@ Workflow, standard-library SBOL/SBML semantic import and actual chemical-profile
 execution. No scientific equation, biological default, solver tolerance or
 scientific approval was changed by these interface/import/build changes.
 
+## Batch 3a: persisted Graph/List and Workflow-only execution controls
+
+Web and CLI now use WorkflowDocuments through ApplicationService. There is no
+second graph, scheduler or scientific implementation. A single Workflow model
+supplies data/reference and ordering edges, including fan-out. Scientific
+definitions are stored once per semantic revision; the latest layout, selection
+and view are stored separately, not repeated full scientific snapshots on every
+click. Layout-only requests do not retransmit the workflow or revalidate unchanged
+tool inputs. Identical state saves are no-ops. Semantic history remains immutable.
+
+Backend checks cycles, required upstreams, policy scope, registered tools, static
+typed values/project bindings and declared output/input primitive types. MCP uses
+its actual input schema rather than its empty transport wrapper. Open/unspecified
+output schemas are not falsely called type-proven; native dispatch validation and
+all existing scientific binding/gate checks still apply. Revision/project conflicts
+cannot overwrite another operation. Typed graph errors survive Pydantic/HTTP/CLI
+wrapping and yield readable safe messages, not raw source strings or private traces.
+
+Graph/List share selection; pointer/keyboard movement and re-opened view/layout are
+saved. Removing a required upstream displays affected modules and is rejected,
+without injecting placeholders. The existing list remains the detailed job/science
+status view. Changed graphs cannot start the old accepted proposal. Review changes
+uses the existing PlanningService and preserves document identity/history/layout.
+Policy edits save a semantic revision of that exact graph; they do not silently
+replace a custom graph with a template. Frozen run policy cannot be edited in place.
+
+Duplicate top-level Import/Save/Inspect proposal and Tools-menu run controls were
+removed. Run/review/scope/pause/cancel/retry controls are in Workflow. Primary
+navigation is Inputs / Workflow / Results; the tree shows the active context's
+categories, modules or run results rather than all three simultaneously. Contextual
+object selection, full Assistant and general result presentation still need work.
+
+Actual acceptance records:
+
+- Compute-server full regression: 903 passed, 12 skipped (108.02 s), including
+  immutable author regression and original LAMMPS cases. The separate existing
+  native structure/chemistry profile: 56 passed (6.98 s), real FreeSASA/2PDZ and
+  original LAMMPS checks. No scientific computation was run on the workstation.
+- Native API/CLI/editor software tests verify history, no created jobs, cycles,
+  deleted upstreams, declared IO mismatch, source ownership, concurrency, stale
+  approval, and the actual MCP-schema boundary. These are not biological oracles.
+- Final frontend software suite: 67 passed in 24 files (44.33 s), one bounded
+  worker. Final installed-wheel browser suite: four passed (27.3 s), including
+  shared Graph/List, real fan-out edges, keyboard/pointer movement, restart,
+  invalid-edit recovery and absence of jobs. The delivered Web wheel is
+  3,228,236 bytes; production use does not require Node or Rust. These are software
+  tasks, not scientific execution on the workstation.
+- Final installed Web package/server synthetic PS-v3 chain passed (10.5 s):
+  corrected package → approval → original M3/M4 kernels → result table/Plotly →
+  exact scoped CSV. E3 remains blocked and experimental validation unestablished.
+- A browser fixture initially received 403 because its direct REST helper lacked
+  the browser-origin checks. It now seeds metadata through a real same-origin
+  browser fetch; authentication/CSRF rules were not weakened.
+- Real pointer acceptance found a stale click-suppression flag after dragging;
+  removed the unnecessary flag and re-ran the real browser. No test-only bypass.
+- Generated TypeScript incorrectly described annotation-only Any schemas as
+  objects, excluding valid JSON arrays/primitives. Generation now maps that
+  unconstrained schema to equivalent boolean true for TypeScript only; runtime
+  Pydantic/Ajv validation semantics and scientific values are unchanged.
+
+Still incomplete: full MethodRegistry/formulas and scientific parameter UI;
+general typed node/tool creation and data-binding edits; deep compatibility for
+all structured IO schemas; comprehensive module status badges in Graph; Inputs
+Add/Use/Defer; the remaining Results/Assistant/Tools/Skills/model/terminal tasks;
+schema-family lazy loading, real WebGL/lifecycle/performance acceptance and external
+experimental/user/publication evidence. No new biological parameter, approximation,
+method equation or relaxed gate was introduced.
+
 ## Remaining review acceptance tasks
 
 | ID | Required outcome | Current status |
@@ -204,16 +272,16 @@ scientific approval was changed by these interface/import/build changes.
 | IN-02 | Typed format registry, transactions and ambiguity handling | Required core format/recovery/relative-binding paths verified; chemical profile, SBOL/SBML and full measurement/parameter binding pending |
 | IN-03 | Contextual gaps with Add/Use/Defer actions | Pending |
 | IN-04 | Server-calculated asset identity, no user SHA entry | Registered typed file references obtain hashes server-side; ownership/conflicting identities still rejected |
-| WF-01 | Graph/List editing of one workflow revision | Pending |
+| WF-01 | Graph/List editing of one workflow revision | Shared persisted graph/list, movement, selection/recovery, revision and dependency rejection verified; general typed module/binding creation and full IO compatibility pending |
 | WF-02 | Versioned full method formulas, tools and parameter records | Pending |
-| WF-03 | Save/review/run and controls only in Workflow | Pending |
+| WF-03 | Save/review/run and controls only in Workflow | Existing-engine review, graph/policy stale-approval protection and Workflow-only controls implemented; full final UI acceptance recorded per batch |
 | RES-01 / SCI-06 | Grouped results, independent job/numeric/evidence/validation status | Four-state summary and synthetic tables verified; general module grouping pending |
 | RES-02 / SCI-07 | Pool-aware ER tables/curves and actual viewer acceptance | Typed actual-volume projection and CSV verified; real structure/WebGL/lifecycle acceptance pending |
 | AG-01 / AG-02 | Persistent conversational proposals/diffs/decisions using existing engine | Pending |
 | AG-03 | Tools, plugins and skills with real capability tests | Pending |
 | AG-04 | Model settings, write-only secrets, local/hosted endpoint boundaries | Pending |
 | JOB-01 | Structured Jobs/Output/Problems and mode-safe terminal | Pending |
-| UI-01 / UI-02 / UI-03 | Single menu, inline tabs, contextual tree and English messages | Pending |
+| UI-01 / UI-02 / UI-03 | Single menu, inline tabs, contextual tree and English messages | Single menu/inline tabs existed in batch 1; redundant top controls removed and primary context navigation added; full object selection, diagnostics consolidation and language/visual audit pending |
 | PERF-01 | Measured baseline, schema split, viewer/resource lifecycle | Pending |
 | Synthetic PS-v3 | Original corrected package, separate runner and inherited scope | Original kernels, independent endpoints, canonical perturbation and browser/server chain verified; separate synthetic scope, E3 blocked |
 | Publication | Final designated repository, Wiki, Village and award registration | Owner confirmation required; no relocation/registration mutation |

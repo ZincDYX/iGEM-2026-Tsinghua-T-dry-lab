@@ -21,6 +21,7 @@ from igem_drylab.workflow.planning import ProposalRequest, ProposalDecision
 from igem_drylab.workflow.declared_series import DeclaredColumn, DeclaredSeries, read_columns
 from igem_drylab.workflow.scientific_setup import ScientificSetupRequest
 from igem_drylab.workflow.annotation_binding import AnnotationBindingRequest, bind_annotation
+from igem_drylab.workflow.documents import WorkflowDocument, WorkflowDocumentInput
 
 
 class SaveProject(Contract):
@@ -558,6 +559,18 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.post("/workflows/validate")
     def validate_workflow(workflow: Workflow) -> Workflow:
         return application.validate_workflow(workflow)
+
+    @router.get('/projects/{project_id}/workflow-documents', response_model=list[WorkflowDocument])
+    def workflow_documents(project_id: str):
+        return application.workflow_documents.list(project_id)
+
+    @router.get('/projects/{project_id}/workflow-documents/{document_id}', response_model=WorkflowDocument)
+    def workflow_document(project_id: str, document_id: str):
+        return application.workflow_documents.get(project_id, document_id)
+
+    @router.post('/projects/{project_id}/workflow-documents/{document_id}', response_model=WorkflowDocument)
+    def save_workflow_document(project_id: str, document_id: str, request: WorkflowDocumentInput):
+        return application.workflow_documents.save(project_id, document_id, request)
 
     @router.post("/runs", status_code=202)
     def run(request: RunRequest) -> dict[str, Any]:

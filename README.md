@@ -108,6 +108,31 @@ requires an available RDKit chemistry profile; an unparsed SDF is an attachment,
 not a verified substrate. SBOL/SBML semantic import remains pending. Uploaded
 source files are never executed by normal Import.
 
+Workflow has Graph/List views of the same saved definition. Select modules,
+move them by pointer or arrow keys, add ordering dependencies, or remove an
+unreferenced module. Data-reference edges are derived from actual input bindings,
+not a second diagram. Cycles, missing required upstreams, unknown tools and known
+incompatible IO types are rejected by the backend. Open saved workflows to resume
+their view/selection/layout. Position changes do not alter computational approval;
+dependency or execution-policy changes need a new reviewed and accepted proposal.
+Run, checkpoint/scope, pause/cancel and retry controls live in Workflow, not the
+global toolbar. Frozen run definitions and old scientific revisions are retained.
+
+The CLI uses the same document and review service:
+
+```text
+fusionlab workflow draft <plan-id>
+fusionlab workflow document <document-id> --project <project-id>
+fusionlab workflow edit <document-id> --project <project-id> --upstream <module-id> --downstream <module-id>
+fusionlab workflow edit <document-id> --project <project-id> --view list
+fusionlab workflow review-draft <document-id> --project <project-id>
+```
+
+Editing/reviewing is not execution or scientific parameter approval. Full original
+method Formulas/Tools/Parameters columns and general typed module/binding creation
+are still pending; this editor does not imply full review completion or that an
+installed tool has been scientifically validated.
+
 ## Start the desktop
 
 Obtain a verified Windows portable release from the team's distribution.

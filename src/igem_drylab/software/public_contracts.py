@@ -24,6 +24,7 @@ from igem_drylab.pipeline.config import ConstructDefinition
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.workflow.genbank_design import GenBankDesign, GenBankPage
 from .import_service import ImportTransactionPreview
+from igem_drylab.workflow.documents import WorkflowDocument
 
 
 class AssetIdentity(Contract):
@@ -205,6 +206,7 @@ PUBLIC_MODELS["ScientificObservation"] = ScientificObservation
 PUBLIC_MODELS['GenBankDesign'] = GenBankDesign
 PUBLIC_MODELS['GenBankPage'] = GenBankPage
 PUBLIC_MODELS['ImportTransactionPreview'] = ImportTransactionPreview
+PUBLIC_MODELS['WorkflowDocument'] = WorkflowDocument
 
 
 def public_schemas():

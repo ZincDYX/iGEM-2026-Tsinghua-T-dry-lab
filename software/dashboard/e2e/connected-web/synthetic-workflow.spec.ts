@@ -19,7 +19,8 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
   await page.getByRole('button',{name:'Start run',exact:true}).click();
   await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible({timeout:60000});
-  await page.getByLabel('Project and run tree').getByRole('button',{name:'Synthetic M3/M4 reference scenarios',exact:true}).click();
+  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Results',exact:true}).click();
+  await page.getByLabel('Project and run tree').getByRole('button',{name:/^Synthetic M3\/M4 reference scenarios/}).click();
   await expect(page.getByRole('heading',{name:'Synthetic M3/M4 reference demonstration'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'E3: ER anchoring remains blocked'})).toBeVisible();
   await page.getByLabel('Synthetic scenario').selectOption('E1');

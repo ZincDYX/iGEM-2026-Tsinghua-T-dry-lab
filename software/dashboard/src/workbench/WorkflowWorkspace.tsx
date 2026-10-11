@@ -1,0 +1,100 @@
+import { useEffect, useRef, useState } from 'react';
+import type { Workflow, WorkflowDocument, RunSummaryView, ScientificPrecheckView } from '../contracts/generated';
+import * as client from './client';
+import { PlanPanel, dependencies } from './PlanPanel';
+import { WorkflowGraph } from './WorkflowGraph';
+
+/** One persisted WorkflowDocument; Graph and List never own separate nodes. */
+export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, document, run, inputCheck, selected, busy, frozen,
+  onDocument, onSelect, onReview}: {
+  projectId?: string; projectRevision?: number; seedId?: string; seed?: Workflow; document?: WorkflowDocument;
+  run?: RunSummaryView; inputCheck?: ScientificPrecheckView; selected: string; busy: boolean; frozen: boolean;
+  onDocument: (value: WorkflowDocument) => void; onSelect: (id: string) => void; onReview: (workflow: Workflow) => Promise<void>;
+}) {
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<WorkflowDocument[]>([]);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [frozenView, setFrozenView] = useState<'graph'|'list'>('graph');
+  const live = useRef(document), locked = useRef(false), epoch = useRef(0);
+  live.current = document;
+  const workflow = frozen ? seed : document?.workflow ?? seed;
+  const view = frozen ? frozenView : document?.view ?? 'graph';
+  useEffect(() => {
+    const stamp = ++epoch.current, controller = new AbortController();
+    setError(''); setFrom(''); setTo(''); setSaved([]);
+    if (!projectId || frozen) return () => controller.abort();
+    void client.workflowDocuments(projectId, controller.signal).then(async values => {
+      if (controller.signal.aborted || stamp !== epoch.current) return;
+      setSaved(values);
+      if (live.current?.project_id === projectId) return;
+      const existing = values.find(d => d.id === seedId);
+      if (existing) {onDocument(existing); if (existing.selected_node_id) onSelect(existing.selected_node_id);}
+      else if (seed && seedId && projectRevision) {
+        const value = await client.saveWorkflowDocument(projectId, seedId, {workflow: seed, layout: {}, selected_node_id: seed.nodes[0].id, view: 'graph'}, projectRevision);
+        if (stamp === epoch.current && !controller.signal.aborted) onDocument(value);
+      }
+    }).catch(reason => {if (!controller.signal.aborted && stamp === epoch.current) setError(String(reason instanceof Error ? reason.message : reason));});
+    return () => {controller.abort(); ++epoch.current;};
+    // Seed is immutable for this review ID; editor changes must not reload it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, seedId, frozen]);
+
+  async function persist(changes: Partial<Pick<WorkflowDocument, 'workflow'|'layout'|'selected_node_id'|'view'>>) {
+    const current = live.current;
+    if (!current || !projectId || !projectRevision || locked.current || frozen) return;
+    const stamp = epoch.current;
+    locked.current = true; setSaving(true); setError('');
+    try {
+      const value = await client.saveWorkflowDocument(projectId, current.id, {
+        layout: current.layout, selected_node_id: current.selected_node_id, view: current.view, ...changes,
+      }, projectRevision, current.revision);
+      if (stamp === epoch.current) {live.current = value; onDocument(value); if (value.selected_node_id) onSelect(value.selected_node_id);}
+    } catch (reason) {if (stamp === epoch.current) setError(reason instanceof Error ? reason.message : String(reason));}
+    finally {locked.current = false; if (stamp === epoch.current) setSaving(false);}
+  }
+  const disabled = busy || saving || (!frozen && !document);
+  const node = workflow?.nodes.find(n => n.id === selected);
+  const select = (id: string) => {onSelect(id); if (!frozen) void persist({selected_node_id: id});};
+  function revise(change: (value: Workflow) => void) {
+    if (!workflow) return;
+    const value = structuredClone(workflow); change(value);
+    const ids = new Set(value.nodes.map(n => n.id));
+    const layout = Object.fromEntries(Object.entries(document?.layout ?? {}).filter(([id]) => ids.has(id)));
+    void persist({workflow: value, layout, selected_node_id: ids.has(selected) ? selected : value.nodes[0]?.id ?? null});
+  }
+  return <section aria-label="Workflow editor">
+    <header className="panel-heading"><h2>Workflow</h2>{document && !frozen && <span>Saved revision {document.semantic_revision}</span>}</header>
+    <p>{frozen ? 'Frozen run: its tools, inputs and dependencies cannot be edited.' : 'Review modules and their bindings here. Moving a module changes only its saved layout; scientific changes require a new review.'}</p>
+    {!frozen && saved.length > 0 && <label>Open saved workflow<select aria-label="Open saved workflow" value={document?.id ?? ''} disabled={disabled && !!seed} onChange={event => {
+      const value = saved.find(d => d.id === event.target.value); if (value) {onDocument(value); if (value.selected_node_id) onSelect(value.selected_node_id);}
+    }}><option value="">Choose saved workflow</option>{saved.map(d => <option key={d.id} value={d.id}>{d.workflow.name} (revision {d.semantic_revision})</option>)}</select></label>}
+    {error && <p role="alert">{error}</p>}
+    {workflow ? <>
+      <h3>{workflow.name}</h3>
+      <p>{workflow.description}</p>
+      <div className="workflow-view-switch" role="group" aria-label="Workflow view">
+        {(['graph','list'] as const).map(value => <button key={value} aria-pressed={view === value} disabled={disabled} onClick={() => frozen ? setFrozenView(value) : void persist({view: value})}>{value === 'graph' ? 'Graph' : 'List'}</button>)}
+      </div>
+      {view === 'graph' ? <WorkflowGraph workflow={workflow} layout={frozen ? undefined : document?.layout} selected={selected} disabled={disabled}
+        onSelect={select} onMove={frozen ? undefined : (id, position) => void persist({layout: {...document?.layout, [id]: position}, selected_node_id: id})}/>
+        : <PlanPanel workflow={workflow} run={run} inputCheck={inputCheck} selected={selected} onSelect={select}/>}
+      {!frozen && document && <section className="workflow-edit-controls">
+        <h3>Edit modules and dependencies</h3>
+        <p>Solid edges bind data. Dashed edges specify ordering only; they do not invent a scientific input.</p>
+        <label>Upstream module<select aria-label="Upstream module" value={from} disabled={disabled} onChange={e => setFrom(e.target.value)}><option value="">Choose upstream</option>{workflow.nodes.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}</select></label>
+        <label>Downstream module<select aria-label="Downstream module" value={to} disabled={disabled} onChange={e => setTo(e.target.value)}><option value="">Choose downstream</option>{workflow.nodes.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}</select></label>
+        <button disabled={disabled || !from || !to || from === to} onClick={() => revise(w => {const target = w.nodes.find(n => n.id === to)!; if (!target.depends_on.includes(from)) target.depends_on.push(from);})}>Connect modules</button>
+        <button disabled={disabled || !from || !to || !workflow.nodes.find(n => n.id === to)?.depends_on.includes(from)} onClick={() => revise(w => {const target = w.nodes.find(n => n.id === to)!; target.depends_on = target.depends_on.filter(id => id !== from);})}>Remove ordering dependency</button>
+        {node && <>
+          <p>Selected module: <strong>{node.label}</strong>. Removing it affects: {workflow.nodes.filter(n => dependencies(n).includes(node.id)).map(n => n.label).join(', ') || 'No downstream modules'}.</p>
+          <button disabled={disabled || workflow.nodes.length === 1} onClick={() => revise(w => {w.nodes = w.nodes.filter(n => n.id !== selected) as Workflow['nodes'];})}>Delete selected module</button>
+          <p>Required upstream modules cannot be deleted while their data or execution scope is still referenced. The backend retains the previous valid revision on rejection.</p>
+        </>}
+        <button disabled={disabled} onClick={() => void onReview(document.workflow)}>Review workflow changes</button>
+        <p>This creates a new proposal, not a run or scientific parameter approval.</p>
+      </section>}
+    </> : <p>No workflow yet. Choose a method in Inputs, create a proposal, or open a saved workflow.</p>}
+  </section>;
+}

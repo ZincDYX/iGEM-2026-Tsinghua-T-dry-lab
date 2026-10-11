@@ -38,15 +38,23 @@ def output(ctx,value):
             typer.echo(f"{item['filename']}: {item['detected_format']} / {item['semantic_type']}")
             for issue in item['issues']: typer.echo(f"{issue['severity'].capitalize()}: {issue['message']}"+(f" Field: {issue['field']}" if issue['field'] else ''))
         if value.get('state')=='preview': typer.echo('Import preview retained. Confirm roles with import-review, then publish using import-commit. No job has started.')
+        if 'semantic_revision' in value:
+            typer.echo(f"Workflow: {value['workflow']['name']} (saved scientific revision {value['semantic_revision']})")
+            for node in value['workflow']['nodes']:
+                typer.echo(f"{node['label']}: {node['tool_id']}")
+            typer.echo('Saved draft, not execution authorization. Review, accept, then run separately.')
+        if 'message' in value:
+            typer.echo(value['message'])
+            for field in value.get('field_paths',[]): typer.echo('Field: '+field)
+            for action in value.get('actions',[]): typer.echo('Next: '+action)
     else: typer.echo(str(value))
 
 
 def execute(ctx,operation):
     try: return operation(service(ctx))
     except (ValueError,KeyError,OSError) as error:
-        from igem_drylab.workflow.models import WorkflowError
-        code=error.code if isinstance(error,WorkflowError) else 'invalid_or_missing_input'
-        output(ctx,{'status':'blocked','missing_inputs':[code],'rationale':'Check the input field, file, project revision or approval. No calculation was silently substituted.'})
+        diagnostic=service(ctx).boundary.diagnostic(error,code='invalid_or_missing_input')
+        output(ctx,{'status':'blocked',**diagnostic})
         raise typer.Exit(2)
 
 
@@ -113,6 +121,71 @@ def inspect(ctx: typer.Context,plan_id: str):
 def decide(ctx: typer.Context,plan_id: str,accept: bool=typer.Option(False,'--accept'),reject: bool=typer.Option(False,'--reject')):
     if accept==reject: raise typer.BadParameter('Choose exactly one of --accept or --reject after inspecting the plan.')
     output(ctx,execute(ctx,lambda application:application.planning.decide(plan_id,'accept' if accept else 'reject')))
+
+
+@workflows.command('draft')
+def workflow_draft(ctx: typer.Context,plan_id: str):
+    """Open the same saved editor document used by the Web proposal."""
+    def create(application):
+        from igem_drylab.workflow.documents import WorkflowDocumentInput
+        proposal=application.planning.get(plan_id)
+        if proposal.workflow is None: raise ValueError('proposal_has_no_workflow')
+        try: return application.workflow_documents.get(proposal.project_id,plan_id)
+        except KeyError: pass
+        project=application.store.project(proposal.project_id)
+        return application.workflow_documents.save(project.id,plan_id,WorkflowDocumentInput(
+            workflow=proposal.workflow,expected_project_revision=project.revision,selected_node_id=proposal.workflow.nodes[0].id))
+    output(ctx,execute(ctx,create))
+
+
+@workflows.command('document')
+def workflow_document(ctx: typer.Context,document_id: str,project: str=typer.Option(...,'--project')):
+    """Inspect the saved graph, layout and semantic revision; never execute."""
+    output(ctx,execute(ctx,lambda application:application.workflow_documents.get(project,document_id)))
+
+
+@workflows.command('edit')
+def workflow_edit(ctx: typer.Context,document_id: str,project: str=typer.Option(...,'--project'),
+                  upstream: str|None=typer.Option(None,'--upstream'),downstream: str|None=typer.Option(None,'--downstream'),
+                  remove: str|None=typer.Option(None,'--remove'),view: str|None=typer.Option(None,'--view')):
+    """Connect ordering dependencies, remove a module or switch Graph/List."""
+    if bool(upstream)!=bool(downstream) or sum([bool(upstream),bool(remove),bool(view)])!=1:
+        raise typer.BadParameter('Choose --upstream and --downstream, --remove, or --view graph/list.')
+    if view is not None and view not in {'graph','list'}: raise typer.BadParameter('View must be graph or list.')
+    def edit(application):
+        from igem_drylab.workflow.documents import WorkflowDocumentInput
+        from igem_drylab.workflow.models import Workflow
+        document=application.workflow_documents.get(project,document_id)
+        data=document.workflow.model_dump(mode='json')
+        if upstream:
+            if upstream not in {node['id'] for node in data['nodes']}: raise ValueError('unknown_dependency')
+            target=next((node for node in data['nodes'] if node['id']==downstream),None)
+            if target is None: raise ValueError('unknown_dependency')
+            target['depends_on']=sorted(set(target['depends_on'])|{upstream})
+        if remove:
+            if remove not in {node['id'] for node in data['nodes']}: raise ValueError('unknown_dependency')
+            data['nodes']=[node for node in data['nodes'] if node['id']!=remove]
+        ids={node['id'] for node in data['nodes']}
+        return application.workflow_documents.save(project,document_id,WorkflowDocumentInput(
+            workflow=Workflow.model_validate(data) if not view else None,
+            layout={key:value for key,value in document.layout.items() if key in ids},
+            selected_node_id=document.selected_node_id if document.selected_node_id in ids else next(iter(ids),None),
+            view=view or document.view,expected_revision=document.revision,
+            expected_project_revision=application.store.project(project).revision))
+    output(ctx,execute(ctx,edit))
+
+
+@workflows.command('review-draft')
+def review_workflow_draft(ctx: typer.Context,document_id: str,project: str=typer.Option(...,'--project')):
+    """Create a fresh proposal for this exact draft. Acceptance/run are separate."""
+    def review(application):
+        from igem_drylab.workflow.models import WorkflowError
+        document=application.workflow_documents.get(project,document_id)
+        current=application.store.project(project)
+        if document.project_revision!=current.revision: raise WorkflowError('workflow_project_revision_changed',status_code=409)
+        application.validate_workflow(document.workflow,current)
+        return application.planning.custom(project,document.workflow,'Review saved workflow '+document.workflow.name)
+    output(ctx,execute(ctx,review))
 
 
 @workflows.command('run')

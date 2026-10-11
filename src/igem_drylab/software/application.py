@@ -38,6 +38,8 @@ class ApplicationService:
         self.plugins.load_installed()
         from .import_service import ImportService
         self.imports=ImportService(self)
+        from igem_drylab.workflow.documents import WorkflowDocuments
+        self.workflow_documents = WorkflowDocuments(self)
 
     def create_project(self,name):
         return self.save_project(Project(id=str(uuid4()),name=name))
@@ -87,11 +89,12 @@ class ApplicationService:
             return self.imports.append(project_id,transaction_id,files)
         return self.imports.preview(project_id,files,options)
 
-    def validate_workflow(self,workflow: Workflow):
+    def validate_workflow(self,workflow: Workflow,project=None):
         self.boundary.check(workflow.model_dump(mode='json'))
         from igem_drylab.workflow.scientific_project import validate_stage_bindings
         validate_stage_bindings(workflow)
-        for node in workflow.nodes: self.tools.get(node.tool_id)
+        from igem_drylab.workflow.documents import validate_editor_inputs
+        validate_editor_inputs(workflow, self.tools, project)
         return workflow
 
     def propose(self,request):

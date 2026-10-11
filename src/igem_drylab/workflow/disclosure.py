@@ -154,6 +154,8 @@ class DisclosureBoundary:
         return parsed
 
     def diagnostic(self, error: Exception, *, code: str = "operation_failed") -> dict[str, Any]:
+        from .public_errors import diagnostic_code
+        code = diagnostic_code(error, code)
         diagnostic_id = str(uuid4())
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,95}", code) or any(value in code for value in self._private_values):
             code = "operation_failed"

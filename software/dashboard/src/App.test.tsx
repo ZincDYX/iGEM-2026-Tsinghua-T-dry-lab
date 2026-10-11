@@ -41,6 +41,8 @@ vi.mock("./workbench/client", async (importOriginal) => {
     propose: vi.fn(),
     decide: vi.fn(),
     start: vi.fn(),
+    workflowDocuments: vi.fn(),
+    saveWorkflowDocument: vi.fn(),
   };
 });
 const project: ProjectView = {
@@ -140,6 +142,10 @@ describe("FusionLab scientific workbench", () => {
     vi.mocked(client.project).mockResolvedValue(project);
     vi.mocked(client.history).mockResolvedValue([]);
     vi.mocked(client.actions).mockResolvedValue([]);
+    vi.mocked(client.workflowDocuments).mockResolvedValue([]);
+    vi.mocked(client.saveWorkflowDocument).mockImplementation(async (projectId, id, value, revision) => ({
+      ...value, workflow: value.workflow ?? proposal.workflow!, id, project_id: projectId, project_revision: revision, revision: 1, semantic_revision: 1, layout_revision: 1,
+    }));
     vi.mocked(client.info).mockResolvedValue({
       name: "FusionLab",
       workspace_id: "w".repeat(64),
@@ -230,6 +236,42 @@ describe("FusionLab scientific workbench", () => {
       screen.getByRole("button", { name: "Generate proposal" }),
     ).toHaveProperty("disabled", true);
   });
+  it('an edited graph cannot start an old accepted proposal; run controls appear only in Workflow',async()=>{
+    const candidate: ProposalView={...proposal,workflow:{...proposal.workflow!,name:'Reviewed graph',execution_policy:{...proposal.workflow!.execution_policy,allowed_tools:['workflow.gather']},nodes:[
+      {id:'a',label:'Inputs',tool_id:'workflow.gather',inputs:{results:{kind:'literal',value:[]}},map:null,depends_on:[]},
+      {id:'b',label:'First branch',tool_id:'workflow.gather',inputs:{results:{kind:'literal',value:[]}},map:null,depends_on:['a']},
+      {id:'c',label:'Second branch',tool_id:'workflow.gather',inputs:{results:{kind:'literal',value:[]}},map:null,depends_on:['a']},
+    ]}};
+    vi.mocked(client.propose).mockResolvedValue(candidate);
+    vi.mocked(client.decide).mockResolvedValue({...candidate,status:'accepted'});
+    let current=candidate.workflow!;
+    vi.mocked(client.saveWorkflowDocument).mockImplementation(async (projectId,id,value,projectRevision)=>{
+      current=value.workflow??current;
+      return {...value,workflow:current,id,project_id:projectId,project_revision:projectRevision,revision:2,semantic_revision:2,layout_revision:1};
+    });
+    render(<App/>);
+    await screen.findByText('Standalone sequences: 1',{exact:true});
+    expect(screen.queryByLabelText('Workflow run controls')).toBeNull();
+    expect(screen.queryByRole('button',{name:/^Import$/})).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'Generate proposal'}));
+    await screen.findByText('Reviewed graph');
+    fireEvent.click(screen.getByRole('button',{name:'Accept proposal (does not start computation)'}));
+    await vi.waitFor(()=>expect(screen.getByRole('button',{name:'Start run'})).toHaveProperty('disabled',false));
+    fireEvent.change(screen.getByLabelText('Upstream module'),{target:{value:'b'}});
+    fireEvent.change(screen.getByLabelText('Downstream module'),{target:{value:'c'}});
+    fireEvent.click(screen.getByRole('button',{name:'Connect modules'}));
+    await vi.waitFor(()=>expect(screen.getByRole('button',{name:'Start run'})).toHaveProperty('disabled',true));
+    expect(screen.getByText('Workflow changes are saved but not authorized. Review and accept a new proposal before running.')).toBeTruthy();
+    expect(client.start).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Tool call budget'),{target:{value:'50'}});
+    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget')).toHaveProperty('value','50'));
+    const policySave=vi.mocked(client.saveWorkflowDocument).mock.calls.at(-1)![2];
+    expect(policySave.workflow?.nodes.find(n=>n.id==='c')?.depends_on).toEqual(['a','b']);
+    expect(policySave.workflow?.execution_policy.max_tool_calls).toBe(50);
+    expect(screen.getByRole('button',{name:'Start run'})).toHaveProperty('disabled',true);
+    fireEvent.click(screen.getByRole('button',{name:/^Inputs$/}));
+    expect(screen.queryByLabelText('Workflow run controls')).toBeNull();
+  });
   it("editing facts invalidates acceptance and cannot start an obsolete workflow", async () => {
     render(<App />);
     await screen.findByText("Standalone sequences: 1", { exact: true });
@@ -316,7 +358,7 @@ describe("FusionLab scientific workbench", () => {
     );
     render(<App />);
     await screen.findByText("Standalone sequences: 1", { exact: true });
-    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Inputs" }));
     fireEvent.change(screen.getByLabelText("Project name"), {
       target: { value: "edited fixture" },
     });

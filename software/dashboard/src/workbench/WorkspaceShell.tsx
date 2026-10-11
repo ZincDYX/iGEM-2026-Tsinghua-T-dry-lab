@@ -11,6 +11,7 @@ import type {
   RunListView,
   RuntimeInfoView,
   ScientificPrecheckView,
+  WorkflowDocument,
 } from "../contracts/generated";
 import type { ExecutionPolicy } from "../contracts/Workflow.generated";
 import type { Goal } from "../types";
@@ -19,7 +20,9 @@ import { show } from "../contracts/resultAdapters";
 import * as client from "./client";
 import { useProject } from "./useProject";
 import { useRun } from "./useRun";
-import { PlanPanel, dependencies, statusLabel } from "./PlanPanel";
+import { dependencies, statusLabel } from "./PlanPanel";
+import { WorkflowWorkspace } from './WorkflowWorkspace';
+import { WorkflowControls } from './WorkflowControls';
 import { AgentPanel } from "./AgentPanel";
 import { InputEditor } from "./InputEditor";
 import { InputIssues, type InputIssue } from "./PrecheckPanel";
@@ -37,7 +40,7 @@ import { matchesRun, selectRunNode, type Selection } from "./selection";
 import "./workbench.css";
 import { ResourceBrowser } from "./ResourceBrowser";
 import { WorkbenchMenus } from "./WorkbenchMenus";
-import { primaryCommand, commandLabels } from "./workbenchCommands";
+import { primaryCommand } from "./workbenchCommands";
 import { usePlanController } from "./usePlanController";
 import { PredictionTools } from "./PredictionTools";
 import { useDocuments } from "./useDocuments";
@@ -128,6 +131,9 @@ export function WorkspaceShell() {
   const [info, setInfo] = useState<RuntimeInfoView>();
   const [history, setHistory] = useState<RunListView[]>([]);
   const [proposal, setProposal] = useState<ProposalView>();
+  const [workflowDocument, setWorkflowDocument] = useState<WorkflowDocument>();
+  useLayoutEffect(() => setWorkflowDocument(current => current && proposal?.workflow &&
+    JSON.stringify(current.workflow) === JSON.stringify(proposal.workflow) ? current : undefined), [proposal?.id]);
   const [goal, setGoal] = useState<Goal>("fusion_screen");
   const [inputTarget, setInputTarget] = useState<InputIssue>();
   const [objective, setObjective] = useState("");
@@ -174,7 +180,8 @@ export function WorkspaceShell() {
   const workflow =
     selection?.kind === "run-node"
       ? run?.workflow
-      : (proposal?.workflow ?? run?.workflow);
+      : (workflowDocument?.workflow ?? proposal?.workflow ?? run?.workflow);
+  const workflowChanged = !!workflowDocument && JSON.stringify(workflowDocument.workflow) !== JSON.stringify(proposal?.workflow);
   const node = workflow?.nodes.find((value) => value.id === selected);
   const stopped =
     run &&
@@ -197,9 +204,25 @@ export function WorkspaceShell() {
   function invalidate() {
     planController.invalidate();
     setProposal(undefined);
+    setWorkflowDocument(undefined);
     setSelection(undefined);
   }
   function updatePolicy(value: ExecutionPolicy) {
+    if (workflowDocument && currentProject && !runSelected) {
+      const document = workflowDocument, stamp = project.generation.current;
+      void action(async () => {
+        const revised = structuredClone(document.workflow);
+        revised.execution_policy = value;
+        const saved = await client.saveWorkflowDocument(currentProject.id, document.id, {
+          workflow: revised, layout: document.layout, selected_node_id: document.selected_node_id, view: document.view,
+        }, currentProject.revision, document.revision);
+        if (stamp !== project.generation.current) return;
+        setWorkflowDocument(saved);
+        setPolicy(saved.workflow.execution_policy);
+        planController.invalidate();
+      });
+      return;
+    }
     setPolicy(value);
     invalidate();
   }
@@ -284,10 +307,10 @@ export function WorkspaceShell() {
     if (run) setSelection(selectRunNode(run, id));
   }
   function selectPlan(id: string) {
-    if (selection?.kind !== "run-node" && proposal?.workflow)
+    if (selection?.kind !== "run-node" && (workflowDocument || proposal?.workflow))
       setSelection({
         kind: "proposal-node",
-        proposalId: proposal.id,
+        proposalId: proposal?.id ?? workflowDocument!.id,
         nodeId: id,
       });
     else selectRun(id);
@@ -374,7 +397,7 @@ export function WorkspaceShell() {
     });
   }
   async function start() {
-    if (!proposal) return;
+    if (!proposal || workflowChanged) return;
     const stamp = project.generation.current;
     await action(async () => {
       const value = await client.start(proposal);
@@ -473,6 +496,12 @@ export function WorkspaceShell() {
     if (primary === "start") return start();
     if (primary === "review") return propose();
     if (primary === "check") return checkInputs();
+  }
+  async function reviewScope(scope: Partial<ExecutionPolicy>) {
+    if (!workflow) return propose({...policy, ...scope});
+    const revised = structuredClone(workflow);
+    revised.execution_policy = {...revised.execution_policy, ...scope};
+    await importWorkflow(async () => revised);
   }
   async function checkInputs() {
     if (editing) return;
@@ -589,43 +618,6 @@ export function WorkspaceShell() {
             },
             { label: "Settings", action: () => setTab("settings") },
             { label: "Trusted plugins", action: () => setTab("plugins") },
-            {
-              label: "New stage-step plan",
-              disabled: busy || !currentProject || editing || !!executing,
-              action: () => {
-                invalidate();
-                void propose({
-                  ...policy,
-                  max_completed_stages: 1,
-                  target_node_id: null,
-                });
-              },
-            },
-            {
-              label: "Run to selected stage (review dependencies)",
-              disabled: busy || !node || editing || !!executing,
-              action: () => {
-                invalidate();
-                void propose({
-                  ...policy,
-                  target_node_id: selected,
-                  max_completed_stages: null,
-                });
-              },
-            },
-            {
-              label: "Retry selected node",
-              disabled:
-                busy ||
-                !runSelected ||
-                !run ||
-                !selected ||
-                !["failed", "interrupted"].includes(
-                  run.nodes.find((value) => value.id === selected)?.status ??
-                    "",
-                ),
-              action: () => void control("retry"),
-            },
           ]}
           help={[
             {
@@ -641,68 +633,6 @@ export function WorkspaceShell() {
           {info ? "Connected workspace" : "Connecting to backend"}
         </span>
       </header>
-      <div className="workbench-toolbar" aria-label="Project and run controls">
-        <button
-          disabled={!currentProject || busy}
-          onClick={() => navigateInput("conditions")}
-        >
-          Import
-        </button>
-        <button
-          disabled={busy || !currentProject || editing}
-          onClick={() => void action(() => project.save())}
-        >
-          Save
-        </button>
-        <button
-          disabled={
-            busy ||
-            !currentProject ||
-            editing ||
-            primary === "running" ||
-            (primary === "start" && project.dirty)
-          }
-          onClick={() => void runPrimary()}
-        >
-          {commandLabels[primary]}
-        </button>
-        {proposal?.status === "proposed" && (
-          <button
-            onClick={() => {
-              setInspector("agent");
-              setInspectorOpen(true);
-            }}
-          >
-            Inspect proposal
-          </button>
-        )}
-        {executing && runSelected && (
-          <>
-            <button
-              disabled={busy || !!run?.control}
-              onClick={() => void control("pause")}
-            >
-              Pause run
-            </button>
-            <button
-              disabled={busy || run?.control === "cancel"}
-              onClick={() => void control("cancel")}
-            >
-              Cancel run
-            </button>
-          </>
-        )}
-        {runSelected &&
-          run &&
-          ["paused", "interrupted"].includes(run.status) && (
-            <button
-              disabled={busy || run.control === "cancel"}
-              onClick={() => void control("cancel")}
-            >
-              Cancel run
-            </button>
-          )}
-      </div>
       <aside
         id="project-tree"
         className="project-tree"
@@ -730,8 +660,12 @@ export function WorkspaceShell() {
             </option>
           ))}
         </select>
+        <nav className="context-navigation" aria-label="Project navigation">
+          {(['inputs','plan','results'] as const).map(id=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}>{id==='inputs'?'Inputs':id==='plan'?'Workflow':'Results'}</button>)}
+        </nav>
         {currentProject && (
           <>
+            {tab === 'inputs' && <>
             <p>Standalone sequences: {currentProject.sequences.length}</p>
             <p>
               Scientific sequences:{" "}
@@ -752,10 +686,15 @@ export function WorkspaceShell() {
             <button onClick={() => navigateInput("evidence")}>
               ▸ Evidence
             </button>
-            <button onClick={() => setTab("artifacts")}>
-              ▸ Plots / Images / Structures / Tables
-            </button>
-            <h3>Runs (recent 50 rows / page)</h3>
+            </>}
+            {tab === 'plan' && workflow && <section aria-label="Workflow modules">
+              <h3>Modules</h3>
+              {workflow.nodes.map(module=><button key={module.id} className={selected===module.id?'tree-selected':''} onClick={()=>selectPlan(module.id)}>
+                {module.label}<small>{dependencies(module).length ? `Requires ${dependencies(module).map(id=>workflow.nodes.find(n=>n.id===id)!.label).join(', ')}` : 'Project inputs'}</small>
+              </button>)}
+            </section>}
+            {tab === 'results' && <>
+            {history.length > 0 && <h3>Runs (recent 50 rows / page)</h3>}
             {history.map((value) => (
               <button
                 className={runId === value.id ? "tree-selected" : ""}
@@ -765,7 +704,7 @@ export function WorkspaceShell() {
                   invalidate();
                   setRunId(value.id);
                   setRefresh((n) => n + 1);
-                  setTab("plan");
+                  setTab("results");
                 }}
               >
                 {value.name} · r{value.project_revision}
@@ -793,19 +732,19 @@ export function WorkspaceShell() {
                 Next run page
               </button>
             )}
-            <h3>Artifacts</h3>
-            {run?.artifacts.map((value) => (
+            {!!run?.nodes.length && <h3>Results by module</h3>}
+            {run?.nodes.map((value) => (
               <button
                 key={value.id}
                 onClick={() => {
-                  selectRun(value.node_id);
+                  selectRun(value.id);
                   setTab("results");
                 }}
               >
-                {run.workflow.nodes.find((node) => node.id === value.node_id)
-                  ?.label ?? "Stage result"}
+                {value.label}<small>{statusLabel(value.status)}</small>
               </button>
             ))}
+            </>}
           </>
         )}
       </aside>
@@ -887,6 +826,15 @@ export function WorkspaceShell() {
           ) : null}
           {tab === "plan" && (
             <>
+              <WorkflowControls primary={primary} disabled={busy || !currentProject || editing}
+                pausePending={!!run?.control}
+                startDisabled={workflowChanged || project.dirty} executing={!!executing && runSelected}
+                cancellable={!!run && runSelected && ['queued','running','paused','interrupted'].includes(run.status) && run.control!=='cancel'}
+                retryable={runSelected && ['failed','interrupted'].includes(run?.nodes.find(n=>n.id===selected)?.status??'')}
+                canSelectStage={!!node} onPrimary={()=>void runPrimary()} onPause={()=>void control('pause')}
+                onCancel={()=>void control('cancel')} onRetry={()=>void control('retry')}
+                onStep={()=>void reviewScope({max_completed_stages:1,target_node_id:null})}
+                onTarget={()=>void reviewScope({target_node_id:selected,max_completed_stages:null})}/>
               <p aria-label="Selection context">
                 {selection?.kind === "proposal-node"
                   ? "Draft proposal; no computed result yet."
@@ -894,14 +842,24 @@ export function WorkspaceShell() {
                     ? `${run?.name} · Saved inputs ${run?.project_revision}`
                     : "Select a proposal or a frozen run."}
               </p>
-              <PlanPanel
+              <WorkflowWorkspace
+                key={currentProject?.id}
+                projectId={currentProject?.id}
+                projectRevision={currentProject?.revision}
+                seedId={selection?.kind === 'run-node' ? run?.id : proposal?.id}
+                seed={selection?.kind === 'run-node' ? run?.workflow : proposal?.workflow ?? undefined}
+                document={workflowDocument}
+                onDocument={value=>{setWorkflowDocument(value);setPolicy(value.workflow.execution_policy);setSelection({kind:'proposal-node',proposalId:proposal?.id??value.id,nodeId:value.selected_node_id??value.workflow.nodes[0].id});}}
+                onReview={value=>importWorkflow(async()=>value)}
+                frozen={selection?.kind === 'run-node'}
+                busy={busy || project.dirty}
                 inputCheck={checkStale ? undefined : projectCheck}
-                workflow={workflow ?? undefined}
                 run={selection?.kind === "proposal-node" ? undefined : run}
                 selected={selected}
                 onSelect={selectPlan}
               />
-              <section className="policy-editor">
+              {workflowChanged && selection?.kind !== 'run-node' && <p role="status">Workflow changes are saved but not authorized. Review and accept a new proposal before running.</p>}
+              <fieldset className="policy-editor" disabled={busy || editing || !!runSelected}>
                 <h3>Execution authorization and stop policy</h3>
                 <label>
                   <input
@@ -990,7 +948,7 @@ export function WorkspaceShell() {
                   result reuse are unsupported. Stopping Agent proposals does
                   not cancel authorized numerical jobs.
                 </p>
-              </section>
+              </fieldset>
               <WorkflowImporter
                 key={currentProject?.id}
                 busy={busy}

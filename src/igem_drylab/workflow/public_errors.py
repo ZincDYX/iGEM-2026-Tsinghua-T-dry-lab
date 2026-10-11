@@ -1,5 +1,5 @@
 """Allowlisted public diagnostics; raw exceptions stay in the private ledger."""
-from .models import Contract
+from .models import Contract, WorkflowError
 
 
 class PublicError(Contract):
@@ -12,6 +12,26 @@ class PublicError(Contract):
 
 
 ERROR_GUIDANCE = {
+    'duplicate_node_id': ('Two modules have the same identity.', ['workflow.nodes'], ['Use distinct identities for distinct modules']),
+    'unknown_policy_node': ('Execution scope still refers to a removed module.', ['workflow.execution_policy'], ['Review the target and checkpoints before deleting this module']),
+    'tool_not_in_execution_authorization': ('This tool is outside the workflow execution scope.', ['workflow.execution_policy.allowed_tools'], ['Explicitly review the changed tool scope']),
+    'memory_limit_not_supported_by_process_backend': ('This backend cannot enforce a hard process memory limit.', ['workflow.execution_policy.memory_limit_mb'], ['Do not claim an unenforced limit; use an administrator-managed isolated runtime']),
+    'workflow_definition_required': ('A new workflow document needs an executable workflow definition.', ['workflow'], ['Choose a method or create a proposal first']),
+    'workflow_layout_references_missing_node': ('The saved layout or selection refers to a module that no longer exists.', ['layout','selected_node_id'], ['Reload the latest workflow and select an existing module']),
+    'workflow_cycle': ('These connections create a circular dependency.', ['workflow.nodes'], ['Remove the connection that returns to an upstream module']),
+    'unknown_dependency': ('A remaining module still refers to a removed or unknown upstream module.', ['workflow.nodes'], ['Keep the required upstream module or explicitly revise all affected input bindings']),
+    'unknown_tool': ('The selected tool is not registered in this workspace.', ['workflow.nodes.tool_id'], ['Select an installed tool; tool availability is separate from scientific readiness']),
+    'workflow_reference_type_mismatch': ('The declared tool output type does not match the receiving input.', ['workflow.nodes.inputs'], ['Choose an output and input with compatible types']),
+    'workflow_required_input_argument_missing': ('The selected tool requires an input that is not bound.', ['workflow.nodes.inputs'], ['Bind the required input before saving this workflow']),
+    'workflow_unknown_input_argument': ('This input is not declared by the selected tool.', ['workflow.nodes.inputs'], ['Review the tool input contract rather than reusing incompatible bindings']),
+    'workflow_input_value_or_project_binding_invalid': ('An input value or project binding does not match the tool contract.', ['workflow.nodes.inputs'], ['Check the selected object, field type and required values']),
+    'workflow_map_requires_list': ('Fan-out requires a collection, not a single object.', ['workflow.nodes.map'], ['Select a collection of compatible objects']),
+    'workflow_map_item_type_mismatch': ('One or more fan-out items do not match the receiving tool input.', ['workflow.nodes.map'], ['Review the collection and the tool input type']),
+    'workflow_output_field_not_declared': ('The selected field is not in the upstream output contract.', ['workflow.nodes.inputs'], ['Select a declared upstream output field']),
+    'workflow_document_revision_conflict': ('This workflow was edited in another operation.', [], ['Reload the saved workflow and review the latest revision']),
+    'workflow_project_revision_changed': ('Project inputs changed while this workflow was being edited.', [], ['Reload the project and recheck the input bindings']),
+    'formal_stage_requires_registered_upstream_result': ('This scientific stage needs the registered result from its required upstream stage.', ['workflow.nodes.inputs'], ['Keep the original scientific dependency and its result binding']),
+    'formal_stage_predecessor_mismatch': ('This connection does not match the scientific method dependency.', ['workflow.nodes.inputs'], ['Keep the method-required upstream stage; do not substitute an unrelated result']),
     "jpred_requires_recoverable_native_route": ("JPred is configured to submit only, not retrieve a prediction.", [], ["Configure the backend native JPred runner with the installed jpredapi client", "Keep existing job records; do not submit the same job again"]),
     "remote_submission_reconciliation_required": ("The service may have accepted this job, but its acknowledgement is unknown.", [], ["Reconcile the original submission log or service job identity", "Do not resubmit until the original job is accounted for"]),
     "remote_retrieval_failed": ("The known remote job is retained; its result could not yet be retrieved.", [], ["Retry retrieval of the same job", "Check the service and the backend diagnostic"]),
@@ -41,3 +61,16 @@ ERROR_GUIDANCE = {
     "accepted_proposal_binding_required": ("Execution requires an accepted review with matching identity.", [], ["Review and accept the current proposal", "Legacy clients must provide explicit manual_review identity"]),
     "reviewed_tool_or_profile_changed": ("Tool or runtime identity changed; review again.", [], ["Generate a new proposal and inspect identity differences"]),
 }
+
+
+def diagnostic_code(error, fallback):
+    """Recover typed graph failures wrapped by Pydantic/FastAPI, not text matches."""
+    if isinstance(error, WorkflowError):
+        return error.code
+    errors = getattr(error, 'errors', None)
+    if callable(errors):
+        for issue in errors():
+            wrapped = issue.get('ctx', {}).get('error')
+            if isinstance(wrapped, WorkflowError):
+                return wrapped.code
+    return fallback

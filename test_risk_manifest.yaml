@@ -1,6 +1,23 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: WORKFLOW_DOCUMENT_REVISION_AND_NATIVE_CONTRACT
+    group: platform
+    test_nodeids:
+      - "tests/test_workflow_documents.py::test_layout_selection_view_recover_and_do_not_change_scientific_binding"
+      - "tests/test_workflow_documents.py::test_semantic_edit_is_new_revision_old_approval_and_history_are_not_reused"
+      - "tests/test_workflow_documents.py::test_bad_edits_rejected_without_mutation_or_execution"
+      - "tests/test_workflow_documents.py::test_concurrent_edits_and_stale_project_do_not_overwrite"
+      - "tests/test_workflow_documents.py::test_API_documents_are_project_scoped_and_reopen"
+      - "tests/test_workflow_documents.py::test_MCP_native_schema_not_empty_transport_wrapper_controls_editor"
+      - "tests/test_workflow_documents.py::test_CLI_and_Web_use_the_same_document_and_new_review_after_semantic_edit"
+    requirement_or_formula_source: 20261011 review WF-01 WF-03 one workflow model with independent layout
+    oracle_type: independently declared three-node fan-out, primitive IO types, database history and immutable accepted workflow
+    fixture_scope: software_only_no_scientific_calculation_or_external_submission
+    formula_version: not_applicable
+    units: revision_and_canvas_pixels
+    tolerance_basis: exact selection, dependency, revision, no created runs and rejection of invalid edits
+    expected_faults: [layout_changes_scientific_binding, lost_fan_out, deleted_required_upstream, mismatched_IO_type, stale_editor_overwrite, MCP_wrapper_instead_of_native_schema, old_approval_for_changed_graph]
   - risk_id: WEB_RELEASE_STALE_BUILD_ARTIFACTS
     group: platform
     test_nodeids: ["tests/test_web_build_assets.py::test_rebuilding_removes_obsolete_generated_chunks_and_modules_only"]

@@ -188,8 +188,7 @@ li {
   color: var(--muted);
   font-size: 11px;
 }
-.workbench-toolbar {
-  grid-area: toolbar;
+.workflow-run-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -198,6 +197,9 @@ li {
   background: var(--soft);
   border-bottom: 1px solid var(--line);
 }
+.context-navigation { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.context-navigation button { text-align: left; }
+.context-navigation button[aria-current="page"] { font-weight: 600; border-color: var(--accent); }
 .project-tree {
   grid-area: tree;
   border-right: 1px solid var(--line);
@@ -208,7 +210,7 @@ li {
 .project-tree select {
   width: 100%;
 }
-.project-tree > button {
+.project-tree > button, .project-tree section > button {
   width: 100%;
   text-align: left;
   border-color: transparent;
@@ -536,3 +538,14 @@ tr[aria-selected="true"] {
   margin: 0;
   min-width: 0;
 }
+.workflow-graph-scroll { overflow: auto; border: 1px solid var(--line); margin: 1rem 0; max-height: 440px; }
+.workflow-graph { position: relative; }
+.workflow-graph svg { position: absolute; inset: 0; pointer-events: none; color: inherit; }
+.workflow-graph path.data-edge, .workflow-graph path.control-edge { fill: none; stroke: currentColor; stroke-width: 2; }
+.workflow-graph path.control-edge { stroke-dasharray: 6 4; }
+.workflow-graph-node { position: absolute; width: 218px; min-height: 78px; text-align: left; touch-action: none; display: flex; flex-direction: column; gap: 4px; }
+.workflow-graph-node.selected { outline: 2px solid var(--accent); }
+.workflow-graph-node span { font-size: .85em; overflow-wrap: anywhere; }
+.workflow-view-switch, .workflow-edit-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.workflow-edit-controls h3, .workflow-edit-controls p { flex-basis: 100%; }
+.workflow-edit-controls label { min-width: 180px; }

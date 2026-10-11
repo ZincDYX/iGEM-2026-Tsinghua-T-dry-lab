@@ -24,8 +24,22 @@ if (exported.error || exported.status !== 0) throw new Error("Public schema expo
 const source = new URL("../src/contracts/public.schemas.json",import.meta.url);
 const schemas = JSON.parse(await readFile(source,"utf8"));
 const exports = [];
+// An annotation-only Pydantic Any schema permits every JSON value, not just
+// objects. json-schema-to-typescript otherwise infers an index-signature
+// interface from its title. Boolean true has identical validation semantics.
+function typescriptSchema(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  const annotations = new Set(['title','description','default','examples']);
+  if (Object.keys(schema).every(key => annotations.has(key))) return true;
+  const maps = new Set(['properties','patternProperties','$defs','definitions','dependentSchemas']);
+  const arrays = new Set(['allOf','anyOf','oneOf','prefixItems']);
+  const children = new Set(['items','additionalProperties','contains','not','if','then','else','propertyNames','unevaluatedProperties']);
+  return Object.fromEntries(Object.entries(schema).map(([key,value]) => [key,
+    maps.has(key) ? Object.fromEntries(Object.entries(value).map(([name,item]) => [name,typescriptSchema(item)])) :
+      arrays.has(key) ? value.map(typescriptSchema) : children.has(key) ? typescriptSchema(value) : value]));
+}
 for (const [name,schema] of Object.entries(schemas)) {
-  const output = await compile(schema,name,{bannerComment:"/* Generated from public Pydantic contracts. Do not edit. */",additionalProperties:false});
+  const output = await compile(typescriptSchema(schema),name,{bannerComment:"/* Generated from public Pydantic contracts. Do not edit. */",additionalProperties:false});
   await writeFile(new URL(`../src/contracts/${name}.generated.ts`,import.meta.url),output);
   exports.push(`export type { ${name} } from "./${name}.generated";`);
 }
