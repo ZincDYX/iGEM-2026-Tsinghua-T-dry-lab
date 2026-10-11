@@ -33,7 +33,7 @@ test('owned server executes reviewed scalar version and renders frozen unvalidat
   await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
   await expect(page.getByRole('button',{name:'Start run',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Start run',exact:true}).click();
-  await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible();
+  await expect(page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module Server scalar ratio',exact:true})).toContainText('Job: Job completed');
   await page.getByRole('tab',{name:'Results',exact:true}).click();
   await page.getByLabel('Result object',{exact:true}).selectOption('formula');
   await expect(page.getByLabel('Custom formula result')).toContainText('0.5 1');

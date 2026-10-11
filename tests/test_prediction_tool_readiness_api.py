@@ -17,7 +17,10 @@ def test_private_backend_tools_bind_new_project_but_do_not_leak_settings(tmp_pat
         assert app.state.platform_store.project("p").runtime_profile_ref == "backend-configured-tools"
         rows = client.get("/api/platform/projects/p/prediction-tools", headers=headers)
         assert rows.status_code == 200
-        assert len(rows.json()) == 5
+        assert [row['id'] for row in rows.json()] == [
+            'prediction.iupred2a','prediction.seg','prediction.colabfold','prediction.pscore',
+            'prediction.jpred','prediction.signalp','prediction.deeptmhmm','prediction.tango']
+        assert all(row['status']=='not_configured' for row in rows.json()[5:])
         assert rows.json()[3]["id"] == "prediction.pscore"
         assert rows.json()[1]["version"] == "PROTOCOL_VERSION"
         assert "PRIVATE_" not in rows.text

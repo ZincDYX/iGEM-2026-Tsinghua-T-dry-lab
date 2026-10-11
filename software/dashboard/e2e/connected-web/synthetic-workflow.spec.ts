@@ -28,7 +28,7 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
   await page.getByRole('button',{name:'Start run',exact:true}).click();
-  await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible({timeout:60000});
+  await expect(page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module Synthetic M3/M4 reference scenarios',exact:true})).toContainText('Job: Job completed',{timeout:60000});
   await page.getByRole('tab',{name:'Results',exact:true}).click();
   await page.getByLabel('Result object',{exact:true}).selectOption('synthetic-demo');
   await expect(page.getByRole('heading',{name:'E1 · M3/M4'})).toBeVisible();

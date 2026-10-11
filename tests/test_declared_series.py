@@ -28,7 +28,7 @@ def test_declared_csv_npz_keep_original_units_null_zero_and_recheck_target(tmp_p
     asset = boundary.asset(sidecar, project_id="a")
     page = resources.series("a",asset["id"],0,2)
     assert page["time"]==[0,30] and page["values"]=={"0":[0,None]}
-    assert page["series"][0]==dict(id="0",compartment="extracellular",species="13",unit="mM")
+    assert page["series"][0]==dict(id="0",compartment="extracellular",species="13",unit="mM",species_id="13",quantity=None)
     assert page["time_unit"]=="min" and page["model_kind"]=="registered_source_not_prediction"
     assert page["data_source_sha256"]==target["sha256"]
     from igem_drylab.workflow import declared_series
