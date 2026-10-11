@@ -19,6 +19,7 @@ import {ScientificSetup} from "./ScientificSetup";
 
 export function InputEditor({
   project,
+  persisted,
   busy,
   dirty,
   onChange,
@@ -34,6 +35,7 @@ export function InputEditor({
   onImported,
 }: {
   project: ProjectView;
+  persisted: boolean;
   busy: boolean;
   dirty: boolean;
   onChange: (value: ProjectView) => void;
@@ -91,7 +93,7 @@ export function InputEditor({
         {rename&&<label>Project name<input aria-label="Project name" value={project.name} onChange={e=>change({...project,name:e.target.value})}/></label>}
         <section id="input-evidence" aria-label="Biological data">
           <h2>Biological data</h2>
-          <UnifiedImport project={project} busy={busy} dirty={dirty} action={action} prepare={prepareImport} onCommitted={onImported}/>
+          <UnifiedImport project={project} persisted={persisted} busy={busy} dirty={dirty} action={action} prepare={prepareImport} onCommitted={onImported}/>
           <StructureAnnotationLinker project={project} disabled={busy||dirty} action={action} onPreview={setPreview}/>
           {preview&&<div><p>Reviewed annotation binding candidate; original source is retained.</p>
             <button disabled={busy} onClick={()=>{change(mergeImportDraft(project,preview,{}));setPreview(undefined);}}>Confirm annotation binding into draft</button>

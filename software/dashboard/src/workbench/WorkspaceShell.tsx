@@ -728,6 +728,7 @@ export function WorkspaceShell() {
               <InputEditor
                 key={currentProject.id}
                 project={currentProject}
+                persisted={project.saved?.id===currentProject.id}
                 busy={busy}
                 dirty={project.dirty}
                 onChange={(value) => {

@@ -4,8 +4,8 @@ import * as client from './client';
 import {LazyJson} from '../contracts/LazyJson';
 import {object} from '../contracts/validation';
 
-export function UnifiedImport({project,busy,dirty,action,prepare,onCommitted}:{
-  project:ProjectView;busy:boolean;dirty:boolean;action:(job:()=>Promise<unknown>)=>Promise<void>;
+export function UnifiedImport({project,persisted,busy,dirty,action,prepare,onCommitted}:{
+  project:ProjectView;persisted:boolean;busy:boolean;dirty:boolean;action:(job:()=>Promise<unknown>)=>Promise<void>;
   prepare:()=>Promise<ProjectView|undefined>;onCommitted:(project:ProjectView)=>void;
 }){
   const [preview,setPreview]=useState<ImportTransactionPreview>();
@@ -18,12 +18,17 @@ export function UnifiedImport({project,busy,dirty,action,prepare,onCommitted}:{
   const additionalInput=useRef<HTMLInputElement>(null);
   const generation=useRef(0);
   useEffect(()=>{
-    const stamp=++generation.current;setPreview(undefined);setOptions({});setChoices({});setPending([]);setRestoreError(false);
-    void client.pendingImports(project.id).then(ids=>{
-      if(stamp===generation.current)setPending(ids);
-    }).catch(()=>{if(stamp===generation.current)setRestoreError(true);});
+    ++generation.current;setPreview(undefined);setOptions({});setChoices({});setPending([]);setRestoreError(false);
     return()=>{++generation.current};
   },[project.id]);
+  useEffect(()=>{
+    if(!persisted)return;
+    const stamp=generation.current;let active=true;
+    void client.pendingImports(project.id).then(ids=>{
+      if(active&&stamp===generation.current)setPending(ids);
+    }).catch(()=>{if(active&&stamp===generation.current)setRestoreError(true);});
+    return()=>{active=false};
+  },[project.id,persisted]);
   async function choose(files:File[],append=false){
     if(!files.length)return;
     const stamp=++generation.current;
@@ -31,7 +36,7 @@ export function UnifiedImport({project,busy,dirty,action,prepare,onCommitted}:{
       const saved=await prepare();
       if(!saved||stamp!==generation.current)return;
       const value=await client.importTransaction(saved.id,files,append?preview?.id:undefined,append?relativeName:undefined);
-      if(stamp===generation.current){setPreview(value);setOptions({});setChoices({});}
+      if(stamp===generation.current){setPreview(value);setOptions({});setChoices({});setRestoreError(false);}
     });
   }
   const blocking=preview?.items.some(item=>item.issues.some(issue=>issue.severity==='error'||issue.severity==='confirmation'));
