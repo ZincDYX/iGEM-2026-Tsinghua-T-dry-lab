@@ -77,7 +77,28 @@ function externalReferences(value){
 }
 ajv.addSchema({$id:"urn:fusionlab:shared",$defs:externalReferences(definitions)},"shared");
 for(const[name,schema]of Object.entries(schemas)){const{$defs,...root}=schema;ajv.addSchema(externalReferences(root),name);}
-const validation=standaloneCode(ajv,Object.fromEntries(Object.keys(schemas).map(name=>[name,name])));
-await build({stdin:{contents:validation,resolveDir:fileURLToPath(new URL("..",import.meta.url)),loader:"js"},bundle:true,format:"esm",platform:"browser",write:true,
-  outfile:fileURLToPath(new URL("../src/contracts/public.validators.generated.js",import.meta.url))});
+// A finite set of protocol families, not a runtime schema compiler. Only the
+// input-editing family is synchronous; response families load at their actual
+// API boundary. The Python registry remains the sole schema source.
+const families={
+  inputs:['ProjectView','GenBankDesign','ImportView','ScientificRecordView','Workflow','RuntimeInfoView','M5ComparisonSeries','PublicError','NodePage'],
+  planning:['ProposalView','AssistantPage','ProposalDiff','PlanView','WorkflowDocument','ScientificObservation'],
+  results:['RunSummaryView','RunListView','EventPage','TablePage','ScanPage','SeriesPage','StructurePage','ResourcePage','LineagePage','ComparePage'],
+  imports:['ImportTransactionPreview','ScientificPreviewView','BindingPreviewView','IterationView','GenBankPage','SequencePage','ScientificPrecheckView'],
+  tools:['ToolCatalogPage','PluginInspectionView','PredictionToolView','AssistantSettingsView','AssistantProbeView','SkillView','SkillPage','MethodDefinition','ModuleMethodView','MethodDraftView','MethodDraftPage'],
+  basic:['ProjectSummaryView','ActionView','InputDiffView'],
+};
+const assigned=Object.values(families).flat();
+if(new Set(assigned).size!==assigned.length||Object.keys(schemas).some(name=>!assigned.includes(name))||assigned.some(name=>!(name in schemas)))
+  throw Error('Every public contract must belong to exactly one protocol family.');
+const loaders=[];
+for(const[family,names]of Object.entries(families)){
+  const validation=standaloneCode(ajv,Object.fromEntries(names.map(name=>[name,name])));
+  await build({stdin:{contents:validation,resolveDir:fileURLToPath(new URL("..",import.meta.url)),loader:"js"},bundle:true,format:"esm",platform:"browser",write:true,
+    outfile:fileURLToPath(new URL(`../src/contracts/validators.${family}.generated.js`,import.meta.url))});
+  await writeFile(new URL(`../src/contracts/validators.${family}.generated.d.ts`,import.meta.url),names.map(name=>`export function ${name}(value:unknown):value is import("./${name}.generated").${name};`).join('\n')+'\n');
+  loaders.push(...names.map(name=>`${JSON.stringify(name)}:()=>import("./validators.${family}.generated.js"),`));
+}
+await writeFile(new URL('../src/contracts/validatorLoaders.generated.ts',import.meta.url),'/* Generated protocol-family loaders. */\nexport const validatorLoaders={\n'+loaders.join('\n')+'\n};\n');
+await writeFile(new URL('../src/contracts/public.validators.generated.js',import.meta.url),Object.keys(families).map(family=>`export * from "./validators.${family}.generated.js";`).join('\n')+'\n');
 await writeFile(new URL("../src/contracts/public.validators.generated.d.ts",import.meta.url),Object.keys(schemas).map(name=>`export function ${name}(value:unknown):value is import("./${name}.generated").${name};`).join("\n")+"\n");

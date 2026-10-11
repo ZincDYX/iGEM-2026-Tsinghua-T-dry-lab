@@ -1,5 +1,5 @@
 import { requestJson, requestBinary } from "../api";
-import { parsePublic, parseList, object } from "../contracts/validation";
+import { parsePublicAsync as parsePublic, parseList, object } from "../contracts/validation";
 import type { Protocol } from "../contracts/validation";
 import type {
   ProjectView,
@@ -92,6 +92,23 @@ export const decide = (id: string, action: "accept" | "reject") =>
   read("ProposalView", `/proposals/${encodeURIComponent(id)}/decision`, {
     action,
   });
+export const assistantHistory = (projectId: string, signal?: AbortSignal, before?: number) =>
+  read('AssistantPage', `/projects/${encodeURIComponent(projectId)}/assistant${before === undefined ? '' : `?before=${before}`}`, undefined, signal);
+export const proposalDiff = (id: string, signal?: AbortSignal) => read('ProposalDiff', `/proposals/${encodeURIComponent(id)}/diff`, undefined, signal);
+export const proposal = (id: string, signal?: AbortSignal) => read('ProposalView', `/proposals/${encodeURIComponent(id)}`, undefined, signal);
+export const assistantSettings = () => read('AssistantSettingsView','/assistant/settings');
+export const saveAssistantSettings = (value: {provider:'none'|'compatible_api'|'local_endpoint'; model:string; endpoint?:string; secret?:string; clear_secret:boolean; style_instructions:string}) => read('AssistantSettingsView','/assistant/settings',value);
+export const testAssistantSettings = () => read('AssistantProbeView','/assistant/settings/test',{});
+export const skills = (offset=0) => read('SkillPage',`/skills?offset=${offset}`);
+export const saveSkill = (text:string,enabled:boolean,id?:string,revision?:number) => read('SkillView',id?`/skills/${encodeURIComponent(id)}`:'/skills',{text,enabled,expected_revision:revision??null});
+export const methodDrafts = (projectId:string,offset=0) => read('MethodDraftPage',`/projects/${encodeURIComponent(projectId)}/method-drafts?offset=${offset}`);
+export const saveMethodDraft = (projectId:string,value:{base_method_id:string;base_version:string;title:string;formula_id:string;latex:string;reason:string;source_reference:string;previous_id:string|null;expected_project_revision:number}) =>
+  read('MethodDraftView',`/projects/${encodeURIComponent(projectId)}/method-drafts`,value);
+export const revise = (id: string, prompt: string, workflow?: Workflow) =>
+  read('ProposalView', `/proposals/${encodeURIComponent(id)}/revise`, {prompt, workflow});
+export const reviewParameter = (projectId: string, parameterId: string, stage: 'm3'|'m4', requirement_name: string, reviewer: string, reason: string, expected_revision: number) =>
+  read('ProjectView', `/projects/${encodeURIComponent(projectId)}/parameters/${encodeURIComponent(parameterId)}/review`,
+    {stage, requirement_name, reviewer, reason, expected_revision});
 export async function start(proposal: ProposalView) {
   if (
     !proposal.workflow ||
@@ -193,10 +210,16 @@ export const proposeCustom = (
     objective,
   });
 export const fetchPlugin = (repositoryUrl: string, commit: string) =>
-  read("PluginInspectionView", "/plugins/github", {
+  read("PluginInspectionView", "/plugins/repository", {
     repository_url: repositoryUrl,
-    commit,
+    revision: commit.trim()||'HEAD',
   });
+export const installedPlugins = () => list('PluginInspectionView','/plugins');
+export const pluginEnabled = (hash:string,enabled:boolean) => read('PluginInspectionView',`/plugins/${encodeURIComponent(hash)}/state`,{enabled});
+export async function uploadPluginSource(file:File) {
+  if(file.size>16*1024*1024)throw Error('Source ZIP is limited to 16 MiB.');
+  return parsePublic('PluginInspectionView',await (await requestBinary('/plugins/source',file)).json());
+}
 export const installPlugin = (source: string, hash: string) =>
   read("PluginInspectionView", "/plugins/install", {
     source_path: source,

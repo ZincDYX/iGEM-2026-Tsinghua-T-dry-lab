@@ -128,10 +128,38 @@ fusionlab workflow edit <document-id> --project <project-id> --view list
 fusionlab workflow review-draft <document-id> --project <project-id>
 ```
 
-Editing/reviewing is not execution or scientific parameter approval. Full original
-method Formulas/Tools/Parameters columns and general typed module/binding creation
-are still pending; this editor does not imply full review completion or that an
-installed tool has been scientifically validated.
+Select an original M1–M4 module to inspect Tools, Formulas and Parameters. Original
+method versions, assumptions and discrepancies are retained; frozen runs show
+their own recorded tool versions and parameters. Edit a saved parameter by creating
+a reasoned, unapproved override, then review its source/units/conditions explicitly.
+Custom formula drafts are separately versioned, unvalidated and **not executable**;
+they never replace an original scientific kernel merely because they were saved.
+General typed module/binding creation remains pending. Editing/reviewing is not
+execution, scientific approval, or proof that an installed tool is validated.
+
+Assistant retains project-scoped proposal history. Accept, Reject and Revise use
+the same workflow engine; a revision shows its actual graph/policy changes and
+requires new acceptance. Tools → Assistant Settings defaults to None: manual
+workflows do not require a model. Optional compatible/local model endpoints and
+write-only keys are stored in the private workspace, outside scientific exports.
+The connection test sends public test text only and can incur three small API
+requests. Hosted deployments require an administrator endpoint allowlist; a hosted
+server's localhost is not the user's computer. A streaming capability probe is not
+a streaming chat interface, and software transport tests are not real LLM validation.
+
+Tools → Tools & extensions shows actual registered capabilities, trusted plugin
+source inspection/install/enable controls and editable instruction-only SKILL.md.
+Registration is not readiness. Python plugin environments isolate dependencies,
+not hostile code; install only trusted code. Importing Skills never executes their
+scripts or approves evidence. Hosted raw shell access is unavailable; use your own
+trusted local terminal for the documented CLI.
+
+Results/Resources opens actual PDB/mmCIF geometry with rotation, chain selection,
+reset and native PNG export. Original coordinates remain downloadable if WebGL is
+unavailable. B-factors are not relabelled pLDDT; references need recorded mappings
+and transforms, not an inferred alignment. Actual 1CRN display/lifecycle acceptance
+and scoped loading measurements are recorded in
+[the review implementation record](docs/web_cli_review_20261011.md).
 
 ## Start the desktop
 

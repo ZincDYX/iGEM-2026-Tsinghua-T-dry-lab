@@ -1,0 +1,11 @@
+export function ToolCatalogPage(value:unknown):value is import("./ToolCatalogPage.generated").ToolCatalogPage;
+export function PluginInspectionView(value:unknown):value is import("./PluginInspectionView.generated").PluginInspectionView;
+export function PredictionToolView(value:unknown):value is import("./PredictionToolView.generated").PredictionToolView;
+export function AssistantSettingsView(value:unknown):value is import("./AssistantSettingsView.generated").AssistantSettingsView;
+export function AssistantProbeView(value:unknown):value is import("./AssistantProbeView.generated").AssistantProbeView;
+export function SkillView(value:unknown):value is import("./SkillView.generated").SkillView;
+export function SkillPage(value:unknown):value is import("./SkillPage.generated").SkillPage;
+export function MethodDefinition(value:unknown):value is import("./MethodDefinition.generated").MethodDefinition;
+export function ModuleMethodView(value:unknown):value is import("./ModuleMethodView.generated").ModuleMethodView;
+export function MethodDraftView(value:unknown):value is import("./MethodDraftView.generated").MethodDraftView;
+export function MethodDraftPage(value:unknown):value is import("./MethodDraftPage.generated").MethodDraftPage;

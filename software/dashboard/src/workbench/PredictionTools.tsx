@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { requestJson } from "../api";
-import { parseList, parsePublic } from "../contracts/validation";
+import { parseList, parsePublicAsync as parsePublic } from "../contracts/validation";
 import type {
   PredictionToolView,
   ProjectView,
@@ -31,8 +31,8 @@ export function PredictionTools({
     setSequences(undefined);
     setSequenceId("");
     void requestJson(`/projects/${encodeURIComponent(project.id)}/sequences?offset=${offset}&limit=100`, undefined, controller.signal)
-      .then(raw => {
-        const page = parsePublic("SequencePage", raw);
+      .then(async raw => {
+        const page = await parsePublic("SequencePage", raw);
         if (!controller.signal.aborted) {
           setSequences(page);
           setSequenceId(page.items.length ? "0" : "");
@@ -47,9 +47,9 @@ export function PredictionTools({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
-        if (!controller.signal.aborted)
-          setRows(parseList("PredictionToolView", raw));
+      .then(async (raw) => {
+        const value=await parseList('PredictionToolView',raw);
+        if (!controller.signal.aborted) setRows(value);
       })
       .catch(() => {
         if (!controller.signal.aborted)

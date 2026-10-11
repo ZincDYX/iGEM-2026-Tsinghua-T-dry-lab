@@ -27949,6 +27949,11 @@
         },
         "title": "Capability Requests",
         "type": "array"
+      },
+      "enabled": {
+        "default": true,
+        "title": "Enabled",
+        "type": "boolean"
       }
     },
     "required": [
@@ -27958,7 +27963,8 @@
       "trust_required",
       "installed",
       "source_path",
-      "capability_requests"
+      "capability_requests",
+      "enabled"
     ],
     "title": "PluginInspectionView",
     "type": "object"
@@ -30106,6 +30112,1209 @@
       "view"
     ],
     "title": "WorkflowDocument",
+    "type": "object"
+  },
+  "AssistantPage": {
+    "$defs": {
+      "AssistantMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "proposal_id": {
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "project_revision": {
+            "title": "Project Revision",
+            "type": "integer"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "role",
+          "text",
+          "proposal_id",
+          "project_revision",
+          "timestamp"
+        ],
+        "title": "AssistantMessage",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "messages": {
+        "items": {
+          "$ref": "#/$defs/AssistantMessage"
+        },
+        "title": "Messages",
+        "type": "array"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "project_id",
+      "messages",
+      "has_more"
+    ],
+    "title": "AssistantPage",
+    "type": "object"
+  },
+  "ProposalDiff": {
+    "$defs": {
+      "ProposalChange": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "node",
+              "tool",
+              "binding",
+              "dependency",
+              "permission"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "before",
+          "after"
+        ],
+        "title": "ProposalChange",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "proposal_id": {
+        "title": "Proposal Id",
+        "type": "string"
+      },
+      "previous_proposal_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Previous Proposal Id"
+      },
+      "changes": {
+        "items": {
+          "$ref": "#/$defs/ProposalChange"
+        },
+        "title": "Changes",
+        "type": "array"
+      },
+      "missing_inputs": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Missing Inputs",
+        "type": "array"
+      },
+      "evidence": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Evidence",
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Limitations",
+        "type": "array"
+      }
+    },
+    "required": [
+      "proposal_id",
+      "previous_proposal_id",
+      "changes",
+      "missing_inputs",
+      "evidence",
+      "limitations"
+    ],
+    "title": "ProposalDiff",
+    "type": "object"
+  },
+  "MethodDefinition": {
+    "$defs": {
+      "MethodFormula": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "latex": {
+            "title": "Latex",
+            "type": "string"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "implementation": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Implementation",
+            "type": "array"
+          },
+          "status": {
+            "default": "implemented",
+            "enum": [
+              "implemented",
+              "conditional",
+              "undefined_in_source",
+              "source_discrepancy"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "latex",
+          "assumptions",
+          "implementation",
+          "status"
+        ],
+        "title": "MethodFormula",
+        "type": "object"
+      },
+      "MethodStep": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description"
+        ],
+        "title": "MethodStep",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "version": {
+        "title": "Version",
+        "type": "string"
+      },
+      "title": {
+        "title": "Title",
+        "type": "string"
+      },
+      "scope": {
+        "title": "Scope",
+        "type": "string"
+      },
+      "source_reference": {
+        "title": "Source Reference",
+        "type": "string"
+      },
+      "source_version": {
+        "title": "Source Version",
+        "type": "string"
+      },
+      "steps": {
+        "items": {
+          "$ref": "#/$defs/MethodStep"
+        },
+        "title": "Steps",
+        "type": "array"
+      },
+      "formulas": {
+        "items": {
+          "$ref": "#/$defs/MethodFormula"
+        },
+        "title": "Formulas",
+        "type": "array"
+      },
+      "symbols": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Symbols",
+        "type": "object"
+      },
+      "tools": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Tools",
+        "type": "array"
+      },
+      "discrepancies": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Discrepancies",
+        "type": "array"
+      },
+      "formal_formula_editable": {
+        "const": false,
+        "default": false,
+        "title": "Formal Formula Editable",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "version",
+      "title",
+      "scope",
+      "source_reference",
+      "source_version",
+      "steps",
+      "formulas",
+      "symbols",
+      "tools",
+      "discrepancies",
+      "formal_formula_editable"
+    ],
+    "title": "MethodDefinition",
+    "type": "object"
+  },
+  "ModuleMethodView": {
+    "$defs": {
+      "MethodDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "source_version": {
+            "title": "Source Version",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/$defs/MethodStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "formulas": {
+            "items": {
+              "$ref": "#/$defs/MethodFormula"
+            },
+            "title": "Formulas",
+            "type": "array"
+          },
+          "symbols": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Symbols",
+            "type": "object"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "discrepancies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Discrepancies",
+            "type": "array"
+          },
+          "formal_formula_editable": {
+            "const": false,
+            "default": false,
+            "title": "Formal Formula Editable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "title",
+          "scope",
+          "source_reference",
+          "source_version",
+          "steps",
+          "formulas",
+          "symbols",
+          "tools",
+          "discrepancies",
+          "formal_formula_editable"
+        ],
+        "title": "MethodDefinition",
+        "type": "object"
+      },
+      "MethodFormula": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "latex": {
+            "title": "Latex",
+            "type": "string"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "implementation": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Implementation",
+            "type": "array"
+          },
+          "status": {
+            "default": "implemented",
+            "enum": [
+              "implemented",
+              "conditional",
+              "undefined_in_source",
+              "source_discrepancy"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "latex",
+          "assumptions",
+          "implementation",
+          "status"
+        ],
+        "title": "MethodFormula",
+        "type": "object"
+      },
+      "MethodStep": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description"
+        ],
+        "title": "MethodStep",
+        "type": "object"
+      },
+      "ModuleTool": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "runtime": {
+            "title": "Runtime",
+            "type": "string"
+          },
+          "status": {
+            "const": "registered_not_tested",
+            "default": "registered_not_tested",
+            "title": "Status",
+            "type": "string"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "input_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Names",
+            "type": "array"
+          },
+          "output_scope": {
+            "title": "Output Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "description",
+          "runtime",
+          "status",
+          "license",
+          "input_names",
+          "output_scope"
+        ],
+        "title": "ModuleTool",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "project_revision": {
+        "title": "Project Revision",
+        "type": "integer"
+      },
+      "methods": {
+        "items": {
+          "$ref": "#/$defs/MethodDefinition"
+        },
+        "title": "Methods",
+        "type": "array"
+      },
+      "tool": {
+        "$ref": "#/$defs/ModuleTool"
+      },
+      "configured_mode": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Configured Mode"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Limitations",
+        "type": "array"
+      },
+      "parameter_records": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Parameter Records",
+        "type": "array"
+      }
+    },
+    "required": [
+      "project_id",
+      "project_revision",
+      "methods",
+      "tool",
+      "configured_mode",
+      "limitations",
+      "parameter_records"
+    ],
+    "title": "ModuleMethodView",
+    "type": "object"
+  },
+  "AssistantSettingsView": {
+    "additionalProperties": false,
+    "properties": {
+      "profile_id": {
+        "title": "Profile Id",
+        "type": "string"
+      },
+      "provider": {
+        "enum": [
+          "none",
+          "compatible_api",
+          "local_endpoint"
+        ],
+        "title": "Provider",
+        "type": "string"
+      },
+      "model": {
+        "title": "Model",
+        "type": "string"
+      },
+      "has_secret": {
+        "title": "Has Secret",
+        "type": "boolean"
+      },
+      "configured": {
+        "title": "Configured",
+        "type": "boolean"
+      },
+      "local_workspace": {
+        "title": "Local Workspace",
+        "type": "boolean"
+      },
+      "style_instructions": {
+        "title": "Style Instructions",
+        "type": "string"
+      },
+      "save_scope": {
+        "const": "private_workspace",
+        "default": "private_workspace",
+        "title": "Save Scope",
+        "type": "string"
+      },
+      "capabilities": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Capabilities",
+        "type": "object"
+      },
+      "tested_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Tested At"
+      }
+    },
+    "required": [
+      "profile_id",
+      "provider",
+      "model",
+      "has_secret",
+      "configured",
+      "local_workspace",
+      "style_instructions",
+      "save_scope",
+      "capabilities",
+      "tested_at"
+    ],
+    "title": "AssistantSettingsView",
+    "type": "object"
+  },
+  "AssistantProbeView": {
+    "additionalProperties": false,
+    "properties": {
+      "capabilities": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Capabilities",
+        "type": "object"
+      },
+      "models": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Models",
+        "type": "array"
+      },
+      "tested_at": {
+        "title": "Tested At",
+        "type": "string"
+      },
+      "explanation": {
+        "title": "Explanation",
+        "type": "string"
+      }
+    },
+    "required": [
+      "capabilities",
+      "models",
+      "tested_at",
+      "explanation"
+    ],
+    "title": "AssistantProbeView",
+    "type": "object"
+  },
+  "SkillPage": {
+    "$defs": {
+      "SkillView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "execution": {
+            "const": "instructions_only",
+            "default": "instructions_only",
+            "title": "Execution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "trigger",
+          "version",
+          "source",
+          "license",
+          "enabled",
+          "revision",
+          "text",
+          "updated_at",
+          "execution"
+        ],
+        "title": "SkillView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/SkillView"
+        },
+        "title": "Items",
+        "type": "array"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "items",
+      "has_more"
+    ],
+    "title": "SkillPage",
+    "type": "object"
+  },
+  "SkillView": {
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "description": {
+        "title": "Description",
+        "type": "string"
+      },
+      "trigger": {
+        "title": "Trigger",
+        "type": "string"
+      },
+      "version": {
+        "title": "Version",
+        "type": "string"
+      },
+      "source": {
+        "title": "Source",
+        "type": "string"
+      },
+      "license": {
+        "title": "License",
+        "type": "string"
+      },
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "revision": {
+        "title": "Revision",
+        "type": "integer"
+      },
+      "text": {
+        "title": "Text",
+        "type": "string"
+      },
+      "updated_at": {
+        "title": "Updated At",
+        "type": "string"
+      },
+      "execution": {
+        "const": "instructions_only",
+        "default": "instructions_only",
+        "title": "Execution",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "description",
+      "trigger",
+      "version",
+      "source",
+      "license",
+      "enabled",
+      "revision",
+      "text",
+      "updated_at",
+      "execution"
+    ],
+    "title": "SkillView",
+    "type": "object"
+  },
+  "ToolCatalogPage": {
+    "$defs": {
+      "ModuleTool": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "runtime": {
+            "title": "Runtime",
+            "type": "string"
+          },
+          "status": {
+            "const": "registered_not_tested",
+            "default": "registered_not_tested",
+            "title": "Status",
+            "type": "string"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "input_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Names",
+            "type": "array"
+          },
+          "output_scope": {
+            "title": "Output Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "description",
+          "runtime",
+          "status",
+          "license",
+          "input_names",
+          "output_scope"
+        ],
+        "title": "ModuleTool",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/ModuleTool"
+        },
+        "title": "Items",
+        "type": "array"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "items",
+      "has_more"
+    ],
+    "title": "ToolCatalogPage",
+    "type": "object"
+  },
+  "MethodDraftView": {
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "project_revision": {
+        "title": "Project Revision",
+        "type": "integer"
+      },
+      "version": {
+        "title": "Version",
+        "type": "integer"
+      },
+      "base_method_id": {
+        "title": "Base Method Id",
+        "type": "string"
+      },
+      "base_version": {
+        "title": "Base Version",
+        "type": "string"
+      },
+      "title": {
+        "title": "Title",
+        "type": "string"
+      },
+      "formula_id": {
+        "title": "Formula Id",
+        "type": "string"
+      },
+      "original_latex": {
+        "title": "Original Latex",
+        "type": "string"
+      },
+      "latex": {
+        "title": "Latex",
+        "type": "string"
+      },
+      "reason": {
+        "title": "Reason",
+        "type": "string"
+      },
+      "source_reference": {
+        "title": "Source Reference",
+        "type": "string"
+      },
+      "previous_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Previous Id"
+      },
+      "validation_status": {
+        "const": "unvalidated",
+        "default": "unvalidated",
+        "title": "Validation Status",
+        "type": "string"
+      },
+      "executable": {
+        "const": false,
+        "default": false,
+        "title": "Executable",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "project_id",
+      "project_revision",
+      "version",
+      "base_method_id",
+      "base_version",
+      "title",
+      "formula_id",
+      "original_latex",
+      "latex",
+      "reason",
+      "source_reference",
+      "previous_id",
+      "validation_status",
+      "executable"
+    ],
+    "title": "MethodDraftView",
+    "type": "object"
+  },
+  "MethodDraftPage": {
+    "$defs": {
+      "MethodDraftView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_revision": {
+            "title": "Project Revision",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "base_method_id": {
+            "title": "Base Method Id",
+            "type": "string"
+          },
+          "base_version": {
+            "title": "Base Version",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "formula_id": {
+            "title": "Formula Id",
+            "type": "string"
+          },
+          "original_latex": {
+            "title": "Original Latex",
+            "type": "string"
+          },
+          "latex": {
+            "title": "Latex",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "previous_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Id"
+          },
+          "validation_status": {
+            "const": "unvalidated",
+            "default": "unvalidated",
+            "title": "Validation Status",
+            "type": "string"
+          },
+          "executable": {
+            "const": false,
+            "default": false,
+            "title": "Executable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "project_revision",
+          "version",
+          "base_method_id",
+          "base_version",
+          "title",
+          "formula_id",
+          "original_latex",
+          "latex",
+          "reason",
+          "source_reference",
+          "previous_id",
+          "validation_status",
+          "executable"
+        ],
+        "title": "MethodDraftView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/MethodDraftView"
+        },
+        "title": "Items",
+        "type": "array"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "items",
+      "has_more"
+    ],
+    "title": "MethodDraftPage",
     "type": "object"
   }
 }

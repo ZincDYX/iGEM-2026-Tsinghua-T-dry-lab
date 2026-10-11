@@ -41,7 +41,7 @@ const sample = {
   },
 } as unknown as ProjectView;
 
-it("blank parameter is not zero; numeric mode survives clearing and editing revokes approval once", () => {
+it("override retains approved source; blank is not zero and the candidate cannot inherit approval", () => {
   const changed = vi.fn();
   function Editor() {
     const [project, setProject] = useState(sample);
@@ -57,20 +57,26 @@ it("blank parameter is not zero; numeric mode survives clearing and editing revo
     );
   }
   render(<Editor />);
-  const input = screen.getByLabelText("software value", { exact: true });
+  expect(screen.getByLabelText('declared v1 value',{exact:true}).matches(':disabled')).toBe(true);
+  fireEvent.change(screen.getByLabelText('Reason for parameter override'),{target:{value:'SOFTWARE_ONLY correction'}});
+  fireEvent.click(screen.getByRole('button',{name:'Create override for declared'}));
+  const replacement = changed.mock.calls.at(-1)![0].scientific_project.config.parameters[1];
+  const input = screen.getByLabelText(`declared v${replacement.parameter_version} value`, { exact: true });
   fireEvent.change(input, { target: { value: "" } });
-  let p = changed.mock.calls.at(-1)![0].scientific_project.config.parameters[0];
+  let p = changed.mock.calls.at(-1)![0].scientific_project.config.parameters[1];
   expect(p.value).toBe("");
   expect(p).toMatchObject({
     review_status: "extracted",
     approved_by: null,
     validation_flags: [],
     parameter_version: 2,
+    supersedes: 'software',
   });
   fireEvent.change(input, { target: { value: "0" } });
-  p = changed.mock.calls.at(-1)![0].scientific_project.config.parameters[0];
+  p = changed.mock.calls.at(-1)![0].scientific_project.config.parameters[1];
   expect(p.value).toBe(0);
   expect(p.parameter_version).toBe(2);
+  expect(changed.mock.calls.at(-1)![0].scientific_project.config.parameters[0]).toEqual(sample.scientific_project!.config.parameters[0]);
   expect(request).not.toHaveBeenCalled();
 });
 

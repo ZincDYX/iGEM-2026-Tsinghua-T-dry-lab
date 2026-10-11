@@ -27,6 +27,9 @@ def main() -> None:
     else:
         from .dashboard import create_app
         app = create_app(data_dir=args.data_dir, session_token=token)
+        # This supervised child is explicitly the user's local trusted mode,
+        # unlike the optional HTTPS relay or arbitrary hosted API deployments.
+        app.state.application.assistant_settings.configure_deployment(local_workspace=True)
     original_lifespan = app.router.lifespan_context
 
     @asynccontextmanager

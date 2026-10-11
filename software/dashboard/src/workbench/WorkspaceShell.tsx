@@ -4,6 +4,8 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  lazy,
+  Suspense,
   type CSSProperties,
 } from "react";
 import type {
@@ -43,8 +45,10 @@ import { ResourceBrowser } from "./ResourceBrowser";
 import { WorkbenchMenus } from "./WorkbenchMenus";
 import { primaryCommand } from "./workbenchCommands";
 import { usePlanController } from "./usePlanController";
-import { PredictionTools } from "./PredictionTools";
 import { useDocuments } from "./useDocuments";
+const MethodPanel = lazy(() => import('./MethodPanel').then(module => ({default: module.MethodPanel})));
+const AssistantSettings = lazy(() => import('./AssistantSettings').then(module=>({default:module.AssistantSettings})));
+const ExtensionsPanel = lazy(() => import('./ExtensionsPanel').then(module=>({default:module.ExtensionsPanel})));
 
 type Tab =
   | "plan"
@@ -52,6 +56,7 @@ type Tab =
   | "results"
   | "compare"
   | "settings"
+  | "assistant-settings"
   | "plugins"
   | "tools"
   | "artifacts";
@@ -62,8 +67,9 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "compare", label: "Compare" },
   { id: "artifacts", label: "Resources" },
   { id: "settings", label: "Settings" },
+  { id: "assistant-settings", label: "Assistant Settings" },
   { id: "plugins", label: "Plugins" },
-  { id: "tools", label: "Prediction tools" },
+  { id: "tools", label: "Tools & extensions" },
 ];
 function Tabs({
   values,
@@ -276,7 +282,7 @@ export function WorkspaceShell() {
       setGoal("scientific_pipeline");
   }, [currentProject?.id, !!currentProject?.scientific_project]);
   useEffect(() => {
-    if (!currentProject) return;
+    if (!currentProject || project.saved?.id !== currentProject.id) return;
     const controller = new AbortController();
     client
       .history(currentProject.id, 0, controller.signal)
@@ -287,7 +293,7 @@ export function WorkspaceShell() {
         if (!controller.signal.aborted) fail(reason);
       });
     return () => controller.abort();
-  }, [currentProject?.id, run?.status, fail]);
+  }, [currentProject?.id, project.saved?.id, run?.status, fail]);
   useEffect(() => {
     if (!run || proposal) return;
     if (
@@ -365,6 +371,32 @@ export function WorkspaceShell() {
       const value = await client.decide(proposal.id, decision);
       if (stamp === planGeneration.current) setProposal(value);
     });
+  }
+  async function reviseProposal(prompt: string) {
+    if (!proposal) return;
+    const stamp = planGeneration.current;
+    await action(async () => {
+      const value = await client.revise(proposal.id, prompt, workflowDocument?.workflow);
+      if (stamp === planGeneration.current) {
+        setProposal(value); setTab('plan');
+        if (value.workflow) setSelection({kind:'proposal-node',proposalId:value.id,nodeId:value.workflow.nodes[0].id});
+      }
+    });
+  }
+  async function openRecordedProposal(id:string) {
+    const stamp=planGeneration.current;
+    await action(async()=>{
+      const value=await client.proposal(id);
+      if(stamp!==planGeneration.current || value.project_id!==currentProject?.id) return;
+      setProposal(value);setTab('plan');
+      setSelection(value.workflow?.nodes.length?{kind:'proposal-node',proposalId:value.id,nodeId:value.workflow.nodes[0].id}:undefined);
+    });
+  }
+  async function reviewParameter(id: string, stage: 'm3'|'m4', name: string, reviewer: string, reason: string) {
+    await action(() => planController.guarded(project.generation,project.save,
+      saved => {const value = saved as import('../contracts/generated').ProjectView;
+        return client.reviewParameter(value.id,id,stage,name,reviewer,reason,value.revision);},
+      value => {project.adopt(value); invalidate();}));
   }
   async function importWorkflow(
     create: () => Promise<import("../contracts/generated").Workflow>,
@@ -612,12 +644,12 @@ export function WorkspaceShell() {
           ]}
           tools={[
             {
-              label: "Prediction tools",
+              label: "Tools & extensions",
               disabled: !currentProject,
               action: () => setTab("tools"),
             },
             { label: "Settings", action: () => setTab("settings") },
-            { label: "Trusted plugins", action: () => setTab("plugins") },
+            { label: "Assistant Settings", action: () => setTab("assistant-settings") },
           ]}
           help={[
             {
@@ -858,6 +890,9 @@ export function WorkspaceShell() {
                 onSelect={selectPlan}
               />
               {workflowChanged && selection?.kind !== 'run-node' && <p role="status">Workflow changes are saved but not authorized. Review and accept a new proposal before running.</p>}
+              {tab === 'plan' && node && currentProject && <Suspense fallback={<p>Loading method details…</p>}><MethodPanel
+                key={node.id} project={currentProject} toolId={node.tool_id} runId={runSelected ? run?.id : undefined}
+                disabled={busy || editing} onChange={value => {project.edit(value); invalidate();}} onReview={reviewParameter}/></Suspense>}
               <fieldset className="policy-editor" disabled={busy || editing || !!runSelected}>
                 <h3>Execution settings</h3>
                 <p>{runSelected ? 'Recorded settings for this frozen run; not the current draft.' : 'Choose the execution scope here, then Review plan. Changing these settings requires a new accepted proposal; it does not approve scientific evidence.'}</p>
@@ -1047,14 +1082,17 @@ export function WorkspaceShell() {
             />
           )}
           {tab === "plugins" && <PluginPanel busy={busy} action={action} />}
-          {tab === "tools" && currentProject && (
-            <PredictionTools
-              key={currentProject.id}
+          {tab === "assistant-settings" && <Suspense fallback={<p>Loading Assistant settings…</p>}><AssistantSettings onSaved={()=>{setInfoRefresh(value=>value+1);setPermission(false);invalidate();}}/></Suspense>}
+          {tab === "tools" && (
+            <Suspense fallback={<p>Loading Tools &amp; extensions…</p>}><ExtensionsPanel
+              key={`${info?.workspace_id}:${currentProject?.id}`}
+              workspace={info?.workspace_id ?? 'initial'}
               project={currentProject}
               busy={busy}
+              action={action}
               onPlan={(workflow) => void importWorkflow(async () => workflow).then(() => setTab("plan"))}
               onOpenResource={(id) => openResource(id, false)}
-            />
+            /></Suspense>
           )}
         </div>
       </main>
@@ -1085,7 +1123,7 @@ export function WorkspaceShell() {
         <Tabs
           label="Inspector tabs"
           values={[
-            { id: "agent", label: "Agent" },
+            { id: "agent", label: "Assistant" },
             { id: "evidence", label: "Inputs / Evidence" },
           ]}
           selected={inspector}
@@ -1095,6 +1133,9 @@ export function WorkspaceShell() {
           {inspector === "agent" && (
             <AgentPanel
               proposal={proposal}
+              projectId={project.saved?.id===currentProject?.id?project.saved?.id:undefined}
+              projectRevision={project.saved?.revision}
+              context={`${tab === 'inputs' ? 'Inputs and missing data' : tab === 'plan' ? 'Workflow' : tab === 'results' ? 'Recorded results' : 'Workspace'}${node ? ' · '+node.label : ''}`}
               info={info}
               goal={goal}
               objective={objective}
@@ -1121,6 +1162,8 @@ export function WorkspaceShell() {
               }}
               onPropose={() => void propose()}
               onDecision={(value) => void decide(value)}
+              onRevise={reviseProposal}
+              onOpenProposal={openRecordedProposal}
             />
           )}
           {inspector === "evidence" && (
@@ -1216,9 +1259,9 @@ export function WorkspaceShell() {
           label="Bottom panel tabs"
           values={[
             { id: "queue", label: "Jobs" },
-            { id: "events", label: "Tool / Stage events" },
-            { id: "agent", label: "Agent actions" },
-            { id: "problems", label: "Problems / Approval" },
+            { id: "events", label: "Output" },
+            { id: "problems", label: "Problems" },
+            { id: "terminal", label: "Terminal" },
           ]}
           selected={bottom}
           onChange={setBottom}
@@ -1282,10 +1325,10 @@ export function WorkspaceShell() {
               </tbody>
             </table>
           )}
-          {bottom === "agent" && (
+          {bottom === "queue" && (
             <>
               <p>
-                Action ledger window: at most 500 rows；
+                Action ledger window: at most 500 rows;
                 {actionHistory.trimmed
                   ? "Earlier rows truncated; query the server ledger."
                   : "Current window is not truncated."}
@@ -1354,6 +1397,10 @@ export function WorkspaceShell() {
               </p>
             </>
           )}
+          {bottom === 'terminal' && <section aria-label="Workspace terminal boundary"><h3>Terminal unavailable in this Web workspace</h3>
+            <p>Raw host shell access is disabled. This page does not expose a server account, SSH credentials or arbitrary server files.</p>
+            <p>For trusted local batch work, use the documented fusionlab CLI in your own terminal. Importing a file or enabling an instruction Skill never executes a shell command.</p>
+          </section>}
         </div>
       </section>
       <footer className="workbench-footer">

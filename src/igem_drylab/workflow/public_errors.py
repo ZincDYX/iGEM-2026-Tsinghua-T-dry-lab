@@ -12,6 +12,18 @@ class PublicError(Contract):
 
 
 ERROR_GUIDANCE = {
+    'trusted_plugin_install_requires_deployment_authorization': ('This hosted workspace does not permit trusted-code installation.', [], ['Use a trusted local workspace or ask the deployment administrator to install the reviewed plugin']),
+    'assistant_private_secret_unavailable': ('The saved model credential is unavailable in this OS user context.', [], ['Configure the optional model again in your current private workspace; never copy credentials into a project']),
+    'parameter_source_record_immutable': ('This saved parameter value or source cannot be overwritten.', ['scientific_project.config.parameters'], ['Create a linked Override candidate, explain the reason, then review it separately']),
+    'assistant_endpoint_requires_administrator_allowlist': ('This hosted workspace has not authorized that model endpoint.', [], ['Ask the deployment administrator to authorize its exact endpoint or use a local workspace']),
+    'assistant_local_endpoint_requires_local_workspace': ('A local model requires your own local workspace.', [], ['Start fusionlab serve locally; a hosted server cannot connect to your computer through its localhost']),
+    'assistant_requires_chat_completions_endpoint': ('Enter the complete compatible chat completions endpoint.', [], ['Use the provider endpoint ending in /chat/completions']),
+    'assistant_provider_disabled': ('The Assistant model is disabled.', [], ['Keep using deterministic tools or configure an optional model first']),
+    'assistant_endpoint_request_failed': ('The saved model endpoint did not accept the connection test.', [], ['Check the provider, model, endpoint and private credential; scientific tasks were not started']),
+    'assistant_response_invalid': ('The model returned an incompatible response.', [], ['Use manual/template planning or a model that passes the public JSON test']),
+    'skill_revision_changed': ('This instruction Skill has changed since it was opened.', [], ['Reload its latest revision before editing']),
+    'skill_name_description_trigger_version_source_license_required': ('The Skill is missing required frontmatter.', [], ['Supply name, description, trigger, version, source and license as text']),
+    'plugin_disabled': ('This trusted plugin version is disabled.', [], ['Enable the reviewed version or choose another tool; no plugin process was started']),
     'duplicate_node_id': ('Two modules have the same identity.', ['workflow.nodes'], ['Use distinct identities for distinct modules']),
     'unknown_policy_node': ('Execution scope still refers to a removed module.', ['workflow.execution_policy'], ['Review the target and checkpoints before deleting this module']),
     'tool_not_in_execution_authorization': ('This tool is outside the workflow execution scope.', ['workflow.execution_policy.allowed_tools'], ['Explicitly review the changed tool scope']),

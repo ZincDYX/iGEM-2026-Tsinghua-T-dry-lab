@@ -76,6 +76,23 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   expect(reviewed.nodes.map((n:{id:string})=>n.id)).toEqual(['a','b']);
   expect(reviewed.execution_policy.max_tool_calls).toBe(3);
   expect(reviewed.execution_policy.target_node_id).toBe('a');
+  // Real persisted Assistant decisions; the fixture graph is never executed.
+  await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeDisabled();
+  const oldMessages=(await (await context.request.get(`/api/platform/projects/${project.id}/assistant`)).json()).messages;
+  const originalProposal=oldMessages.at(-1).proposal_id;
+  await page.getByLabel('Additional revision request').fill('Keep the actual edited graph and do not invent scientific parameters.');
+  await page.getByRole('button',{name:'Revise proposal',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeEnabled();
+  await expect(page.getByLabel('Proposed changes')).toContainText('No graph or permission changes');
+  expect((await (await context.request.get(`/api/platform/proposals/${originalProposal}`)).json()).status).toBe('rejected');
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Open recorded proposal',exact:true}).last()).toBeEnabled();
+  await page.getByRole('button',{name:'Open recorded proposal',exact:true}).last().click();
+  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeEnabled();
+  await expect(page.getByLabel('Assistant conversation')).toContainText('do not invent scientific parameters');
+  await page.getByRole('button',{name:'Reject proposal',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeDisabled();
   await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Inputs',exact:true}).click();
   const current=await (await context.request.get(endpoint)).json();
   const updated=await page.evaluate(async({url,data})=>{
@@ -84,6 +101,7 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   },{url:endpoint,data:{workflow:{...current.workflow,name:'Latest saved workflow'},layout:current.layout,selected_node_id:current.selected_node_id,view:current.view,expected_revision:current.revision,expected_project_revision:project.revision}});
   expect(updated.status,updated.body).toBe(200);
   await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Workflow',exact:true}).click();
+  await page.getByLabel('Open saved workflow').selectOption('browser-acceptance');
   await expect(page.getByRole('heading',{name:'Latest saved workflow',exact:true})).toBeVisible();
   await expect(page.getByRole('option',{name:'Latest saved workflow (revision 5)'})).toHaveCount(1);
   expect(await (await context.request.get('/api/platform/runs')).json()).toEqual([]);

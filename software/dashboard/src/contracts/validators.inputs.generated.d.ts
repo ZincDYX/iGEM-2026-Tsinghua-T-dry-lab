@@ -1,0 +1,9 @@
+export function ProjectView(value:unknown):value is import("./ProjectView.generated").ProjectView;
+export function GenBankDesign(value:unknown):value is import("./GenBankDesign.generated").GenBankDesign;
+export function ImportView(value:unknown):value is import("./ImportView.generated").ImportView;
+export function ScientificRecordView(value:unknown):value is import("./ScientificRecordView.generated").ScientificRecordView;
+export function Workflow(value:unknown):value is import("./Workflow.generated").Workflow;
+export function RuntimeInfoView(value:unknown):value is import("./RuntimeInfoView.generated").RuntimeInfoView;
+export function M5ComparisonSeries(value:unknown):value is import("./M5ComparisonSeries.generated").M5ComparisonSeries;
+export function PublicError(value:unknown):value is import("./PublicError.generated").PublicError;
+export function NodePage(value:unknown):value is import("./NodePage.generated").NodePage;

@@ -28,7 +28,7 @@ class ApplicationService:
             from igem_drylab.workflow.runtime_profiles import RuntimeProfiles
             self.backend_profile = RuntimeProfiles(self.store).install('backend-configured-tools',runtime_tools)
             self.boundary.register_runtime(runtime_tools)
-        self.planning = PlanningService(self.store,self.boundary,planning_backend,self.engine)
+        self.planning = PlanningService(self.store,self.boundary,planning_backend,self.engine,self.validate_workflow)
         if planning_backend is not None:
             client = getattr(planning_backend,'client',None)
             for field in ('api_key','api_base'): self.boundary.register_private(getattr(client,field,None))
@@ -40,6 +40,12 @@ class ApplicationService:
         self.imports=ImportService(self)
         from igem_drylab.workflow.documents import WorkflowDocuments
         self.workflow_documents = WorkflowDocuments(self)
+        from igem_drylab.workflow.skills import Skills
+        from igem_drylab.workflow.assistant_settings import AssistantSettings
+        self.skills = Skills(self.store,self.boundary)
+        self.assistant_settings = AssistantSettings(self)
+        from igem_drylab.workflow.methods import MethodDrafts
+        self.method_drafts = MethodDrafts(self.store,self.boundary)
 
     def create_project(self,name):
         return self.save_project(Project(id=str(uuid4()),name=name))
@@ -53,7 +59,18 @@ class ApplicationService:
             except KeyError: project.runtime_profile_ref=self.backend_profile['id']
         if project.scientific_project is not None:
             from igem_drylab.workflow.scientific_project import ScientificProject
-            ScientificProject.model_validate(project.scientific_project).verify()
+            science=ScientificProject.model_validate(project.scientific_project)
+            science.verify()
+            try: original=self.store.project(project.id)
+            except KeyError: original=None
+            if original and original.scientific_project:
+                existing=ScientificProject.model_validate(original.scientific_project)
+                records={record.parameter_id:record for record in existing.config.parameters}
+                review_fields={'review_status','approved_by','validation_flags','updated_at','notes'}
+                for record in science.config.parameters:
+                    previous=records.get(record.parameter_id)
+                    if previous and record.model_dump(mode='json',exclude=review_fields)!=previous.model_dump(mode='json',exclude=review_fields):
+                        raise WorkflowError('parameter_source_record_immutable',status_code=409)
         if project.pathway is not None:
             from igem_drylab.workflow.pathway import Pathway
             Pathway.model_validate(project.pathway)
@@ -71,6 +88,37 @@ class ApplicationService:
         result=precheck(self.store.project(project_id),through).model_dump(mode='json')
         self.boundary.check(result)
         return result
+
+    def review_parameter(self, project_id, parameter_id, *, stage, requirement_name, reviewer, reason, expected_revision):
+        """Explicit human review through the existing scientific admission gate.
+
+        This operation cannot be requested by the semantic model/compiler. It
+        changes only the selected saved candidate's review state, not its raw
+        value, source, identities, units or condition evidence.
+        """
+        from igem_drylab.workflow.scientific_project import ScientificProject
+        from igem_drylab.wetlab.parameter_update import validate_candidate_for_approval, _requirement
+        from datetime import datetime, timezone
+        project = self.store.project(project_id)
+        if project.revision != expected_revision: raise WorkflowError('project_revision_changed',status_code=409)
+        if not project.scientific_project: raise WorkflowError('typed_scientific_project_required')
+        science = ScientificProject.model_validate(project.scientific_project)
+        candidate = next((p for p in science.config.parameters if p.parameter_id == parameter_id),None)
+        if candidate is None: raise WorkflowError('parameter_record_not_found',status_code=404)
+        if candidate.review_status in {'approved','rejected'}: raise WorkflowError('unapproved_parameter_candidate_required')
+        if not reviewer.strip() or not reason.strip(): raise WorkflowError('reviewer_and_review_reason_required')
+        # The shared validator expects a proposed append, not the same candidate
+        # twice. Exclude only this candidate while retaining its complete lineage.
+        review_config = science.config.model_copy(update={'parameters':[p for p in science.config.parameters if p.parameter_id != parameter_id]})
+        checked = candidate.model_copy(update={'review_status':'validated'})
+        validate_candidate_for_approval(review_config,checked,_requirement(review_config,stage,requirement_name),reviewer)
+        approved = candidate.model_copy(update={'review_status':'approved','approved_by':reviewer.strip(),
+            'updated_at':datetime.now(timezone.utc),'notes':candidate.notes+'\nHuman review reason: '+reason.strip(),
+            'validation_flags':[*candidate.validation_flags,'approved_by:'+reviewer.strip()]})
+        science.config.parameters = [approved if p.parameter_id == parameter_id else p for p in science.config.parameters]
+        project.scientific_project = science.model_dump(mode='json')
+        self.boundary.check(self.boundary.project(project))
+        return self.boundary.project(self.store.save_project(project,expected_revision))
 
     def preview_import(self,filename,content,input_kind='auto'):
         from .imports import preview_import

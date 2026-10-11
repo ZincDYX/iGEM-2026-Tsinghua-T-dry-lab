@@ -76,6 +76,9 @@ export function ScientificInputForms({
   }, []);
   const [error, setError] = useState(""),
     [pending, setPending] = useState(false);
+  const [editingIds, setEditingIds] = useState<Set<string>>(new Set());
+  const [reason, setReason] = useState('');
+  useEffect(() => setEditingIds(new Set()), [project.id, project.revision]);
   const [id, setId] = useState(""),
     [components, setComponents] = useState("");
   const [name, setName] = useState(""),
@@ -145,6 +148,7 @@ export function ScientificInputForms({
     onChange({ ...project, scientific_project: { ...scope!, config } });
   }
   function updateParameter(index: number, patch: Partial<Parameter>) {
+    if (!editingIds.has(scope!.config.parameters[index].parameter_id)) return;
     change({
       ...scope!.config,
       parameters: scope!.config.parameters.map((p, i) =>
@@ -163,6 +167,18 @@ export function ScientificInputForms({
             },
       ),
     });
+  }
+  function overrideParameter(p: Parameter) {
+    if (!reason.trim()) {setError('Explain why this source record needs an override.'); return;}
+    const replacementId = `${p.parameter_id}:override:${crypto.randomUUID()}`;
+    const timestamp = new Date().toISOString();
+    const replacement: Parameter = {...p, parameter_id: replacementId, parameter_version: p.parameter_version+1,
+      supersedes: p.parameter_id, derived_from: [...(p.derived_from ?? []), p.parameter_id],
+      review_status: 'extracted', approved_by: null, validation_flags: [], created_at: timestamp, updated_at: timestamp,
+      notes: `${p.notes ?? ''}\nOverride reason: ${reason.trim()}`};
+    setEditingIds(current => new Set([...current, replacementId]));
+    change({...scope!.config, parameters: [...scope!.config.parameters, replacement]});
+    setError('');
   }
   async function add() {
     setError("");
@@ -220,6 +236,7 @@ export function ScientificInputForms({
           ...scope!.config,
           parameters: [...scope!.config.parameters, record.parameter],
         });
+        setEditingIds(current => new Set([...current, record.parameter!.parameter_id]));
       }
       setId("");
       setValue("");
@@ -381,28 +398,35 @@ export function ScientificInputForms({
         <>
           <h3>Typed parameters</h3>
           <p>
-            Blank values are not zero. Editing removes approval and validation
-            flags; scientific approval requires a separate review.
+            Blank values are not zero. Original source records are retained.
+            Create an override to edit a new, unapproved version. Until that
+            version is separately approved, it is not used instead of an
+            existing approved source record.
           </p>
+          <label>Reason for parameter override<input aria-label="Reason for parameter override" value={reason} onChange={event => setReason(event.target.value)}/></label>
+          <table aria-label="Parameter source records"><thead><tr><th>Name</th><th>Value</th><th>Unit</th><th>Source</th><th>Condition</th><th>Status</th></tr></thead>
+            <tbody>{scope.config.parameters.map(p => <tr key={p.parameter_id}><td>{p.name}</td><td>{p.value === '' ? 'Missing' : p.value}</td><td>{p.unit ?? 'Missing'}</td>
+              <td>{p.source_reference ?? 'Missing'} · {p.source_type}</td><td>{p.condition_id ?? 'Not scoped'}</td><td>{p.review_status}</td></tr>)}</tbody></table>
           {scope.config.parameters.map((p, i) => (
+            <section key={p.parameter_id}>
             <fieldset
-              key={p.parameter_id}
+              disabled={!editingIds.has(p.parameter_id)}
               data-parameter-name={p.name}
               data-parameter-id={p.parameter_id}
             >
-              <legend>Parameter {p.parameter_id}</legend>
+              <legend>{p.name} · version {p.parameter_version}</legend>
               <p>
                 Review {p.review_status} · version {p.parameter_version} ·
                 reviewer {p.approved_by ?? "Not approved"}
               </p>
               <ParameterValueInput
                 fieldPath={`scientific_project.config.parameters.${i}.value`}
-                label={`${p.parameter_id} value`}
+                label={`${p.name} v${p.parameter_version} value`}
                 value={p.value}
                 onChange={(value) => updateParameter(i, { value })}
               />
               <label>
-                {p.parameter_id} name
+                {p.name} v{p.parameter_version} name
                 <input
                   value={p.name}
                   onChange={(e) => updateParameter(i, { name: e.target.value })}
@@ -436,6 +460,8 @@ export function ScientificInputForms({
                             "parameter_version",
                             "created_at",
                             "updated_at",
+                            "supersedes",
+                            "derived_from",
                           ].includes(key),
                       ),
                     ),
@@ -459,7 +485,7 @@ export function ScientificInputForms({
                 ] as const
               ).map((key) => (
                 <label key={key}>
-                  {p.parameter_id} {key}
+                  {p.name} v{p.parameter_version} {key}
                   <input
                     value={p[key] ?? ""}
                     onChange={(e) =>
@@ -469,7 +495,7 @@ export function ScientificInputForms({
                 </label>
               ))}
               <label>
-                {p.parameter_id} source type
+                {p.name} v{p.parameter_version} source type
                 <select
                   value={p.source_type}
                   onChange={(e) =>
@@ -487,7 +513,7 @@ export function ScientificInputForms({
               </label>
               {(["value", "lower", "upper"] as const).map((key) => (
                 <label key={key}>
-                  {p.parameter_id} uncertainty {key}
+                  {p.name} v{p.parameter_version} uncertainty {key}
                   <input
                     type="number"
                     step="any"
@@ -511,7 +537,7 @@ export function ScientificInputForms({
                 </label>
               ))}
               <label>
-                {p.parameter_id} uncertainty type
+                {p.name} v{p.parameter_version} uncertainty type
                 <input
                   value={p.uncertainty?.type ?? ""}
                   onChange={(e) =>
@@ -528,6 +554,12 @@ export function ScientificInputForms({
                 />
               </label>
             </fieldset>
+            {!editingIds.has(p.parameter_id) && <button disabled={!reason.trim()} onClick={() => overrideParameter(p)}>Create override for {p.name}</button>}
+            <p>{p.supersedes ? 'New source-linked override; review required.' : 'Original source record; editing requires a new version.'} {p.notes}</p>
+            <button disabled={!reason.trim() || p.review_status === 'rejected'} onClick={() => change({...scope.config,
+              parameters: scope.config.parameters.map((record,index) => index === i ? {...record,review_status:'rejected',approved_by:null,
+                validation_flags:[],notes:`${record.notes ?? ''}\nRemoved from calculation: ${reason.trim()}`} : record)})}>Remove {p.name} from calculation (retain source)</button>
+            </section>
           ))}
         </>
       )}

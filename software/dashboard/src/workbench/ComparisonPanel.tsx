@@ -6,7 +6,7 @@ import type {
   RunSummaryView,
 } from "../contracts/generated";
 import { requestJson } from "../api";
-import { parsePublic } from "../contracts/validation";
+import { parsePublicAsync as parsePublic } from "../contracts/validation";
 import { LazyJson } from "../contracts/LazyJson";
 
 export function ComparisonPanel({
@@ -33,9 +33,9 @@ export function ComparisonPanel({
         undefined,
         controller.signal,
       )
-        .then((raw) => {
+        .then(async (raw) => {
           if (!controller.signal.aborted)
-            setLineage(parsePublic("LineagePage", raw));
+            {const value=await parsePublic("LineagePage",raw);if(!controller.signal.aborted)setLineage(value);}
         })
         .catch(() => {
           if (!controller.signal.aborted)
@@ -53,9 +53,10 @@ export function ComparisonPanel({
         undefined,
         controller.signal,
       )
-        .then((raw) => {
+        .then(async (raw) => {
           if (!controller.signal.aborted) {
-            const value = parsePublic("ComparePage", raw);
+            const value = await parsePublic("ComparePage", raw);
+            if(controller.signal.aborted)return;
             if (
               value.left.run_id !== other ||
               value.right.run_id !== current.id ||

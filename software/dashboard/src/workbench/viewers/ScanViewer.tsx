@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Data } from "plotly.js";
 import { requestJson } from "../../api";
-import { parsePublic } from "../../contracts/validation";
+import { parsePublicAsync as parsePublic } from "../../contracts/validation";
 import type { ScanPage } from "../../contracts/generated";
 import { show } from "../../contracts/resultAdapters";
 import { PlotViewer } from "./PlotViewer";
@@ -34,8 +34,8 @@ export function ScanViewer({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
-        const value = parsePublic("ScanPage", raw);
+      .then(async (raw) => {
+        const value = await parsePublic("ScanPage", raw);
         if (
           value.identity.project_id !== projectId ||
           value.identity.file_id !== fileId

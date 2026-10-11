@@ -1,4 +1,4 @@
-import { PublicError as isPublicError } from "./contracts/public.validators.generated.js";
+import { PublicError as isPublicError } from "./contracts/validators.inputs.generated.js";
 import type { PublicError } from "./contracts/generated";
 export let baseUrl =
   import.meta.env.VITE_DASHBOARD_API_URL ?? "";

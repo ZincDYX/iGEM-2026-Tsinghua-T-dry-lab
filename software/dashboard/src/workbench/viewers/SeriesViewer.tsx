@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { requestJson,downloadResource } from "../../api";
-import { parsePublic } from "../../contracts/validation";
+import { parsePublicAsync as parsePublic } from "../../contracts/validation";
 import type { SeriesPage } from "../../contracts/generated";
 import { displayEnvelope } from "./displayEnvelope";
 const Plot = lazy(() =>
@@ -36,8 +36,8 @@ export function SeriesViewer({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
-        const value = parsePublic("SeriesPage", raw);
+      .then(async (raw) => {
+        const value = await parsePublic("SeriesPage", raw);
         if (
           value.identity.file_id !== fileId ||
           value.identity.project_id !== projectId
@@ -77,8 +77,8 @@ export function SeriesViewer({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
-        const value = parsePublic("SeriesPage", raw);
+      .then(async (raw) => {
+        const value = await parsePublic("SeriesPage", raw);
         if (
           value.identity.file_id !== fileId ||
           value.identity.project_id !== projectId

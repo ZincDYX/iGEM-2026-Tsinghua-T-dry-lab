@@ -47,6 +47,9 @@ vi.mock("./workbench/client", async (importOriginal) => {
     node: vi.fn(),
     workflowDocuments: vi.fn(),
     saveWorkflowDocument: vi.fn(),
+    assistantHistory: vi.fn(),
+    proposalDiff: vi.fn(),
+    revise: vi.fn(),
   };
 });
 const project: ProjectView = {
@@ -147,6 +150,8 @@ describe("FusionLab scientific workbench", () => {
     vi.mocked(client.history).mockResolvedValue([]);
     vi.mocked(client.actions).mockResolvedValue([]);
     vi.mocked(client.workflowDocuments).mockResolvedValue([]);
+    vi.mocked(client.assistantHistory).mockResolvedValue({project_id:project.id,messages:[],has_more:false});
+    vi.mocked(client.proposalDiff).mockResolvedValue({proposal_id:proposal.id,previous_proposal_id:null,changes:[],missing_inputs:[],evidence:[],limitations:[]});
     vi.mocked(client.saveWorkflowDocument).mockImplementation(async (projectId, id, value, revision) => ({
       ...value, workflow: value.workflow ?? proposal.workflow!, id, project_id: projectId, project_revision: revision, revision: 1, semantic_revision: 1, layout_revision: 1,
     }));

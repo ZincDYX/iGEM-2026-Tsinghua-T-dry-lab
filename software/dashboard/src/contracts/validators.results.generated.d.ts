@@ -1,0 +1,10 @@
+export function RunSummaryView(value:unknown):value is import("./RunSummaryView.generated").RunSummaryView;
+export function RunListView(value:unknown):value is import("./RunListView.generated").RunListView;
+export function EventPage(value:unknown):value is import("./EventPage.generated").EventPage;
+export function TablePage(value:unknown):value is import("./TablePage.generated").TablePage;
+export function ScanPage(value:unknown):value is import("./ScanPage.generated").ScanPage;
+export function SeriesPage(value:unknown):value is import("./SeriesPage.generated").SeriesPage;
+export function StructurePage(value:unknown):value is import("./StructurePage.generated").StructurePage;
+export function ResourcePage(value:unknown):value is import("./ResourcePage.generated").ResourcePage;
+export function LineagePage(value:unknown):value is import("./LineagePage.generated").LineagePage;
+export function ComparePage(value:unknown):value is import("./ComparePage.generated").ComparePage;

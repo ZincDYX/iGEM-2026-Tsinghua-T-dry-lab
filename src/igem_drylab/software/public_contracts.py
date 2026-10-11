@@ -9,7 +9,7 @@ from igem_drylab.pipeline.config import ProjectConfig
 from igem_drylab.workflow.models import Contract, Project, Workflow, PlanBinding
 from igem_drylab.workflow.disclosure import NodeResultView
 from igem_drylab.workflow.views import ProjectSummaryView, RunSummaryView
-from igem_drylab.workflow.planning import ProposalView
+from igem_drylab.workflow.planning import ProposalView, AssistantPage, ProposalDiff
 from igem_drylab.agent.scientific_environment import ScientificObservation
 from igem_drylab.workflow.public_errors import PublicError
 from igem_drylab.workflow.precheck import ScientificPrecheckView
@@ -25,6 +25,9 @@ from igem_drylab.parameters import ParameterRecord
 from igem_drylab.workflow.genbank_design import GenBankDesign, GenBankPage
 from .import_service import ImportTransactionPreview
 from igem_drylab.workflow.documents import WorkflowDocument
+from igem_drylab.workflow.methods import MethodDefinition, ModuleMethodView, ToolCatalogPage,MethodDraftView,MethodDraftPage
+from igem_drylab.workflow.assistant_settings import AssistantSettingsView, AssistantProbeView
+from igem_drylab.workflow.skills import SkillPage, SkillView
 
 
 class AssetIdentity(Contract):
@@ -185,6 +188,7 @@ class PluginInspectionView(Contract):
     installed: bool
     source_path: str | None
     capability_requests: list[str]
+    enabled: bool = True
 
 
 class PredictionToolView(Contract):
@@ -207,6 +211,17 @@ PUBLIC_MODELS['GenBankDesign'] = GenBankDesign
 PUBLIC_MODELS['GenBankPage'] = GenBankPage
 PUBLIC_MODELS['ImportTransactionPreview'] = ImportTransactionPreview
 PUBLIC_MODELS['WorkflowDocument'] = WorkflowDocument
+PUBLIC_MODELS['AssistantPage'] = AssistantPage
+PUBLIC_MODELS['ProposalDiff'] = ProposalDiff
+PUBLIC_MODELS['MethodDefinition'] = MethodDefinition
+PUBLIC_MODELS['ModuleMethodView'] = ModuleMethodView
+PUBLIC_MODELS['AssistantSettingsView'] = AssistantSettingsView
+PUBLIC_MODELS['AssistantProbeView'] = AssistantProbeView
+PUBLIC_MODELS['SkillPage'] = SkillPage
+PUBLIC_MODELS['SkillView'] = SkillView
+PUBLIC_MODELS['ToolCatalogPage'] = ToolCatalogPage
+PUBLIC_MODELS['MethodDraftView'] = MethodDraftView
+PUBLIC_MODELS['MethodDraftPage'] = MethodDraftPage
 
 
 def public_schemas():

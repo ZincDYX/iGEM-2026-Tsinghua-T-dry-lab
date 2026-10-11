@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { requestJson } from "../api";
-import { object, parsePublic } from "../contracts/validation";
+import { object, parsePublicAsync as parsePublic } from "../contracts/validation";
 import type {
   ProjectView,
   ScientificPreviewView,
@@ -89,7 +89,7 @@ export function ScientificSetup({
             setPending(true);
             setError("");
             try {
-              const v = parsePublic(
+              const v = await parsePublic(
                 "ScientificPreviewView",
                 await requestJson("/scientific-projects/create-preview", {
                   project_id: project.id,

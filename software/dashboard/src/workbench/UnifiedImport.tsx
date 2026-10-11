@@ -101,7 +101,7 @@ export function UnifiedImport({project,busy,dirty,action,prepare,onCommitted}:{
           <p>This declares the intended substrate. Chemical parsing is not a binding pose, sample certificate or scientific approval.</p>
         </div>}
         {item.duplicate_file_id&&<label>Duplicate: {item.filename}
-          <select value={choices[item.filename]??''} onChange={e=>setChoices({...choices,[item.filename]:e.target.value})}>
+          <select aria-label={`Duplicate: ${item.filename}`} value={choices[item.filename]??''} onChange={e=>setChoices({...choices,[item.filename]:e.target.value})}>
             <option value="">Choose reuse or version action</option><option value="reuse">Reuse existing</option><option value="replace">Replace in new revision</option><option value="new_version">Keep as new version</option>
           </select></label>}
         <LazyJson value={item.records} label="Parsed source details"/>

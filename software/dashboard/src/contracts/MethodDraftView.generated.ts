@@ -1,0 +1,35 @@
+/* Generated from public Pydantic contracts. Do not edit. */
+
+export type Id = string;
+export type ProjectId = string;
+export type ProjectRevision = number;
+export type Version = number;
+export type BaseMethodId = string;
+export type BaseVersion = string;
+export type Title = string;
+export type FormulaId = string;
+export type OriginalLatex = string;
+export type Latex = string;
+export type Reason = string;
+export type SourceReference = string;
+export type PreviousId = string | null;
+export type ValidationStatus = "unvalidated";
+export type Executable = false;
+
+export interface MethodDraftView {
+  id: Id;
+  project_id: ProjectId;
+  project_revision: ProjectRevision;
+  version: Version;
+  base_method_id: BaseMethodId;
+  base_version: BaseVersion;
+  title: Title;
+  formula_id: FormulaId;
+  original_latex: OriginalLatex;
+  latex: Latex;
+  reason: Reason;
+  source_reference: SourceReference;
+  previous_id: PreviousId;
+  validation_status: ValidationStatus;
+  executable: Executable;
+}

@@ -125,6 +125,7 @@ def create_app(registry: ToolRegistry | None = None, *, data_dir: Path | None = 
     app.include_router(router)
     app.state.platform_store, app.state.workflow_engine, app.state.disclosure = router.store, router.engine, router.disclosure
     app.state.application=router.application
+    router.application.assistant_settings.configure_deployment(local_workspace=bool(local_web_origin))
     if session_token:
         router.disclosure.register_private(session_token)
 

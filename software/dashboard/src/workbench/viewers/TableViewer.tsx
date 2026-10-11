@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ImportView, TablePage } from "../../contracts/generated";
-import { parsePublic } from "../../contracts/validation";
+import { parsePublicAsync as parsePublic } from "../../contracts/validation";
 import { requestJson } from "../../api";
 
 export function TableViewer({
@@ -36,8 +36,8 @@ export function TableViewer({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
-        const value = parsePublic("TablePage", raw);
+      .then(async (raw) => {
+        const value = await parsePublic("TablePage", raw);
         if (
           value.identity.project_id !== projectId ||
           value.identity.file_id !== fileId
@@ -224,9 +224,10 @@ export function TableViewer({
                       },
                       controller.signal,
                     )
-                      .then((raw) => {
+                      .then(async (raw) => {
+                        const value=await parsePublic('ImportView',raw);
                         if (!controller.signal.aborted)
-                          registered.current(parsePublic("ImportView", raw));
+                          registered.current(value);
                       })
                       .catch((e) => setError(String(e)))
                       .finally(() => setPending(false));

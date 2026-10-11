@@ -4,7 +4,7 @@ from hashlib import sha256
 from io import BytesIO
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shutil
 import subprocess
 import sys
@@ -12,6 +12,8 @@ import venv
 import re
 import stat
 from zipfile import ZipFile
+from urllib.parse import quote
+from uuid import uuid4
 from typing import Any, Literal
 
 import jsonschema
@@ -114,6 +116,8 @@ class PluginManager:
         self.root.mkdir(parents=True, exist_ok=True)
         from .disclosure import DisclosureBoundary
         self.disclosure = disclosure or DisclosureBoundary(store)
+        with self.store.connection() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS plugin_enabled(hash TEXT PRIMARY KEY,enabled INTEGER NOT NULL)')
 
     @staticmethod
     def process_environment() -> dict[str, str]:
@@ -138,13 +142,15 @@ class PluginManager:
     def fetch_github(self, repository: str, revision: str) -> dict[str, Any]:
         """Fetch pinned public source, never import or execute it before trust."""
         match = re.fullmatch(r"https://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?", repository)
-        if not match or not re.fullmatch(r"[0-9a-fA-F]{40}", revision):
+        gitlab = re.fullmatch(r'https://gitlab\.igem\.org/([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+?)(?:\.git)?/?',repository)
+        if not (match or gitlab) or not re.fullmatch(r"[0-9a-fA-F]{40}", revision):
             raise ValueError("github_requires_repository_URL_and_full_40_character_commit")
-        owner, repo = match.groups()
+        owner, repo = match.groups() if match else ('igem',gitlab.group(1).replace('/','.'))
+        download = f"https://api.github.com/repos/{owner}/{repo}/zipball/{revision}" if match else f"https://gitlab.igem.org/api/v4/projects/{quote(gitlab.group(1),safe='')}/repository/archive.zip?sha={revision}"
         destination = self.root / "sources" / f"{owner}.{repo}.{revision.lower()}"
         if not destination.exists():
             limit = 256 * 1024 * 1024
-            with requests.get(f"https://api.github.com/repos/{owner}/{repo}/zipball/{revision}", headers={"Accept": "application/vnd.github+json"}, stream=True, timeout=60) as response:
+            with requests.get(download, headers={"Accept": "application/vnd.github+json"}, stream=True, timeout=(8,30)) as response:
                 response.raise_for_status()
                 archive = BytesIO()
                 for chunk in response.iter_content(1024 * 1024):
@@ -169,6 +175,57 @@ class PluginManager:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(zipped.read(member))
         return {**self.inspect(destination), "source_path": str(destination), "repository_commit": revision.lower(), "download_url": repository}
+
+    def fetch_repository(self, repository: str, revision: str = 'HEAD'):
+        """Resolve a readable ref once, then download only the pinned commit."""
+        if re.fullmatch(r'[0-9a-fA-F]{40}',revision):
+            return self.fetch_github(repository,revision)
+        if not re.fullmatch(r'[A-Za-z0-9_./-]{1,100}',revision):
+            raise ValueError('plugin_source_revision_invalid')
+        github=re.fullmatch(r'https://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?',repository)
+        gitlab=re.fullmatch(r'https://gitlab\.igem\.org/([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+?)(?:\.git)?/?',repository)
+        if github:
+            owner,repo=github.groups()
+            endpoint=f'https://api.github.com/repos/{owner}/{repo}/commits/{quote(revision,safe="")}'
+            field='sha'
+        elif gitlab:
+            endpoint=f'https://gitlab.igem.org/api/v4/projects/{quote(gitlab.group(1),safe="")}/repository/commits/{quote(revision,safe="")}'
+            field='id'
+        else: raise ValueError('plugin_requires_public_GitHub_or_official_iGEM_GitLab_repository')
+        with requests.Session() as session:
+            session.trust_env=False
+            response=session.get(endpoint,timeout=(8,15),allow_redirects=False)
+            response.raise_for_status()
+            commit=response.json().get(field)
+        if not isinstance(commit,str) or not re.fullmatch(r'[0-9a-fA-F]{40}',commit):
+            raise ValueError('plugin_commit_resolution_failed')
+        return self.fetch_github(repository,commit)
+
+    def import_archive(self, raw: bytes):
+        """Inspect uploaded source; importing never installs or executes it."""
+        if len(raw)>16*1024*1024: raise ValueError('plugin_source_upload_exceeds_16_MiB')
+        destination=self.root/'sources'/str(uuid4())
+        with ZipFile(BytesIO(raw)) as archive:
+            members=[item for item in archive.infolist() if not item.is_dir()]
+            if len(members)>10000 or sum(item.file_size for item in members)>64*1024*1024:
+                raise ValueError('plugin_source_archive_exceeds_limits')
+            names=[Path(item.filename) for item in members]
+            if any(path.is_absolute() or PureWindowsPath(item.orig_filename).drive or '..' in path.parts or '\\' in item.orig_filename for item,path in zip(members,names)):
+                raise ValueError('invalid_plugin_archive')
+            occupied=sum(path.stat().st_size for path in self.root.rglob('*') if path.is_file())
+            if occupied+sum(item.file_size for item in members)>self.budget_bytes:
+                raise ValueError('plugin_storage_budget_exceeded')
+            prefix=() if Path('plugin.json') in names else names[0].parts[:1] if names else ()
+            targets=[]
+            for member,path in zip(members,names):
+                if stat.S_ISLNK(member.external_attr>>16) or (prefix and path.parts[:1]!=prefix):
+                    raise ValueError('invalid_plugin_archive')
+                relative=Path(*path.parts[len(prefix):])
+                targets.append((member,contained(destination,str(relative))))
+            for member,target in targets:
+                target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_bytes(archive.read(member))
+        return {**self.inspect(destination),'source_path':str(destination)}
 
     def install(self, source: Path, *, trusted: bool, expected_hash: str | None = None) -> dict[str, Any]:
         if not trusted:
@@ -219,7 +276,19 @@ class PluginManager:
 
     def installed(self) -> list[dict[str, Any]]:
         with self.store.connection() as db:
-            return [json.loads(row["payload"]) for row in db.execute("SELECT payload FROM plugins")]
+            return [{**json.loads(row['payload']),'enabled':self.is_enabled(json.loads(row['payload'])['hash'])} for row in db.execute("SELECT payload FROM plugins")]
+
+    def is_enabled(self, digest):
+        with self.store.connection() as db:
+            row=db.execute('SELECT enabled FROM plugin_enabled WHERE hash=?',(digest,)).fetchone()
+        return row is None or bool(row[0])
+
+    def set_enabled(self,digest,enabled):
+        with self.store.connection() as db:
+            row=db.execute('SELECT payload FROM plugins WHERE hash=?',(digest,)).fetchone()
+            if row is None: raise KeyError(digest)
+            db.execute('INSERT OR REPLACE INTO plugin_enabled VALUES(?,?)',(digest,int(enabled)))
+        return {**json.loads(row[0]),'enabled':enabled}
 
     def load_installed(self) -> None:
         for record in self.installed():
@@ -234,6 +303,8 @@ class PluginManager:
             return
 
         def invoke(payload: PluginArguments, context: NodeContext) -> dict[str, Any]:
+            if not self.is_enabled(record['hash']):
+                raise ToolFailure('plugin_disabled','This installed plugin is disabled; no process was started.')
             runtime = f"python{sys.version_info.major}{sys.version_info.minor}._pth"
             if os.name == "nt" and (Path(sys.base_prefix) / runtime).is_file() and not (Path(record["python"]).parent / runtime).is_file():
                 raise ToolFailure("plugin_environment_requires_reinstall", "Reinstall this trusted plugin to isolate its dependencies from the desktop runtime.")

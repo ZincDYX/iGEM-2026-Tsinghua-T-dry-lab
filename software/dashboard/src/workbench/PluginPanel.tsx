@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PluginInspectionView } from "../contracts/generated";
 import { LazyJson } from "../contracts/LazyJson";
 import * as client from "./client";
@@ -14,15 +14,20 @@ export function PluginPanel({
   const [commit, setCommit] = useState("");
   const [inspection, setInspection] = useState<PluginInspectionView>();
   const [trusted, setTrusted] = useState(false);
+  const [installed,setInstalled]=useState<PluginInspectionView[]>([]);
+  const [error,setError]=useState('');
+  useEffect(()=>{let active=true;void client.installedPlugins().then(value=>{if(active)setInstalled(value);}).catch(reason=>{if(active)setError(String(reason));});return()=>{active=false;};},[]);
   return (
     <section>
-      <h2>Trusted plugins</h2>
+      <h3>Plugins</h3>
       <p>
         Uses current workspace authorization; venv isolates dependencies, not
         file/network permissions. Install only code you trust.
       </p>
+      <p>Source import and inspection never execute code. Hosted installation requires deployment-administrator authorization.</p>
+      {error&&<p role="alert">{error}</p>}
       <label>
-        Public GitHub repository
+        Public iGEM GitLab or GitHub repository
         <input
           disabled={busy}
           value={url}
@@ -33,8 +38,8 @@ export function PluginPanel({
           }}
         />
       </label>
-      <label>
-        Pinned commit
+      <details><summary>Advanced source version</summary><label>
+        Branch, tag or pinned revision (blank uses repository HEAD)
         <input
           disabled={busy}
           value={commit}
@@ -44,9 +49,9 @@ export function PluginPanel({
             setTrusted(false);
           }}
         />
-      </label>
+      </label><p>The backend resolves this ref to one immutable commit before download. Future branch changes are not automatically installed.</p></details>
       <button
-        disabled={busy || !url || !commit}
+        disabled={busy || !url}
         onClick={() =>
           void action(async () => {
             const value = await client.fetchPlugin(url, commit);
@@ -59,9 +64,14 @@ export function PluginPanel({
       >
         Fetch pinned source and inspect
       </button>
+      <label>Import local source ZIP<input type="file" accept=".zip" disabled={busy} onChange={event=>{const file=event.target.files?.[0];
+        if(file)void action(async()=>{setInspection(await client.uploadPluginSource(file));setTrusted(false);});event.target.value='';}}/></label>
+      <p>The ZIP must include plugin.json, actual entrypoint code, license, version, input/output schemas and a hashed dependency lock when needed. A manifest alone is not an executable tool.</p>
       {inspection && (
         <>
-          <LazyJson value={inspection} label="License and capabilities" />
+          <h4>{inspection.manifest.name} — {inspection.manifest.version}</h4><p>{inspection.manifest.description}</p>
+          <p>License: {inspection.manifest.license}. Runtime: {inspection.manifest.runtime}. Requested capabilities: {inspection.capability_requests.join(', ')||'No additional declared capabilities'}.</p>
+          <details><summary>Technical source identity</summary><LazyJson value={inspection} label="Backend source and version identity" /></details>
           <label>
             <input
               type="checkbox"
@@ -75,15 +85,19 @@ export function PluginPanel({
           <button
             disabled={busy || !trusted || !inspection.source_path}
             onClick={() =>
-              void action(() =>
-                client.installPlugin(inspection.source_path!, inspection.hash),
-              )
+              void action(async () => {
+                setInspection(await client.installPlugin(inspection.source_path!, inspection.hash));
+                setInstalled(await client.installedPlugins());
+              })
             }
           >
             Install inspected plugin
           </button>
         </>
       )}
+      <h4>Installed versions</h4><p>A new install retains the old version for frozen runs. Disabling blocks the next dispatch; it does not stop an already-running process.</p>
+      <ul>{installed.map(value=><li key={value.hash}><strong>{value.manifest.name}</strong> {value.manifest.version} — {value.enabled?'Enabled':'Disabled'}
+        <button disabled={busy} onClick={()=>void action(async()=>{await client.pluginEnabled(value.hash,!value.enabled);setInstalled(await client.installedPlugins());})}>{value.enabled?'Disable':'Enable'} {value.manifest.name}</button></li>)}</ul>
     </section>
   );
 }

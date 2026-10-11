@@ -24,6 +24,7 @@
     "plotly.js-strict-dist-min": "4.1.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "temml": "0.13.4",
     "vite": "8.2.2"
   },
   "devDependencies": {

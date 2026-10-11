@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ResourcePage, ImportView } from "../contracts/generated";
 import { requestJson, downloadResource } from "../api";
-import { parsePublic } from "../contracts/validation";
+import { parsePublicAsync as parsePublic } from "../contracts/validation";
 const Image = lazy(() =>
   import("./viewers/ImageViewer").then((m) => ({ default: m.ImageViewer })),
 );
@@ -62,8 +62,8 @@ export function ResourceBrowser({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
-        const value = parsePublic("ResourcePage", raw);
+      .then(async (raw) => {
+        const value = await parsePublic("ResourcePage", raw);
         if (!controller.signal.aborted) {
           setRequestedResource(value.items[0]);
           setSelected(initialFileId);
@@ -87,9 +87,10 @@ export function ResourceBrowser({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
+      .then(async (raw) => {
         if (!controller.signal.aborted) {
-          const value = parsePublic("ResourcePage", raw);
+          const value = await parsePublic("ResourcePage", raw);
+          if(controller.signal.aborted)return;
           if (
             value.project_id !== projectId ||
             value.run_id !== (activeRun ?? null)

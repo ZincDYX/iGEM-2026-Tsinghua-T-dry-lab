@@ -17,16 +17,27 @@ from igem_drylab.workflow.mcp_bridge import register_scientific_mcp
 from igem_drylab.workflow.models import Contract, PlanBinding, Project, Workflow, WorkflowError
 from igem_drylab.workflow.pathway import Pathway
 from igem_drylab.workflow.store import plan_binding
-from igem_drylab.workflow.planning import ProposalRequest, ProposalDecision
+from igem_drylab.workflow.planning import ProposalRequest, ProposalDecision, ProposalRevision
 from igem_drylab.workflow.declared_series import DeclaredColumn, DeclaredSeries, read_columns
 from igem_drylab.workflow.scientific_setup import ScientificSetupRequest
 from igem_drylab.workflow.annotation_binding import AnnotationBindingRequest, bind_annotation
 from igem_drylab.workflow.documents import WorkflowDocument, WorkflowDocumentInput
+from igem_drylab.workflow.assistant_settings import AssistantSettingsInput
+from igem_drylab.workflow.skills import SkillInput
+from igem_drylab.workflow.methods import MethodDraftInput
 
 
 class SaveProject(Contract):
     project: Project
     expected_revision: int | None = None
+
+
+class ParameterReview(Contract):
+    stage: Literal['m3','m4']
+    requirement_name: str
+    reviewer: str = Field(min_length=1,max_length=200)
+    reason: str = Field(min_length=1,max_length=4000)
+    expected_revision: int = Field(ge=1)
 
 
 class ImportRequest(Contract):
@@ -117,6 +128,15 @@ class GithubPluginRequest(Contract):
     commit: str
 
 
+class RepositoryPluginRequest(Contract):
+    repository_url: str
+    revision: str = 'HEAD'
+
+
+class PluginStateRequest(Contract):
+    enabled: bool
+
+
 def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_backend=None, workflow_tools=None, runtime_tools=None) -> APIRouter:
     data_dir = data_dir.resolve()
     from .application import ApplicationService
@@ -151,7 +171,31 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.get("/info")
     def info() -> dict[str, Any]:
-        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "hybrid_semantic_compiler" if planning_backend else "validated_workflow_templates", "capabilities": capabilities | {"stage_step":"ready","checkpoints":"ready","cancel_dispatch":"ready","hybrid_planning":"ready" if planning_backend else "unavailable","cross_run_reuse":"unavailable"}, "resources":engine.budget.state() | dispatcher.state(), "remote_desktop_authenticated_session": True, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
+        return {"name": "FusionLab", "protocol_version": "2", "authentication": "session_required", "workspace_id": sha256(str(data_dir).encode()).hexdigest(), "storage": "SQLite WAL", "max_workers": engine.max_workers, "plugin_sandbox": False, "agent_backend": "hybrid_semantic_compiler" if planning.backend else "validated_workflow_templates", "capabilities": capabilities | {"stage_step":"ready","checkpoints":"ready","cancel_dispatch":"ready","hybrid_planning":"ready" if planning.backend else "unavailable","cross_run_reuse":"unavailable"}, "resources":engine.budget.state() | dispatcher.state(), "remote_desktop_authenticated_session": True, "supported_rate_laws": ["two_phase_competitive_mm_v1"]}
+
+    @router.get('/assistant/settings')
+    def assistant_settings():
+        return application.assistant_settings.view()
+
+    @router.post('/assistant/settings')
+    def save_assistant_settings(request: AssistantSettingsInput):
+        return application.assistant_settings.save(request)
+
+    @router.post('/assistant/settings/test')
+    def test_assistant_settings():
+        return application.assistant_settings.probe()
+
+    @router.get('/skills')
+    def skills(offset: int = Query(default=0,ge=0)):
+        return application.skills.list(offset)
+
+    @router.post('/skills')
+    def create_skill(request: SkillInput):
+        return application.skills.save(request)
+
+    @router.post('/skills/{skill_id}')
+    def update_skill(skill_id: str,request: SkillInput):
+        return application.skills.save(request,skill_id)
 
     @router.post("/proposals")
     def propose(request: ProposalRequest):
@@ -171,9 +215,22 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def proposal_decision(proposal_id: str,request: ProposalDecision):
         return planning.decide(proposal_id,request.action)
 
+    @router.get("/projects/{project_id}/assistant")
+    def assistant_history(project_id: str, before: int | None = None):
+        result = planning.conversation(project_id,before=before)
+        boundary.check(result.model_dump(mode="json"))
+        return result
+
+    @router.get("/proposals/{proposal_id}/diff")
+    def proposal_diff(proposal_id: str):
+        return planning.diff(proposal_id)
+
+    @router.post("/proposals/{proposal_id}/revise")
+    def proposal_revision(proposal_id: str,request: ProposalRevision):
+        return planning.revise(proposal_id,request)
+
     @router.post("/custom-proposals")
     def custom_proposal(request: CustomPlanRequest):
-        validate_workflow(request.workflow)
         return planning.custom(request.project_id,request.workflow,request.objective)
 
     @router.get("/projects/{project_id}/input-diff")
@@ -232,6 +289,42 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.get("/projects/{project_id}")
     def get_project(project_id: str) -> dict[str, Any]:
         return boundary.project(store.project(project_id))
+
+    @router.get('/methods')
+    def method_catalog():
+        from igem_drylab.workflow.methods import METHODS
+        return list(METHODS.values())
+
+    @router.post('/projects/{project_id}/parameters/{parameter_id}/review')
+    def parameter_review(project_id: str, parameter_id: str, request: ParameterReview):
+        return application.review_parameter(project_id,parameter_id,**request.model_dump())
+
+    @router.get('/projects/{project_id}/module-method')
+    def selected_module_method(project_id: str, tool_id: str, run_id: str | None = None):
+        from igem_drylab.workflow.methods import module_method
+        project = store.project(project_id)
+        if run_id:
+            run = store.run(run_id)
+            if run['snapshot']['project']['id'] != project_id:
+                raise WorkflowError('run_project_mismatch', status_code=403)
+            if tool_id not in run['snapshot']['tools']:
+                raise WorkflowError('tool_not_in_frozen_run',status_code=403)
+            project = Project.model_validate(run['snapshot']['project'])
+        result = module_method(project, tools.get(tool_id))
+        if run_id:
+            frozen=run['snapshot']['tools'][tool_id]
+            result.tool=result.tool.model_copy(update={key:frozen[key] for key in ('name','version','description','runtime')})
+        projected=boundary.tree(result.model_dump(mode='json'),project_id=project_id)
+        boundary.check(projected)
+        return projected
+
+    @router.get('/projects/{project_id}/method-drafts')
+    def method_drafts(project_id: str,offset: int = Query(default=0,ge=0)):
+        return application.method_drafts.list(project_id,offset)
+
+    @router.post('/projects/{project_id}/method-drafts')
+    def save_method_draft(project_id: str,request: MethodDraftInput):
+        return application.method_drafts.save(project_id,request)
 
     @router.get("/projects/{project_id}/sequences")
     def project_sequence_choices(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
@@ -701,6 +794,23 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         boundary.check(result)
         return result
 
+    @router.get('/tool-catalog')
+    def tool_catalog(offset: int = Query(default=0,ge=0)):
+        from igem_drylab.workflow.methods import ModuleTool,ToolCatalogPage
+        definitions=sorted(tools.definitions(),key=lambda tool:(tool.name,tool.id))[offset:offset+51]
+        installed={item['hash']:item['manifest'] for item in plugins.installed()}
+        items=[]
+        for definition in definitions[:50]:
+            plugin=installed.get(definition.plugin_hash,{})
+            names=list(definition.input_schema.get('properties',{})) if definition.input_schema else list(definition.input_model.model_fields)
+            items.append(ModuleTool(id=definition.id,name=definition.name,version=definition.version,
+                description=definition.description,runtime=definition.runtime,
+                license=plugin.get('license','Application code: Apache-2.0; external tools retain their individual licenses.'),
+                input_names=names,output_scope='Registered capability only. Prepare a legal input and review its workflow before any actual tool job.'))
+        result=ToolCatalogPage(items=items,has_more=len(definitions)>50)
+        boundary.check(result.model_dump(mode='json'))
+        return result
+
     @router.get("/projects/{project_id}/prediction-tools")
     def prediction_tool_list(project_id: str):
         from igem_drylab.software.public_contracts import PredictionToolView
@@ -750,6 +860,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         manifest=item["manifest"]
         result=PluginInspectionView(manifest={key:manifest[key] for key in ("id","name","description","version","capability","license","runtime","permissions")},
             hash=item["hash"],sandboxed=item["sandboxed"],trust_required=item["trust_required"],installed=item.get("installed",False),
+            enabled=item.get('enabled',True),
             source_path="plugin-source:"+Path(item["source_path"]).name if item.get("source_path") else None,
             capability_requests=["permission:"+key for key in manifest.get("permissions",[])]+["secret_env:"+key for key in manifest.get("secret_env",[])]).model_dump(mode="json")
         boundary.check(result)
@@ -768,6 +879,23 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         result = plugins.fetch_github(request.repository_url, request.commit)
         return public_plugin(result)
 
+    @router.post('/plugins/repository')
+    def repository_plugin(request: RepositoryPluginRequest):
+        return public_plugin(plugins.fetch_repository(request.repository_url,request.revision))
+
+    @router.post('/plugins/{digest}/state')
+    def plugin_state(digest: str,request: PluginStateRequest):
+        return public_plugin(plugins.set_enabled(digest,request.enabled))
+
+    @router.post('/plugins/source')
+    async def local_plugin_source(request: Request):
+        # Bounded source ZIP, not an arbitrary backend path or executable.
+        raw=bytearray()
+        async for chunk in request.stream():
+            raw.extend(chunk)
+            if len(raw)>16*1024*1024: raise WorkflowError('plugin_source_upload_exceeds_16_MiB',status_code=413)
+        return public_plugin(plugins.import_archive(bytes(raw)))
+
     @router.get("/schemas")
     def schemas() -> dict[str, Any]:
         from igem_drylab.software.public_contracts import public_schemas
@@ -778,6 +906,9 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
 
     @router.post("/plugins/install")
     def install_plugin(request: PluginRequest) -> dict[str, Any]:
+        import os
+        if not application.assistant_settings.local_workspace and os.getenv('FUSIONLAB_ALLOW_TRUSTED_PLUGINS')!='1':
+            raise WorkflowError('trusted_plugin_install_requires_deployment_authorization',status_code=403)
         if not request.expected_hash:
             raise WorkflowError("plugin_changed_since_inspection", status_code=409)
         if str(request.source_path).startswith("plugin-source:"):

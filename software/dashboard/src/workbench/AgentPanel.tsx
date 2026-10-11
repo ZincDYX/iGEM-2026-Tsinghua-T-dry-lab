@@ -1,8 +1,14 @@
 import type { ProposalView, RuntimeInfoView } from "../contracts/generated";
 import type { Goal } from "../types";
+import { useEffect, useState, useRef } from 'react';
+import type { AssistantPage, ProposalDiff } from '../contracts/generated';
+import * as client from './client';
 
 export function AgentPanel(props: {
   proposal?: ProposalView;
+  projectId?: string;
+  projectRevision?: number;
+  context?: string;
   info?: RuntimeInfoView;
   goal: Goal;
   objective: string;
@@ -16,11 +22,41 @@ export function AgentPanel(props: {
   onPermission: (value: boolean) => void;
   onPropose: () => void;
   onDecision: (action: "accept" | "reject") => void;
+  onRevise?: (prompt: string) => Promise<void>;
+  onOpenProposal?: (id:string) => Promise<void>;
 }) {
   const p = props.proposal;
+  const [history, setHistory] = useState<AssistantPage>();
+  const [diff, setDiff] = useState<ProposalDiff>();
+  const [prompt, setPrompt] = useState('');
+  const [error, setError] = useState('');
+  const epoch = useRef(0);
+  useEffect(() => {
+    epoch.current++;
+    const controller = new AbortController();
+    setHistory(undefined); setDiff(undefined); setPrompt(''); setError('');
+    if (props.projectId && props.projectRevision) void client.assistantHistory(props.projectId, controller.signal)
+      .then(value => {if (!controller.signal.aborted) setHistory(value);})
+      .catch(reason => {if (!controller.signal.aborted) setError(String(reason));});
+    if (p && props.projectId) void client.proposalDiff(p.id, controller.signal)
+      .then(value => {if (!controller.signal.aborted) setDiff(value);})
+      .catch(reason => {if (!controller.signal.aborted) setError(String(reason));});
+    return () => controller.abort();
+  }, [props.projectId, props.projectRevision, p?.id, p?.status]);
   return (
     <section aria-label="Agent Plan proposal">
-      <h2>Agent / Plan proposal</h2>
+      <h2>Assistant</h2>
+      <p>{props.context ?? 'Project context'} · Proposals never approve scientific parameters or run tools without an accepted execution scope.</p>
+      {error && <p role="alert">{error}</p>}
+      {history && <section aria-label="Assistant conversation">
+        {history.messages.map(message => <div key={message.seq}><p><strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong> · project revision {message.project_revision}<br/>{message.text}</p>
+          {message.role === 'assistant' && props.onOpenProposal && message.proposal_id !== p?.id && <button disabled={props.busy}
+            onClick={() => void props.onOpenProposal!(message.proposal_id)}>Open recorded proposal</button>}</div>)}
+        {history.has_more && <button disabled={props.busy} onClick={() => {const stamp=epoch.current;
+          void client.assistantHistory(props.projectId!, undefined, history.messages[0]?.seq)
+          .then(value => {if(stamp===epoch.current) setHistory({...value, messages: [...value.messages, ...history.messages]});})
+          .catch(reason => {if(stamp===epoch.current) setError(String(reason));});}}>Load earlier conversation</button>}
+      </section>}
       <label>
         Research objective
         <textarea
@@ -71,7 +107,7 @@ export function AgentPanel(props: {
             )
           }
         >
-          <option value="template">Template planner (no LLM）</option>
+          <option value="template">Template planner (no LLM)</option>
           <option
             value="hybrid"
             disabled={props.info?.capabilities.hybrid_planning !== "ready"}
@@ -102,6 +138,12 @@ export function AgentPanel(props: {
       </button>
       {p && (
         <article className="proposal">
+          {diff && <section aria-label="Proposed changes">
+            <h3>Changes to review</h3>
+            {!diff.changes.length && <p>No graph or permission changes. This prompt did not edit scientific parameters.</p>}
+            {diff.changes.map((change, index) => <details key={index}><summary>{change.kind} · {change.target}</summary>
+              <p>Before: {change.before ?? 'Not present'}</p><p>After: {change.after ?? 'Removed'}</p></details>)}
+          </section>}
           <h3>
             {p.source === "validated_template"
               ? "Template proposal"
@@ -184,6 +226,11 @@ export function AgentPanel(props: {
           >
             Reject proposal
           </button>
+          {props.onRevise && <><label>Additional revision request<textarea aria-label="Additional revision request" value={prompt}
+            maxLength={8000} disabled={props.busy} onChange={event => setPrompt(event.target.value)}/></label>
+            <p>Manual/template mode uses the actual edited workflow, not invented parameter changes. A new proposal must be accepted again.</p>
+            <button disabled={props.busy || !prompt.trim() || !['proposed','accepted','blocked'].includes(p.status)}
+              onClick={() => void props.onRevise!(prompt.trim())}>Revise proposal</button></>}
           <p className="subtle">
             Changing goal, policy or inputs invalidates this proposal.
             Regenerate and accept; this is not scientific parameter approval.

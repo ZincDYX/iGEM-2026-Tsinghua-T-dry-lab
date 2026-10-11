@@ -18,7 +18,7 @@ import { StateTransforms } from "molstar/lib/mol-plugin-state/transforms";
 import { applyStructureInteractivity } from "molstar/lib/extensions/plugin/interactivity";
 import "molstar/build/viewer/molstar.css";
 import { requestBinary, requestJson } from "../../api";
-import { parsePublic } from "../../contracts/validation";
+import { parsePublicAsync as parsePublic } from "../../contracts/validation";
 import type { StructurePage } from "../../contracts/generated";
 
 const residueKey = (
@@ -31,11 +31,27 @@ const residueKey = (
 export function StructureViewer({
   fileId,
   projectId,
+}: { fileId: string; projectId: string }) {
+  const [reference, setReference] = useState<string>();
+  useEffect(() => setReference(undefined), [fileId, projectId]);
+  return <section aria-label="Structure viewer">
+    {reference && <><h3>Registered reference — independent coordinates, not aligned</h3>
+      <button onClick={() => setReference(undefined)}>Return to original structure</button></>}
+    <CoordinateViewer key={reference ?? fileId} fileId={reference ?? fileId} projectId={projectId}
+      allowReference={!reference} onReference={setReference}/>
+  </section>;
+}
+
+function CoordinateViewer({
+  fileId,
+  projectId,
   allowReference = true,
+  onReference,
 }: {
   fileId: string;
   projectId: string;
   allowReference?: boolean;
+  onReference: (id: string) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const plugin = useRef<PluginUIContext | undefined>(undefined);
@@ -54,7 +70,6 @@ export function StructureViewer({
   const [displayBusy, setDisplayBusy] = useState(false);
   const [representation, setRepresentation] = useState("cartoon");
   const [colorMode, setColorMode] = useState("chain");
-  const [reference, setReference] = useState<string>();
   const overlayRoot = useRef<string>(undefined);
   const overlayRequest = useRef<AbortController>(undefined);
   const [overlayIndex, setOverlayIndex] = useState<number>();
@@ -67,7 +82,6 @@ export function StructureViewer({
     setReady(false);
     setAnnotationsReady(false);
     annotationIndex.current.clear();
-    setReference(undefined);
     setOverlayIndex(undefined);
     overlayRoot.current = undefined;
     setOffset(0);
@@ -90,8 +104,8 @@ export function StructureViewer({
           controller.signal,
         ),
       ]);
-      const metadata = parsePublic("StructurePage", raw);
-      const fullAnnotations = parsePublic("StructurePage", annotationRaw);
+      const metadata = await parsePublic("StructurePage", raw);
+      const fullAnnotations = await parsePublic("StructurePage", annotationRaw);
       const data = await response.text();
       if (controller.signal.aborted || !root.current) return;
       if (
@@ -122,6 +136,13 @@ export function StructureViewer({
       setAnnotationsReady(true);
       setMeta(metadata);
       setChain(metadata.chains[0] ?? "");
+      // Molstar's UI initialization promise can remain pending after a failed
+      // WebGL mount. Detect an unavailable browser before mounting that UI,
+      // while keeping the already loaded source/annotation table usable.
+      const probe = document.createElement('canvas');
+      const graphics = probe.getContext('webgl2') ?? probe.getContext('webgl');
+      if (!graphics) throw Error('WebGL is unavailable.');
+      graphics.getExtension('WEBGL_lose_context')?.loseContext();
       const spec = DefaultPluginUISpec();
       spec.actions = [];
       // No remote/download actions or network custom properties.
@@ -194,10 +215,16 @@ export function StructureViewer({
       setReady(true);
     }
     void load().catch(() => {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
+        reactRoot?.unmount();
+        reactRoot = undefined;
+        owned?.dispose();
+        owned = undefined;
+        plugin.current = undefined;
         setError(
           "Structure display unavailable. WebGL is required; the original source remains available.",
         );
+      }
     });
     return () => {
       controller.abort();
@@ -215,9 +242,10 @@ export function StructureViewer({
       undefined,
       controller.signal,
     )
-      .then((raw) => {
+      .then(async (raw) => {
         if (!controller.signal.aborted) {
-          const next = parsePublic("StructurePage", raw);
+          const next = await parsePublic("StructurePage", raw);
+          if(controller.signal.aborted)return;
           if (
             next.identity.file_id !== fileId ||
             next.identity.project_id !== projectId ||
@@ -458,7 +486,7 @@ export function StructureViewer({
           controller.signal,
         ),
       ]);
-      const referenceMeta = parsePublic("StructurePage", raw);
+      const referenceMeta = await parsePublic("StructurePage", raw);
       if (
         referenceMeta.identity.file_id !== overlay.reference_file_id ||
         referenceMeta.identity.project_id !== projectId ||
@@ -530,6 +558,18 @@ export function StructureViewer({
       if (plugin.current === owned) setDisplayBusy(false);
     }
   }
+  async function exportImage() {
+    const owned = plugin.current;
+    if (!owned?.helpers.viewportScreenshot) return;
+    setDisplayBusy(true);
+    try {
+      await owned.helpers.viewportScreenshot.download('registered-structure.png');
+    } catch {
+      if (plugin.current === owned) setError('Image export failed; coordinates and registered sources are unchanged.');
+    } finally {
+      if (plugin.current === owned) setDisplayBusy(false);
+    }
+  }
   return (
     <section>
       <p>
@@ -538,6 +578,12 @@ export function StructureViewer({
         annotation source. No inferred overlays or activity claims.
       </p>
       {error && <p role="alert">{error}</p>}
+      <div
+        ref={root}
+        className="structure-canvas"
+        data-state={ready ? 'ready' : error ? 'unavailable' : 'loading'}
+        style={{ position: "relative", height: 420 }}
+      />
       <label>
         Representation
         <select
@@ -586,6 +632,7 @@ export function StructureViewer({
       >
         Reset structure view
       </button>
+      <button disabled={!ready || displayBusy} onClick={() => void exportImage()}>Export structure image</button>
       <p>
         Display {representation} / {colorMode}.{" "}
         {annotationsReady
@@ -595,11 +642,6 @@ export function StructureViewer({
         Rotate/zoom/pan in the viewport; no new geometry or alignment is
         computed.
       </p>
-      <div
-        ref={root}
-        className="structure-canvas"
-        style={{ position: "relative", height: 420 }}
-      />
       {allowReference &&
         meta?.overlays.map((overlay, index) => (
           <section key={index}>
@@ -743,28 +785,12 @@ export function StructureViewer({
               .map((a, i) => (
                 <button
                   key={i}
-                  onClick={() => setReference(a.reference_file_id!)}
+                  onClick={() => onReference(a.reference_file_id!)}
                 >
                   Open registered reference {a.reference_residue?.chain}:
                   {a.reference_residue?.residue_number}
                 </button>
               ))}
-          {reference && (
-            <section>
-              <h3>
-                Registered reference — independent coordinates, not aligned
-              </h3>
-              <button onClick={() => setReference(undefined)}>
-                Close reference
-              </button>
-              <StructureViewer
-                key={reference}
-                projectId={projectId}
-                fileId={reference}
-                allowReference={false}
-              />
-            </section>
-          )}
           <button
             disabled={!offset}
             onClick={() => setOffset(Math.max(0, offset - 100))}

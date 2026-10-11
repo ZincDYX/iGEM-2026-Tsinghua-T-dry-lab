@@ -424,19 +424,93 @@ given private compute access in this task. Latest reported repository storage is
 | IN-03 | Contextual gaps with Add/Use/Defer actions | Pending |
 | IN-04 | Server-calculated asset identity, no user SHA entry | Registered typed file references obtain hashes server-side; ownership/conflicting identities still rejected |
 | WF-01 | Graph/List editing of one workflow revision | Shared persisted graph/list, movement, selection/recovery, revision, backend status counts and dependency rejection verified; general typed module/binding creation and full IO compatibility pending |
-| WF-02 | Versioned full method formulas, tools and parameter records | Pending |
+| WF-02 | Versioned full method formulas, tools and parameter records | Source-preserving M1 V3/M2 V2/M3/M4 and separate ER registry, actual frozen tool/parameter snapshots and linked parameter overrides implemented; custom LaTeX versions are non-executable proposals, not new verified kernels |
 | WF-03 | Save/review/run and controls only in Workflow | Existing-engine review, graph/policy stale-approval protection, one review action and explicit scope/checkpoints implemented; batch acceptance separates draft settings from frozen run settings |
 | RES-01 / SCI-06 | Grouped results, independent job/numeric/evidence/validation status | Four-state summary and synthetic tables verified; general module grouping pending |
-| RES-02 / SCI-07 | Pool-aware ER tables/curves and actual viewer acceptance | Typed actual-volume projection and CSV verified; real structure/WebGL/lifecycle acceptance pending |
-| AG-01 / AG-02 | Persistent conversational proposals/diffs/decisions using existing engine | Pending |
-| AG-03 | Tools, plugins and skills with real capability tests | Pending |
-| AG-04 | Model settings, write-only secrets, local/hosted endpoint boundaries | Pending |
-| JOB-01 | Structured Jobs/Output/Problems and mode-safe terminal | Pending |
+| RES-02 / SCI-07 | Pool-aware ER tables/curves and actual viewer acceptance | Typed actual-volume projection/CSV retained; actual RCSB PDB/mmCIF display, rotation/export and 20-cycle native GPU lifecycle verified; reference overlays require recorded transforms, no inferred alignment |
+| AG-01 / AG-02 | Persistent conversational proposals/diffs/decisions using existing engine | Project-scoped history, typed graph/policy diff, Accept/Reject/Revise/reopen implemented; template prompts do not invent numerical patches; real external LLM account validation unavailable |
+| AG-03 | Tools, plugins and skills with real capability tests | Actual registered capability catalog, existing prediction job controls, trusted isolated Python plugin import/install/disable and instruction-only Skills implemented; general tool configuration and third-party scientific jobs are not all verified |
+| AG-04 | Model settings, write-only secrets, local/hosted endpoint boundaries | Private profile, Windows DPAPI, None/local/API modes and public capability probes implemented; HTTP protocol fixture is not a real model, streaming probe is not a streaming chat interface |
+| JOB-01 | Structured Jobs/Output/Problems and mode-safe terminal | Existing Jobs/Problems retained, actions grouped under Jobs; raw host terminal explicitly unavailable in Web; full structured Output and embedded local PTY pending |
 | UI-01 / UI-02 / UI-03 | Single menu, inline tabs, contextual tree and English messages | Single menu/inline tabs existed in batch 1; redundant top controls and Diagnostic tab removed, contextual source/problems added; full object selection, Assistant and language/visual audit pending |
-| PERF-01 | Measured baseline, schema split, viewer/resource lifecycle | Pending |
+| PERF-01 | Measured baseline, schema split, viewer/resource lifecycle | Standalone schemas split into lazy protocol families, actual cold-page comparison and native 20-cycle GPU measurements recorded; no universal speed/memory claim or clean locked desktop release acceptance |
 | Synthetic PS-v3 | Original corrected package, separate runner and inherited scope | Original kernels, independent endpoints, canonical perturbation and browser/server chain verified; separate synthetic scope, E3 blocked |
 | Publication | Final designated repository, Wiki, Village and award registration | Owner confirmation required; no relocation/registration mutation |
 | Validation | Real independent experiment, real transfer case, five novice-user sessions | Requires corresponding data/people; software fixtures are not substitutes |
 
 Do not interpret a pending row, a passing software test or a completed job as
 formal M1–M4 readiness or experimental validation.
+
+## Batch 4: methods, Assistant/extensions, actual 3D and measured loading
+
+Scientific kernels/equations/tolerances were not replaced. The method registry
+lists every original stage and retains original equalities and documented source
+discrepancies. M3's undefined blockiness/avidity/capacity claims remain explicitly
+conditional or undefined; a metadata implementation reference is not an independent
+numerical proof. ER is separately versioned and never relabels a cytosolic result.
+Tools are registered/not tested until actual execution establishes otherwise.
+Run inspectors use immutable run tool versions and parameters, not a live draft.
+
+Parameter overrides create linked, unapproved candidates with reasons; saved values
+and sources cannot be overwritten under the same identity. Human review reuses
+the existing unit/applicability validator. Formula changes are separately versioned
+LaTeX proposals, explicitly unvalidated/non-executable. Saving one does not alter
+an original kernel or grant calculation authority. No expression evaluator was
+introduced. Complete executable custom-method development remains a separate,
+independently validated implementation task.
+
+Assistant history and original requests are persisted. Revise records an actual
+typed graph/policy diff, revokes old proposal authority and creates a new proposal
+requiring acceptance. Reopening and rejection do not start jobs. Template/manual
+mode remains usable without a model. Model profiles and secrets are private
+workspace configuration, not project exports or browser storage. Hosted endpoints
+require the deployment administrator's exact allowlist; local endpoints require
+an explicitly local workspace. A changed endpoint clears the old secret. Actual
+JSON capability must pass before enabling the existing hybrid planner. Connection
+tests send only public text. Saved DPAPI credentials that cannot be decrypted by
+another OS/user disable the model without preventing manual workspace startup.
+
+Plugins use the existing manifest/process/venv protocol, not another scheduler.
+Uploaded ZIP import inspects source without executing it. Public GitHub/iGEM GitLab
+refs resolve to a pinned backend commit; hashes remain technical details. Installed
+versions can be disabled/re-enabled and are retained for previous run identities.
+Disabling prevents new processes, not already-running ones. A Python venv is
+dependency isolation, **not an OS security sandbox**; hosted trusted installation
+is disabled unless the administrator explicitly enables it. Skills are editable,
+versioned plain instructions with source/license; embedded scripts are not executed
+and text cannot supply scientific evidence or approve parameters.
+
+Real display source: RCSB [1CRN entry](https://www.rcsb.org/structure/1CRN),
+[PDB bytes](https://files.rcsb.org/download/1CRN.pdb),
+[mmCIF bytes](https://files.rcsb.org/download/1CRN.cif),
+[dataset DOI](https://doi.org/10.2210/pdb1CRN/pdb). This is real crambin geometry,
+not a fusion prediction or synthetic replacement. Original chain A numbering and
+the warning that B-factor is not pLDDT remain visible. Actual Edge/Molstar acceptance
+rotates the image, verifies a native PNG download, switches formats and opens/closes
+20 times. Native context-loss invalidation is counted alongside explicit handle
+deletion; every closed view has zero still-valid measured handles. Measured heap
+samples are retained, without inventing a universal memory threshold. Registered
+reference overlays require recorded transforms and do not infer alignment.
+
+The generated runtime contracts still derive from the single Python public schema.
+Build-time standalone AJV validators are split into exhaustive named protocol
+families; unknown/duplicate membership fails generation. Core input validation
+remains synchronous, heavy result/import/tool/planning families load on demand.
+No coercion, scientific default or gate was removed. Method rendering uses pinned
+Temml 0.13.4, trusted-false XML MathML, with no user HTML/expression execution.
+
+Initial same-machine samples: cold empty Inputs loaded JS decreased from
+1,504,041 to 979,298 bytes, gzip from 213,987 to 174,642 bytes. Both recorded zero
+extra requests over ten idle seconds. These first timing samples overlapped other
+build activity; they establish asset-loading reduction, **not** a stable startup,
+CPU or API-latency improvement. Molstar and Plotly remain large lazy chunks; total
+installed assets are not claimed to have shrunk. A reproducible read-only measuring
+script is committed at `software/dashboard/scripts/measure-workbench-performance.mjs`.
+
+Software acceptance is distinct from scientific/experimental acceptance. HTTP
+model transport fixtures are not real LLMs; plugin ref transport fixtures are not
+real third-party deployments; original scientific regressions run only on the
+compute deployment. Latest exact delivery counts/sizes are appended after final
+acceptance. Clean release-builder Node 24.19.0, desktop EXE, full generic module/
+binding creation, SBOL/SBML semantics, comprehensive Jobs/Output and the other
+pending rows remain outside claims of completion in this batch.

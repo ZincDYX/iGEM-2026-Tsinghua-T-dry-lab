@@ -14,6 +14,7 @@ export type TrustRequired = boolean;
 export type Installed = boolean;
 export type SourcePath = string | null;
 export type CapabilityRequests = string[];
+export type Enabled = boolean;
 
 export interface PluginInspectionView {
   manifest: PluginMetadataView;
@@ -23,6 +24,7 @@ export interface PluginInspectionView {
   installed: Installed;
   source_path: SourcePath;
   capability_requests: CapabilityRequests;
+  enabled: Enabled;
 }
 export interface PluginMetadataView {
   id: Id;

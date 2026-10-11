@@ -53,15 +53,57 @@ class ProposalDecision(Contract):
     action: Literal["accept","reject"]
 
 
+class ProposalRevision(Contract):
+    prompt: str = Field(min_length=1, max_length=8000)
+    workflow: Workflow | None = None
+
+
+class AssistantMessage(Contract):
+    seq: int
+    role: Literal["user", "assistant"]
+    text: str
+    proposal_id: str
+    project_revision: int
+    timestamp: str
+
+
+class ProposalChange(Contract):
+    kind: Literal["node", "tool", "binding", "dependency", "permission"]
+    target: str
+    before: str | None
+    after: str | None
+
+
+class AssistantPage(Contract):
+    project_id: str
+    messages: list[AssistantMessage]
+    has_more: bool
+
+
+class ProposalDiff(Contract):
+    proposal_id: str
+    previous_proposal_id: str | None
+    changes: list[ProposalChange]
+    missing_inputs: list[str]
+    evidence: list[str]
+    limitations: list[str]
+
+
 class PlanningService:
-    def __init__(self,store,boundary,backend=None,engine=None):
+    def __init__(self,store,boundary,backend=None,engine=None,workflow_validator=None):
         self.store,self.boundary,self.backend = store,boundary,backend
         self.engine = engine
+        self.workflow_validator = workflow_validator
         with store.connection() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS proposals(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS plan_actions(seq INTEGER PRIMARY KEY AUTOINCREMENT,project_id TEXT NOT NULL,proposal_id TEXT,run_id TEXT,action TEXT NOT NULL,actor TEXT NOT NULL,timestamp TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS actions_project_seq ON plan_actions(project_id,seq);
+                CREATE TABLE IF NOT EXISTS proposal_requests(id TEXT PRIMARY KEY,payload TEXT NOT NULL,previous_id TEXT);
+                CREATE TABLE IF NOT EXISTS assistant_messages(seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,role TEXT NOT NULL,text TEXT NOT NULL,proposal_id TEXT NOT NULL,
+                    project_revision INTEGER NOT NULL,timestamp TEXT NOT NULL);
+                CREATE INDEX IF NOT EXISTS assistant_project_seq ON assistant_messages(project_id,seq);
             """)
 
     def propose(self,request: ProposalRequest) -> ProposalView:
@@ -168,10 +210,13 @@ class PlanningService:
         self.boundary.check(result.model_dump(mode="json"))
         with self.store.connection() as db:
             db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project.id,result.model_dump_json()))
+            db.execute("INSERT INTO proposal_requests VALUES(?,?,NULL)",(identity,request.model_dump_json()))
+            self._conversation(db,result,project.revision)
             self._action(db,result,"proposed","planner")
         return result
 
     def custom(self,project_id:str,workflow:Workflow,objective:str,*,source="user_reviewed_workflow",previous_review_identity=None):
+        if self.workflow_validator: self.workflow_validator(workflow)
         project=self.store.project(project_id)
         identity=str(uuid4())
         result=ProposalView(id=identity,task_id=identity,project_id=project_id,source=source,status="proposed",
@@ -183,7 +228,88 @@ class PlanningService:
         self.boundary.check(result.model_dump(mode="json"))
         with self.store.connection() as db:
             db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project_id,result.model_dump_json()))
+            self._conversation(db,result,project.revision)
             self._action(db,result,"proposed","user")
+        return result
+
+    @staticmethod
+    def _conversation(db, proposal, revision):
+        for role, text in (("user", proposal.objective), ("assistant", proposal.rationale)):
+            db.execute("INSERT INTO assistant_messages(project_id,role,text,proposal_id,project_revision,timestamp) VALUES(?,?,?,?,?,?)",
+                (proposal.project_id,role,text,proposal.id,revision,now()))
+
+    def conversation(self, project_id, *, before=None, limit=40):
+        self.store.project(project_id)
+        limit = min(max(limit,1),100)
+        with self.store.connection() as db:
+            rows = db.execute("SELECT seq,role,text,proposal_id,project_revision,timestamp FROM assistant_messages WHERE project_id=? AND seq<? ORDER BY seq DESC LIMIT ?",
+                (project_id,before if before is not None else 2**63-1,limit+1)).fetchall()
+        return AssistantPage(project_id=project_id,messages=[AssistantMessage(**dict(row)) for row in reversed(rows[:limit])],has_more=len(rows)>limit)
+
+    def revise(self, proposal_id, revision: ProposalRevision):
+        original = self.get(proposal_id)
+        if original.status not in {"proposed","accepted","blocked"}:
+            raise WorkflowError("proposal_not_actionable",status_code=409)
+        self.boundary.check(revision.model_dump(mode="json"))
+        with self.store.connection() as db:
+            saved = db.execute("SELECT payload FROM proposal_requests WHERE id=?",(proposal_id,)).fetchone()
+        objective = original.objective + "\nRevision request: " + revision.prompt
+        if revision.workflow is not None:
+            result = self.custom(original.project_id,revision.workflow,objective,previous_review_identity=original.review_identity)
+        elif saved and saved[0] != "null":
+            request = ProposalRequest.model_validate_json(saved[0])
+            result = self.propose(request.model_copy(update={"objective":objective}))
+            if result.workflow and self.workflow_validator: self.workflow_validator(result.workflow)
+        elif original.workflow:
+            result = self.custom(original.project_id,original.workflow,objective,previous_review_identity=original.review_identity)
+        else:
+            raise WorkflowError("workflow_required_for_revision")
+        # A prompt is not a scientific patch. Template/manual revisions keep
+        # their actual graph unless the user supplies validated edits or a
+        # configured semantic compiler actually produces them.
+        with self.store.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT payload FROM proposals WHERE id=?",(proposal_id,)).fetchone()
+            current = ProposalView.model_validate_json(row[0])
+            if current.status not in {"proposed","accepted","blocked"}:
+                raise WorkflowError("proposal_not_actionable",status_code=409)
+            current.status = "rejected"
+            db.execute("UPDATE proposals SET payload=? WHERE id=?",(current.model_dump_json(),proposal_id))
+            db.execute("INSERT INTO proposal_requests(id,payload,previous_id) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET previous_id=excluded.previous_id",
+                (result.id,"null",proposal_id))
+            self._action(db,current,"revise","user")
+        return result
+
+    def diff(self, proposal_id):
+        proposal = self.get(proposal_id)
+        with self.store.connection() as db:
+            row = db.execute("SELECT previous_id FROM proposal_requests WHERE id=?",(proposal_id,)).fetchone()
+        previous_id = row[0] if row else None
+        previous = self.get(previous_id) if previous_id else None
+        old = {n.id:n for n in previous.workflow.nodes} if previous and previous.workflow else {}
+        new = {n.id:n for n in proposal.workflow.nodes} if proposal.workflow else {}
+        changes = []
+        def add(kind,target,before,after):
+            if before != after:
+                changes.append(ProposalChange(kind=kind,target=target,before=before,after=after))
+        def text(value):
+            from .store import canonical
+            return canonical(value) if value is not None else None
+        for key in sorted(old.keys()|new.keys()):
+            a,b = old.get(key),new.get(key)
+            add("node",key,a.label if a else None,b.label if b else None)
+            add("tool",key,a.tool_id if a else None,b.tool_id if b else None)
+            names = (a.inputs.keys() if a else set()) | (b.inputs.keys() if b else set())
+            for name in sorted(names):
+                before = a.inputs[name].model_dump(mode="json") if a and name in a.inputs else None
+                after = b.inputs[name].model_dump(mode="json") if b and name in b.inputs else None
+                add("binding",key+"."+name,text(before),text(after))
+            add("dependency",key,text(sorted(a.dependencies())) if a else None,text(sorted(b.dependencies())) if b else None)
+        add("permission","Execution scope and permissions",text(previous.workflow.execution_policy.model_dump(mode="json")) if previous and previous.workflow else None,
+            text(proposal.workflow.execution_policy.model_dump(mode="json")) if proposal.workflow else None)
+        result = ProposalDiff(proposal_id=proposal_id,previous_proposal_id=previous_id,changes=changes,
+            missing_inputs=proposal.missing_inputs,evidence=proposal.evidence,limitations=proposal.limitations)
+        self.boundary.check(result.model_dump(mode="json"))
         return result
 
     def get(self,proposal_id: str):

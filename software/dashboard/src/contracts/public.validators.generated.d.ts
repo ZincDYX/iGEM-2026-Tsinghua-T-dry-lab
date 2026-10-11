@@ -33,3 +33,14 @@ export function GenBankDesign(value:unknown):value is import("./GenBankDesign.ge
 export function GenBankPage(value:unknown):value is import("./GenBankPage.generated").GenBankPage;
 export function ImportTransactionPreview(value:unknown):value is import("./ImportTransactionPreview.generated").ImportTransactionPreview;
 export function WorkflowDocument(value:unknown):value is import("./WorkflowDocument.generated").WorkflowDocument;
+export function AssistantPage(value:unknown):value is import("./AssistantPage.generated").AssistantPage;
+export function ProposalDiff(value:unknown):value is import("./ProposalDiff.generated").ProposalDiff;
+export function MethodDefinition(value:unknown):value is import("./MethodDefinition.generated").MethodDefinition;
+export function ModuleMethodView(value:unknown):value is import("./ModuleMethodView.generated").ModuleMethodView;
+export function AssistantSettingsView(value:unknown):value is import("./AssistantSettingsView.generated").AssistantSettingsView;
+export function AssistantProbeView(value:unknown):value is import("./AssistantProbeView.generated").AssistantProbeView;
+export function SkillPage(value:unknown):value is import("./SkillPage.generated").SkillPage;
+export function SkillView(value:unknown):value is import("./SkillView.generated").SkillView;
+export function ToolCatalogPage(value:unknown):value is import("./ToolCatalogPage.generated").ToolCatalogPage;
+export function MethodDraftView(value:unknown):value is import("./MethodDraftView.generated").MethodDraftView;
+export function MethodDraftPage(value:unknown):value is import("./MethodDraftPage.generated").MethodDraftPage;
