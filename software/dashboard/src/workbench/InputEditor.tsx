@@ -5,30 +5,23 @@ import type {
   ScientificPreviewView,
   ScientificPrecheckView,
 } from "../contracts/generated";
-import { object, parsePublic } from "../contracts/validation";
 import * as client from "./client";
-import { downloadResource } from "../api";
 import { LazyJson } from "../contracts/LazyJson";
 import { PrecheckPanel, type InputIssue } from "./PrecheckPanel";
 import { UnifiedImport } from "./UnifiedImport";
-import { ScientificInputForms } from "./ScientificInputForms";
+import {ConstructObject,NewConstruct} from "./ScientificInputForms";
 import { StructureAnnotationLinker } from "./StructureAnnotationLinker";
 import {GenBankDesigns} from './GenBankDesigns';
 import {
   mergeImportDraft,
 } from "./importDraft";
-import {
-  ScientificSetup,
-  ScientificSettings,
-  useScientificSchema,
-} from "./ScientificSetup";
+import {ScientificSetup} from "./ScientificSetup";
 
 export function InputEditor({
   project,
   busy,
   dirty,
   onChange,
-  onEditing,
   action,
   inputCheck,
   checkStale,
@@ -44,7 +37,6 @@ export function InputEditor({
   busy: boolean;
   dirty: boolean;
   onChange: (value: ProjectView) => void;
-  onEditing: (value: boolean) => void;
   action: (job: () => Promise<unknown>) => Promise<void>;
   inputCheck?: ScientificPrecheckView;
   checkStale: boolean;
@@ -56,13 +48,16 @@ export function InputEditor({
   prepareImport:()=>Promise<ProjectView|undefined>;
   onImported:(project:ProjectView)=>void;
 }) {
+  const [rename,setRename]=useState(false),[selectedSequence,setSelectedSequence]=useState<string>(),[selectedConstruct,setSelectedConstruct]=useState('');
   const [preview, setPreview] = useState<ImportView>();
   const [scientific, setScientific] = useState<ScientificPreviewView>();
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState("");
-  const { schema, error: schemaError } = useScientificSchema();
   useEffect(() => {
     if (!inputTarget) return;
+    if(inputTarget.construct_id){
+      const inputs=project.scientific_project?.config.inputs;
+      if(inputs?.constructs.some(c=>c.id===inputTarget.construct_id))setSelectedConstruct('definition:'+inputTarget.construct_id);
+      else if(inputs?.construct_records.some(c=>c.construct_id===inputTarget.construct_id))setSelectedConstruct('record:'+inputTarget.construct_id);
+    }
     const target = Array.from(
       document.querySelectorAll<HTMLElement>("[data-input-path]"),
     ).find((e) => e.dataset.inputPath === inputTarget.field_path);
@@ -71,7 +66,7 @@ export function InputEditor({
       if (p instanceof HTMLDetailsElement) p.open = true;
     target.scrollIntoView({ block: "center" });
     target.focus({ preventScroll: true });
-  }, [inputTarget, schema]);
+  }, [inputTarget,project.id]);
   const mounted = useRef(true);
   const epoch = useRef(0);
   useEffect(() => {
@@ -85,98 +80,39 @@ export function InputEditor({
     ++epoch.current;
     onChange(value);
   }
-  function startEditor() {
-    setText(JSON.stringify(project, null, 2));
-    setEditing(true);
-    onEditing(true);
-  }
   const scope = project.scientific_project;
   return (
     <section aria-label="Project inputs and evidence">
       <header className="panel-heading">
         <h2>Inputs and evidence</h2>
-        <span>revision {project.revision}</span>
       </header>
-      <fieldset className="input-fields" disabled={busy || editing}>
-        <label>
-          Project name
-          <input
-            aria-label="Project name"
-            value={project.name}
-            onChange={(e) => change({ ...project, name: e.target.value })}
-          />
-        </label>
-        <label>
-          Project notes (not scientific conditions)
-          <textarea
-            value={project.description}
-            onChange={(e) =>
-              change({ ...project, description: e.target.value })
-            }
-          />
-        </label>
-        <section aria-label="Biological data">
+      <fieldset className="input-fields" disabled={busy}>
+        <button onClick={()=>setRename(value=>!value)}>Rename project</button>
+        {rename&&<label>Project name<input aria-label="Project name" value={project.name} onChange={e=>change({...project,name:e.target.value})}/></label>}
+        <section id="input-evidence" aria-label="Biological data">
           <h2>Biological data</h2>
-          <UnifiedImport project={project} busy={busy||editing} dirty={dirty} action={action} prepare={prepareImport} onCommitted={onImported}/>
-          <section aria-label="Imported biological objects"><h3>Imported biological objects</h3>
-            <table><thead><tr><th>Name</th><th>Type</th><th>Scope</th><th>Source readiness</th></tr></thead><tbody>
-              {project.datasets.filter(row=>typeof row.file_id==='string'&&!['genbank_design','wetlab','ProjectConfig','AnalysisPlan','ParameterSet','synthetic_ps_v3'].includes(String(row.kind))).map(row=>
-                <tr key={String(row.id)}><td>{String(row.name)}</td><td>{String(row.kind)}</td><td>{String(row.supported_scope??'Imported source; scientific applicability not established')}</td>
-                  <td>{row.has_unresolved_inputs?'Review missing inputs':'Parsed, not scientifically approved'}</td></tr>)}
-            </tbody></table>
-          </section>
+          <UnifiedImport project={project} busy={busy} dirty={dirty} action={action} prepare={prepareImport} onCommitted={onImported}/>
           <StructureAnnotationLinker project={project} disabled={busy||dirty} action={action} onPreview={setPreview}/>
           {preview&&<div><p>Reviewed annotation binding candidate; original source is retained.</p>
             <button disabled={busy} onClick={()=>{change(mergeImportDraft(project,preview,{}));setPreview(undefined);}}>Confirm annotation binding into draft</button>
             <button onClick={()=>setPreview(undefined)}>Discard annotation binding</button>
           </div>}
         <GenBankDesigns project={project} dirty={dirty} action={action}/>
-        <h3 id="input-evidence">Registered input files</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Logical file</th>
-              <th>Open</th>
-              <th>Download</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              ...new Map(
-                [...project.files, ...(scope?.evidence_files ?? [])].map(
-                  (file) => [file.id, file],
-                ),
-              ).values(),
-            ].map((file, i) => (
-              <tr key={`${file.id}-${i}`}>
-                <td>{file.name}</td>
-                <td>
-                  <button
-                    disabled={dirty}
-                    onClick={() => onOpenResource(file.id)}
-                  >
-                    Open resource
-                  </button>
-                </td>
-                <td>
-                  <button
-                    onClick={() =>
-                      void action(() =>
-                        downloadResource(
-                          `/files/${encodeURIComponent(file.id)}?project_id=${encodeURIComponent(project.id)}`,
-                          file.name,
-                        ),
-                      )
-                    }
-                  >
-                    Original file
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <h3>Measurements and M5</h3>
+        <h3>Input objects</h3>
+        <table aria-label="Input objects"><thead><tr><th>Name</th><th>Type</th><th>Status</th></tr></thead><tbody>
+          {[...new Map([...project.files,...(scope?.evidence_files??[])].map(file=>[file.id,file])).values()].map(file=>{
+            const dataset=project.datasets.find(row=>row.file_id===file.id);
+            return <tr key={file.id}><td><button disabled={dirty} onClick={()=>onOpenResource(file.id)}>{file.name}</button></td><td>{String(dataset?.kind??'Evidence')}</td><td>{dataset?.has_unresolved_inputs?'Needs input review':'Imported'}</td></tr>;})}
+          {project.sequences.map(sequence=><tr key={sequence.id}><td><button onClick={()=>{setSelectedSequence(sequence.id);setSelectedConstruct('');}}>{sequence.id}</button></td><td>Protein · {sequence.role.replaceAll('_',' ')}</td><td>{sequence.sequence.length} aa · design input</td></tr>)}
+          {scope?.config.inputs.constructs.map(c=><tr key={'definition:'+c.id}><td><button onClick={()=>{setSelectedConstruct('definition:'+c.id);setSelectedSequence(undefined);}}>{c.id}</button></td><td>Construct</td><td>{c.m1_review?'Reviewed declaration':'Needs review'}</td></tr>)}
+          {scope?.config.inputs.construct_records.map(c=><tr key={'record:'+c.construct_id}><td><button onClick={()=>{setSelectedConstruct('record:'+c.construct_id);setSelectedSequence(undefined);}}>{c.construct_id}</button></td><td>Construct evidence</td><td>{c.review_status.replaceAll('_',' ')}</td></tr>)}
+        </tbody></table>
+        <ConstructObject project={project} selected={selectedConstruct} onChange={change}/>
+        {project.sequences.filter(sequence=>sequence.id===selectedSequence).map(sequence=><section key={sequence.id} aria-label="Selected sequence"><h3>{sequence.id} · {sequence.sequence.length} aa</h3><p className="sequence-text">{sequence.sequence}</p>
+          <label>Construct role<select aria-label={`M1 role for ${sequence.id}`} value={sequence.role} onChange={e=>change({...project,sequences:project.sequences.map(row=>row.id===sequence.id?{...row,role:e.target.value}:row)})}>
+            <option value={sequence.role} hidden>{sequence.role.replaceAll('_',' ')}</option>{['idr','enzyme_ligand_linker','scaffold_linker','rigid_linker','full_fusion'].map(role=><option key={role} value={role}>{role.replaceAll('_',' ')}</option>)}
+          </select></label></section>)}
+        {project.datasets.some(row=>row.kind==="wetlab")&&<h3>Measurements and M5</h3>}
         {dirty && (
           <p>
             Save this draft before previewing the backend M5 binding, to
@@ -215,68 +151,13 @@ export function InputEditor({
               )}
             </article>
           ))}
-        <h3 id="input-sequences">Sequences</h3>
-        <p>
-          Standalone sequences: {project.sequences.length} · Scientific
-          sequences:{" "}
-          {scope?.sequence_index.status === "indexed"
-            ? scope.sequence_index.count
-            : "Not indexed"}{" "}
-          · Assembly declarations: {project.assemblies.length}
-        </p>
-        <LazyJson
-          value={scope?.sequence_index}
-          label="Read-only scientific FASTA index"
-        />
-        {project.sequences.map((sequence, index) => (
-          <label key={sequence.id}>
-            {sequence.id} ({sequence.sequence.length} aa): M1 role
-            <select
-              aria-label={`M1 role for ${sequence.id}`}
-              value={sequence.role}
-              onChange={(event) =>
-                change({
-                  ...project,
-                  sequences: project.sequences.map((row, i) =>
-                    i === index ? { ...row, role: event.target.value } : row,
-                  ),
-                })
-              }
-            >
-              <option value={sequence.role} hidden>
-                {sequence.role} — current role
-              </option>
-              <option value="idr">IDR fragment</option>
-              <option value="enzyme_ligand_linker">Enzyme–ligand linker</option>
-              <option value="scaffold_linker">Scaffold linker</option>
-              <option value="rigid_linker">Rigid linker</option>
-              <option value="full_fusion">Complete fusion protein</option>
-            </select>
-          </label>
-        ))}
-        <p>
-          Roles are explicit inputs, not inferred from names. Save before
-          planning M1 checks.
-        </p>
-        <LazyJson value={project.sequences} label="Original sequences" />
-        <h3 id="input-constructs">Constructs and assembly declarations</h3>
-        <ScientificInputForms
-          project={project}
-          section="constructs"
-          onChange={change}
-          schema={schema}
-          inputTarget={inputTarget}
-        />
-        <LazyJson
-          value={project.assemblies}
-          label="Assembly declarations (not experimental confirmation)"
-        />
+        <NewConstruct project={project} onChange={change}/>
         </section>
         <section aria-label="Analysis plan and configuration">
         {project.datasets.some(row=>row.kind==='synthetic_ps_v3')&&<section>
           <h3>Synthetic reference demonstration</h3>
           <p>Original M3/competitive amount-model kernels recompute canonical inputs. E3 remains blocked; there is no fermentation or ER advantage claim.</p>
-          <button disabled={busy||editing} onClick={()=>onPlanMethod?.('ps-v3-demo')}>Review synthetic demonstration workflow</button>
+          <button disabled={busy} onClick={()=>onPlanMethod?.('ps-v3-demo')}>Review synthetic demonstration workflow</button>
         </section>}
         <section id="input-conditions" className="input-section">
           <h2>Analysis plan &amp; configuration</h2>
@@ -284,10 +165,8 @@ export function InputEditor({
             <ScientificSetup
               project={project}
               dirty={dirty}
-              busy={busy || editing}
+              busy={busy}
               onPreview={setScientific}
-              schema={schema}
-              schemaError={schemaError}
             />
           )}
           {scientific && (
@@ -297,7 +176,7 @@ export function InputEditor({
                 {scientific.scientific_project.evidence_files.length} original
                 files; import does not approve evidence.
               </p>
-              <LazyJson value={scientific.scientific_project} />
+              <p>M1 sequence screening · {scientific.scientific_project.sequence_index.count} protein records · real mode, no assumed inputs.</p>
               <button
                 disabled={busy}
                 onClick={() => {
@@ -378,18 +257,8 @@ export function InputEditor({
                 {scope.config.stages.m4_reaction.unit_mode} · Missing values
                 remain absent.
               </p>
-              <ScientificInputForms
-                project={project}
-                section="parameters"
-                onChange={change}
-                schema={schema}
-                inputTarget={inputTarget}
-              />
-              <ScientificSettings
-                project={project}
-                onChange={change}
-                schema={schema}
-              />
+
+
             </>
           ) : (
             <p>
@@ -403,59 +272,10 @@ export function InputEditor({
       <PrecheckPanel
         result={inputCheck}
         stale={checkStale}
-        disabled={busy || editing}
+        disabled={busy}
         onCheck={onCheck}
         onLocate={onLocate}
       />
-      <button disabled={busy || editing} onClick={startEditor}>
-        Advanced: Edit public project JSON
-      </button>
-      {editing && (
-        <section>
-          <p>
-            This edits the scientific draft, not runtime profile; apply edits
-            before new plans. Backend verification remains required.
-          </p>
-          <textarea
-            aria-label="Public inputs JSON"
-            className="json-editor"
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              ++epoch.current;
-            }}
-          />
-          <button
-            disabled={busy}
-            onClick={() =>
-              void action(async () => {
-                const value = parsePublic("ProjectView", JSON.parse(text));
-                if (
-                  value.id !== project.id ||
-                  value.revision !== project.revision
-                )
-                  throw new Error(
-                    "Do not change project  ID/revision; create an iteration instead.",
-                  );
-                change(value);
-                setEditing(false);
-                onEditing(false);
-              })
-            }
-          >
-            Apply validated draft
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => {
-              setEditing(false);
-              onEditing(false);
-            }}
-          >
-            Discard unapplied edits
-          </button>
-        </section>
-      )}
     </section>
   );
 }

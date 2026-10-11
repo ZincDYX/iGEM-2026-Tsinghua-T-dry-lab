@@ -2931,13 +2931,39 @@
           "unit": {
             "title": "Unit",
             "type": "string"
+          },
+          "species_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Species Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quantity"
           }
         },
         "required": [
           "id",
           "compartment",
           "species",
-          "unit"
+          "unit",
+          "species_id",
+          "quantity"
         ],
         "title": "SeriesDescriptor",
         "type": "object"
@@ -27970,6 +27996,56 @@
     "type": "object"
   },
   "PredictionToolView": {
+    "$defs": {
+      "PublicError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "diagnostic_id": {
+            "title": "Diagnostic Id",
+            "type": "string"
+          },
+          "field_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Field Paths",
+            "type": "array"
+          },
+          "logical_files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Logical Files",
+            "type": "array"
+          },
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "diagnostic_id",
+          "field_paths",
+          "logical_files",
+          "actions"
+        ],
+        "title": "PublicError",
+        "type": "object"
+      }
+    },
     "additionalProperties": false,
     "properties": {
       "id": {
@@ -28032,6 +28108,29 @@
         "default": "connected_backend",
         "title": "Location",
         "type": "string"
+      },
+      "failure_step": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Failure Step"
+      },
+      "problem": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/PublicError"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       }
     },
     "required": [
@@ -28042,7 +28141,9 @@
       "last_real_check",
       "latest_file_id",
       "source_reference",
-      "location"
+      "location",
+      "failure_step",
+      "problem"
     ],
     "title": "PredictionToolView",
     "type": "object"
@@ -30729,6 +30830,24 @@
         },
         "title": "Parameter Records",
         "type": "array"
+      },
+      "parameter_requirements": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Parameter Requirements",
+        "type": "array"
+      },
+      "parameter_source_options": {
+        "additionalProperties": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": "Parameter Source Options",
+        "type": "object"
       }
     },
     "required": [
@@ -30738,7 +30857,9 @@
       "tool",
       "configured_mode",
       "limitations",
-      "parameter_records"
+      "parameter_records",
+      "parameter_requirements",
+      "parameter_source_options"
     ],
     "title": "ModuleMethodView",
     "type": "object"

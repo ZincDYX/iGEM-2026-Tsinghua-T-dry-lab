@@ -101,6 +101,7 @@ export const saveAssistantSettings = (value: {provider:'none'|'compatible_api'|'
 export const testAssistantSettings = () => read('AssistantProbeView','/assistant/settings/test',{});
 export const skills = (offset=0) => read('SkillPage',`/skills?offset=${offset}`);
 export const saveSkill = (text:string,enabled:boolean,id?:string,revision?:number) => read('SkillView',id?`/skills/${encodeURIComponent(id)}`:'/skills',{text,enabled,expected_revision:revision??null});
+export const saveSkillFields = (name:string,instructions:string,enabled:boolean,id?:string,revision?:number) => read('SkillView',id?`/skills/${encodeURIComponent(id)}`:'/skills',{name,instructions,enabled,expected_revision:revision??null});
 export const methodDrafts = (projectId:string,offset=0) => read('MethodDraftPage',`/projects/${encodeURIComponent(projectId)}/method-drafts?offset=${offset}`);
 export const saveMethodDraft = (projectId:string,value:{base_method_id:string;base_version:string;title:string;formula_id:string;latex:string;reason:string;source_reference:string;previous_id:string|null;expected_project_revision:number;execution_spec?:import('../contracts/generated').MethodDraftView['execution_spec']}) =>
   read('MethodDraftView',`/projects/${encodeURIComponent(projectId)}/method-drafts`,value);

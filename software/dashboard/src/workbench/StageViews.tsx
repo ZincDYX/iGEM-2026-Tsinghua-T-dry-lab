@@ -5,94 +5,14 @@ const Plot = lazy(() =>
   import("./viewers/PlotViewer").then((m) => ({ default: m.PlotViewer })),
 );
 
-export function M3View({ record }: { record: Record<string, unknown> }) {
-  const fields = [
-    ["free_dense_concentration", "Free dense", "uM"],
-    ["bound_dense_concentration", "Bound dense", "uM"],
-    ["free_dilute_concentration", "Free dilute", "uM"],
-    ["bound_fraction_of_whole_cell_total", "Bound / whole-cell total", "1"],
-    ["fraction_in_dense", "Dense / whole-cell total", "1"],
-    ["site_occupancy", "Site occupancy", "1"],
-    ["mass_balance_residual_um", "Mass-balance residual", "uM"],
-  ];
-  const enzymes = [
-    ...new Set(
-      fields.flatMap(([field]) =>
-        object(record[field]) ? Object.keys(record[field]) : [],
-      ),
-    ),
-  ];
-  const data = useMemo(
-    () =>
-      fields.slice(0, 3).map(([field, label]) => ({
-        type: "bar" as const,
-        name: label,
-        x: enzymes,
-        y: enzymes.map((enzyme) =>
-          object(record[field]) && typeof record[field][enzyme] === "number"
-            ? (record[field][enzyme] as number)
-            : null,
-        ),
-      })),
-    [record],
-  );
-  return (
-    <section>
-      <h3>Recorded phase distribution</h3>
-      <p>
-        OC:DMT dense ratio {show(record.dense_oc_dmt_ratio)} · Whole-cell ratio{" "}
-        {show(record.whole_cell_oc_dmt_ratio)}
-      </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Enzyme</th>
-            {fields.map(([key, label, unit]) => (
-              <th key={key}>
-                {label} ({unit})
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {enzymes.map((enzyme) => (
-            <tr key={enzyme}>
-              <td>{enzyme}</td>
-              {fields.map(([field]) => (
-                <td key={field}>
-                  {object(record[field])
-                    ? show(record[field][enzyme])
-                    : "Not recorded"}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {enzymes.length > 0 ? (
-        <Suspense fallback={<p>Loading local plot renderer…</p>}>
-          <Plot
-            data={data}
-            title="M3 recorded enzyme concentrations"
-            dataIdentity={JSON.stringify([
-              record.candidate_id,
-              record.condition_id,
-              data,
-            ])}
-            xLabel="Enzyme identity"
-            yLabel="Concentration (uM)"
-          />
-        </Suspense>
-      ) : (
-        <p>No phase distribution recorded.</p>
-      )}
-      <p>
-        Site occupancy is distinct from fraction of the whole-cell enzyme pool.
-        Capacity {show(record.capacity_status)} · Excess{" "}
-        {show(record.capacity_excess_um)} uM.
-      </p>
-    </section>
-  );
+export function M3View({record}:{record:Record<string,unknown>}) {
+  const concentrations=object(record.concentrations)?record.concentrations:{};
+  const fractions=object(record.fraction_in_dense)?record.fraction_in_dense:{};
+  const dilute=object(record.free_dilute_concentration)?record.free_dilute_concentration:{};
+  return <section><h3>Enzyme recruitment</h3><table><thead><tr><th>Enzyme</th><th>Total dense (µM)</th><th>Free dilute (µM)</th><th>Dense fraction (1)</th></tr></thead><tbody>
+    {Object.entries(concentrations).filter(([,value])=>object(value)).map(([enzyme,value])=>{const c=value as Record<string,unknown>;return <tr key={enzyme}><td>{enzyme}</td><td>{show(c.dense_concentration??c.dense)}</td><td>{show(dilute[enzyme]??c.dilute_concentration??c.dilute)}</td><td>{show(fractions[enzyme])}</td></tr>;})}
+  </tbody></table><p>OC:DMT dense ratio: {show(record.dense_oc_dmt_ratio)}</p>
+  </section>;
 }
 
 export function M4View({ record }: { record: Record<string, unknown> }) {
@@ -129,12 +49,12 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
   return (
     <section>
       <h3>M4 recorded quantities</h3>
-      <p>
+      {(typeof record.final_15==='number' || typeof record.final_13==='number') && <p>
         Endpoint compound 15 {show(record.final_15)} · compound 13{" "}
         {show(record.final_13)}. Endpoint titers, dimensionless yield and
         secretion flux are not interchangeable.
-      </p>
-      <table>
+      </p>}
+      {["yield_abs", "productivity", "secretion_loss"].some(field=>typeof record[field]==='number') && <table>
         <thead>
           <tr>
             <th>Original field</th>
@@ -142,14 +62,14 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
           </tr>
         </thead>
         <tbody>
-          {["yield_abs", "productivity", "secretion_loss"].map((field) => (
+          {["yield_abs", "productivity", "secretion_loss"].filter(field=>typeof record[field]==='number').map((field) => (
             <tr key={field}>
               <td>{field}</td>
               <td>{show(record[field])}</td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>}
       {Object.keys(residuals).length > 0 && (
         <table>
           <thead>
@@ -186,13 +106,14 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
           </tbody>
         </table>
       )}
-      <h3>F2 recorded analysis</h3>
+      {Object.keys(robustness).length>0&&<><h3>Recorded robustness</h3>
       <p>
         Robustness {show(robustness.value)} · sigma {show(robustness.sigma)} ·
         ddof {show(robustness.ddof)} · scope {show(robustness.scope)}. No
         uncertainty interval is invented.
       </p>
-      {Object.keys(ranks).length > 0 ? (
+      </>}
+      {Object.keys(ranks).length > 0 && (
         <Suspense fallback={<p>Loading local plot renderer…</p>}>
           <Plot
             data={data}
@@ -206,14 +127,7 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
             yLabel="Spearman coefficient (1)"
           />
         </Suspense>
-      ) : (
-        <p>No global sensitivity analysis recorded.</p>
       )}
-      <p>
-        Local stability must be read from the recorded analysis; it does not
-        establish global uniqueness. F3 comparisons require the backend
-        comparison contract.
-      </p>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { requestJson,downloadResource } from "../../api";
 import { parsePublicAsync as parsePublic } from "../../contracts/validation";
 import type { SeriesPage } from "../../contracts/generated";
+import {show} from "../../contracts/resultAdapters";
 import { displayEnvelope } from "./displayEnvelope";
 const Plot = lazy(() =>
   import("./PlotViewer").then((m) => ({ default: m.PlotViewer })),
@@ -10,10 +11,15 @@ const Plot = lazy(() =>
 export function SeriesViewer({
   fileId,
   projectId,
+  targetSpecies,
+  scopeMarked = false,
 }: {
   fileId: string;
   projectId: string;
+  targetSpecies?: string;
+  scopeMarked?: boolean;
 }) {
+  const [dataOpen,setDataOpen] = useState(false);
   const [offset, setOffset] = useState(0),
     [rangeOffset, setRangeOffset] = useState(0);
   const [page, setPage] = useState<SeriesPage>(),
@@ -48,7 +54,9 @@ export function SeriesViewer({
           setSelected((previous) =>
             previous.length
               ? previous
-              : value.series.slice(0, 1).map((s) => s.id),
+              : (()=>{const match=value.series.find(s=>s.species_id===targetSpecies && s.quantity==='concentration' && s.compartment==='dilute')
+                ?? value.series.find(s=>s.species_id===targetSpecies && s.quantity==='concentration')
+                ?? value.series.find(s=>s.species_id===targetSpecies);return match?[match.id]:[];})(),
           );
         }
       })
@@ -57,7 +65,7 @@ export function SeriesViewer({
           setError("No authorized time-course data available.");
       });
     return () => controller.abort();
-  }, [fileId, projectId, offset]);
+  }, [fileId, projectId, offset, targetSpecies]);
   const seriesKey = selected.join(",");
   useEffect(() => {
     if (!selected.length) {
@@ -132,7 +140,7 @@ export function SeriesViewer({
   return (
     <section>
       {error && <p role="alert">{error}</p>}
-      {page.source_type==='synthetic'&&<p className="scope-warning"><strong>Synthetic demo.</strong> Not a project prediction or experimental validation.</p>}
+      {page.source_type==='synthetic'&&!scopeMarked&&<p className="scope-warning"><strong>Synthetic demo.</strong> Not a project prediction or experimental validation.</p>}
       {Object.keys(page.pool_volumes).length>0&&<details><summary>Actual pool volumes</summary>
         {Object.entries(page.pool_volumes).map(([id,pool])=><p key={id}>{id}: {String(pool.volume_L)} L ({String(pool.role)}). Amount divided by this pool's volume gives its concentration.</p>)}
       </details>}
@@ -143,23 +151,18 @@ export function SeriesViewer({
           {page.model_kind} · {page.source_reference ?? "Source file"}
         </p>
       </details>
-      <label>
-        Registered series
-        <select
-          value={selected[0] ?? ""}
-          onChange={(e) => {
-            setSelected([e.target.value]);
-            setRangeOffset(0);
-            setUnitError("");
-          }}
-        >
-          {page.series.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.compartment} / {s.species} ({s.unit})
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="result-controls">
+        {(['species','phase','quantity'] as const).map(kind=>{
+          const current=page.series.find(s=>s.id===selected[0]);
+          const valueOf=(s:SeriesPage['series'][number])=>kind==='species'?(s.species_id??s.species):kind==='phase'?s.compartment:(s.quantity??'Recorded value');
+          const relevant=page.series.filter(s=>kind==='species'||!current||(s.species_id??s.species)===(current.species_id??current.species));
+          return <label key={kind}>{kind==='species'?'Species':kind==='phase'?'Phase':'Quantity'}<select aria-label={kind==='species'?'Species':kind==='phase'?'Phase':'Quantity'} value={current?valueOf(current):''}
+            onChange={e=>{const next=relevant.find(s=>valueOf(s)===e.target.value&&(!current || (kind==='species' ? s.compartment===current.compartment && s.quantity===current.quantity : kind==='phase' ? s.quantity===current.quantity : s.compartment===current.compartment)))??relevant.find(s=>valueOf(s)===e.target.value);
+              setSelected(next?[next.id]:[]);setRangeOffset(0);setUnitError('');}}>
+            <option value="">Choose {kind}</option>{[...new Set(relevant.map(valueOf))].map(value=><option key={value}>{value}</option>)}
+          </select></label>;})}
+      </div>
+      {!selected.length&&<p>Select the target species, phase and quantity; no target is inferred from column order.</p>}
       <details>
         <summary>Overlay recorded series</summary>
         {page.series.map((s) => (
@@ -228,7 +231,7 @@ export function SeriesViewer({
               }
               onPoint={(i) => {
                 const original = overview.offset + i;
-                setPoint(original);
+                setPoint(original);setDataOpen(true);
                 setOffset(Math.floor(original / 500) * 500);
               }}
             />
@@ -261,6 +264,9 @@ export function SeriesViewer({
           )}
         </>
       )}
+      {overview?.time.length ? <p className="result-status">{overview.series[0]?.species}: {show(overview.values[overview.series[0]?.id]?.at(-1))} {overview.series[0]?.unit} at {show(overview.time.at(-1))} {overview.time_unit}, {overview.series[0]?.compartment}. Transient endpoint, not steady state.</p> : null}
+      <button aria-expanded={dataOpen} onClick={()=>setDataOpen(value=>!value)}>Data</button>
+      {dataOpen&&<section aria-label="Recorded numerical data">
       <p>
         Exact contiguous page, {offset + 1}–{offset + page.time.length} /{" "}
         {page.total} points.
@@ -292,7 +298,7 @@ export function SeriesViewer({
                 {page.series
                   .filter((s) => selected.includes(s.id))
                   .map((s) => (
-                    <td key={s.id}>{page.values[s.id][i] ?? "Not recorded"}</td>
+                    <td key={s.id}>{show(page.values[s.id][i])}</td>
                   ))}
               </tr>
             ))}
@@ -308,6 +314,7 @@ export function SeriesViewer({
       <button disabled={!page.has_more} onClick={() => setOffset(offset + 500)}>
         Next series page
       </button>
+      </section>}
     </section>
   );
 }

@@ -3,7 +3,7 @@
   color: #243044;
   background: #edf0f4;
   font-synthesis: none;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 .run-assessment {display:grid;grid-template-columns:max-content 1fr;gap:4px 16px}
@@ -148,25 +148,22 @@ li {
 }
 .workbench {
   --surface: #fff;
-  --soft: #f4f6f8;
+  --soft: #f7f4fa;
   --line: #d5dce4;
-  --muted: #65738a;
-  --accent: #215da8;
+  --muted: #566174;
+  --accent: #7540a8;
   color: #243044;
   background: var(--surface);
   height: 100dvh;
   min-height: 600px;
   display: grid;
-  grid-template-columns: var(--left-width) minmax(300px, 1fr) var(--right-width);
-  grid-template-rows: 34px auto minmax(240px, 1fr) var(--bottom-height) 24px;
-  grid-template-areas: "top top top" "toolbar toolbar toolbar" "tree center inspector" "tree bottom bottom" "footer footer footer";
 }
 .workbench.dark {
   --surface: #20272f;
   --soft: #29333d;
   --line: #3c4855;
   --muted: #b1bcc9;
-  --accent: #83b9f5;
+  --accent: #c7a4ed;
   color: #e2e8ee;
 }
 .workbench-top {
@@ -197,34 +194,9 @@ li {
   background: var(--soft);
   border-bottom: 1px solid var(--line);
 }
-.context-navigation { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
-.context-navigation button { text-align: left; }
-.context-navigation button[aria-current="page"] { font-weight: 600; border-color: var(--accent); }
-.project-tree {
-  grid-area: tree;
-  border-right: 1px solid var(--line);
-  overflow: auto;
-  padding: 10px;
-  background: var(--soft);
-}
-.project-tree select {
-  width: 100%;
-}
-.project-tree > button, .project-tree section > button {
-  width: 100%;
-  text-align: left;
-  border-color: transparent;
-  display: block;
-  margin: 3px 0;
-  overflow-wrap: anywhere;
-}
-.project-tree small {
-  display: block;
-  color: var(--muted);
-}
 .tree-selected,
 .selected-row {
-  background: #215da81a !important;
+  background: #7540a81a !important;
   border-color: var(--accent) !important;
 }
 .workspace-center {
@@ -362,75 +334,20 @@ li {
 .comfortable th {
   padding: 8px;
 }
-.inspector-hidden {
-  grid-template-columns: var(--left-width) minmax(300px, 1fr);
-  grid-template-areas: "top top" "toolbar toolbar" "tree center" "tree bottom" "footer footer";
-}
-.inspector-hidden .workspace-inspector {
-  display: none;
-}
-.bottom-hidden {
-  grid-template-rows: 34px auto minmax(240px, 1fr) 0 24px;
-}
-.bottom-hidden .workspace-bottom {
-  display: none;
-}
-@media (max-width: 1100px) {
-  .workbench {
-    grid-template-columns: 190px minmax(300px, 1fr);
-    grid-template-areas: "top top" "toolbar toolbar" "tree center" "tree bottom" "footer footer";
-  }
-  .workspace-inspector {
-    position: fixed;
-    right: 0;
-    top: 110px;
-    bottom: 24px;
-    width: min(360px, 48vw);
-    background: var(--surface);
-    box-shadow: -5px 0 15px #0002;
-    z-index: 3;
-  }
-  .workspace-state {
-    display: none;
-  }
-}
-@media (max-width: 800px) {
-  .workbench {
-    grid-template-columns: 160px minmax(280px, 1fr);
-  }
-  .workbench-top > span:nth-child(2) {
-    display: none;
-  }
-  .workspace-inspector {
-    width: min(340px, 70vw);
-  }
-  .workbench-footer > span:nth-child(2) {
-    display: none;
-  }
-}
+.inspector-hidden .workspace-inspector, .bottom-hidden .workspace-bottom {display:none;}
 :root {
   --splitter-size: 7px;
 }
 .workbench {
   position: relative;
   min-height: 0;
-  grid-template-columns:
-    var(--left-width) var(--splitter-size) minmax(0, 1fr)
-    var(--splitter-size) var(--right-width);
-  grid-template-rows:
-    34px auto minmax(180px, 1fr) var(--splitter-size) var(--bottom-height)
-    24px;
-  grid-template-areas: "top top top top top" "toolbar toolbar toolbar toolbar toolbar" "tree left-splitter center right-splitter inspector" "tree left-splitter bottom-splitter bottom-splitter bottom-splitter" "tree left-splitter bottom bottom bottom" "footer footer footer footer footer";
+  grid-template-columns: minmax(0, 1fr) var(--splitter-size) var(--right-width);
+  grid-template-rows: 44px auto minmax(180px, 1fr) var(--splitter-size) var(--bottom-height) 28px;
+  grid-template-areas: "top top top" "toolbar toolbar toolbar" "center right-splitter inspector" "bottom-splitter bottom-splitter bottom-splitter" "bottom bottom bottom" "footer footer footer";
 }
-.workbench.inspector-hidden,
-.workbench.narrow {
-  grid-template-columns:
-    var(--left-width) var(--splitter-size) minmax(0, 1fr)
-    0 0;
-  grid-template-areas: "top top top top top" "toolbar toolbar toolbar toolbar toolbar" "tree left-splitter center right-splitter inspector" "tree left-splitter bottom-splitter bottom-splitter bottom-splitter" "tree left-splitter bottom bottom bottom" "footer footer footer footer footer";
-}
+.workbench.inspector-hidden, .workbench.narrow {grid-template-columns: minmax(0,1fr) 0 0;}
 .workbench.bottom-hidden {
-  grid-template-rows: 34px auto minmax(180px, 1fr) 0 0 24px;
+  grid-template-rows: 44px auto minmax(180px, 1fr) 0 0 28px;
 }
 .workbench .workspace-inspector {
   position: static;
@@ -470,10 +387,6 @@ li {
 .splitter:hover,
 .splitter:focus-visible {
   background: var(--accent);
-}
-.splitter-left {
-  grid-area: left-splitter;
-  cursor: col-resize;
 }
 .splitter-right {
   grid-area: right-splitter;
@@ -551,3 +464,7 @@ tr[aria-selected="true"] {
 .workflow-view-switch, .workflow-edit-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .workflow-edit-controls h3, .workflow-edit-controls p { flex-basis: 100%; }
 .workflow-edit-controls label { min-width: 180px; }
+
+.workbench-top select {max-width:260px;}
+.result-controls {display:flex;gap:16px;flex-wrap:wrap;}
+.result-status {font-weight:600;color:var(--accent);}

@@ -7,7 +7,7 @@ kept separate; rendering a method never grants evidence or parameter approval.
 from typing import Literal
 from pydantic import Field
 from .models import Contract
-from .custom_formula import FormulaSpec
+from .custom_formula import FormulaSpec, expression_latex
 
 
 class MethodFormula(Contract):
@@ -60,6 +60,8 @@ class ModuleMethodView(Contract):
     configured_mode: str | None
     limitations: list[str]
     parameter_records: list[dict] = Field(default_factory=list)
+    parameter_requirements: list[dict] = Field(default_factory=list)
+    parameter_source_options: dict[str,list[str]] = Field(default_factory=dict)
 
 
 class ToolCatalogPage(Contract):
@@ -148,9 +150,12 @@ class MethodDrafts:
                 if previous.base_method_id!=method.id or previous.formula_id!=original.id:
                     raise WorkflowError('method_draft_parent_mismatch')
                 version=previous.version+1
+            fields=request.model_dump(exclude={'expected_project_revision'})
+            if request.execution_spec is not None:
+                fields['latex']=expression_latex(request.execution_spec.expression)
             result=MethodDraftView(id=str(uuid4()),project_id=project_id,project_revision=revision,version=version,
                 original_latex=original.latex,executable=request.execution_spec is not None,
-                **request.model_dump(exclude={'expected_project_revision'}))
+                **fields)
             db.execute('INSERT INTO method_drafts VALUES(?,?,?)',(result.id,project_id,canonical(result.model_dump(mode='json'))))
         return result
 
@@ -164,7 +169,7 @@ class MethodDrafts:
         draft=MethodDraftView.model_validate_json(row[0])
         if draft.execution_spec is None: raise WorkflowError('method_draft_has_no_execution_spec')
         payload=FormulaExecution(method_id=draft.id,method_version=draft.version,title=draft.title,
-            base_method_id=draft.base_method_id,base_version=draft.base_version,latex=draft.latex,
+            base_method_id=draft.base_method_id,base_version=draft.base_version,latex=expression_latex(draft.execution_spec.expression),
             reason=draft.reason,source_reference=draft.source_reference,spec=draft.execution_spec)
         return Workflow(id='custom-formula-'+draft.id,name=draft.title,
             description='Separate unvalidated exploratory formula. Review the frozen expression, all values, units and sources; Accept then Start. Not formal M1–M4 evidence.',
@@ -188,6 +193,27 @@ def module_method(project, definition):
             from igem_drylab.compartments import scenario_for_construct
             if any(scenario_for_construct(config, item.id) == 'er_anchored' for item in config.inputs.constructs):
                 methods.append(ER)
+    from igem_drylab.parameters.requirements import requirements_for_stage
+    requirements=requirements_for_stage(science.config,definition.id.removeprefix('project.')) if science and definition.id in {'project.m3','project.m4'} else []
+    names={requirement.name for requirement in requirements}
+    source_options={}
+    if science:
+        from igem_drylab.parameters import ParameterRegistry
+        from igem_drylab.parameters.registry import resolve_requirement
+        for original in science.config.parameters:
+            requirement=next((item for item in requirements if item.name==original.name),None)
+            if requirement is None: continue
+            compatible=[]
+            for source in science.config.parameters:
+                if (source.parameter_id==original.parameter_id or source.name!=original.name
+                        or source.construct_id!=original.construct_id or source.condition_id!=original.condition_id):
+                    continue
+                result=resolve_requirement(ParameterRegistry([source.model_copy(update={'supersedes':None})]),
+                    requirement,science.config.experimental_context,allow_assumptions=science.config.execution.allow_assumptions,
+                    construct_id=original.construct_id,condition_id=original.condition_id,
+                    require_provenance=science.config.execution.mode=='real')
+                if result.status=='resolved': compatible.append(source.parameter_id)
+            source_options[original.parameter_id]=compatible
     return ModuleMethodView(project_id=project.id,project_revision=project.revision,methods=methods,
         tool=ModuleTool(id=definition.id,name=definition.name,version=definition.version,description=definition.description,
             runtime=definition.runtime,license='Apache-2.0' if definition.runtime == 'builtin' else 'See the registered tool/plugin license; third-party licensing is independent.',
@@ -196,7 +222,9 @@ def module_method(project, definition):
             'Registration/configuration is not a real successful tool job. External tool evidence and license gates remain authoritative.',
             'The original method is shown for review. A differently configured historical/dynamic mode is not relabeled as this method.',
             'Custom scalar formulas use a separate unit-checked exploratory tool, not an original method or approved scientific evidence. LaTeX alone is not executable.'],
-        parameter_records=[record.model_dump(mode='json') for record in science.config.parameters] if science else [])
+        parameter_source_options=source_options,
+        parameter_requirements=[requirement.model_dump(mode='json') for requirement in requirements],
+        parameter_records=[record.model_dump(mode='json') for record in science.config.parameters if record.name in names] if science else [])
 
 
 def formula(id, title, latex, function, *assumptions, status='implemented'):

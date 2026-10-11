@@ -34,11 +34,9 @@ import { ComparisonPanel } from "./ComparisonPanel";
 import { InputDiffPanel } from "./InputDiffPanel";
 import { WorkflowImporter } from "./WorkflowImporter";
 import { LocalSettings } from "./LocalSettings";
-import { PluginPanel } from "./PluginPanel";
 import { Splitter } from "./Splitter";
 import { useWorkbenchLayout } from "./useWorkbenchLayout";
 import { useSelectedResult } from "./useSelectedResult";
-import { usePlanActions } from "./usePlanActions";
 import { matchesRun, selectRunNode, type Selection } from "./selection";
 import "./workbench.css";
 import { ResourceBrowser } from "./ResourceBrowser";
@@ -57,7 +55,6 @@ type Tab =
   | "compare"
   | "settings"
   | "assistant-settings"
-  | "plugins"
   | "tools"
   | "artifacts";
 const tabs: { id: Tab; label: string }[] = [
@@ -68,7 +65,6 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "artifacts", label: "Resources" },
   { id: "settings", label: "Settings" },
   { id: "assistant-settings", label: "Assistant Settings" },
-  { id: "plugins", label: "Plugins" },
   { id: "tools", label: "Tools & extensions" },
 ];
 function Tabs({
@@ -112,7 +108,7 @@ function Tabs({
         >
           {tab.label}
         </button>
-        {onClose && <button aria-label={`Close ${tab.label}`} onClick={() => onClose(tab.id)}>×</button>}
+        {onClose && !['inputs','plan','results'].includes(tab.id) && <button aria-label={`Close ${tab.label}`} onClick={() => onClose(tab.id)}>×</button>}
         </span>
       ))}
     </div>
@@ -144,11 +140,10 @@ export function WorkspaceShell() {
   const [goal, setGoal] = useState<Goal>("fusion_screen");
   const [inputTarget, setInputTarget] = useState<InputIssue>();
   const [objective, setObjective] = useState("");
-  const [mode, setMode] = useState<"template" | "hybrid">("template");
+  const [mode, setMode] = useState<"template" | "hybrid">(()=>localStorage.getItem("fusionlab.planner")==="hybrid"?"hybrid":"template");
   const [permission, setPermission] = useState(false);
   const [policy, setPolicy] = useState<ExecutionPolicy>(client.defaultPolicy);
-  const [editing, setEditing] = useState(false);
-  const { tab, setTab, openDocuments, closeDocument } = useDocuments(info?.workspace_id ?? "initial", project.dirty || editing,
+  const { tab, setTab, openDocuments, closeDocument } = useDocuments(info?.workspace_id ?? "initial", project.dirty,
     () => setError("Save or discard input edits before closing Inputs."));
   const [resourceFile, setResourceFile] = useState<string>();
   const [resourceRunScope, setResourceRunScope] = useState(false);
@@ -178,12 +173,6 @@ export function WorkspaceShell() {
     runSelected ? selected : "",
   );
   const nodeData = result.data;
-  const actionHistory = usePlanActions(
-    currentProject?.id,
-    `${proposal?.id}:${proposal?.status}:${run?.id}:${run?.state_version}`,
-    fail,
-  );
-  const actions = actionHistory.items;
   const workflow =
     selection?.kind === "run-node"
       ? run?.workflow
@@ -191,12 +180,16 @@ export function WorkspaceShell() {
   const workflowChanged = !!workflowDocument && JSON.stringify(workflowDocument.workflow) !== JSON.stringify(proposal?.workflow);
   const visiblePolicy = runSelected && run ? run.workflow.execution_policy : policy;
   const node = workflow?.nodes.find((value) => value.id === selected);
+  const m1Dependencies=new Set(run?.workflow.nodes.filter(n=>n.tool_id==='method.m1.decision').flatMap(n=>n.depends_on));
+  const resultNodes = run?.nodes.filter(item => item.parent_id === null && !m1Dependencies.has(item.id)) ?? [];
   const stopped =
     run &&
     ["succeeded", "failed", "paused", "cancelled", "interrupted"].includes(
       run.status,
     );
   const executing = run && ["queued", "running"].includes(run.status);
+
+  useEffect(()=>{if(run?.status==='succeeded')setBottomOpen(false);},[run?.status]);
 
   async function action(job: () => Promise<unknown>) {
     setPending((value) => value + 1);
@@ -258,7 +251,6 @@ export function WorkspaceShell() {
     // Reset project-scoped commands before the new project's controls are interactive.
     invalidate();
     setSelection(undefined);
-    setEditing(false);
     setHistory([]);
     setPolicy(client.defaultPolicy());
     setResourceFile(undefined);
@@ -307,7 +299,7 @@ export function WorkspaceShell() {
           run,
           selection?.kind === "run-node"
             ? selection.nodeId
-            : (run.nodes[0]?.id ?? ""),
+            : (resultNodes[0]?.id ?? ""),
         ),
       );
   }, [run?.id, run?.state_version, proposal?.id]);
@@ -440,7 +432,7 @@ export function WorkspaceShell() {
         setSelection(selectRunNode(value, value.nodes[0]?.id ?? ""));
         setRefresh((value) => value + 1);
         setProposal(undefined);
-        setBottom("queue");
+        setBottom("queue");setBottomOpen(true);
       }
     });
   }
@@ -454,7 +446,7 @@ export function WorkspaceShell() {
   }
   function discardDraft(message: string) {
     return (
-      !(project.dirty || editing) ||
+      !(project.dirty) ||
       window.confirm(message + " (including unapplied  JSON edits). Continue?")
     );
   }
@@ -523,7 +515,7 @@ export function WorkspaceShell() {
     inputCheck?.project_id === currentProject?.id &&
       inputCheck?.project_revision === currentProject?.revision &&
       !project.dirty &&
-      !editing,
+      true,
   );
   async function runPrimary() {
     if (primary === "resume") return control("resume");
@@ -537,7 +529,6 @@ export function WorkspaceShell() {
     setError('Choose a method or open a saved workflow before reviewing a plan.');
   }
   async function checkInputs() {
-    if (editing) return;
     await action(async () => {
       const stamp = project.generation.current;
       const saved = await project.save();
@@ -560,7 +551,6 @@ export function WorkspaceShell() {
     inputCheck?.project_id === currentProject?.id ? inputCheck : undefined;
   const checkStale =
     project.dirty ||
-    editing ||
     projectCheck?.project_revision !== currentProject?.revision;
   function openInput(issue: InputIssue) {
     setInputTarget(issue);
@@ -570,19 +560,18 @@ export function WorkspaceShell() {
       : field.includes("fasta")
         ? "sequences"
         : field.includes("parameter")
-          ? "parameters"
+          ? "evidence"
           : field.includes("condition") ||
               field.includes("experimental_context")
             ? "conditions"
             : field === "scientific_project"
               ? "scientific-setup"
               : field.includes("stages.")
-                ? "model-settings"
+                ? "conditions"
                 : "evidence";
     navigateInput(section);
   }
   const style = {
-    "--left-width": `${layout.left}px`,
     "--right-width": `${layout.right}px`,
     "--bottom-height": `${layout.bottom}px`,
   } as CSSProperties;
@@ -619,7 +608,7 @@ export function WorkspaceShell() {
             },
             {
               label: "Save",
-              disabled: busy || !currentProject || editing,
+              disabled: busy || !currentProject,
               action: () => void action(() => project.save()),
             },
             {
@@ -663,16 +652,6 @@ export function WorkspaceShell() {
             },
           ]}
         />
-        <span className="workspace-state">
-          {info ? "Connected workspace" : "Connecting to backend"}
-        </span>
-      </header>
-      <aside
-        id="project-tree"
-        className="project-tree"
-        aria-label="Project and run tree"
-      >
-        <h2>Project</h2>
         <select
           aria-label="Current project"
           disabled={busy}
@@ -694,107 +673,18 @@ export function WorkspaceShell() {
             </option>
           ))}
         </select>
-        <nav className="context-navigation" aria-label="Project navigation">
-          {(['inputs','plan','results'] as const).map(id=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}>{id==='inputs'?'Inputs':id==='plan'?'Workflow':'Results'}</button>)}
-        </nav>
-        {currentProject && (
-          <>
-            {tab === 'inputs' && <>
-            <p>Standalone sequences: {currentProject.sequences.length}</p>
-            <p>
-              Scientific sequences:{" "}
-              {currentProject.scientific_project?.sequence_index.status ===
-              "indexed"
-                ? currentProject.scientific_project.sequence_index.count
-                : "Not indexed"}
-            </p>
-            <button onClick={() => navigateInput("sequences")}>
-              ▸ Sequences
-            </button>
-            <button onClick={() => navigateInput("constructs")}>
-              ▸ Constructs
-            </button>
-            <button onClick={() => navigateInput("conditions")}>
-              ▸ Conditions
-            </button>
-            <button onClick={() => navigateInput("evidence")}>
-              ▸ Evidence
-            </button>
-            </>}
-            {tab === 'plan' && workflow && <section aria-label="Workflow modules">
-              <h3>Modules</h3>
-              {workflow.nodes.map(module=><button key={module.id} className={selected===module.id?'tree-selected':''} onClick={()=>selectPlan(module.id)}>
-                {module.label}<small>{dependencies(module).length ? `Requires ${dependencies(module).map(id=>workflow.nodes.find(n=>n.id===id)!.label).join(', ')}` : 'Project inputs'}</small>
-              </button>)}
-            </section>}
-            {tab === 'results' && <>
-            {history.length > 0 && <h3>Runs (recent 50 rows / page)</h3>}
-            {history.map((value) => (
-              <button
-                className={runId === value.id ? "tree-selected" : ""}
-                key={value.id}
-                title={value.id}
-                onClick={() => {
-                  invalidate();
-                  setRunId(value.id);
-                  setRefresh((n) => n + 1);
-                  setTab("results");
-                }}
-              >
-                {value.name} · r{value.project_revision}
-                <small>{statusLabel(value.status)}</small>
-              </button>
-            ))}
-            {history.length >= 50 && (
-              <button
-                disabled={busy}
-                onClick={() =>
-                  void action(async () => {
-                    const values = await client.history(
-                      currentProject.id,
-                      history.length,
-                    );
-                    setHistory((previous) => [
-                      ...previous,
-                      ...values.filter(
-                        (value) => !previous.some((row) => row.id === value.id),
-                      ),
-                    ]);
-                  })
-                }
-              >
-                Next run page
-              </button>
-            )}
-            {!!run?.nodes.length && <h3>Results by module</h3>}
-            {run?.nodes.map((value) => (
-              <button
-                key={value.id}
-                onClick={() => {
-                  selectRun(value.id);
-                  setTab("results");
-                }}
-              >
-                {value.label}<small>{statusLabel(value.status)}</small>
-              </button>
-            ))}
-            </>}
-          </>
-        )}
-      </aside>
-      <Splitter
-        dimension="left"
-        value={layout.left}
-        {...view.bounds.left}
-        defaultValue={view.defaults.left}
-        onChange={(value, save) => view.resize("left", value, save)}
-      />
+        <button aria-expanded={inspectorOpen} onClick={() => {setInspector("agent");setInspectorOpen(value=>!value);}}>Assistant</button>
+        <button onClick={() => setBottomOpen(value=>!value)}>Jobs{executing ? " · running" : run?.status === "failed" ? " · failed" : ""}</button>
+        <span className="workspace-state">
+          {info ? "Connected workspace" : "Connecting to backend"}
+        </span>
+      </header>
       <main className="workspace-center">
         <Tabs
-          values={tabs.filter(item => openDocuments.includes(item.id))}
+          values={tabs.filter(item => ["inputs","plan","results"].includes(item.id) || openDocuments.includes(item.id))}
           selected={tab}
           label="Workspace documents"
-          onClose={(id) => closeDocument(id as Tab)}
+          onClose={(id) => {if (!["inputs","plan","results"].includes(id)) closeDocument(id as Tab);}}
           onChange={(id) => {
             const value = tabs.find((t) => t.id === id);
             if (value) setTab(value.id);
@@ -805,7 +695,7 @@ export function WorkspaceShell() {
             <span>
               {currentProject?.name ?? "No project loaded"} ·{" "}
               {project.dirty ? "Unsaved changes" : "Draft synchronized"}
-              {editing ? " · Unapplied edits" : ""}
+              {""}
             </span>
             <span>
               {run
@@ -835,10 +725,6 @@ export function WorkspaceShell() {
                 project={currentProject}
                 busy={busy}
                 dirty={project.dirty}
-                onEditing={(value) => {
-                  setEditing(value);
-                  invalidate();
-                }}
                 onChange={(value) => {
                   project.edit(value);
                   invalidate();
@@ -860,7 +746,7 @@ export function WorkspaceShell() {
           ) : null}
           {tab === "plan" && (
             <>
-              <WorkflowControls primary={primary} disabled={busy || !currentProject || editing}
+              <WorkflowControls primary={primary} disabled={busy || !currentProject}
                 reviewDisabled={!workflowDocument && !proposal?.workflow}
                 pausePending={!!run?.control}
                 startDisabled={workflowChanged || project.dirty} executing={!!executing && runSelected}
@@ -894,9 +780,9 @@ export function WorkspaceShell() {
               {workflowChanged && selection?.kind !== 'run-node' && <p role="status">Workflow changes are saved but not authorized. Review and accept a new proposal before running.</p>}
               {tab === 'plan' && node && currentProject && <Suspense fallback={<p>Loading method details…</p>}><MethodPanel
                 key={node.id} project={currentProject} toolId={node.tool_id} runId={runSelected ? run?.id : undefined}
-                disabled={busy || editing} onChange={value => {project.edit(value); invalidate();}} onReview={reviewParameter}
+                disabled={busy} onChange={value => {project.edit(value); invalidate();}} onReview={reviewParameter}
                 onPlan={value=>void importWorkflow(async()=>value)}/></Suspense>}
-              <fieldset className="policy-editor" disabled={busy || editing || !!runSelected || (!!proposal?.workflow && !workflowDocument)}>
+              <fieldset className="policy-editor" disabled={busy || !!runSelected || (!!proposal?.workflow && !workflowDocument)}>
                 <h3>Execution settings</h3>
                 {!!proposal?.workflow && !workflowDocument && !runSelected && <p role="status">Saving this workflow before execution settings can be edited.</p>}
                 <p>{runSelected ? 'Recorded settings for this frozen run; not the current draft.' : 'Choose the execution scope here, then Review plan. Changing these settings requires a new accepted proposal; it does not approve scientific evidence.'}</p>
@@ -920,34 +806,6 @@ export function WorkspaceShell() {
                     }
                   />
                   Pause after each completed module
-                </label>
-                <label>
-                  Tool call budget
-                  <input
-                    type="number"
-                    min="1"
-                    value={visiblePolicy.max_tool_calls}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      if (Number.isInteger(value) && value > 0)
-                        updatePolicy({ ...policy, max_tool_calls: value });
-                    }}
-                  />
-                </label>
-                <label>
-                  Dispatch deadline, seconds (blank: unlimited; solvers are not
-                  killed)
-                  <input
-                    type="number"
-                    min="1"
-                    value={visiblePolicy.stop_after_seconds ?? ""}
-                    onChange={(e) => {
-                      const value =
-                        e.target.value === "" ? null : Number(e.target.value);
-                      if (value === null || value > 0)
-                        updatePolicy({ ...policy, stop_after_seconds: value });
-                    }}
-                  />
                 </label>
                 {node && (
                   <>
@@ -1000,52 +858,26 @@ export function WorkspaceShell() {
               <WorkflowImporter
                 key={`workflow-import:${currentProject?.id}`}
                 busy={busy}
-                enabled={!!currentProject && !editing}
+                enabled={!!currentProject}
                 submit={importWorkflow}
                 onEdit={invalidate}
               />
             </>
           )}
-          {tab === "results" &&
-            (run ? (
-              <>
-                <label>
-                  Result object
-                  <select
-                    aria-label="Result object"
-                    value={runSelected ? selected : ""}
-                    onChange={(e) => selectRun(e.target.value)}
-                  >
-                    <option value="">Select stage / branch</option>
-                    {run.nodes.map((value) => (
-                      <option key={value.id} value={value.id}>
-                        {value.id} · {statusLabel(value.status)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {runSelected ? (
-                  <SelectedResult
-                    run={run}
-                    selected={selected}
-                    data={nodeData}
-                    error={result.error}
-                    offset={result.offset}
-                    onOffset={result.setOffset}
-                    onOpenResource={(id) => openResource(id, true)}
-                    onSelect={selectRun}
-                    action={action}
-                  />
-                ) : (
-                  <p>
-                    Draft proposals have no results. Explicitly select a frozen
-                    run result above.
-                  </p>
-                )}
-              </>
-            ) : (
-              <p>No run for this project; no example results generated.</p>
-            ))}
+          {tab === "results" && <>
+            <label>Run version<select aria-label="Run version" value={runId ?? ''} onChange={event=>{invalidate();setRunId(event.target.value||undefined);setRefresh(value=>value+1);}}>
+              <option value="">Choose recorded run</option>{history.map(value=><option key={value.id} value={value.id}>{value.name} · {statusLabel(value.status)}</option>)}
+            </select></label>
+            {history.length>=50&&<button onClick={()=>void action(async()=>{const values=await client.history(currentProject!.id,history.length);setHistory(previous=>[...previous,...values.filter(row=>!previous.some(item=>item.id===row.id))]);})}>More runs</button>}
+            {run ? <>
+              <p>Batch jobs: {statusLabel(run.status)}{run.scientific_assessment.numerical_state==='partial_or_blocked'?' · scientific results partially complete':''}</p>
+              <label>Module<select aria-label="Result object" value={runSelected ? selected : ''} onChange={e=>selectRun(e.target.value)}>
+                <option value="">Select module</option>{resultNodes.map(value=><option key={value.id} value={value.id}>{value.label}</option>)}
+              </select></label>
+              {runSelected?<SelectedResult onAddData={()=>navigateInput('evidence')} run={run} selected={selected} data={nodeData} error={result.error} offset={result.offset}
+                onOffset={result.setOffset} onOpenResource={id=>openResource(id,true)} onSelect={selectRun} action={action}/>:<p>Select a recorded module result.</p>}
+            </>:<p>No run selected; no example results generated.</p>}
+          </>}
           {tab === "compare" && (
             <ComparisonPanel history={history} current={run} />
           )}
@@ -1074,18 +906,18 @@ export function WorkspaceShell() {
           {tab === "artifacts" && (
             <button onClick={returnFromResource}>Return to source</button>
           )}
-          {(tab === "settings" || tab === "plugins" || tab === "artifacts") && (
+          {(tab === "settings" || tab === "artifacts") && (
             <button onClick={() => setTab("plan")}>Back to Workflow</button>
           )}
           {tab === "settings" && (
             <LocalSettings
+              goal={goal} mode={mode} onGoal={value=>{goalChosen.current=true;setGoal(value);invalidate();}} onMode={value=>{setMode(value);localStorage.setItem("fusionlab.planner",value);invalidate();}}
               layout={layout}
               onLayout={view.update}
               info={info}
               onRefresh={() => setInfoRefresh((value) => value + 1)}
             />
           )}
-          {tab === "plugins" && <PluginPanel busy={busy} action={action} />}
           {tab === "assistant-settings" && <Suspense fallback={<p>Loading Assistant settings…</p>}><AssistantSettings onSaved={()=>{setInfoRefresh(value=>value+1);setPermission(false);invalidate();}}/></Suspense>}
           {tab === "tools" && (
             <Suspense fallback={<p>Loading Tools &amp; extensions…</p>}><ExtensionsPanel
@@ -1146,7 +978,7 @@ export function WorkspaceShell() {
               mode={mode}
               permission={permission}
               busy={busy}
-              canPlan={!!currentProject && !editing}
+              canPlan={!!currentProject}
               onGoal={(value) => {
                 goalChosen.current = true;
                 setGoal(value);
@@ -1265,7 +1097,6 @@ export function WorkspaceShell() {
             { id: "queue", label: "Jobs" },
             { id: "events", label: "Output" },
             { id: "problems", label: "Problems" },
-            { id: "terminal", label: "Terminal" },
           ]}
           selected={bottom}
           onChange={setBottom}
@@ -1329,41 +1160,7 @@ export function WorkspaceShell() {
               </tbody>
             </table>
           )}
-          {bottom === "queue" && (
-            <>
-              <p>
-                Action ledger window: at most 500 rows;
-                {actionHistory.trimmed
-                  ? "Earlier rows truncated; query the server ledger."
-                  : "Current window is not truncated."}
-              </p>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Identity</th>
-                    <th>Actor</th>
-                    <th>Action</th>
-                    <th>Linked run</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {actions.map((event) => (
-                    <tr key={event.seq}>
-                      <td>{event.proposal_id}</td>
-                      <td>{event.actor}</td>
-                      <td>{event.action}</td>
-                      <td>{event.run_id ?? "Proposal only, not started"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {actionHistory.hasMore && (
-                <button onClick={actionHistory.loadMore}>
-                  Load next actions (bounded window)
-                </button>
-              )}
-            </>
-          )}
+          {bottom==="queue"&&run&&<table aria-label="Execution jobs"><thead><tr><th>Step</th><th>Status</th><th>Output / log</th></tr></thead><tbody>{run.nodes.map(job=><tr key={job.id}><td>{job.label}</td><td>{statusLabel(job.status)}</td><td><button onClick={()=>{selectRun(job.id);setBottom('problems');}}>View diagnostic</button></td></tr>)}</tbody></table>}
           {bottom === "problems" && (
             <>
               {nodeData?.node.error && <section aria-label="Selected module problem">
@@ -1401,10 +1198,6 @@ export function WorkspaceShell() {
               </p>
             </>
           )}
-          {bottom === 'terminal' && <section aria-label="Workspace terminal boundary"><h3>Terminal unavailable in this Web workspace</h3>
-            <p>Raw host shell access is disabled. This page does not expose a server account, SSH credentials or arbitrary server files.</p>
-            <p>For trusted local batch work, use the documented fusionlab CLI in your own terminal. Importing a file or enabling an instruction Skill never executes a shell command.</p>
-          </section>}
         </div>
       </section>
       <footer className="workbench-footer">
@@ -1412,14 +1205,10 @@ export function WorkspaceShell() {
           {busy
             ? "Working"
             : stopped
-              ? "Stage boundary / Terminal"
+              ? "Run "+run.status.replaceAll("_", " ")
               : executing
                 ? "Backend executing"
                 : "Ready"}
-        </span>
-        <span>
-          Original formulas and evidence approvals unchanged · Missing values
-          are not zero · Bounded event display
         </span>
       </footer>
     </div>

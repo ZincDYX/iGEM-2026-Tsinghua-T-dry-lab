@@ -166,9 +166,15 @@ class PublicReads:
                 output = json.loads(meta)
                 output["records"] = [json.loads(row[0]) for row in records]
             else:
-                output = db.execute("SELECT output FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()[0]
-                output = json.loads(output) if output else None
-                count = 0
+                count = db.execute("SELECT json_array_length(output,'$.items') FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()[0]
+                if count is not None:
+                    meta = db.execute("SELECT json_remove(output,'$.items') FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()[0]
+                    rows = db.execute("SELECT value FROM nodes,json_each(nodes.output,'$.items') WHERE run_id=? AND nodes.id=? LIMIT ? OFFSET ?",(run_id,node_id,limit,offset))
+                    output = {**json.loads(meta), 'items': [json.loads(row[0]) for row in rows]}
+                else:
+                    output = db.execute("SELECT output FROM nodes WHERE run_id=? AND id=?",(run_id,node_id)).fetchone()[0]
+                    output = json.loads(output) if output else None
+                    count = 0
             artifact = db.execute("SELECT id,hash FROM artifacts WHERE run_id=? AND node_id=? AND json_extract(metadata,'$.attempt')=?",(run_id,node_id,node["attempts"])).fetchone()
         result = self.boundary.node({**dict(node),"output":output,"error":json.loads(node["error"]) if node["error"] else None},run["project_id"])
         self.boundary.check(sequences)

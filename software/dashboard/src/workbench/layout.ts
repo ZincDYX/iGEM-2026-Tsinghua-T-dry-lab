@@ -1,13 +1,11 @@
 export interface Layout {
-  left: number;
   right: number;
   bottom: number;
   density: "compact" | "comfortable";
   theme: "light" | "dark";
 }
-export type Dimension = "left" | "right" | "bottom";
+export type Dimension = "right" | "bottom";
 export const defaultLayout = (): Layout => ({
-  left: 225,
   right: 310,
   bottom: 165,
   density: "compact",
@@ -20,7 +18,7 @@ export function loadLayout(): Layout {
     );
     if (
       value &&
-      [value.left, value.right, value.bottom].every(
+      [value.right, value.bottom].every(
         (item) =>
           typeof item === "number" &&
           Number.isFinite(item) &&
@@ -30,7 +28,6 @@ export function loadLayout(): Layout {
     )
       return {
         ...defaultLayout(),
-        left: value.left,
         right: value.right,
         bottom: value.bottom,
         density: value.density === "comfortable" ? "comfortable" : "compact",
@@ -57,55 +54,20 @@ export function layoutBounds(
 ) {
   const narrow = width < 1100,
     center = Math.min(300, Math.max(160, width - 140 - 14));
-  const leftMin = Math.min(180, Math.max(100, width - center - 14));
-  const rightMin = narrow ? Math.min(260, width - 32) : 260;
-  const clamp = (n: number, min: number, max: number) =>
-    Math.max(min, Math.min(n, max));
-  const left = clamp(
-    value.left,
-    leftMin,
-    Math.max(
-      leftMin,
-      Math.min(
-        420,
-        width - center - 14 - (!narrow && inspector ? rightMin : 0),
-      ),
-    ),
-  );
-  const right = clamp(
-    value.right,
-    rightMin,
-    Math.max(
-      rightMin,
-      Math.min(560, narrow ? width - 32 : width - center - left - 14),
-    ),
-  );
+  const rightMin = Math.min(260, Math.max(160, width - 32));
+  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(n, max));
+  const rightMax = Math.max(rightMin, Math.min(560, narrow ? width - 32 : width - center - 7));
+  const right = clamp(value.right, rightMin, rightMax);
   const bottomMax = Math.max(
     80,
     Math.min(420, height - 34 - toolbar - 24 - 180 - 7),
   );
   const bottom = clamp(value.bottom, 80, bottomMax);
   return {
-    layout: { ...value, left, right, bottom },
+    layout: { ...value, right, bottom },
     narrow,
     bounds: {
-      left: {
-        min: leftMin,
-        max: Math.max(
-          leftMin,
-          Math.min(
-            420,
-            width - center - 14 - (!narrow && inspector ? right : 0),
-          ),
-        ),
-      },
-      right: {
-        min: rightMin,
-        max: Math.max(
-          rightMin,
-          Math.min(560, narrow ? width - 32 : width - center - left - 14),
-        ),
-      },
+      right: {min: rightMin, max: rightMax},
       bottom: { min: 80, max: bottomMax },
     },
   };

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { PluginInspectionView } from "../contracts/generated";
-import { LazyJson } from "../contracts/LazyJson";
 import * as client from "./client";
 
 export function PluginPanel({
@@ -15,17 +14,18 @@ export function PluginPanel({
   const [inspection, setInspection] = useState<PluginInspectionView>();
   const [trusted, setTrusted] = useState(false);
   const [installed,setInstalled]=useState<PluginInspectionView[]>([]);
-  const [error,setError]=useState('');
+  const [error,setError]=useState(''),[operation,setOperation]=useState('');
+  async function perform(label:string,job:()=>Promise<unknown>) {
+    await action(async()=>{setOperation(label);setError('');try{return await job();}catch(reason){setError(reason instanceof Error?reason.message:String(reason));throw reason;}finally{setOperation('');}});
+  }
   useEffect(()=>{let active=true;void client.installedPlugins().then(value=>{if(active)setInstalled(value);}).catch(reason=>{if(active)setError(String(reason));});return()=>{active=false;};},[]);
   return (
     <section>
       <h3>Plugins</h3>
       <p>
-        Uses current workspace authorization; venv isolates dependencies, not
-        file/network permissions. Install only code you trust.
+        Install only code you trust. Shared deployments require administrator authorization; plugins are not a security sandbox.
       </p>
-      <p>Source import and inspection never execute code. Hosted installation requires deployment-administrator authorization.</p>
-      {error&&<p role="alert">{error}</p>}
+      {operation&&<p role="status">{operation}</p>}{error&&<p role="alert">{error}</p>}
       <label>
         Public iGEM GitLab or GitHub repository
         <input
@@ -53,7 +53,7 @@ export function PluginPanel({
       <button
         disabled={busy || !url}
         onClick={() =>
-          void action(async () => {
+          void perform("Fetching and inspecting source…",async () => {
             const value = await client.fetchPlugin(url, commit);
             if (!value.source_path)
               throw new Error("Registered source identity missing.");
@@ -62,16 +62,15 @@ export function PluginPanel({
           })
         }
       >
-        Fetch pinned source and inspect
+        Review plugin
       </button>
       <label>Import local source ZIP<input type="file" accept=".zip" disabled={busy} onChange={event=>{const file=event.target.files?.[0];
-        if(file)void action(async()=>{setInspection(await client.uploadPluginSource(file));setTrusted(false);});event.target.value='';}}/></label>
-      <p>The ZIP must include plugin.json, actual entrypoint code, license, version, input/output schemas and a hashed dependency lock when needed. A manifest alone is not an executable tool.</p>
+        if(file)void perform("Inspecting imported source…",async()=>{setInspection(await client.uploadPluginSource(file));setTrusted(false);});event.target.value='';}}/></label>
       {inspection && (
         <>
           <h4>{inspection.manifest.name} — {inspection.manifest.version}</h4><p>{inspection.manifest.description}</p>
           <p>License: {inspection.manifest.license}. Runtime: {inspection.manifest.runtime}. Requested capabilities: {inspection.capability_requests.join(', ')||'No additional declared capabilities'}.</p>
-          <details><summary>Technical source identity</summary><LazyJson value={inspection} label="Backend source and version identity" /></details>
+          <p>Source: {url || "Imported source ZIP"}</p>
           <label>
             <input
               type="checkbox"
@@ -85,7 +84,7 @@ export function PluginPanel({
           <button
             disabled={busy || !trusted || !inspection.source_path}
             onClick={() =>
-              void action(async () => {
+              void perform("Installing inspected version…",async () => {
                 setInspection(await client.installPlugin(inspection.source_path!, inspection.hash));
                 setInstalled(await client.installedPlugins());
               })

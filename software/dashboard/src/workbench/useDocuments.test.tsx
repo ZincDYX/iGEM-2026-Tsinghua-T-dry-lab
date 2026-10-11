@@ -12,14 +12,14 @@ it('starts a new workspace with Inputs only and restores the last selected docum
   const restored=renderHook(()=>useDocuments('new-workspace',false,vi.fn()));
   expect(restored.result.current.tab).toBe('plan');
 });
-it("keeps Settings and Plugins open across navigation and restores the workspace", () => {
+it("keeps Settings and Tools & extensions open across navigation and restores the workspace", () => {
   const blocked = vi.fn();
   const first = renderHook(() => useDocuments("workspace-a", false, blocked));
   act(() => first.result.current.setTab("settings"));
-  act(() => first.result.current.setTab("plugins"));
+  act(() => first.result.current.setTab("tools"));
   act(() => first.result.current.setTab("plan"));
   expect(first.result.current.openDocuments).toContain("settings");
-  expect(first.result.current.openDocuments).toContain("plugins");
+  expect(first.result.current.openDocuments).toContain("tools");
   first.unmount();
   const second = renderHook(() => useDocuments("workspace-a", false, blocked));
   expect(second.result.current.openDocuments).toContain("settings");

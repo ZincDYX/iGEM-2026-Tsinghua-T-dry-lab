@@ -120,7 +120,7 @@ def test_text_content_detects_FASTA_without_reinterpreting_uploaded_scripts(tmp_
 def test_project_config_relative_file_binds_without_manual_hash_and_no_M4_defaults_run(tmp_path):
     app,project=setup(tmp_path)
     config={'schema_version':'project-config-v1','config':{'inputs':{'protein_fasta':'proteins.faa','enzymes':[],'scaffolds':[],'linkers':[]},
-        'execution':{'mode':'real','allow_assumptions':False},'prepared_through':'m1'}}
+        'execution':{'mode':'real','allow_assumptions':False},'prepared_through':'m1','run':{'output_dir':'outputs'}}}
     preview=app.imports.preview(project,[('study/project.json',json.dumps(config).encode()),
         ('study/proteins.faa',b'>e\nMKWVTFISLLFLFSSAYS\n')])
     item=preview.items[0]

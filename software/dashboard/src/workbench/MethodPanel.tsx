@@ -4,8 +4,7 @@ import 'temml/dist/Temml-Local.css';
 import type {ModuleMethodView, ProjectView,MethodDefinition,MethodDraftPage,MethodDraftView,Workflow} from '../contracts/generated';
 import {requestJson} from '../api';
 import {parsePublicAsync as parsePublic} from '../contracts/validation';
-import {ScientificInputForms} from './ScientificInputForms';
-import type {FieldSchema} from './ScientificFields';
+import {ModuleParameters} from './ModuleParameters';
 import * as client from './client';
 
 function FormulaDraftEditor({project,methods,disabled,onPlan}:{project:ProjectView;methods:MethodDefinition[];disabled:boolean;onPlan:(value:Workflow)=>void}) {
@@ -25,8 +24,8 @@ function FormulaDraftEditor({project,methods,disabled,onPlan}:{project:ProjectVi
       <label>Original method<select aria-label="Formula base method" value={methodId} onChange={event=>{setMethodId(event.target.value);setFormulaId('');setLatex('');setPrevious(undefined);setExpression('');setOutputUnit('');setVariables([]);}}><option value="">Choose original version</option>{methods.map(value=><option key={value.id} value={value.id}>{value.title} ({value.version})</option>)}</select></label>
       <label>Formula<select aria-label="Formula to revise" value={formulaId} onChange={event=>{setFormulaId(event.target.value);setLatex(method!.formulas.find(value=>value.id===event.target.value)?.latex??'');setPrevious(undefined);setExpression('');setOutputUnit('');setVariables([]);}}><option value="">Choose original formula</option>{method?.formulas.map(value=><option key={value.id} value={value.id}>{value.id}: {value.title}</option>)}</select></label>
       {original&&<><label>New method title<input aria-label="Custom formula title" value={title} maxLength={200} onChange={event=>setTitle(event.target.value)}/></label>
-        <label>Exact proposed LaTeX<textarea aria-label="Proposed formula LaTeX" value={latex} maxLength={8000} rows={4} onChange={event=>setLatex(event.target.value)}/></label>
-        <Formula latex={latex}/><label>Source reference<input aria-label="Custom formula source" value={source} maxLength={2000} onChange={event=>setSource(event.target.value)}/></label>
+        {!expression.trim()&&<><label>Display-only LaTeX (ignored for executable methods)<textarea aria-label="Proposed formula LaTeX" value={latex} maxLength={8000} rows={4} onChange={event=>setLatex(event.target.value)}/></label></>}
+        {!expression.trim()&&<Formula latex={latex}/>}<label>Source reference<input aria-label="Custom formula source" value={source} maxLength={2000} onChange={event=>setSource(event.target.value)}/></label>
         <label>Reason and changed assumptions<textarea aria-label="Custom formula reason" value={reason} maxLength={4000} onChange={event=>setReason(event.target.value)}/></label>
         <label>Optional executable expression<input aria-label="Executable scalar expression" value={expression} maxLength={2000} onChange={event=>setExpression(event.target.value)}/></label>
         <p>Supported: + − * /, integer powers ** (-16 to 16), sqrt, exp, ln, log10, abs. No automatic LaTeX translation, summation, ODEs or code execution. Units: 1, M/mM/uM/nM, mol, L, m/mm/um/nm, s/min/h, kg/g and products/ratios/powers. Inputs are explicitly converted to SI before evaluation; the result is converted to your chosen unit. No inferred biological values.</p>
@@ -40,7 +39,7 @@ function FormulaDraftEditor({project,methods,disabled,onPlan}:{project:ProjectVi
             previous_id:previous?.id??null,expected_project_revision:project.revision}).then(value=>{setPrevious(value);setRefresh(value=>value+1);}).catch(reason=>setError(String(reason))).finally(()=>setBusy(false));}}>Save separate unvalidated version</button>
       </>}
     </fieldset>
-    <ul>{page?.items.map(value=><li key={value.id}><details><summary>{value.title} — version {value.version}, unvalidated / {value.executable?'exploratory execution available':'not executable'}</summary><p>Original {value.base_method_id} ({value.base_version}), formula {value.formula_id}. {value.reason}</p><p>Source: {value.source_reference}</p><Formula latex={value.latex}/>
+    <ul>{page?.items.map(value=><li key={value.id}><details><summary>{value.title} — version {value.version}, unvalidated / {value.executable?'exploratory execution available':'not executable'}</summary><p>{value.reason}</p><p>Source: {value.source_reference}</p><h4>Reviewed baseline</h4><Formula latex={value.original_latex}/><h4>{value.executable?"Executed expression preview":"Display-only proposal · not executable"}</h4><Formula latex={value.latex}/>
       {value.execution_spec&&<><p>Executed expression (not inferred from LaTeX): <code>{value.execution_spec.expression}</code>. Result unit: {value.execution_spec.output_unit}</p>
         <table><thead><tr><th>Input</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead><tbody>{Object.entries(value.execution_spec.variables).map(([name,v])=><tr key={name}><td>{name}</td><td>{v.value}</td><td>{v.unit}</td><td>{v.source}</td></tr>)}</tbody></table>
         <button disabled={disabled||busy} onClick={()=>{setBusy(true);void client.methodWorkflow(project.id,value.id).then(onPlan).catch(reason=>setError(String(reason))).finally(()=>setBusy(false));}}>Prepare exploratory workflow</button></>}
@@ -67,7 +66,7 @@ export function Formula({latex}: {latex: string}) {
     }
   }, [latex]);
   return <><div ref={element} className="method-formula"/>{error && <p role="alert">{error}</p>}
-    <details><summary>Exact LaTeX source</summary><code>{latex}</code></details></>;
+    {error&&<code>{latex}</code>}</>;
 }
 
 export function MethodPanel({project, toolId, runId, disabled, onChange, onReview,onPlan}: {
@@ -76,26 +75,17 @@ export function MethodPanel({project, toolId, runId, disabled, onChange, onRevie
   onPlan:(value:Workflow)=>void;
 }) {
   const [value, setValue] = useState<ModuleMethodView>();
-  const [schema, setSchema] = useState<FieldSchema>();
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<'tools'|'formulas'|'parameters'>('tools');
+  const [tab, setTab] = useState<'tools'|'formulas'|'parameters'>('formulas');
   const [parameter, setParameter] = useState(''), [reviewer, setReviewer] = useState(''), [reviewReason, setReviewReason] = useState('');
   useEffect(() => {
     const controller = new AbortController();
-    setValue(undefined); setSchema(undefined); setError('');
+    setValue(undefined); setError('');
     void requestJson(`/projects/${encodeURIComponent(project.id)}/module-method?tool_id=${encodeURIComponent(toolId)}${runId ? `&run_id=${encodeURIComponent(runId)}` : ''}`, undefined, controller.signal)
       .then(async raw => {const value=await parsePublic('ModuleMethodView',raw);if (!controller.signal.aborted) setValue(value);})
       .catch(reason => {if (!controller.signal.aborted) setError(String(reason));});
     return () => controller.abort();
   }, [project.id, project.revision, toolId, runId]);
-  useEffect(() => {
-    if (tab !== 'parameters' || !project.scientific_project || runId) return;
-    const controller = new AbortController();
-    void requestJson(`/scientific-projects/form-schema?prepared_through=${project.scientific_project.config.prepared_through}`, undefined, controller.signal)
-      .then(raw => {if (!controller.signal.aborted) setSchema(raw as FieldSchema);})
-      .catch(reason => {if (!controller.signal.aborted) setError(String(reason));});
-    return () => controller.abort();
-  }, [tab, project.id, project.scientific_project?.config.prepared_through, runId]);
   return <section aria-label="Module method">
     <h3>Module method</h3>
     <div role="tablist" aria-label="Module method sections">{(['tools','formulas','parameters'] as const).map(id =>
@@ -116,23 +106,18 @@ export function MethodPanel({project, toolId, runId, disabled, onChange, onRevie
           <details><summary>All method steps and gates</summary>{method.steps.map(step => <p key={step.id}><strong>{step.id}: {step.title}</strong> — {step.description}</p>)}</details>
           <details><summary>Symbols and units</summary><dl>{Object.entries(method.symbols).map(([symbol,meaning]) => <div key={symbol}><dt>{symbol}</dt><dd>{meaning}</dd></div>)}</dl></details>
           {method.discrepancies.map(text => <p key={text}>Source discrepancy / boundary: {text}</p>)}
-          {method.formulas.map(formula => <details key={formula.id}><summary>{formula.id} · {formula.title} · {formula.status.replaceAll('_',' ')}</summary>
+          {method.formulas.map(formula => <section key={formula.id}><h4>{formula.title} · {formula.status.replaceAll('_',' ')}</h4>
             <Formula latex={formula.latex}/>{formula.assumptions.map(text => <p key={text}>{text}</p>)}
-            <p>Backend implementation: {formula.implementation.join(', ')}</p></details>)}
+            </section>)}
         </section>)}
         <p>Formal formulas are read-only. No calculation or formula simplification occurs in this viewer.</p>
-        {!runId && value.methods.length>0 && <FormulaDraftEditor key={project.id+toolId} project={project} methods={value.methods} disabled={disabled} onPlan={onPlan}/>}
+        {!runId && value.methods.length>0 && <details><summary>Edit method · new exploratory version</summary><FormulaDraftEditor key={project.id+toolId} project={project} methods={value.methods} disabled={disabled} onPlan={onPlan}/></details>}
       </>}
-      {tab === 'parameters' && <>{runId ? <><p>Frozen run parameters are read-only. These are from the recorded run revision, not the current draft. Create an iteration to change them.</p>
-        <table><thead><tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Condition</th><th>Source</th><th>Review</th></tr></thead><tbody>
-          {value.parameter_records.slice(0,100).map((record,index)=><tr key={index}><td>{String(record.name)} v{String(record.parameter_version)}</td><td>{String(record.value)}</td>
-            <td>{String(record.unit??'Missing unit')}</td><td>{String(record.condition_id??'Global; applicability still checked')}</td><td>{String(record.source_reference??'Missing source')}</td><td>{String(record.review_status)}</td></tr>)}
-        </tbody></table>{value.parameter_records.length>100&&<p>First 100 frozen records shown. Export the original recorded inputs for the complete set.</p>}</> :
-        <fieldset disabled={disabled}><ScientificInputForms project={project} section="parameters" onChange={onChange} schema={schema}/>
+      {tab === 'parameters' && <><fieldset disabled={disabled}><ModuleParameters project={project} method={value} frozen={!!runId} onChange={onChange}/>
           {(toolId === 'project.m3' || toolId === 'project.m4') && project.scientific_project && <section aria-label="Human parameter review">
             <h4>Review a saved candidate</h4><p>Backend checks the actual requirement, units, identity, condition and source. Accepting an Assistant proposal does not perform this review.</p>
             <label>Candidate parameter<select aria-label="Candidate parameter" value={parameter} onChange={event => setParameter(event.target.value)}><option value="">Choose candidate</option>
-              {project.scientific_project.config.parameters.filter(p => ['extracted','validated'].includes(p.review_status)).map(p => <option key={p.parameter_id} value={p.parameter_id}>{p.name} · version {p.parameter_version} · {p.source_reference ?? 'Missing source'}</option>)}</select></label>
+              {project.scientific_project.config.parameters.filter(p => value.parameter_records.some(record=>record.parameter_id===p.parameter_id) && ['extracted','validated'].includes(p.review_status)).map(p => <option key={p.parameter_id} value={p.parameter_id}>{p.name} · version {p.parameter_version} · {p.source_reference ?? 'Missing source'}</option>)}</select></label>
             <label>Reviewer name<input aria-label="Reviewer name" value={reviewer} onChange={event => setReviewer(event.target.value)}/></label>
             <label>Scientific review reason<textarea aria-label="Scientific review reason" value={reviewReason} onChange={event => setReviewReason(event.target.value)}/></label>
             <button disabled={!parameter || !reviewer.trim() || !reviewReason.trim()} onClick={() => {
@@ -140,7 +125,7 @@ export function MethodPanel({project, toolId, runId, disabled, onChange, onRevie
               void onReview(parameter, toolId === 'project.m3' ? 'm3' : 'm4', selected.name, reviewer.trim(), reviewReason.trim());
             }}>Save and review candidate against this module</button>
           </section>}
-        </fieldset>}</>}
+        </fieldset></>}
     </div>}
   </section>;
 }

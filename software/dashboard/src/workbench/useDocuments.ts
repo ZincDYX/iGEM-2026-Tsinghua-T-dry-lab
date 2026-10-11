@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type DocumentId = "plan" | "inputs" | "results" | "compare" | "settings" | "assistant-settings" | "plugins" | "tools" | "artifacts";
-const valid: DocumentId[] = ["plan", "inputs", "results", "compare", "settings", "assistant-settings", "plugins", "tools", "artifacts"];
+export type DocumentId = "plan" | "inputs" | "results" | "compare" | "settings" | "assistant-settings" | "tools" | "artifacts";
+const valid: DocumentId[] = ["plan", "inputs", "results", "compare", "settings", "assistant-settings", "tools", "artifacts"];
 type State = { active: DocumentId; open: DocumentId[] };
 const initial: State = { active: "inputs", open: ["inputs"] };
 

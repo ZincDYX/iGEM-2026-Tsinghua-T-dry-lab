@@ -37,6 +37,9 @@ export type Limitations = string[];
 export type ParameterRecords = {
   [k: string]: unknown;
 }[];
+export type ParameterRequirements = {
+  [k: string]: unknown;
+}[];
 
 export interface ModuleMethodView {
   project_id: ProjectId;
@@ -46,6 +49,8 @@ export interface ModuleMethodView {
   configured_mode: ConfiguredMode;
   limitations: Limitations;
   parameter_records: ParameterRecords;
+  parameter_requirements: ParameterRequirements;
+  parameter_source_options: ParameterSourceOptions;
 }
 export interface MethodDefinition {
   id: Id;
@@ -87,4 +92,7 @@ export interface ModuleTool {
   license: License;
   input_names: InputNames;
   output_scope: OutputScope;
+}
+export interface ParameterSourceOptions {
+  [k: string]: string[];
 }

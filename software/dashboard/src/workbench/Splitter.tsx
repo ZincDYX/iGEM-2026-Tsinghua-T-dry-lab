@@ -17,7 +17,7 @@ export function Splitter({
   defaultValue: number;
 }) {
   const horizontal = dimension === "bottom",
-    direction = dimension === "left" ? 1 : -1;
+    direction = -1;
   const drag = useRef<
     | {
         pointer: number;
@@ -45,9 +45,7 @@ export function Splitter({
   }
   useEffect(() => () => finish(true, false), []);
   const label =
-    dimension === "left"
-      ? "Project pane"
-      : dimension === "right"
+    dimension === "right"
         ? "Inspector"
         : "Bottom pane";
   return (
@@ -58,9 +56,7 @@ export function Splitter({
       aria-label={label}
       aria-orientation={horizontal ? "horizontal" : "vertical"}
       aria-controls={
-        dimension === "left"
-          ? "project-tree"
-          : dimension === "right"
+        dimension === "right"
             ? "workspace-inspector"
             : "workspace-bottom"
       }

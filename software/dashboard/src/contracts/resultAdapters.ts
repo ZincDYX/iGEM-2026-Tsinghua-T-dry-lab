@@ -10,13 +10,25 @@ export function numbers(value: unknown): value is Record<string, number> {
   );
 }
 export function show(value: unknown): string {
-  return value === null || value === undefined
-    ? "Not recorded / Not applicable"
-    : object(value) && !Object.keys(value).length
-      ? "No record (not computed, not  0）"
-      : typeof value === "object"
-        ? JSON.stringify(value)
-        : String(value);
+  if (value === undefined) return "Not recorded";
+  if (value === null) return "Not computed";
+  if (typeof value === 'number') return Number.isFinite(value)
+    ? new Intl.NumberFormat('en', {maximumSignificantDigits: 3}).format(value) : 'Invalid number';
+  if (Array.isArray(value)) return [...new Set(value.map(show))].join('; ') || 'None';
+  if (object(value)) return typeof value.status === 'string'
+    ? value.status.replaceAll('_', ' ') : 'Details available';
+  return String(value);
+}
+
+export interface M1Check {
+  schema_version: 'm1-method-check-v1'; candidate_id: string; verdict: string;
+  precheck?: Record<string, unknown>; screen?: Record<string, unknown>; missing?: unknown[];
+}
+export function m1Checks(output: unknown): M1Check[] | null {
+  const values = object(output) && Array.isArray(output.items) ? output.items : [output];
+  if (!values.length || !values.every(value => object(value) && value.schema_version === 'm1-method-check-v1'
+    && typeof value.candidate_id === 'string' && typeof value.verdict === 'string')) return null;
+  return values as M1Check[];
 }
 export function adaptSteadyResult(tool: string | undefined, output: unknown) {
   const m4 = tool === "igem.m4.solve_steady_state";

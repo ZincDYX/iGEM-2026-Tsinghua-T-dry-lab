@@ -57,7 +57,7 @@ def test_frozen_module_parameters_use_actual_snapshot_not_live_draft(tmp_path):
     project.scientific_project['config']['parameters'][0]['value']=.9
     app.state.platform_store.save_project(project,project.revision)
     with TestClient(app) as client:
-        response=client.get(f'/api/platform/projects/software-fixture/module-method?tool_id=project.m1&run_id={run}')
+        response=client.get(f'/api/platform/projects/software-fixture/module-method?tool_id=project.m3&run_id={run}')
         assert response.status_code==200,response.text
         assert response.json()['parameter_records'][0]['value']==.2
         assert response.json()['project_revision']==project.revision

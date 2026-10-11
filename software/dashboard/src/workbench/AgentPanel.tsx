@@ -46,7 +46,7 @@ export function AgentPanel(props: {
   return (
     <section aria-label="Agent Plan proposal">
       <h2>Assistant</h2>
-      <p>{props.context ?? 'Project context'} · Proposals never approve scientific parameters or run tools without an accepted execution scope.</p>
+      <p>{props.context ?? 'Project context'}</p>
       {error && <p role="alert">{error}</p>}
       {history && <section aria-label="Assistant conversation">
         {history.messages.map(message => <div key={message.seq}><p><strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong> · project revision {message.project_revision}<br/>{message.text}</p>
@@ -66,62 +66,6 @@ export function AgentPanel(props: {
           placeholder="Describe the goal or data changes; do not invent parameters"
         />
       </label>
-      <label>
-        Analysis entry point
-        <select
-          aria-label="Analysis entry point"
-          value={props.goal}
-          onChange={(event) => {
-            const value = event.target.value;
-            if (
-              value === "fusion_screen" ||
-              value === "assembly_review" ||
-              value === "pathway_simulation" ||
-              value === "scientific_pipeline" ||
-              value === "m1_sequence_checks"
-            )
-              props.onGoal(value);
-          }}
-        >
-          <option value="fusion_screen">Fusion sequence statistics</option>
-          <option value="assembly_review">Assembly inventory check</option>
-          <option value="pathway_simulation">
-            Uploaded pathway steady state
-          </option>
-          <option value="scientific_pipeline">
-            M1–M5 Original-formula scientific pipeline
-          </option>
-          <option value="m1_sequence_checks">
-            M1 sequence checks — real tools and missing steps
-          </option>
-        </select>
-      </label>
-      <label>
-        Planner source
-        <select
-          aria-label="Planner source"
-          value={props.mode}
-          onChange={(event) =>
-            props.onMode(
-              event.target.value === "hybrid" ? "hybrid" : "template",
-            )
-          }
-        >
-          <option value="template">Template planner (no LLM)</option>
-          <option
-            value="hybrid"
-            disabled={props.info?.capabilities.hybrid_planning !== "ready"}
-          >
-            Hybrid semantic / deterministic compiler
-          </option>
-        </select>
-      </label>
-      {props.info?.capabilities.hybrid_planning !== "ready" && (
-        <p className="subtle">
-          Hybrid planner not configured. Credentials are not read or displayed;
-          no model call is claimed.
-        </p>
-      )}
       {props.mode === "hybrid" && (
         <label>
           <input

@@ -5,7 +5,7 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   const loaded:string[]=[];
   page.on('response',response=>{if(response.url().includes('/assets/'))loaded.push(response.url().split('/').at(-1)!);});
   await page.goto('/');
-  await expect(page.getByLabel('Project name')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
   const projects=await (await context.request.get('/api/platform/projects')).json();
   const project=projects.find((value:{name:string})=>value.name==='Dependency import recovery');
   expect(project,'Run the actual dependency-import browser task first').toBeTruthy();
@@ -18,7 +18,7 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
     return {status:response.status,text:await response.text()};
   },{project,workflow});
   expect(response.status,response.text).toBe(200);
-  await page.getByRole('button',{name:'Workflow',exact:true}).click();
+  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   await page.getByLabel('Open saved workflow').selectOption('method-display');
   const metadata=await (await context.request.get('/api/platform/methods')).json();
   const rendered:{module:string;formulas:number}[]=[];
@@ -28,14 +28,12 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
     await panel.getByRole('tab',{name:'Formulas',exact:true}).click();
     const method=metadata.find((value:{id:string})=>value.id.startsWith(stage.toLowerCase()+'-'));
     await expect(panel.getByRole('heading',{name:method.title,exact:true})).toBeVisible();
-    for(const formula of method.formulas) {
-      await panel.locator('summary').filter({hasText:formula.id+' · '+formula.title+' · '}).click();
-    }
     await expect(panel.locator('.method-formula math')).toHaveCount(method.formulas.length);
     await expect(panel.getByRole('alert')).toHaveCount(0);
     rendered.push({module:stage,formulas:method.formulas.length});
   }
   const panel=page.getByLabel('Module method',{exact:true});
+  await panel.locator('summary').filter({hasText:'Edit method · new exploratory version'}).click();
   await panel.getByLabel('Formula base method').selectOption('m4-step0-step8');
   await panel.getByLabel('Formula to revise').selectOption(metadata.find((value:{id:string})=>value.id==='m4-step0-step8').formulas[0].id);
   await panel.getByLabel('Custom formula title').fill('Browser instruction draft');
@@ -69,7 +67,8 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   await expect(page.getByText('Model disabled or not configured.',{exact:false})).toBeVisible();
   await page.getByRole('navigation',{name:'Workbench menus'}).getByText('Tools',{exact:true}).click();
   await page.getByRole('menuitem',{name:'Tools & extensions',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'All registered capabilities',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Check availability',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'All registered capabilities',exact:true})).toHaveCount(0);
   await page.getByRole('tab',{name:'Skills',exact:true}).click();
   await page.getByLabel('Import SKILL.md').setInputFiles({name:'SKILL.md',mimeType:'text/markdown',buffer:Buffer.from('---\nname: Browser instruction\ndescription: Read-only explanation\ntrigger: Review missing input\nversion: "1"\nsource: User-authored software test\nlicense: Apache-2.0\n---\nDo not invent data or grant permissions.\n')});
   await page.getByLabel('Enable instruction guidance').check();

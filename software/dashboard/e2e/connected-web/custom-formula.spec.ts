@@ -4,10 +4,11 @@ test('owned server executes reviewed scalar version and renders frozen unvalidat
   // This connected suite is run against an authorized server acceptance
   // workspace, never a workstation calculator or a real user project.
   await page.goto('/');
-  await expect(page.getByLabel('Project name')).toBeVisible();
+  await expect(page.getByRole('tab',{name:'Inputs',exact:true})).toBeVisible();
   await page.getByText('File',{exact:true}).click();
   await page.getByRole('menuitem',{name:'New project',exact:true}).click();
   const name='Custom formula server acceptance '+Date.now();
+  await page.getByRole('button',{name:'Rename project',exact:true}).click();
   await page.getByLabel('Project name').fill(name);
   await page.getByText('File',{exact:true}).click();
   await page.getByRole('menuitem',{name:'Save',exact:true}).click();
@@ -25,7 +26,7 @@ test('owned server executes reviewed scalar version and renders frozen unvalidat
       return {status:doc.status,text:await doc.text()};
     },{project,method});
   expect(saved.status,saved.text).toBe(200);
-  await page.getByRole('button',{name:'Workflow',exact:true}).click();
+  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   await page.getByLabel('Open saved workflow').selectOption('formula-display');
   await expect(page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module Server scalar ratio',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Review plan',exact:true}).click();
@@ -33,14 +34,12 @@ test('owned server executes reviewed scalar version and renders frozen unvalidat
   await expect(page.getByRole('button',{name:'Start run',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Start run',exact:true}).click();
   await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible();
-  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Results',exact:true}).click();
-  await page.getByLabel('Project and run tree').getByRole('button',{name:/^Server scalar ratio · r1/}).click();
+  await page.getByRole('tab',{name:'Results',exact:true}).click();
   await page.getByLabel('Result object',{exact:true}).selectOption('formula');
   await expect(page.getByLabel('Custom formula result')).toContainText('0.5 1');
   await expect(page.getByLabel('Custom formula result')).toContainText('scientifically unvalidated');
   await page.reload();
-  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Results',exact:true}).click();
-  await page.getByLabel('Project and run tree').getByRole('button',{name:/^Server scalar ratio · r1/}).click();
+  await page.getByRole('tab',{name:'Results',exact:true}).click();
   await page.getByLabel('Result object',{exact:true}).selectOption('formula');
   await expect(page.getByLabel('Custom formula result')).toContainText('0.5 1');
 });

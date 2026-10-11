@@ -22,7 +22,7 @@ venv **不是安全沙箱**。可信 Python 可以访问宿主文件和网络；
 
 ## 验收和贡献
 
-先调用 `/api/platform/plugins/inspect`，再带 `trusted=true/expected_hash=<检查所得哈希>` 调用 install。在 Developer 工作流中使用返回工具 ID，并通过 `/api/platform/workflows/validate` 校验。
+先调用 `/api/platform/plugins/inspect`，再带 `trusted=true/expected_hash=<检查所得哈希>` 调用 install。在单一工作区的 Workflow 中使用返回工具 ID，并通过 `/api/platform/workflows/validate` 校验。
 
 贡献至少提供输入输出样例、许可、固定依赖、独立进程 smoke test、失败/超时测试和科学适用范围。不得输出伪造预测值，缺少证据应明确返回。大文件模型不要提交到 Git；记录下载来源、版本、哈希和合法获取方式。
 

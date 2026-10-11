@@ -41,7 +41,7 @@ export function M1Matrix({ records }: { records: Record<string, unknown>[] }) {
   );
 }
 
-export function M2Metrics({ record }: { record: Record<string, unknown> }) {
+export function M2Metrics({ record, onAddData }: { record: Record<string, unknown>; onAddData?:()=>void }) {
   const fields = [
     ["core_ca_rmsd_angstrom", "Core  Cα RMSD (Å)"],
     ["pocket_rmsd_angstrom", "Pocket  RMSD (Å)"],
@@ -60,6 +60,13 @@ export function M2Metrics({ record }: { record: Record<string, unknown> }) {
     ["v_scaffold_nm3", "Scaffold volume (nm³)"],
     ["v_enzyme_nm3", "Enzyme volume (nm³)"],
   ];
+  const computed = fields.filter(([key])=>typeof record[key] === 'number' || typeof record[key] === 'string');
+  if (!fields.some(([key])=>typeof record[key]==='number')) return <section aria-label="M2 needs structure">
+    <h3>Structure calculation blocked</h3>
+    <p>{show(record.status)}: {show(record.missing_inputs)}</p>
+    {typeof record.reference_structure_id === 'string' && <p>Reference structure: {show(record.reference_structure_id)}. A reference does not replace a predicted fusion structure.</p>}
+    <p>Next: add the required fusion structure and its confidence / residue mapping evidence in Inputs.</p>{onAddData&&<button onClick={onAddData}>Add data</button>}
+  </section>;
   return (
     <>
       <p>Reference structure: {show(record.reference_structure_id)}</p>
@@ -77,7 +84,7 @@ export function M2Metrics({ record }: { record: Record<string, unknown> }) {
           </tr>
         </thead>
         <tbody>
-          {fields.map(([key, label]) => (
+          {computed.map(([key, label]) => (
             <tr key={key}>
               <td>{label}</td>
               <td>{show(record[key])}</td>
@@ -85,10 +92,7 @@ export function M2Metrics({ record }: { record: Record<string, unknown> }) {
           ))}
         </tbody>
       </table>
-      <p>
-        Missing metrics: {show(record.missing_metrics)} · Volume method:{" "}
-        {show(record.volume_method)}
-      </p>
+      {Array.isArray(record.missing_metrics) && record.missing_metrics.length>0 && <p>Missing metrics: {show(record.missing_metrics)}</p>}
       {Array.isArray(record.region_observations) &&
         record.region_observations.filter(object).map((model, index) => (
           <section key={index}>

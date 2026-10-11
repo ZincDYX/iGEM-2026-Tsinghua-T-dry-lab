@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import Field
+from pydantic import Field, model_validator
 import yaml
 
 from .models import Contract, WorkflowError
@@ -12,9 +12,20 @@ from .store import canonical, now
 
 
 class SkillInput(Contract):
-    text: str = Field(min_length=1,max_length=65536)
+    text: str | None = Field(default=None,min_length=1,max_length=65536)
+    name: str | None = Field(default=None,min_length=1,max_length=200)
+    instructions: str | None = Field(default=None,min_length=1,max_length=60000)
     enabled: bool = False
     expected_revision: int | None = None
+
+    @model_validator(mode='after')
+    def one_source(self):
+        if self.text is None:
+            if not self.name or not self.name.strip() or not self.instructions or not self.instructions.strip():
+                raise ValueError('skill_name_and_instructions_required')
+        elif self.name is not None or self.instructions is not None:
+            raise ValueError('skill_choose_structured_edit_or_markdown_import')
+        return self
 
 
 class SkillView(Contract):
@@ -51,6 +62,14 @@ class Skills:
 
     def save(self, request: SkillInput, skill_id=None):
         import json
+        if request.text is None:
+            with self.store.connection() as db:
+                previous=db.execute('SELECT payload FROM workspace_skills WHERE id=?',(skill_id,)).fetchone() if skill_id else None
+            metadata=json.loads(previous[0]) if previous else dict(description='User-authored workflow instructions',
+                trigger='When enabled for planning',version='1',source='User-authored',license='Apache-2.0')
+            required=('name','description','trigger','version','source','license')
+            metadata['name']=request.name.strip()
+            request=request.model_copy(update={'text':'---\n'+yaml.safe_dump({key:metadata[key] for key in required},allow_unicode=True,sort_keys=False)+'---\n'+request.instructions})
         self.boundary.check(request.text)
         if not request.text.startswith('---\n') and not request.text.startswith('---\r\n'):
             raise WorkflowError('skill_requires_yaml_frontmatter')

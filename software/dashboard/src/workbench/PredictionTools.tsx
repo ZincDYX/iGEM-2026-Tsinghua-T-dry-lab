@@ -14,8 +14,10 @@ export function PredictionTools({
   busy,
   onPlan,
   onOpenResource,
+  catalog = [],
 }: {
   project: ProjectView;
+  catalog?: import("../contracts/ToolCatalogPage.generated").ModuleTool[];
   busy: boolean;
   onPlan: (workflow: Workflow) => void;
   onOpenResource: (fileId: string) => void;
@@ -61,7 +63,7 @@ export function PredictionTools({
   }, [project.id, project.revision, revision]);
   return (
     <section aria-label="Scientific prediction tools">
-      <h2>Prediction tools</h2>
+      <h2>Tools</h2>
       <p>
         Real jobs run on the connected backend and are saved in the workflow
         ledger. These diagnostic tasks do not approve M1/M2 evidence.
@@ -94,26 +96,26 @@ export function PredictionTools({
           setRevision((value) => value + 1);
         }}
       >
-        Check configured routes
+        Check availability
       </button>
       <table>
         <thead>
           <tr>
             <th>Tool</th>
-            <th>Availability</th>
-            <th>Version</th>
-            <th>Last real check</th>
+            <th>Purpose</th>
+            <th>Status</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
+          {catalog.filter(tool=>!rows.some(row=>row.id===tool.id)).map(tool=><tr key={tool.id}><td>{tool.name}</td><td>{tool.description}</td><td>Registered · not tested</td><td>{tool.id==="fusion.sequence_metrics"?<button disabled={busy||!sequenceId} onClick={()=>{const input=sequences?.items[Number(sequenceId)];if(input)onPlan({id:"sequence-statistics",name:input.label,version:"1",description:"Sequence statistics",execution_policy:defaultPolicy(),nodes:[{id:"metrics",label:"Sequence statistics",tool_id:tool.id,inputs:{item:input.ref},depends_on:[],map:null}]});}}>Run</button>:<span>Configure this module in Workflow</span>}</td></tr>)}
           {rows.map((row) => (
             <tr key={row.id}>
               <td>
                 <a href={row.source_reference} target="_blank" rel="noreferrer">
                   {row.name}
                 </a>
-              </td>
+              </td><td>{catalog.find(tool=>tool.id===row.id)?.description??"Sequence prediction"}</td>
               <td>
                 {
                   {
@@ -123,13 +125,10 @@ export function PredictionTools({
                     failed: "Last real job failed",
                   }[row.status]
                 }
+                {row.status==="not_configured"&&<p>Ask the deployment administrator to install or configure this predictor. A license may be required.</p>}
+                {row.status==="failed"&&<><p>{row.failure_step??'Last job'}: {row.problem?.message??'Job incomplete. Open Jobs → Problems for its diagnostic.'}</p>
+                  {row.problem?.actions.map(action=><p key={action}>{action}</p>)}</>}
               </td>
-              <td>
-                {row.version && /^[0-9a-f]{40}$/.test(row.version)
-                  ? "Author source revision recorded in backend"
-                  : (row.version ?? "Not recorded")}
-              </td>
-              <td>{row.last_real_check ?? "Not run"}</td>
               <td>
                 <button
                   disabled={
@@ -160,11 +159,11 @@ export function PredictionTools({
                     });
                   }}
                 >
-                  Prepare run on selected input
+                  Run
                 </button>
                 {row.latest_file_id && (
                   <button onClick={() => onOpenResource(row.latest_file_id!)}>
-                    Open latest output
+                    View output
                   </button>
                 )}
               </td>

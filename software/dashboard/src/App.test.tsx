@@ -185,17 +185,19 @@ describe("FusionLab scientific workbench", () => {
   it("loads a real project into simultaneous panes without a global private developer mode", async () => {
     render(<App />);
     expect(
-      await screen.findByText("Standalone sequences: 1", { exact: true }),
+      await screen.findByRole("button", {name: "fixture"}),
     ).toBeTruthy();
-    expect(screen.getByLabelText("Project and run tree")).toBeTruthy();
-    expect(screen.getByLabelText("Inspector")).toBeTruthy();
-    expect(screen.getByLabelText("Jobs and actions")).toBeTruthy();
+    expect(screen.queryByLabelText("Project and run tree")).toBeNull();
+    expect(document.querySelector(".inspector-hidden")).not.toBeNull();
+    expect(screen.getByRole("button",{name:"Jobs"})).toBeTruthy();
+    expect(screen.queryByRole("tab",{name:"Terminal"})).toBeNull();
     expect(screen.queryByText(/Scientist Mode/)).toBeNull();
     expect(screen.queryByText(/Developer Mode/)).toBeNull();
   });
   it("an accepted plan is separate from calculation and binds the saved revision", async () => {
     render(<App />);
-    await screen.findByText("Standalone sequences: 1", { exact: true });
+    await screen.findByRole("button", {name: "fixture"});
+    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     expect(await screen.findByText("可审阅分析")).toBeTruthy();
     expect(client.start).not.toHaveBeenCalled();
@@ -227,7 +229,7 @@ describe("FusionLab scientific workbench", () => {
     );
     render(<App />);
     expect(
-      await screen.findByText("Standalone sequences: 1", { exact: true }),
+      await screen.findByRole("button", {name: "fixture"}),
     ).toBeTruthy();
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",
@@ -260,9 +262,10 @@ describe("FusionLab scientific workbench", () => {
       return {...value,workflow:current,id,project_id:projectId,project_revision:projectRevision,revision:2,semantic_revision:2,layout_revision:1};
     });
     render(<App/>);
-    await screen.findByText('Standalone sequences: 1',{exact:true});
+    await screen.findByRole("button", {name: "fixture"});
     expect(screen.queryByLabelText('Workflow run controls')).toBeNull();
     expect(screen.queryByRole('button',{name:/^Import$/})).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'Assistant'}));
     fireEvent.click(screen.getByRole('button',{name:'Generate proposal'}));
     await screen.findByText('Reviewed graph');
     fireEvent.click(screen.getByRole('button',{name:'Accept proposal (does not start computation)'}));
@@ -273,11 +276,7 @@ describe("FusionLab scientific workbench", () => {
     await vi.waitFor(()=>expect(screen.getByRole('button',{name:'Start run'})).toHaveProperty('disabled',true));
     expect(screen.getByText('Workflow changes are saved but not authorized. Review and accept a new proposal before running.')).toBeTruthy();
     expect(client.start).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText('Tool call budget'),{target:{value:'50'}});
-    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget')).toHaveProperty('value','50'));
-    const policySave=vi.mocked(client.saveWorkflowDocument).mock.calls.at(-1)![2];
-    expect(policySave.workflow?.nodes.find(n=>n.id==='c')?.depends_on).toEqual(['a','b']);
-    expect(policySave.workflow?.execution_policy.max_tool_calls).toBe(50);
+    expect(screen.queryByLabelText('Tool call budget')).toBeNull();
     expect(screen.getByRole('button',{name:'Start run'})).toHaveProperty('disabled',true);
     fireEvent.change(screen.getByLabelText('Run through module'),{target:{value:'c'}});
     await vi.waitFor(()=>expect(screen.getByLabelText('Run through module')).toHaveProperty('value','c'));
@@ -287,11 +286,11 @@ describe("FusionLab scientific workbench", () => {
     expect(screen.getAllByRole('button',{name:'Review plan'})).toHaveLength(1);
     fireEvent.click(screen.getByRole('button',{name:'Review plan'}));
     await vi.waitFor(()=>expect(client.proposeCustom).toHaveBeenCalledWith('test',expect.objectContaining({
-      nodes:current.nodes,execution_policy:expect.objectContaining({target_node_id:'c',max_tool_calls:50}),
+      nodes:current.nodes,execution_policy:expect.objectContaining({target_node_id:'c',max_tool_calls:1000}),
     }),''));
     expect(client.propose).toHaveBeenCalledTimes(1); // No template replacement of the edited graph.
     expect(client.start).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button',{name:/^Inputs$/}));
+    fireEvent.click(screen.getByRole('tab',{name:/^Inputs$/}));
     expect(screen.queryByLabelText('Workflow run controls')).toBeNull();
   });
   it('execution settings wait for the first durable document instead of dropping its proposal',async()=>{
@@ -303,15 +302,13 @@ describe("FusionLab scientific workbench", () => {
         revision:1,semantic_revision:1,layout_revision:1};
     });
     render(<App/>);
-    await screen.findByText('Standalone sequences: 1',{exact:true});
+    await screen.findByRole("button", {name: "fixture"});
+    fireEvent.click(screen.getByRole('button',{name:'Assistant'}));
     fireEvent.click(screen.getByRole('button',{name:'Generate proposal'}));
     await screen.findByText('可审阅分析');
-    expect(screen.getByLabelText('Tool call budget').matches(':disabled')).toBe(true);
     expect(screen.getByLabelText('Run through module').matches(':disabled')).toBe(true);
     release();
-    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget').matches(':disabled')).toBe(false));
-    fireEvent.change(screen.getByLabelText('Tool call budget'),{target:{value:'2'}});
-    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget')).toHaveProperty('value','2'));
+    await vi.waitFor(()=>expect(screen.getByLabelText('Run through module').matches(':disabled')).toBe(false));
     expect(screen.getByLabelText('Run through module').querySelector('option[value="fixture"]')).not.toBeNull();
     expect(screen.getByText('可审阅分析')).toBeTruthy();
     expect(client.start).not.toHaveBeenCalled();
@@ -328,13 +325,13 @@ describe("FusionLab scientific workbench", () => {
     vi.mocked(client.events).mockResolvedValue({items:[],cursor:0,has_more:false});
     vi.mocked(client.node).mockResolvedValue({node:{id:'fixture',parent_id:null,status:'succeeded',attempts:1,output:null,error:null,inputs:null},offset:0,limit:20,total_records:0,artifact:null,sequence_map:null});
     render(<App/>);
-    await screen.findByText('Standalone sequences: 1',{exact:true});
-    fireEvent.click(within(screen.getByRole('navigation',{name:'Project navigation'})).getByRole('button',{name:'Results'}));
-    fireEvent.click(await screen.findByRole('button',{name:/^Recorded software run/}));
+    await screen.findByRole("button", {name: "fixture"});
+    fireEvent.click(screen.getByRole('tab',{name:'Results'}));
+    fireEvent.change(await screen.findByLabelText("Run version"),{target:{value:"recorded"}});
     await vi.waitFor(()=>expect(client.summary).toHaveBeenCalled());
-    fireEvent.click(within(screen.getByRole('navigation',{name:'Project navigation'})).getByRole('button',{name:'Workflow'}));
-    await vi.waitFor(()=>expect(screen.getByLabelText('Tool call budget')).toHaveProperty('value','7'));
-    expect(screen.getByLabelText('Tool call budget').matches(':disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('tab',{name:'Workflow'}));
+    await vi.waitFor(()=>expect(screen.getByLabelText('Run through module')).toHaveProperty('value','fixture'));
+    expect(screen.queryByLabelText('Tool call budget')).toBeNull();
     expect(screen.getByLabelText('Run through module')).toHaveProperty('value','fixture');
     expect(screen.getByRole('checkbox',{name:'Pause after 受控夹具Node'})).toHaveProperty('checked',true);
     expect(screen.queryByRole('button',{name:'Review plan'})).toBeNull();
@@ -343,7 +340,8 @@ describe("FusionLab scientific workbench", () => {
   });
   it("editing facts invalidates acceptance and cannot start an obsolete workflow", async () => {
     render(<App />);
-    await screen.findByText("Standalone sequences: 1", { exact: true });
+    await screen.findByRole("button", {name: "fixture"});
+    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     await screen.findByText("可审阅分析");
     fireEvent.click(
@@ -362,6 +360,7 @@ describe("FusionLab scientific workbench", () => {
         screen.getByRole("tablist", { name: "Workspace documents" }),
       ).getByRole("tab", { name: "Inputs" }),
     );
+    fireEvent.click(screen.getByRole("button",{name:"Rename project"}));
     fireEvent.change(screen.getByLabelText("Project name"), {
       target: { value: "changed fixture" },
     });
@@ -371,8 +370,8 @@ describe("FusionLab scientific workbench", () => {
   });
   it('scientific boundaries open the Workflow source context without a second Diagnostic tab',async()=>{
     render(<App/>);
-    await screen.findByText('Standalone sequences: 1',{exact:true});
-    expect(within(screen.getByRole('tablist',{name:'Inspector tabs'})).queryByRole('tab',{name:'Diagnostic'})).toBeNull();
+    await screen.findByRole("button", {name: "fixture"});
+    expect(screen.queryByRole("tab",{name:"Diagnostic"})).toBeNull();
     fireEvent.click(screen.getByText('Help',{exact:true}));
     fireEvent.click(screen.getByRole('menuitem',{name:'Scientific boundaries'}));
     expect(screen.getByRole('tab',{name:'Workflow'}).getAttribute('aria-selected')).toBe('true');
@@ -413,7 +412,8 @@ describe("FusionLab scientific workbench", () => {
         }),
     );
     render(<App />);
-    await screen.findByText("Standalone sequences: 1", { exact: true });
+    await screen.findByRole("button", {name: "fixture"});
+    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     await vi.waitFor(() => expect(client.propose).toHaveBeenCalled());
     fireEvent.change(screen.getByLabelText("Current project"), {
@@ -437,13 +437,17 @@ describe("FusionLab scientific workbench", () => {
         }),
     );
     render(<App />);
-    await screen.findByText("Standalone sequences: 1", { exact: true });
-    fireEvent.click(screen.getByRole("button", { name: "Inputs" }));
+    await screen.findByRole("button", {name: "fixture"});
+    fireEvent.click(screen.getByRole("tab", { name: "Inputs" }));
+    fireEvent.click(screen.getByRole("button",{name:"Rename project"}));
     fireEvent.change(screen.getByLabelText("Project name"), {
       target: { value: "edited fixture" },
     });
+    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     await vi.waitFor(() => expect(client.save).toHaveBeenCalled());
+    fireEvent.click(screen.getByText("Tools",{exact:true}));
+    fireEvent.click(screen.getByRole("menuitem",{name:"Settings"}));
     fireEvent.change(
       screen.getByLabelText("Analysis entry point", { selector: "select" }),
       { target: { value: "assembly_review" } },

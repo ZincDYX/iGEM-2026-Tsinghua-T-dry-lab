@@ -172,6 +172,9 @@ class ImportService:
             from igem_drylab.pipeline.config import ProjectConfig
             schema=ProjectConfig.model_json_schema()
             bound=deepcopy(config)
+            # Runtime/output bookkeeping is not an imported scientific input.
+            bound.pop('run',None)
+            bound.pop('tools',None)
             def check(value,node,field):
                 if '$ref' in node: node=schema['$defs'][node['$ref'].rsplit('/',1)[-1]]
                 if node.get('format')=='path' and value is not None:
@@ -206,8 +209,6 @@ class ImportService:
                 from igem_drylab.workflow.scientific_setup import preview_setup,ScientificSetupRequest
                 # Reuse the original explicit-value and review-status gates.
                 # Relative paths become registered IDs; no user SHA entry.
-                bound.pop('run',None)
-                bound.pop('tools',None)
                 try:
                     preview=preview_setup(ScientificSetupRequest(project_id=project.id,
                         expected_revision=project.revision,config=bound),self.store,self.boundary)

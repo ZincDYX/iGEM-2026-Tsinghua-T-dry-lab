@@ -8,12 +8,13 @@ test('installed same-origin Web opens Inputs, authenticates without token entry 
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto('/');
   await expect(page.getByRole('tab',{name:'Inputs',exact:true})).toHaveAttribute('aria-selected','true');
-  expect(await page.getByRole('tablist',{name:'Workspace documents'}).getByRole('tab').count()).toBe(1);
-  await expect(page.getByLabel('Project name')).toBeVisible();
+  expect(await page.getByRole('tablist',{name:'Workspace documents'}).getByRole('tab').count()).toBe(3);
+  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
   const cookies=await context.cookies();
   const session=cookies.find(item=>item.name.startsWith('fusionlab_session_'));
   expect(session?.httpOnly).toBe(true);
   expect(await page.evaluate(()=>document.cookie)).not.toContain('fusionlab_session_');
+  await page.getByRole('button',{name:'Rename project',exact:true}).click();
   await page.getByLabel('Project name').fill('Web import acceptance');
   const source=fs.readFileSync(path.resolve(import.meta.dirname,'../../../../tests/fixtures/genbank/software_design.gb'));
   await page.getByLabel('Import data file').setInputFiles({name:'original.gb',mimeType:'text/plain',buffer:source});
@@ -26,6 +27,7 @@ test('installed same-origin Web opens Inputs, authenticates without token entry 
   await page.getByRole('menuitem',{name:'Save',exact:true}).click();
   await expect(page.getByText(/Draft synchronized/)).toBeVisible();
   await page.reload();
+  await page.getByRole('button',{name:'Rename project',exact:true}).click();
   await expect(page.getByLabel('Project name')).toHaveValue('Web import acceptance');
   const designs=page.getByLabel('Annotated DNA designs');
   await designs.getByRole('button',{name:'View DNA and features'}).click();
@@ -40,9 +42,10 @@ test('installed same-origin Web opens Inputs, authenticates without token entry 
 
 test('unfinished ambiguous import survives browser restart and requires a molecule decision',async({page,context})=>{
   await page.goto('/');
-  await expect(page.getByLabel('Project name')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
   const projectId=await page.getByLabel('Current project',{exact:true}).inputValue();
   const initial=await (await context.request.get(`/api/platform/projects/${projectId}`)).json();
+  await page.getByRole('button',{name:'Rename project',exact:true}).click();
   await page.getByLabel('Project name').fill('DNA import recovery');
   await page.getByLabel('Import data file').setInputFiles({name:'ambiguous.fa',mimeType:'text/plain',buffer:Buffer.from('>dna-source\nACGTACGT\n')});
   await expect(page.getByRole('button',{name:'Confirm import',exact:true})).toBeDisabled();
@@ -63,9 +66,10 @@ test('unfinished ambiguous import survives browser restart and requires a molecu
 
 test('missing config dependency can be appended to the saved transaction without reupload',async({page,context})=>{
   await page.goto('/');
+  await page.getByRole('button',{name:'Rename project',exact:true}).click();
   await page.getByLabel('Project name').fill('Dependency import recovery');
   const config={schema_version:'project-config-v1',config:{inputs:{protein_fasta:'study/proteins.faa',enzymes:[],scaffolds:[],linkers:[]},
-    execution:{mode:'real',allow_assumptions:false},prepared_through:'m1'}};
+    execution:{mode:'real',allow_assumptions:false},prepared_through:'m1',run:{output_dir:'outputs'}}};
   await page.getByLabel('Import data file').setInputFiles({name:'project.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(config))});
   await expect(page.getByText('Add the referenced file to this import:',{exact:false})).toBeVisible();
   await page.getByLabel('Relative filename for one missing file (optional)').fill('study/proteins.faa');

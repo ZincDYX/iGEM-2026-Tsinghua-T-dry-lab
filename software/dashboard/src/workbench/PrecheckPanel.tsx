@@ -35,7 +35,7 @@ export function InputIssues({
               </td>
               <td>
                 {fieldLabel(item.field_path)}{" "}
-                <button onClick={() => onLocate(item)}>Open input</button>
+                <button onClick={() => onLocate(item)}>Add data</button>
               </td>
               <td>
                 {item.construct_id ?? "Not declared"} /{" "}

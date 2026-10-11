@@ -75,15 +75,16 @@ def compartment_series(raw):
     try: recorded=RecordedCompartments.model_validate(result)
     except ValueError as error:
         raise WorkflowError('recorded_compartment_units_or_volume_missing',private_detail=str(error)) from error
-    columns={};units={};volumes={}
+    columns={};units={};volumes={};metadata={}
     for pool_id,pool in recorded.pools.items():
-        columns[pool_id]={};units[pool_id]={}
+        columns[pool_id]={};units[pool_id]={};metadata[pool_id]={}
         volumes[pool_id]={'role':pool.role,'volume_L':pool.volume_L,'source':pool.volume_source}
         for quantities,unit,label in ((pool.amounts_umol,'umol','amount'),(pool.concentrations_um,'uM','concentration')):
             for species,values in quantities.items():
                 name=f'Compound {species} {label}'
                 columns[pool_id][name]=values
                 units[pool_id][name]=unit
+                metadata[pool_id][name]={'species_id':species,'quantity':label}
     return {'schema_version':'m4-compartment-amount-v1','model_kind':'pool_specific_amount_model',
         'formula_version':recorded.formula_version,'time_unit':'h','time':recorded.time_h,
-        'concentrations':columns,'column_units':units,'pool_volumes':volumes,**scope}
+        'concentrations':columns,'column_units':units,'column_metadata':metadata,'pool_volumes':volumes,**scope}

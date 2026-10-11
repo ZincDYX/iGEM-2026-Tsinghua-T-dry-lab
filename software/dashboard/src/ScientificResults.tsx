@@ -6,6 +6,7 @@ import {
   sequenceOutput,
   show,
   stageRecords,
+  m1Checks,
 } from "./contracts/resultAdapters";
 import { LazyJson } from "./contracts/LazyJson";
 import { M1Matrix, M2Metrics } from "./workbench/ScreenResultTables";
@@ -68,32 +69,31 @@ function TrajectoryReference({
 }: {
   reference: unknown;
   projectId?: string;
+  onAddData?:()=>void;
 }) {
-  const [open, setOpen] = useState(false);
   const path = object(reference) ? reference.path : reference;
   if (typeof path !== "string" || !path.startsWith("asset:") || !projectId)
     return (
       <p>No authorized registered series reference; no curve generated.</p>
     );
   return (
-    <details onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary>Recorded time course (paged original values)</summary>
-      {open && (
+    <section aria-label="Recorded time course">
         <Suspense fallback={<p>Loading local series viewer…</p>}>
-          <Series fileId={path.slice(6)} projectId={projectId} />
+          <Series fileId={path.slice(6)} projectId={projectId} targetSpecies="15" />
         </Suspense>
-      )}
-    </details>
+    </section>
   );
 }
 function StageResult({
   output,
   records,
   projectId,
+  onAddData,
 }: {
   output: Record<string, unknown>;
   records: Record<string, unknown>[];
   projectId?: string;
+  onAddData?:()=>void;
 }) {
   const [selected, setSelected] = useState(0);
   const record = records[selected] ?? records[0];
@@ -123,55 +123,8 @@ function StageResult({
           ))}
         </select>
       </label>
-      <table className="science-status" aria-label="Four independent statuses">
-        <thead>
-          <tr>
-            <th>Job status</th>
-            <th>Numerical status</th>
-            <th>Evidence / Approval status</th>
-            <th>Experimental validation status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              Completed
-              {record.status === "insufficient_data"
-                ? " · evidence incomplete"
-                : ""}
-            </td>
-            <td>
-              {record.numerically_solved === true
-                ? module === "M1"
-                  ? messages.metricsComputed
-                  : messages.numericalSolution
-                : record.numerically_solved === false
-                  ? "No numerical prediction"
-                  : "Not recorded"}
-            </td>
-            <td>
-              {record.evidence_ready === true
-                ? "Backend declares evidence ready; parameter approval remains separate"
-                : "Evidence completeness not declared"}{" "}
-              · {show(record.status)}
-            </td>
-            <td>Not assessed; cannot be inferred from job status</td>
-          </tr>
-        </tbody>
-      </table>
-      <p>Claim scope: {show(record.claim_scope)}</p>
-      <MissingEvidence
-        module={module}
-        missing={record.missing_inputs}
-        status={record.status}
-      />
-      <p>Sources: {show(record.provenance_summary)}</p>
-      {["M1", "M2"].includes(module) && (
-        <p>
-          Sequence/Static geometry/negative screens do not establish
-          experimentally validated activity or self-assembly.
-        </p>
-      )}
+      <p className="result-status">{record.numerically_solved === true ? 'Numerically solved' : record.status === 'insufficient_data' ? 'Blocked · missing data' : show(record.status)}{record.data_quality==='demo_fixture'?' · synthetic':''}</p>
+      {module !== 'M2' && <MissingEvidence module={module} missing={record.missing_inputs} status={record.status}/>}
       {module === "M1" && (
         <>
           <M1Matrix records={records} />
@@ -187,7 +140,7 @@ function StageResult({
       )}
       {module === "M2" && (
         <>
-          <M2Metrics record={record} />
+          <M2Metrics record={record} onAddData={onAddData} />
           <LazyJson
             value={record.construct_definition}
             label="Construct / Residue mapping source"
@@ -206,25 +159,25 @@ function StageResult({
                 : record.trajectory_artifact
             }
           />
-          <LazyJson
+          {(record.transport_report || record.steady_state_residuals || record.analysis_result) && <LazyJson
             label="Transport/secretion, steady residuals and local stability"
             value={{
               transport: record.transport_report,
               residuals: record.steady_state_residuals,
               analysis: record.analysis_result,
             }}
-          />
-          <LazyJson
+          />}
+          {(record.robustness || record.sensitivity) && <LazyJson
             label="F2: sensitivity and robustness (recorded analysis)"
             value={{
               robustness: record.robustness,
               sensitivity: record.sensitivity,
             }}
-          />
-          <LazyJson
-            label="F3: design comparison contract (no ranking if absent)"
-            value={record.design_comparison ?? record.analysis_result}
-          />
+          />}
+          {record.design_comparison && <LazyJson
+            label="Design comparison"
+            value={record.design_comparison}
+          />}
         </>
       )}
       {module === "M5" && (
@@ -243,10 +196,7 @@ function StageResult({
           />
         </>
       )}
-      <LazyJson
-        value={record}
-        label="Candidate data, sources and applicability"
-      />
+      {object(record.provenance_summary)&&<details><summary>Sources</summary><dl>{object(record.provenance_summary)&&Object.entries(record.provenance_summary).map(([name,value])=><div key={name}><dt>{name}</dt><dd>{show(value)}</dd></div>)}</dl></details>}
     </section>
   );
 }
@@ -254,10 +204,12 @@ function NodeResult({
   run,
   node,
   projectId,
+  onAddData,
 }: {
   run: ResultRun;
   node: ResultRun["nodes"][number];
   projectId?: string;
+  onAddData?:()=>void;
 }) {
   const tool = nodeTool(run, node);
   const output = node.output;
@@ -265,14 +217,14 @@ function NodeResult({
     return <SyntheticPSResult output={output} projectId={projectId}/>;
   if (tool==='workflow.custom_formula'&&object(output)&&output.schema_version==='custom-formula-v1')
     return <CustomFormulaResult output={output}/>;
-  if (object(output) && output.schema_version === "m1-method-check-v1")
+  if (object(output) && m1Checks(output))
     return <M1MethodResult output={output} />;
   if (object(output) && output.schema_version === "sequence-prediction-v1")
     return <PredictionResult output={output} />;
   const records = stageRecords(tool, output);
   if (records && object(output))
     return (
-      <StageResult output={output} records={records} projectId={projectId} />
+      <StageResult output={output} records={records} projectId={projectId} onAddData={onAddData}/>
     );
   const sequence = sequenceOutput(output);
   if (tool === "fusion.sequence_metrics" && sequence)
@@ -409,9 +361,11 @@ function NodeResult({
 export function ScientificResults({
   run,
   projectId,
+  onAddData,
 }: {
   run: ResultRun;
   projectId?: string;
+  onAddData?:()=>void;
 }) {
   return (
     <>
@@ -419,7 +373,7 @@ export function ScientificResults({
         .filter((node) => node.status === "succeeded")
         .map((node) => (
           <ResultBoundary key={`${run.id}:${node.id}`}>
-            <NodeResult run={run} node={node} projectId={projectId} />
+            <NodeResult run={run} node={node} projectId={projectId} onAddData={onAddData}/>
           </ResultBoundary>
         ))}
     </>

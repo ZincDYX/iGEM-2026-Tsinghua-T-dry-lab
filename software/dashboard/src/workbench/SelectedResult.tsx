@@ -3,7 +3,6 @@ import { ScientificResults } from "../ScientificResults";
 import { downloadArtifact } from "../api";
 import { show } from "../contracts/resultAdapters";
 import { SequenceMapTable } from "./SequenceMapTable";
-import {RunAssessment} from './RunAssessment';
 
 export function SelectedResult({
   run,
@@ -15,6 +14,7 @@ export function SelectedResult({
   onSelect,
   action,
   onOpenResource,
+  onAddData,
 }: {
   run: RunSummaryView;
   selected: string;
@@ -25,6 +25,7 @@ export function SelectedResult({
   onSelect: (id: string) => void;
   action: (job: () => Promise<unknown>) => Promise<void>;
   onOpenResource?: (fileId: string) => void;
+  onAddData?:()=>void;
 }) {
   if (error) return <p role="alert">{error}</p>;
   if (!selected) return <p>Select a stage in Workflow or Results.</p>;
@@ -40,10 +41,6 @@ export function SelectedResult({
   visit(data.node.output);
   return (
     <section>
-      <RunAssessment run={run}/>
-      <p>
-        {run.name} · Saved inputs {run.project_revision}
-      </p>
       {data.node.error && <p role="alert">{show(data.node.error.message)}</p>}
       {data.sequence_map ? (
         <SequenceMapTable
@@ -57,6 +54,7 @@ export function SelectedResult({
         <ScientificResults
           key={`${run.id}:${selected}:${data.node.attempts}:${data.artifact?.hash}:${offset}`}
           projectId={run.project_id}
+          onAddData={onAddData}
           run={{
             id: run.id,
             snapshot: {
@@ -93,15 +91,10 @@ export function SelectedResult({
             )
           }
         >
-          Authorized scientific export (not original artifact bytes)
+          Export result
         </button>
       )}
-      {onOpenResource &&
-        [...files].map((id, index) => (
-          <button key={id} onClick={() => onOpenResource(id)}>
-            Open stage resource {index + 1}
-          </button>
-        ))}
+      {onOpenResource&&files.size>0&&<details><summary>Sources</summary>{[...files].map((id,index)=><button key={id} onClick={()=>onOpenResource(id)}>View source {index+1}</button>)}</details>}
     </section>
   );
 }

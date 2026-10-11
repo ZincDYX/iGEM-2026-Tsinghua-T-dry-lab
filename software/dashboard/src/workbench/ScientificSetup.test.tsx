@@ -1,89 +1,26 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
-import type { ProjectView } from "../contracts/generated";
-import { ScientificSettings } from "./ScientificSetup";
-import type { FieldSchema } from "./ScientificFields";
-
+import {cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {afterEach,expect,it,vi} from 'vitest';
+import type {ProjectView} from '../contracts/generated';
+import {ConstructObject} from './ScientificInputForms';
 afterEach(cleanup);
-const records = ["A", "B"].map((construct_id) => ({
-  construct_id,
-  host: "original host",
-  review_status: "approved",
-  m1_review: { decision: "approved" },
-}));
-const schema: FieldSchema = {
-  properties: { stages: { type: "object", properties: {} } },
-  $defs: {
-    InputsConfig: {
-      type: "object",
-      required: ["construct_records"],
-      properties: {
-        construct_records: {
-          type: "array",
-          items: {
-            type: "object",
-            required: ["construct_id", "host", "review_status", "m1_review"],
-            properties: {
-              construct_id: { type: "string" },
-              host: { type: "string" },
-              review_status: { type: "string", readOnly: true },
-              m1_review: { type: "object", readOnly: true },
-            },
-          },
-        },
-      },
-    },
-  },
-};
-function setup() {
-  const project = {
-    files: [],
-    scientific_project: {
-      evidence_files: [],
-      config: { stages: {}, inputs: { construct_records: records } },
-    },
-  } as unknown as ProjectView;
-  const change = vi.fn();
-  render(
-    <ScientificSettings project={project} schema={schema} onChange={change} />,
-  );
-  fireEvent.click(
-    screen.getByText("Model controls and additional input declarations"),
-  );
-  fireEvent.click(
-    screen.getByText("Construct records (2)"),
-  );
-  return { project, change };
-}
-it("editing a reviewed record clears only that record's approvals without mutating the saved draft", () => {
-  const { project, change } = setup();
-  fireEvent.change(
-    screen.getByLabelText(
-      "scientific_project.config.inputs.construct_records.0.host",
-    ),
-    { target: { value: "new host" } },
-  );
-  const updated =
-    change.mock.calls[0][0].scientific_project.config.inputs.construct_records;
-  expect(updated[0]).toEqual({
-    ...records[0],
-    host: "new host",
-    review_status: "extracted",
-    m1_review: null,
-  });
+const records=['A','B'].map(construct_id=>({construct_id,host:'original host',review_status:'approved',m1_review:{decision:'approved'}}));
+const project={id:'SOFTWARE_ONLY',scientific_project:{config:{inputs:{constructs:[],construct_records:records}}}} as unknown as ProjectView;
+it('editing only the selected construct clears its review, without mutating other evidence or the saved project',()=>{
+  const change=vi.fn();
+  render(<ConstructObject project={project} selected="record:A" onChange={change}/>);
+  expect(screen.queryByLabelText('Construct host')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Edit construct conditions'}));
+  fireEvent.change(screen.getByLabelText('Construct host'),{target:{value:'new host'}});
+  const updated=change.mock.calls[0][0].scientific_project.config.inputs.construct_records;
+  expect(updated[0]).toEqual({...records[0],host:'new host',review_status:'extracted',m1_review:null});
   expect(updated[1]).toEqual(records[1]);
-  expect(project.scientific_project!.config.inputs.construct_records).toEqual(
-    records,
-  );
+  expect(project.scientific_project!.config.inputs.construct_records).toEqual(records);
 });
-it("reordering existing records preserves reviews associated with their identities", () => {
-  const { change } = setup();
-  fireEvent.click(
-    screen.getByText(
-      "Move Construct records 2 up",
-    ),
-  );
-  expect(
-    change.mock.calls[0][0].scientific_project.config.inputs.construct_records,
-  ).toEqual([records[1], records[0]]);
+it('viewing a different construct retains the approval attached to its identity and does not open a schema form',()=>{
+  const change=vi.fn(),view=render(<ConstructObject project={project} selected="record:B" onChange={change}/>);
+  expect(screen.getByText(/review: approved/)).toBeTruthy();
+  view.rerender(<ConstructObject project={project} selected="record:A" onChange={change}/>);
+  expect(screen.getByRole('heading',{name:'A'})).toBeTruthy();
+  expect(change).not.toHaveBeenCalled();
+  expect(screen.queryByRole('textbox')).toBeNull();
 });

@@ -55,7 +55,7 @@ test('real PDB/mmCIF rotate, image export, file switch and twenty GPU lifecycle 
   page.on('pageerror',error => errors.push(error.message));
   const started = Date.now();
   await page.goto('/');
-  await expect(page.getByLabel('Project name')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
   await importStructure(page,'actual.pdb',pdb!);
   await importStructure(page,'actual.cif',cif!);
   await openResources(page);
@@ -112,7 +112,7 @@ test('real coordinate metadata survives actual WebGL-unavailable fallback',async
     } as typeof original;
   });
   await page.goto('/');
-  await expect(page.getByLabel('Project name')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
   await importStructure(page,'fallback.pdb',pdb!);
   await openResources(page);
   await page.getByRole('button',{name:'fallback.pdb · structure',exact:true}).click();

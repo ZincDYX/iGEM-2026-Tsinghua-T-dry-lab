@@ -825,25 +825,36 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         project = store.project(project_id)
         profile, private = RuntimeProfiles(store).get(project.runtime_profile_ref) if project.runtime_profile_ref else (None, {})
         with store.connection() as db:
-            last = db.execute("""SELECT n.output,r.updated_at FROM nodes n JOIN runs r ON n.run_id=r.id
-                WHERE r.project_id=? AND json_extract(n.output,'$.schema_version')='sequence-prediction-v1'
-                AND json_extract(r.snapshot,'$.runtime_profile.hash')=? ORDER BY r.updated_at DESC""",
+            last = db.execute("""SELECT n.output,n.error,n.status,r.updated_at,json_extract(w.value,'$.tool_id') AS tool_id
+                FROM nodes n JOIN runs r ON n.run_id=r.id JOIN json_each(r.snapshot,'$.workflow.nodes') w
+                ON json_extract(w.value,'$.id')=COALESCE(n.parent_id,n.id)
+                WHERE r.project_id=? AND (json_extract(n.output,'$.schema_version')='sequence-prediction-v1' OR n.status='failed')
+                AND json_extract(r.snapshot,'$.runtime_profile.hash') IS ? ORDER BY r.updated_at DESC""",
                 (project_id, profile["hash"] if profile else None)).fetchall()
         rows = []
-        for name in ("iupred2a", "seg", "colabfold", "pscore", "jpred"):
+        for name in ("iupred2a", "seg", "colabfold", "pscore", "jpred", "signalp", "deeptmhmm", "tango"):
             config = ToolConfig.model_validate(private.get(name, {}))
             adapter = create_tool_adapter(name, config)
-            executed = next(((json.loads(row["output"]), row["updated_at"]) for row in last if json.loads(row["output"]).get("tool") == name), None)
+            executed = next((row for row in last if row['tool_id']=='prediction.'+name), None)
             from igem_drylab.workflow.sequence_predictions import uses_native_jpred_route
             complete_route = name!="jpred" or uses_native_jpred_route(config)
             status = "configured_unverified" if complete_route and adapter.is_available() else "not_configured"
-            latest_file, checked = None, None
+            latest_file, checked, problem, failure_step = None, None, None, None
             if executed:
-                output, checked = executed
-                if complete_route and output["tool_status"] == "succeeded" and output["parse_status"] == "succeeded":
+                output=json.loads(executed['output']) if executed['output'] else {}
+                checked=executed['updated_at']
+                if executed['status']=='failed':
+                    status='failed';failure_step='Tool execution'
+                    if executed['error']:
+                        raw_error=json.loads(executed['error'])
+                        if raw_error.get('diagnostic_id'):
+                            from igem_drylab.workflow.public_errors import PublicError
+                            problem=PublicError.model_validate(raw_error)
+                elif complete_route and output.get("tool_status") == "succeeded" and output.get("parse_status") == "succeeded":
                     status = "available"
-                elif output["tool_status"] not in {"succeeded", "not_configured", "not_eligible"}:
+                elif output.get("tool_status") not in {"succeeded", "not_configured", "not_eligible"} or output.get('parse_status') in {'failed','blocked'}:
                     status = "failed"
+                    failure_step='Output parsing' if output.get('tool_status')=='succeeded' else 'Tool execution'
                 paths = list(output.get("outputs", {}).values())
                 if paths:
                     with store.connection() as db:
@@ -851,7 +862,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
                     latest_file = asset[0] if asset else None
             rows.append(PredictionToolView(id="prediction." + name, name=tools.get("prediction." + name).name,
                 status=status, version=config.verified_version, last_real_check=checked,
-                latest_file_id=latest_file, source_reference=tool_spec(name).official_url).model_dump(mode="json"))
+                latest_file_id=latest_file, source_reference=tool_spec(name).official_url,
+                problem=problem,failure_step=failure_step).model_dump(mode="json"))
         boundary.check(rows)
         return rows
 

@@ -17,9 +17,9 @@ export function useWorkbenchLayout() {
     toolbar: 100,
   });
   const [inspectorOpen, setInspectorOpen] = useState(
-    () => window.innerWidth >= 1100,
+    false,
   );
-  const [bottomOpen, setBottomOpen] = useState(true);
+  const [bottomOpen, setBottomOpen] = useState(false);
   useEffect(() => {
     const measure = () => {
       const toolbar =

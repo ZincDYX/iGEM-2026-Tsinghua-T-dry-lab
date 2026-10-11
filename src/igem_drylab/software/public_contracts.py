@@ -201,6 +201,8 @@ class PredictionToolView(Contract):
     latest_file_id: str | None
     source_reference: str
     location: Literal["connected_backend"] = "connected_backend"
+    failure_step: str | None = None
+    problem: PublicError | None = None
 
 
 PUBLIC_MODELS = {model.__name__:model for model in (ScientificRecordView, TablePage, ScanPage, M5ComparisonSeries, LineagePage, ComparePage, ResourcePage, SeriesPage, StructurePage, ScientificPrecheckView,PublicError,ProjectView,ProjectSummaryView,RunSummaryView,RuntimeInfoView,EventPage,

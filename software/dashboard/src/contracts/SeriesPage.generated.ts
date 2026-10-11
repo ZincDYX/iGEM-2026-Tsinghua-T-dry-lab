@@ -26,6 +26,8 @@ export type Id = string;
 export type Compartment = string;
 export type Species = string;
 export type Unit = string;
+export type SpeciesId = string | null;
+export type Quantity = string | null;
 export type Series = SeriesDescriptor[];
 export type ClaimScope = string | null;
 export type SourceType = string | null;
@@ -69,6 +71,8 @@ export interface SeriesDescriptor {
   compartment: Compartment;
   species: Species;
   unit: Unit;
+  species_id: SpeciesId;
+  quantity: Quantity;
 }
 export interface Values {
   [k: string]: (number | null)[];

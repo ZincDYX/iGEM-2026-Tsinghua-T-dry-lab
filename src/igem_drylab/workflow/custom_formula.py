@@ -54,6 +54,27 @@ def exponent(node):
     return sign * node.value
 
 
+def expression_latex(expression):
+    """Presentation of the admitted execution AST; preserve every operation."""
+    def render(node):
+        if isinstance(node, ast.Name):
+            return r'\mathrm{' + node.id.replace('_', r'\_') + '}'
+        if isinstance(node, ast.Constant): return str(node.value)
+        if isinstance(node, ast.UnaryOp):
+            return ('-' if isinstance(node.op, ast.USub) else '+') + r'\left(' + render(node.operand) + r'\right)'
+        if isinstance(node, ast.BinOp):
+            left,right=render(node.left),render(node.right)
+            if isinstance(node.op,ast.Div): return r'\frac{' + left + '}{' + right + '}'
+            if isinstance(node.op,ast.Pow): return r'\left(' + left + r'\right)^{' + right + '}'
+            operator={ast.Add:'+',ast.Sub:'-',ast.Mult:r'\cdot'}[type(node.op)]
+            return r'\left(' + left + operator + right + r'\right)'
+        argument=render(node.args[0])
+        if node.func.id=='sqrt': return r'\sqrt{' + argument + '}'
+        if node.func.id=='abs': return r'\left|' + argument + r'\right|'
+        return {'exp':r'\exp','ln':r'\ln','log10':r'\log_{10}'}[node.func.id]+r'\left('+argument+r'\right)'
+    return render(tree(expression))
+
+
 def dimensions(node, names, *, unit=False):
     if (isinstance(node, ast.Constant) and type(node.value) in {int, float}
             and (not isinstance(node.value, int) or node.value.bit_length() <= 1023)

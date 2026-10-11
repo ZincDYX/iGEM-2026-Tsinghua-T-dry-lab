@@ -105,6 +105,13 @@ def test_skill_is_plain_instructions_revision_bound_and_not_scientific_authority
         skill=response.json()
         assert skill['execution']=='instructions_only' and skill['revision']==1
         assert client.get('/api/platform/skills').json()['items']==[skill]
+        structured=client.post('/api/platform/skills',json={'name':'Simple instructions','instructions':'No automatic approval.','enabled':False})
+        assert structured.status_code==200,structured.text
+        simple=structured.json()
+        assert simple['name']=='Simple instructions' and simple['text'].endswith('No automatic approval.')
+        revised=client.post('/api/platform/skills/'+simple['id'],json={'name':'Revised','instructions':'Keep real gates.','expected_revision':1})
+        assert revised.status_code==200 and revised.json()['revision']==2
+        assert revised.json()['source']==simple['source'] and revised.json()['trigger']==simple['trigger']
         updated=client.post('/api/platform/skills/'+skill['id'],json={'text':text,'enabled':False,'expected_revision':1}).json()
         assert updated['revision']==2 and not updated['enabled']
         assert client.post('/api/platform/skills/'+skill['id'],json={'text':text,'enabled':True,'expected_revision':1}).status_code==409

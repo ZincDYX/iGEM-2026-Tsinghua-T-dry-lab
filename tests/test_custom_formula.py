@@ -42,6 +42,9 @@ def test_save_prepare_freezes_owned_version_without_creating_jobs(tmp_path):
         assert response.status_code==200,response.text
         draft=response.json()
         assert draft['executable'] and draft['validation_status']=='unvalidated'
+        from igem_drylab.workflow.custom_formula import expression_latex
+        assert draft['latex']==expression_latex(request['execution_spec']['expression'])
+        assert draft['latex']!=request['latex']
         url=f"/api/platform/projects/software-fixture/method-drafts/{draft['id']}/workflow"
         prepared=client.post(url,json={})
         assert prepared.status_code==200,prepared.text

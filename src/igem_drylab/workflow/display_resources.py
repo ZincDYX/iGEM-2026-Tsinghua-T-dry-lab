@@ -95,6 +95,8 @@ class SeriesDescriptor(Contract):
     compartment: str
     species: str
     unit: str
+    species_id: str | None = None
+    quantity: str | None = None
 
 
 class SeriesPage(Contract):
@@ -399,7 +401,7 @@ class DisplayResources:
 
     def series(self, project_id, file_id, offset, limit, series_id=None):
         path, identity, _ = self.source(project_id, file_id)
-        key = (file_id, identity.source_sha256, "display-series-v1")
+        key = (file_id, identity.source_sha256, "display-series-columns-v2")
         with self.store.connection() as db:
             row = db.execute("SELECT payload FROM display_series_meta WHERE file_id=? AND hash=? AND schema=?", key).fetchone()
         declaration = None
@@ -449,7 +451,11 @@ class DisplayResources:
                     columns[identifier] = values
                     declared_column = next((c for c in declaration.columns if c.key == name and c.compartment == compartment), None) if declaration else None
                     unit=declared_column.unit if declared_column else contract['column_units'][compartment][name] if 'column_units' in contract else contract['concentration_unit']
-                    descriptors.append(SeriesDescriptor(id=identifier, compartment=compartment, species=declared_column.species if declared_column else name, unit=unit).model_dump())
+                    column_metadata=contract.get('column_metadata',{}).get(compartment,{}).get(name,{})
+                    descriptors.append(SeriesDescriptor(id=identifier, compartment=compartment,
+                        species=declared_column.species if declared_column else name, unit=unit,
+                        species_id=column_metadata.get('species_id',declared_column.species if declared_column else name),
+                        quantity=column_metadata.get('quantity')).model_dump())
             if len(columns) > MAX_SERIES:
                 raise WorkflowError("display_source_budget_exceeded")
             meta = {key: contract[key] for key in ("schema_version", "model_kind", "formula_version", "time_unit")}

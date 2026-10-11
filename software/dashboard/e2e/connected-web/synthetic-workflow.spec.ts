@@ -10,6 +10,7 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await expect(page.getByRole('tab',{name:'Inputs',exact:true})).toHaveAttribute('aria-selected','true');
   await page.getByText('File',{exact:true}).click();
   await page.getByRole('menuitem',{name:'New project',exact:true}).click();
+  await page.getByRole('button',{name:'Rename project',exact:true}).click();
   await page.getByLabel('Project name').fill('PS-v3 browser acceptance');
   await page.getByLabel('Import data file').setInputFiles(packagePath!);
   await expect(page.getByText('Synthetic demo.',{exact:true}).first()).toBeVisible();
@@ -19,7 +20,7 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   // Settings cannot invalidate a proposal while its first persisted workflow
   // document is still being saved on a real remote connection.
   await expect(page.getByRole('button',{name:'Module Synthetic M3/M4 reference scenarios',exact:true})).toBeVisible();
-  await page.getByLabel('Tool call budget').fill('2');
+  await expect(page.getByLabel('Tool call budget')).toHaveCount(0);
   await expect(page.getByLabel('Run through module')).toBeEnabled();
   await page.getByLabel('Run through module').selectOption('synthetic-demo');
   await expect(page.getByRole('button',{name:'Review plan',exact:true})).toBeEnabled();
@@ -28,29 +29,33 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
   await page.getByRole('button',{name:'Start run',exact:true}).click();
   await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible({timeout:60000});
-  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Results',exact:true}).click();
-  await page.getByLabel('Project and run tree').getByRole('button',{name:/^Synthetic M3\/M4 reference scenarios/}).click();
-  await expect(page.getByRole('heading',{name:'Synthetic M3/M4 reference demonstration'})).toBeVisible();
-  await expect(page.getByRole('heading',{name:'E3: ER anchoring remains blocked'})).toBeVisible();
+  await page.getByRole('tab',{name:'Results',exact:true}).click();
+  await page.getByLabel('Result object',{exact:true}).selectOption('synthetic-demo');
+  await expect(page.getByRole('heading',{name:'E1 · M3/M4'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'E3 · blocked · synthetic'})).toHaveCount(0);
+  await expect(page.getByLabel('Species')).toHaveValue('15');
+  await expect(page.getByLabel('Phase')).toHaveValue('dilute');
+  await expect(page.getByLabel('Quantity')).toHaveValue('concentration');
+  await expect(page.getByLabel('Recorded numerical data')).toHaveCount(0);
   await page.getByLabel('Synthetic scenario').selectOption('E1');
   await expect(page.getByText('Complete recorded range',{exact:false})).toBeVisible();
   // Cold-loaded Plotly is an actual production chunk. This bounds UI loading,
   // not solver tolerances or scientific acceptance; it must really render.
   await expect(page.locator('.js-plotly-plot')).toBeVisible({timeout:20000});
-  await expect(page.getByLabel('Independent run assessments')).toContainText('Not established');
+  await expect(page.locator('.scope-warning')).toContainText('numerically solved');
+  await expect(page.locator('.scope-warning')).toHaveCount(1);
   const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Export exact recorded CSV',exact:true}).click()]);
   const csv=fs.readFileSync((await download.path())!,'utf8');
   expect(csv).toContain('Synthetic demo; not experimental validation');
   expect(csv).toContain('Compound 15 amount (umol)');
   expect(csv.trim().split('\n').length).toBe(50);
-  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Workflow',exact:true}).click();
+  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   const module=page.getByRole('button',{name:'Module Synthetic M3/M4 reference scenarios',exact:true});
   await expect(module).toContainText('Job: Job completed');
   await expect(module).toContainText('Numerical results: 4/5 solved');
   await expect(module).toContainText('Evidence: 0/5 ready');
   await expect(module).toContainText('Run experimental validation: not established');
-  await expect(page.getByLabel('Tool call budget')).toHaveValue('2');
-  await expect(page.getByLabel('Tool call budget')).toBeDisabled();
+  await expect(page.getByLabel('Tool call budget')).toHaveCount(0);
   await expect(page.getByLabel('Run through module')).toHaveValue('synthetic-demo');
   await expect(page.getByLabel('Run through module')).toBeDisabled();
   await expect(page.getByLabel('Workflow run controls').getByRole('button',{name:'Review plan',exact:true})).toHaveCount(0);
