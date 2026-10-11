@@ -592,3 +592,73 @@ was pending, no runner assigned. The older job explicitly failed with
 runner administrator is still needed. No private compute runner or shell access
 was registered or exposed. Full code bundle was regenerated and blob-verified;
 the final documentation revision is included in the final export.
+
+## Batch 5: executable exploratory formulas, real model protocol and desktop
+
+Supersedes Batch 4's "non-executable custom drafts / EXE not updated" status.
+Original scientific kernels, data, equations and approval requirements remain
+unchanged. One new builtin uses the existing durable workflow engine: explicit
+scalar AST expressions, sourced values, SI-dimensional admission/conversion and
+finite-real-domain checking. No eval, guessed LaTeX meaning, code execution or
+implicit original-formula replacement. Saved versions are immutable; old
+document-only versions remain readable and non-executable. See
+[the supported language and workflow](custom_formula_execution.md).
+
+Actual user flow: save separate version → Prepare exploratory workflow → review
+its expression/inputs/units/sources → Accept → Start run → select the frozen
+`formula` result in Results. The rendered result and authorized export retain
+the exact method version, values and provenance. Evidence readiness stays false
+and scientific validation remains unvalidated. A browser-discovered load race
+was corrected: reviewing a not-yet-loaded saved workflow cannot fall through
+to an unrelated default sequence template. Review requires an explicit loaded
+workflow; input checks remain available.
+
+Acceptance against code `c2c0242` (later test/document-only changes do not alter
+the runtime): server full regression **958 passed / 12 skipped**, including
+required immutable author-source regression; fresh real non-restricted tool
+suite **56 passed**. New custom-expression analytic/unit/function/domain,
+approval → Start → durable result/reopen tests all ran on the server. Local
+AST/ownership/profile software checks: **29 passed / 14 numerical cases
+deselected**. Final frontend: **84 tests / 27 files passed**. Installed real
+browser package: **7 tasks passed**, including executable-version creation
+without local execution, all original formula rendering, real PDB/mmCIF rotation,
+image export, twenty GPU lifecycle cycles and actual WebGL-unavailable fallback.
+Connected server browser: **2 tasks passed**, including reviewed scalar
+calculation/result/reload and unchanged corrected PS-v3 real-kernel/Plotly/CSV
+flow. The scalar and PS-v3 fixtures are not biological validation.
+
+The actual laboratory model returned JSON and streaming responses through a
+private encrypted tunnel. An actual typed semantic request was parsed (one
+schema repair was needed) and missing scientific inputs blocked execution;
+no fixture HTTP service is counted as an LLM. A real named tool-call request
+returned HTTP 400 explicitly requiring a server tool-call parser. JSON semantic
+planning does not require that feature; function-call compatibility remains
+unverified until the service administrator configures and retests it. No shared
+model service was restarted. No private endpoint, model identifier or key is in
+source, reports, release assets or bundle. The client now allows bounded slow
+model responses, rejects truncated responses explicitly and preserves that
+failure instead of concealing it as a generic parse error.
+
+Windows portable desktop rebuilt from `c2c0242` with pinned CPython 3.13.13,
+Node 24.19.0, pnpm 10.30.3 and Rust 1.95.0, without weakening locks. Actual EXE
+boot/authentication, GenBank import, same workspace restart, embedded asset-byte
+identity and owned-child shutdown passed. Default mode is local; no laboratory
+connection is bundled. Portable folder: **240,695,038 bytes**; ZIP:
+**90,364,937 bytes**. Keep the whole extracted folder, not just the EXE.
+Package manifest/source/ZIP bytes were verified; this is not code signing or
+scientific validation. Intermediate packages were preserved, not delivered.
+
+Fresh installed tool/runtime/dependency/current-package audit:
+**14,990,320,312 bytes**, below decimal 15 GB. Existing numerical tool environments,
+cache and retained runtime backups remain included. PNPM aliases are counted
+once by file identity. Inactive source/releases/build intermediates and scientific
+outputs remain excluded; this is not total disk occupancy. The model is an
+existing external laboratory API; no model weights or new scientific environment
+were installed by this delivery.
+
+Still blocked externally: licensed SignalP/DeepTMHMM/TANGO/PASTA native/API jobs
+without valid access; model function-call service configuration; official CI
+without a matching Runner. The last existing GitLab job explicitly failed with
+`stuck_pending_no_matching_runners`, runner unset. These are not marked passed.
+The complete original biological workflow, matched wet-lab validation and all
+remaining review/award criteria are not established by this batch.

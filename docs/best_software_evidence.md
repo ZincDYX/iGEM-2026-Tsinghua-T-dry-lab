@@ -96,3 +96,20 @@ ER joint uncertainty, actual dependency reuse, formal tool-to-stage evidence
 closure and feedback-triggered Agent research decisions remain unfinished.
 
 No roadmap item becomes completed merely by appearing in this index.
+
+## 2026-10-11 formula/model/desktop update
+
+Separate scalar custom versions can now run after explicit workflow acceptance;
+units/sources and frozen numerical results are retained. They remain exploratory,
+not original-method or wet-lab evidence. The existing engine is reused. Backend
+and new numerical acceptance ran on the authorized server: 958 passed / 12
+skipped; native non-restricted tool suite 56 passed. Frontend 84 tests passed;
+seven actual local software browser tasks and two connected server tasks passed.
+The updated pinned-toolchain Windows EXE passed actual native boot, authentication,
+import, restart and child-process shutdown. No scientific solver ran locally.
+Real external model JSON/streaming and typed semantic parsing were observed, but
+its function-call service configuration still blocks that protocol; a missing-input
+response is not complete model/planner or biological validation. Restricted jobs
+remain unverified without lawful access. See the dated
+[Batch 5 ledger](web_cli_review_20261011.md) and
+[supported custom formula language](custom_formula_execution.md).

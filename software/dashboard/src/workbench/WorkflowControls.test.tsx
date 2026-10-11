@@ -21,6 +21,15 @@ it('a recorded run cannot expose draft review or start actions, even if another 
   expect(screen.getByText('Recorded run. Its workflow and execution settings are read-only.')).toBeTruthy();
 });
 
+it('review waits for the selected workflow without disabling input checks',()=>{
+  render(<WorkflowControls {...actions} {...state} primary="check" reviewDisabled/>);
+  expect(screen.getByRole('button',{name:'Review plan'})).toHaveProperty('disabled',true);
+  expect(screen.getByRole('button',{name:'Check inputs'})).toHaveProperty('disabled',false);
+  cleanup();
+  render(<WorkflowControls {...actions} {...state} primary="review" reviewDisabled/>);
+  expect(screen.getByRole('button',{name:'Review plan'})).toHaveProperty('disabled',true);
+});
+
 it('frozen active and recoverable runs retain only their actual control actions',()=>{
   render(<WorkflowControls {...actions} {...state} primary="running" frozen executing cancellable pausePending/>);
   expect(screen.getByRole('button',{name:'Pause run'})).toHaveProperty('disabled',true);

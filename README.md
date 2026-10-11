@@ -132,8 +132,12 @@ Select an original M1–M4 module to inspect Tools, Formulas and Parameters. Ori
 method versions, assumptions and discrepancies are retained; frozen runs show
 their own recorded tool versions and parameters. Edit a saved parameter by creating
 a reasoned, unapproved override, then review its source/units/conditions explicitly.
-Custom formula drafts are separately versioned, unvalidated and **not executable**;
-they never replace an original scientific kernel merely because they were saved.
+Custom formula versions remain scientifically unvalidated and never replace an
+original scientific kernel. LaTeX alone is not executable. Add an explicit scalar
+expression, sourced values and units, then **Prepare exploratory workflow →
+Review → Accept → Start run**. Results retain the exact version and original
+inputs after restart. Supported syntax, unit conversions and boundaries are in
+[Custom formula execution](docs/custom_formula_execution.md).
 General typed module/binding creation remains pending. Editing/reviewing is not
 execution, scientific approval, or proof that an installed tool is validated.
 
