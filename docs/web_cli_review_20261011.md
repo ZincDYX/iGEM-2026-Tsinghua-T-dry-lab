@@ -445,8 +445,8 @@ formal M1–M4 readiness or experimental validation.
 
 Scientific kernels/equations/tolerances were not replaced. The method registry
 lists every original stage and retains original equalities and documented source
-discrepancies. M3's undefined blockiness/avidity/capacity claims remain explicitly
-conditional or undefined; a metadata implementation reference is not an independent
+discrepancies. M1's undefined blockiness and M3's avidity/capacity claims remain
+explicitly conditional or undefined; a metadata implementation reference is not an independent
 numerical proof. ER is separately versioned and never relabels a cytosolic result.
 Tools are registered/not tested until actual execution establishes otherwise.
 Run inspectors use immutable run tool versions and parameters, not a live draft.
@@ -514,3 +514,81 @@ compute deployment. Latest exact delivery counts/sizes are appended after final
 acceptance. Clean release-builder Node 24.19.0, desktop EXE, full generic module/
 binding creation, SBOL/SBML semantics, comprehensive Jobs/Output and the other
 pending rows remain outside claims of completion in this batch.
+
+### Final batch-4 delivery acceptance
+
+Code commits: `613acd4` (methods/Assistant/extensions/3D) and `c9e5f26`
+(initial-save race, compact generated validators and process-tree measurement).
+Official corresponding code commits: `b5bef3fe` and `b5208140`, with identical
+source trees and unchanged main. Subsequent documentation commits do not change
+these tested kernels or executable assets.
+
+- Frontend: 83 passed / 27 files / 49.00 s; TypeScript and Vite passed. Includes a
+  delayed first-document-save regression: execution settings stay disabled until
+  the document is durable, rather than discarding the proposal during a fast edit.
+- Installed compact Web wheel: 7 actual Edge browser tasks passed / 1.3 min.
+  All M1–M4 formulas rendered as MathML; an unvalidated separate formula version
+  saved; None/model-style and actual instruction Skills survived reload. Proposal
+  revise/reject/reopen, actual imports, graph/list/fan-out and both real-coordinate
+  display tasks passed. No scientific job ran on the workstation.
+- Backend/server full exact-source regression: 924 passed, 12 skipped / 120.49 s.
+  First run had 923 passes and one mandatory-author failure because the fresh
+  source archive intentionally excluded private author files. Those two original
+  files were verified against independently retained bytes and linked into the
+  owned server acceptance directory; the first failure was retained and the whole
+  suite rerun. No oracle, tolerance or required-author flag was weakened.
+- Separate native tools: 56 passed / 7.04 s, actual FreeSASA/2PDZ and original
+  Mpipi/LAMMPS. New local ZIP/process lifecycle tests actually import, install,
+  execute, disable, restart and re-enable a stdlib-only plugin; incompatible
+  dependency-version tests retain their actual separate venv processes. These
+  software plugins are not substitutes for licensed scientific predictors.
+- Final server-connected actual-kernel browser: 1 task passed / 10.5 s (12.9 s
+  total). It found and prompted the first-save race fix, then passed review/scope/
+  acceptance → original synthetic M3/M4 calculation → actual table/Plotly → all
+  49 recorded points in CSV. 4/5 solved, 0/5 evidence-ready, experimental validation
+  not established; E3 remains blocked. Historical projects/runs were preserved.
+
+Controlled sequential cold-page observations, same i7-1255U / 16,995,729,408-B RAM /
+Windows 10.0.26200 / Edge 155.0.4283.45 workstation:
+
+| Measurement | Before family split | Final compact build |
+|---|---:|---:|
+| Actually loaded JavaScript bytes | 1,504,041 | 979,528 |
+| Locally computed gzip bytes | 213,987 | 176,370 |
+| Browser heap after GC, bytes | 3,967,560 | 3,848,776 |
+| 50 sequential info reads, p95 ms | 14.1 | 11.5 |
+| Requests during declared ten-second idle window | 1 | 1 |
+
+This supports approximately 35% less initial JS and 18% less gzip loading.
+It remains a single sequential timing pair, not a universal speed/RSS result.
+The revised measuring script includes the actual Windows Python descendants:
+the first sampler measured only a venv redirector's small working set, so that
+old backend-memory/CPU sample is not a valid backend comparison. Final measured
+server processes are retained in private evidence; no stable backend-memory
+reduction is claimed. One request appeared in each final idle window; the earlier
+zero-request samples must not be substituted for these latest observations.
+
+Latest actual Web wheel: 3,404,577 bytes, installed without new Python dependencies.
+It is not an updated EXE or a clean Node-24.19.0 locked release-build acceptance.
+Temml 0.13.4 is the sole newly added frontend runtime dependency in this batch.
+Fresh installed runtime/tools audit: 14,752,998,991 bytes under decimal 15 GB,
+including live server acceptance package, existing tools/environments/cache and
+retained runtime backups, workstation dependencies and latest installed Web package.
+There was no active older desktop process in this audit. PNPM file aliases are
+counted once by file identity. Inactive source/release/build files and scientific
+outputs are excluded consistently; this is not total disk occupancy.
+
+Final code's conservative full Git/source accounting after normal lossless Git
+packing: 12,353,379 bytes under decimal 50 MB; tracked source 7,137,393 bytes,
+Git storage 5,215,986 bytes, zero reachable LFS. The earlier local check exceeded
+50 MB because redundant development-fetch packs and larger generated code were
+included; generated code was compacted and ordinary `git gc --prune=never` packed
+objects without deleting/rewriting history. Server GitLab last reported 6,695,208
+repository bytes; it is not official freeze/eligibility confirmation.
+
+CI is **not passed**: [code pipeline](https://gitlab.igem.org/2026/software/tsinghua-t/galatea/-/pipelines/747422)
+was pending, no runner assigned. The older job explicitly failed with
+`stuck_pending_no_matching_runners`; shared runners remain disabled. A repository/
+runner administrator is still needed. No private compute runner or shell access
+was registered or exposed. Full code bundle was regenerated and blob-verified;
+the final documentation revision is included in the final export.
