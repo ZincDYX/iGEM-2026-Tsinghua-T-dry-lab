@@ -62,6 +62,7 @@ class ModuleMethodView(Contract):
     parameter_records: list[dict] = Field(default_factory=list)
     parameter_requirements: list[dict] = Field(default_factory=list)
     parameter_source_options: dict[str,list[str]] = Field(default_factory=dict)
+    scalar_method: 'MethodDraftView | None' = None
 
 
 class ToolCatalogPage(Contract):
@@ -123,6 +124,14 @@ class MethodDrafts:
             rows=db.execute('SELECT payload FROM method_drafts WHERE project_id=? ORDER BY rowid DESC LIMIT 21 OFFSET ?',(project_id,offset)).fetchall()
         return MethodDraftPage(items=[MethodDraftView.model_validate(json.loads(row[0])) for row in rows[:20]],has_more=len(rows)>20)
 
+    def get(self,project_id,draft_id):
+        from .models import WorkflowError
+        self.store.project(project_id)
+        with self.store.connection() as db:
+            row=db.execute('SELECT payload FROM method_drafts WHERE id=? AND project_id=?',(draft_id,project_id)).fetchone()
+        if row is None: raise WorkflowError('method_draft_not_owned',status_code=403)
+        return MethodDraftView.model_validate_json(row[0])
+
     def save(self,project_id,request):
         import json
         from uuid import uuid4
@@ -162,11 +171,7 @@ class MethodDrafts:
     def workflow(self,project_id,draft_id):
         from .models import Workflow, WorkflowNode, LiteralInput, WorkflowError
         from .custom_formula import FormulaExecution
-        self.store.project(project_id)
-        with self.store.connection() as db:
-            row=db.execute('SELECT payload FROM method_drafts WHERE id=? AND project_id=?',(draft_id,project_id)).fetchone()
-        if row is None: raise WorkflowError('method_draft_not_owned',status_code=403)
-        draft=MethodDraftView.model_validate_json(row[0])
+        draft=self.get(project_id,draft_id)
         if draft.execution_spec is None: raise WorkflowError('method_draft_has_no_execution_spec')
         payload=FormulaExecution(method_id=draft.id,method_version=draft.version,title=draft.title,
             base_method_id=draft.base_method_id,base_version=draft.base_version,latex=expression_latex(draft.execution_spec.expression),
@@ -195,6 +200,21 @@ def module_method(project, definition):
                 methods.append(ER)
     from igem_drylab.parameters.requirements import requirements_for_stage
     requirements=requirements_for_stage(science.config,definition.id.removeprefix('project.')) if science and definition.id in {'project.m3','project.m4'} else []
+    er_ids=set()
+    if science and definition.id in {'project.m3','project.m4'}:
+        from igem_drylab.compartments import scenario_for_construct
+        from igem_drylab.pipeline.er_stages import quantities
+        constructs=science.config.inputs.constructs
+        er_constructs=[item for item in constructs if scenario_for_construct(science.config,item.id)=='er_anchored']
+        requests=science.config.stages.m3_concentration.er_requests if definition.id=='project.m3' else science.config.stages.m4_reaction.compartment_requests
+        for construct in er_constructs:
+            request=requests.get(construct.id)
+            if request is None: continue
+            er_ids.update(quantity.parameter_id for quantity in quantities(request))
+            er_ids.update(identifier for reaction in getattr(request,'reactions',[]) for identifier in reaction.parameter_ids)
+        if constructs and len(er_constructs)==len(constructs):
+            requirements=[]
+            configured_mode='ER versioned '+('recruitment' if definition.id=='project.m3' else 'amount network')+' requests'
     names={requirement.name for requirement in requirements}
     source_options={}
     if science:
@@ -224,7 +244,8 @@ def module_method(project, definition):
             'Custom scalar formulas use a separate unit-checked exploratory tool, not an original method or approved scientific evidence. LaTeX alone is not executable.'],
         parameter_source_options=source_options,
         parameter_requirements=[requirement.model_dump(mode='json') for requirement in requirements],
-        parameter_records=[record.model_dump(mode='json') for record in science.config.parameters if record.name in names] if science else [])
+        parameter_records=[{**record.model_dump(mode='json'),**({'binding_read_only':True,'binding_reason':'Bound inside the versioned ER model. Import a revised model and matched evidence in Inputs; changing only this record would not change that model.'} if record.parameter_id in er_ids else {})}
+            for record in science.config.parameters if record.name in names or record.parameter_id in er_ids] if science else [])
 
 
 def formula(id, title, latex, function, *assumptions, status='implemented'):

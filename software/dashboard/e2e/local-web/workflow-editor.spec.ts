@@ -87,7 +87,8 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   await expect(page.getByLabel('Proposed changes')).toContainText('No graph or permission changes');
   expect((await (await context.request.get(`/api/platform/proposals/${originalProposal}`)).json()).status).toBe('rejected');
   await page.reload();
-  await page.getByRole('button',{name:'Assistant',exact:true}).click();
+  await page.getByRole('navigation',{name:'Workbench menus'}).getByText('View',{exact:true}).click();
+  await page.getByRole('menuitem',{name:'Assistant',exact:true}).click();
   await expect(page.getByRole('button',{name:'Open recorded proposal',exact:true}).last()).toBeEnabled();
   await page.getByRole('button',{name:'Open recorded proposal',exact:true}).last().click();
   await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeEnabled();

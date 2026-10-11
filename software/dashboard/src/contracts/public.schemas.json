@@ -30563,6 +30563,67 @@
   },
   "ModuleMethodView": {
     "$defs": {
+      "FormulaSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "expression": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression",
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/$defs/FormulaVariable"
+            },
+            "maxProperties": 64,
+            "minProperties": 1,
+            "title": "Variables",
+            "type": "object"
+          },
+          "output_unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Output Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expression",
+          "variables",
+          "output_unit"
+        ],
+        "title": "FormulaSpec",
+        "type": "object"
+      },
+      "FormulaVariable": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "source"
+        ],
+        "title": "FormulaVariable",
+        "type": "object"
+      },
       "MethodDefinition": {
         "additionalProperties": false,
         "properties": {
@@ -30647,6 +30708,112 @@
           "formal_formula_editable"
         ],
         "title": "MethodDefinition",
+        "type": "object"
+      },
+      "MethodDraftView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_revision": {
+            "title": "Project Revision",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "base_method_id": {
+            "title": "Base Method Id",
+            "type": "string"
+          },
+          "base_version": {
+            "title": "Base Version",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "formula_id": {
+            "title": "Formula Id",
+            "type": "string"
+          },
+          "original_latex": {
+            "title": "Original Latex",
+            "type": "string"
+          },
+          "latex": {
+            "title": "Latex",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "previous_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Id"
+          },
+          "validation_status": {
+            "const": "unvalidated",
+            "default": "unvalidated",
+            "title": "Validation Status",
+            "type": "string"
+          },
+          "executable": {
+            "default": false,
+            "title": "Executable",
+            "type": "boolean"
+          },
+          "execution_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FormulaSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "project_revision",
+          "version",
+          "base_method_id",
+          "base_version",
+          "title",
+          "formula_id",
+          "original_latex",
+          "latex",
+          "reason",
+          "source_reference",
+          "previous_id",
+          "validation_status",
+          "executable",
+          "execution_spec"
+        ],
+        "title": "MethodDraftView",
         "type": "object"
       },
       "MethodFormula": {
@@ -30848,6 +31015,17 @@
         },
         "title": "Parameter Source Options",
         "type": "object"
+      },
+      "scalar_method": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/MethodDraftView"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       }
     },
     "required": [
@@ -30859,7 +31037,8 @@
       "limitations",
       "parameter_records",
       "parameter_requirements",
-      "parameter_source_options"
+      "parameter_source_options",
+      "scalar_method"
     ],
     "title": "ModuleMethodView",
     "type": "object"

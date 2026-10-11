@@ -87,7 +87,7 @@ class PlanRequest(Contract):
 
 class MethodPlanRequest(Contract):
     project_id: str
-    method: Literal['sequence-properties','galatea-m1-m2','ps-v3-demo']
+    method: Literal['sequence-properties','galatea-m1-m2','ps-v3-demo','original-m1','original-m2','original-m3','original-m4']
 
 
 class RunRequest(Contract):
@@ -300,7 +300,8 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         return application.review_parameter(project_id,parameter_id,**request.model_dump())
 
     @router.get('/projects/{project_id}/module-method')
-    def selected_module_method(project_id: str, tool_id: str, run_id: str | None = None):
+    def selected_module_method(project_id: str, tool_id: str, run_id: str | None = None,
+                               workflow_id: str | None = None, node_id: str | None = None):
         from igem_drylab.workflow.methods import module_method
         project = store.project(project_id)
         if run_id:
@@ -311,6 +312,22 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
                 raise WorkflowError('tool_not_in_frozen_run',status_code=403)
             project = Project.model_validate(run['snapshot']['project'])
         result = module_method(project, tools.get(tool_id))
+        if tool_id == 'workflow.custom_formula' and node_id:
+            from igem_drylab.workflow.models import Workflow, LiteralInput
+            from igem_drylab.workflow.custom_formula import FormulaExecution, expression_latex
+            if not run_id and not workflow_id: raise WorkflowError('formula_saved_literal_binding_required')
+            workflow = Workflow.model_validate(run['snapshot']['workflow']) if run_id else application.workflow_documents.get(project_id,workflow_id).workflow
+            node=next((item for item in workflow.nodes if item.id==node_id and item.tool_id==tool_id),None)
+            if node is None or any(not isinstance(value,LiteralInput) for value in node.inputs.values()):
+                raise WorkflowError('formula_saved_literal_binding_required')
+            payload=FormulaExecution.model_validate({key:value.value for key,value in node.inputs.items()})
+            draft=application.method_drafts.get(project_id,payload.method_id)
+            # Present the actual executable binding, including frozen historic
+            # inputs, rather than a second, potentially unrelated draft table.
+            result.scalar_method=draft.model_copy(update={'execution_spec':payload.spec,
+                'latex':expression_latex(payload.spec.expression),'version':payload.method_version,'title':payload.title})
+            from igem_drylab.workflow.methods import METHODS
+            result.methods=[METHODS[draft.base_method_id]]
         if run_id:
             frozen=run['snapshot']['tools'][tool_id]
             result.tool=result.tool.model_copy(update={key:frozen[key] for key in ('name','version','description','runtime')})

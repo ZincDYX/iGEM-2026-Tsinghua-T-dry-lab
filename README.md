@@ -85,7 +85,7 @@ Use `fusionlab --json ...` for automation and `fusionlab --data-dir <workspace>
 `check-inputs --project <id> --through M2` and method `galatea-m1-m2` use the
 existing scientific contracts; incomplete or unlicensed tools are not replaced
 with example outputs. Public GFP descriptors are not formal M1–M4 validation.
-See the [current simplification and acceptance record](docs/review_r24_simplification_20261012.md)
+See the [current parameter editing and review record](docs/review_r25_parameter_editing_20261012.md)
 and [earlier review ledger](docs/web_cli_review_20261011.md) for actual validation
 and external blockers; an entry point is not full biological validation.
 
@@ -131,8 +131,12 @@ fusionlab workflow review-draft <document-id> --project <project-id>
 
 Select an original M1–M4 module to inspect Tools, Formulas and Parameters. Original
 method versions, assumptions and discrepancies are retained; frozen runs show
-their own recorded tool versions and parameters. Edit a saved parameter by creating
-a reasoned, unapproved override, then review its source/units/conditions explicitly.
+their own recorded tool versions and parameters. In a historical run, click
+**Edit current draft**, then **Parameters**, click the value, and save its value/unit
+in the same row. The saved workflow stays selected. Review formal parameter
+overrides before running; a pending replacement does not silently use its old value.
+Scalar bindings use this same table and create a new immutable executable version.
+View → Assistant / Jobs panel are the only global panel controls.
 Custom formula versions remain scientifically unvalidated and never replace an
 original scientific kernel. LaTeX alone is not executable. Add an explicit scalar
 expression, sourced values and units, then **Prepare exploratory workflow →
@@ -141,6 +145,10 @@ inputs after restart. Supported syntax, unit conversions and boundaries are in
 [Custom formula execution](docs/custom_formula_execution.md).
 General typed module/binding creation remains pending. Editing/reviewing is not
 execution, scientific approval, or proof that an installed tool is validated.
+Fixed baseline rules and versioned ER/network bindings are explicitly read-only:
+import a revised structured model with matched evidence instead of overwriting
+an embedded value's record alone. Tools → Run for M1–M4 binds the existing project
+plan and required upstream modules automatically; confirmation is still required.
 
 Assistant retains project-scoped proposal history. Accept, Reject and Revise use
 the same workflow engine; a revision shows its actual graph/policy changes and

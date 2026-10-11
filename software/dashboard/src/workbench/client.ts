@@ -183,7 +183,7 @@ export const bindMeasurement = (id: string, revision: number, fileId: string) =>
     expected_revision: revision,
     file_id: fileId,
   });
-export const planMethod=(projectId:string,method:'sequence-properties'|'galatea-m1-m2'|'ps-v3-demo')=>
+export const planMethod=(projectId:string,method:'sequence-properties'|'galatea-m1-m2'|'ps-v3-demo'|'original-m1'|'original-m2'|'original-m3'|'original-m4')=>
   read('ProposalView','/method-plans',{project_id:projectId,method});
 export const methodWorkflow=(projectId:string,draftId:string)=>
   read('Workflow',`/projects/${encodeURIComponent(projectId)}/method-drafts/${encodeURIComponent(draftId)}/workflow`,{});

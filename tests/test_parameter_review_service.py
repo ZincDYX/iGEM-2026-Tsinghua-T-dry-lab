@@ -21,6 +21,12 @@ def seed(app):
 def test_explicit_review_uses_existing_unit_and_lineage_gate_and_retains_original_source(tmp_path):
     app = fixture_app(tmp_path)
     project,old = seed(app)
+    from igem_drylab.workflow.parameter_edits import pending_replacements
+    from igem_drylab.workflow.precheck import precheck
+    before=ScientificProject.model_validate(project.scientific_project)
+    assert [p.parameter_id for p in pending_replacements(before.config,'m3')]==['override']
+    assert pending_replacements(before.config,'m4')==[]  # Not consumed here.
+    assert any('parameter_override_requires_review' in row.reason_codes for row in precheck(project).missing)
     with TestClient(app) as client:
         response = client.post('/api/platform/projects/software-fixture/parameters/override/review',json={
             'stage':'m3','requirement_name':'phi','reviewer':'software reviewer','reason':'SOFTWARE_ONLY declared fixture review','expected_revision':project.revision})
@@ -31,6 +37,13 @@ def test_explicit_review_uses_existing_unit_and_lineage_gate_and_retains_origina
         assert parameters[1]['review_status'] == 'approved' and parameters[1]['approved_by'] == 'software reviewer'
         assert parameters[1]['supersedes'] == 'original' and parameters[1]['value'] == .3
         assert saved['revision'] == project.revision+1
+        from igem_drylab.parameters import ParameterRegistry,resolve_requirement
+        from igem_drylab.parameters.requirements import requirements_for_stage
+        config=ScientificProject.model_validate(app.state.platform_store.project(project.id).scientific_project).config
+        requirement=next(r for r in requirements_for_stage(config,'m3') if r.name=='phi')
+        resolved=resolve_requirement(ParameterRegistry(config.parameters),requirement,config.experimental_context,allow_assumptions=False)
+        assert resolved.selected_parameter.parameter_id=='override' and resolved.canonical_value==.3
+        assert pending_replacements(config,'m3')==[]
         assert app.state.fixture_calls == [] and app.state.fixture_client.calls == 0
         assert client.post('/api/platform/projects/software-fixture/parameters/override/review',json={
             'stage':'m3','requirement_name':'phi','reviewer':'software reviewer','reason':'SOFTWARE_ONLY repeat','expected_revision':project.revision}).status_code == 409

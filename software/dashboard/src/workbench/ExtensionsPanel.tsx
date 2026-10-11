@@ -6,8 +6,9 @@ import {PredictionTools} from './PredictionTools';
 import {PluginPanel} from './PluginPanel';
 import {SkillsPanel} from './SkillsPanel';
 
-export function ExtensionsPanel({workspace,project,busy,action,onPlan,onOpenResource}:{workspace:string;project?:ProjectView;busy:boolean;
-  action:(job:()=>Promise<unknown>)=>Promise<void>;onPlan:(workflow:Workflow)=>void;onOpenResource:(id:string)=>void}) {
+export function ExtensionsPanel({workspace,project,busy,action,onPlan,onOpenResource,onMethod}:{workspace:string;project?:ProjectView;busy:boolean;
+  action:(job:()=>Promise<unknown>)=>Promise<void>;onPlan:(workflow:Workflow)=>void;onOpenResource:(id:string)=>void;
+  onMethod:(method:'original-m1'|'original-m2'|'original-m3'|'original-m4')=>void}) {
   const preference=`fusionlab.extensions.${workspace}`;
   const [tab,setTab]=useState<'tools'|'plugins'|'skills'>(()=>{
     const saved=localStorage.getItem(preference);
@@ -19,7 +20,7 @@ export function ExtensionsPanel({workspace,project,busy,action,onPlan,onOpenReso
   return <section aria-label="Tools and extensions"><h2>Tools &amp; extensions</h2><p>Tool checks do not approve scientific evidence.</p>
     <div role="tablist" aria-label="Extension pages">{(['tools','plugins','skills'] as const).map(value=><button role="tab" key={value} aria-selected={tab===value} onClick={()=>setTab(value)}>{value==='tools'?'Connected tools':value==='plugins'?'Plugins':'Skills'}</button>)}</div>
     {tab==='tools'&&<>{error&&<p role="alert">{error}</p>}
-      {project?.revision?<PredictionTools catalog={page?.items??[]} project={project} busy={busy} onPlan={onPlan} onOpenResource={onOpenResource}/>:<p>Save a project to check its tools.</p>}
+      {project?.revision?<PredictionTools catalog={page?.items??[]} project={project} busy={busy} onPlan={onPlan} onOpenResource={onOpenResource} onMethod={onMethod}/>:<p>Save a project to check its tools.</p>}
       <nav aria-label="Tool pages"><button disabled={!offset} onClick={()=>setOffset(value=>Math.max(0,value-50))}>Previous tools</button><button disabled={!page?.has_more} onClick={()=>setOffset(value=>value+50)}>Next tools</button></nav>
     </>}
     {tab==='plugins'&&<PluginPanel busy={busy} action={action}/>}

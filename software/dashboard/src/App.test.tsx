@@ -189,7 +189,8 @@ describe("FusionLab scientific workbench", () => {
     ).toBeTruthy();
     expect(screen.queryByLabelText("Project and run tree")).toBeNull();
     expect(document.querySelector(".inspector-hidden")).not.toBeNull();
-    expect(screen.getByRole("button",{name:"Jobs"})).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Jobs"})).toBeNull();
+    expect(screen.queryByRole("button",{name:"Assistant"})).toBeNull();
     expect(screen.queryByRole("tab",{name:"Terminal"})).toBeNull();
     expect(screen.queryByText(/Scientist Mode/)).toBeNull();
     expect(screen.queryByText(/Developer Mode/)).toBeNull();
@@ -197,7 +198,7 @@ describe("FusionLab scientific workbench", () => {
   it("an accepted plan is separate from calculation and binds the saved revision", async () => {
     render(<App />);
     await screen.findByRole("button", {name: "fixture"});
-    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
+    fireEvent.click(screen.getByText('View',{exact:true}));fireEvent.click(screen.getByRole('menuitem',{name:'Assistant'}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     expect(await screen.findByText("可审阅分析")).toBeTruthy();
     expect(client.start).not.toHaveBeenCalled();
@@ -265,7 +266,7 @@ describe("FusionLab scientific workbench", () => {
     await screen.findByRole("button", {name: "fixture"});
     expect(screen.queryByLabelText('Workflow run controls')).toBeNull();
     expect(screen.queryByRole('button',{name:/^Import$/})).toBeNull();
-    fireEvent.click(screen.getByRole('button',{name:'Assistant'}));
+    fireEvent.click(screen.getByText('View',{exact:true}));fireEvent.click(screen.getByRole('menuitem',{name:'Assistant'}));
     fireEvent.click(screen.getByRole('button',{name:'Generate proposal'}));
     await screen.findByText('Reviewed graph');
     fireEvent.click(screen.getByRole('button',{name:'Accept proposal (does not start computation)'}));
@@ -303,7 +304,7 @@ describe("FusionLab scientific workbench", () => {
     });
     render(<App/>);
     await screen.findByRole("button", {name: "fixture"});
-    fireEvent.click(screen.getByRole('button',{name:'Assistant'}));
+    fireEvent.click(screen.getByText('View',{exact:true}));fireEvent.click(screen.getByRole('menuitem',{name:'Assistant'}));
     fireEvent.click(screen.getByRole('button',{name:'Generate proposal'}));
     await screen.findByText('可审阅分析');
     expect(screen.getByLabelText('Run through module').matches(':disabled')).toBe(true);
@@ -341,7 +342,7 @@ describe("FusionLab scientific workbench", () => {
   it("editing facts invalidates acceptance and cannot start an obsolete workflow", async () => {
     render(<App />);
     await screen.findByRole("button", {name: "fixture"});
-    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
+    fireEvent.click(screen.getByText('View',{exact:true}));fireEvent.click(screen.getByRole('menuitem',{name:'Assistant'}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     await screen.findByText("可审阅分析");
     fireEvent.click(
@@ -413,7 +414,7 @@ describe("FusionLab scientific workbench", () => {
     );
     render(<App />);
     await screen.findByRole("button", {name: "fixture"});
-    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
+    fireEvent.click(screen.getByText('View',{exact:true}));fireEvent.click(screen.getByRole('menuitem',{name:'Assistant'}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     await vi.waitFor(() => expect(client.propose).toHaveBeenCalled());
     fireEvent.change(screen.getByLabelText("Current project"), {
@@ -443,7 +444,7 @@ describe("FusionLab scientific workbench", () => {
     fireEvent.change(screen.getByLabelText("Project name"), {
       target: { value: "edited fixture" },
     });
-    fireEvent.click(screen.getByRole("button", {name:"Assistant"}));
+    fireEvent.click(screen.getByText('View',{exact:true}));fireEvent.click(screen.getByRole('menuitem',{name:'Assistant'}));
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
     await vi.waitFor(() => expect(client.save).toHaveBeenCalled());
     fireEvent.click(screen.getByText("Tools",{exact:true}));

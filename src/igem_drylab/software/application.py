@@ -161,9 +161,11 @@ class ApplicationService:
                 nodes=[WorkflowNode(id='synthetic-demo',label='Synthetic M3/M4 reference scenarios',tool_id='synthetic.ps_v3',
                     inputs={'package_file':ProjectInput(path=['files',packages[0][0],'path'])})])
         elif method=='sequence-properties': workflow=recommend(project,'fusion_screen')
-        elif method=='galatea-m1-m2':
+        elif method in {'galatea-m1-m2','original-m1','original-m2','original-m3','original-m4'}:
+            if not project.scientific_project: raise WorkflowError('typed_scientific_project_required')
             workflow=recommend(project,'scientific_pipeline')
-            selected={'m1','m2'}
+            through='m2' if method=='galatea-m1-m2' else method.removeprefix('original-')
+            selected={f'm{i}' for i in range(1,int(through[1:])+1)}
             workflow.nodes=[node for node in workflow.nodes if node.id in selected]
             workflow.execution_policy.allowed_tools=sorted({node.tool_id for node in workflow.nodes})
             workflow=Workflow.model_validate(workflow.model_dump(mode='json'))

@@ -50,6 +50,13 @@ def test_save_prepare_freezes_owned_version_without_creating_jobs(tmp_path):
         assert prepared.status_code==200,prepared.text
         frozen=prepared.json()['nodes'][0]['inputs']['spec']['value']
         assert frozen==request['execution_spec']
+        workflow=prepared.json()
+        saved=client.post('/api/platform/projects/software-fixture/workflow-documents/scalar',json={'workflow':workflow,'expected_project_revision':1})
+        assert saved.status_code==200,saved.text
+        shown=client.get('/api/platform/projects/software-fixture/module-method?tool_id=workflow.custom_formula&workflow_id=scalar&node_id=formula')
+        assert shown.status_code==200,shown.text
+        assert shown.json()['scalar_method']['execution_spec']==frozen
+        assert shown.json()['scalar_method']['latex']==draft['latex']
         assert client.post(url.replace('software-fixture','not-owned'),json={}).status_code in {403,404}
         request['previous_id']=draft['id'];request['execution_spec']['variables']['x']['value']=1000
         revised=client.post('/api/platform/projects/software-fixture/method-drafts',json=request)

@@ -135,8 +135,8 @@ export function WorkspaceShell() {
   const [history, setHistory] = useState<RunListView[]>([]);
   const [proposal, setProposal] = useState<ProposalView>();
   const [workflowDocument, setWorkflowDocument] = useState<WorkflowDocument>();
-  useLayoutEffect(() => setWorkflowDocument(current => current && proposal?.workflow &&
-    JSON.stringify(current.workflow) === JSON.stringify(proposal.workflow) ? current : undefined), [proposal?.id]);
+  useLayoutEffect(() => {if(proposal?.workflow)setWorkflowDocument(current => current &&
+    JSON.stringify(current.workflow) === JSON.stringify(proposal.workflow) ? current : undefined);}, [proposal?.id]);
   const [goal, setGoal] = useState<Goal>("fusion_screen");
   const [inputTarget, setInputTarget] = useState<InputIssue>();
   const [objective, setObjective] = useState("");
@@ -353,7 +353,7 @@ export function WorkspaceShell() {
       ),
     );
   }
-  async function proposeMethod(method:'ps-v3-demo') {
+  async function proposeMethod(method:Parameters<typeof client.planMethod>[1]) {
     await action(()=>planController.guarded(project.generation,project.save,
       saved=>client.planMethod((saved as import('../contracts/generated').ProjectView).id,method),
       value=>{setProposal(value);setTab('plan');setInspector('agent');setInspectorOpen(true);
@@ -392,7 +392,36 @@ export function WorkspaceShell() {
     await action(() => planController.guarded(project.generation,project.save,
       saved => {const value = saved as import('../contracts/generated').ProjectView;
         return client.reviewParameter(value.id,id,stage,name,reviewer,reason,value.revision);},
-      value => {project.adopt(value); invalidate();}));
+      value => {project.adopt(value); planController.invalidate();setProposal(undefined);}));
+  }
+  async function saveParameterProject(value:import('../contracts/generated').ProjectView) {
+    const stamp=project.generation.current;
+    const saved=await client.save(value,project.saved?.revision);
+    if(stamp!==project.generation.current)return;
+    project.adopt(saved);planController.invalidate();setProposal(undefined);
+  }
+  async function replaceScalarWorkflow(prepared:import('../contracts/generated').Workflow) {
+    if(!currentProject||!workflowDocument||runSelected)throw Error('Open an editable saved workflow first.');
+    const document=workflowDocument,stamp=project.generation.current;
+    const revised=structuredClone(document.workflow);
+    const original=revised.nodes.find(item=>item.id===selected)!;
+    original.inputs=prepared.nodes[0].inputs;original.label=prepared.nodes[0].label;
+    const saved=await client.saveWorkflowDocument(currentProject.id,document.id,{workflow:revised,layout:document.layout,selected_node_id:selected,view:document.view},currentProject.revision,document.revision);
+    if(stamp!==project.generation.current)return;
+    setWorkflowDocument(saved);planController.invalidate();setProposal(undefined);
+  }
+  async function editCurrentWorkflow() {
+    if(!currentProject||!run||!runSelected)return;
+    await action(async()=>{
+      const stamp=project.generation.current;
+      const saved=await project.save();if(!saved||stamp!==project.generation.current)return;
+      const id='next-run-'+run.id;
+      const existing=(await client.workflowDocuments(saved.id)).find(document=>document.id===id);
+      const document=existing??await client.saveWorkflowDocument(saved.id,id,{workflow:run.workflow,layout:{},selected_node_id:selected,view:'graph'},saved.revision);
+      if(stamp!==project.generation.current)return;
+      planController.invalidate();setProposal(undefined);setWorkflowDocument(document);
+      setSelection({kind:'proposal-node',proposalId:document.id,nodeId:selected});
+    });
   }
   async function importWorkflow(
     create: () => Promise<import("../contracts/generated").Workflow>,
@@ -624,8 +653,8 @@ export function WorkspaceShell() {
           ]}
           view={[
             {
-              label: "Inspector",
-              action: () => setInspectorOpen((value) => !value),
+              label: "Assistant",
+              action: () => {setInspector('agent');setInspectorOpen((value) => !value);},
             },
             {
               label: "Jobs panel",
@@ -678,8 +707,6 @@ export function WorkspaceShell() {
             </option>
           ))}
         </select>
-        <button aria-expanded={inspectorOpen} onClick={() => {setInspector("agent");setInspectorOpen(value=>!value);}}>Assistant</button>
-        <button onClick={() => setBottomOpen(value=>!value)}>Jobs{executing ? " · running" : run?.status === "failed" ? " · failed" : ""}</button>
         <span className="workspace-state">
           {info ? "Connected workspace" : "Connecting to backend"}
         </span>
@@ -785,8 +812,8 @@ export function WorkspaceShell() {
               />
               {workflowChanged && selection?.kind !== 'run-node' && <p role="status">Workflow changes are saved but not authorized. Review and accept a new proposal before running.</p>}
               {tab === 'plan' && node && currentProject && <Suspense fallback={<p>Loading method details…</p>}><MethodPanel
-                key={node.id} project={currentProject} toolId={node.tool_id} runId={runSelected ? run?.id : undefined}
-                disabled={busy} onChange={value => {project.edit(value); invalidate();}} onReview={reviewParameter}
+                key={node.id} project={currentProject} toolId={node.tool_id} runId={runSelected ? run?.id : undefined} workflowId={workflowDocument?.id} nodeId={node.id}
+                disabled={busy} onChange={saveParameterProject} onReview={reviewParameter} onWorkflowChange={replaceScalarWorkflow} onEditDraft={()=>void editCurrentWorkflow()}
                 onPlan={value=>void importWorkflow(async()=>value)}/></Suspense>}
               <fieldset className="policy-editor" disabled={busy || !!runSelected || (!!proposal?.workflow && !workflowDocument)}>
                 <h3>Execution settings</h3>
@@ -926,6 +953,7 @@ export function WorkspaceShell() {
               workspace={info?.workspace_id ?? 'initial'}
               project={currentProject}
               busy={busy}
+              onMethod={method=>void proposeMethod(method)}
               action={action}
               onPlan={(workflow) => void importWorkflow(async () => workflow).then(() => setTab("plan"))}
               onOpenResource={(id) => openResource(id, false)}

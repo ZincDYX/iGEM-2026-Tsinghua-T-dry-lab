@@ -33,16 +33,37 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
     rendered.push({module:stage,formulas:method.formulas.length});
   }
   const panel=page.getByLabel('Module method',{exact:true});
+  // Metadata-only parameter editing through the production UI/API. No local
+  // scientific job is started; source/approval remain explicit test data.
+  const current=await (await context.request.get(`/api/platform/projects/${project.id}`)).json();
+  current.scientific_project.config.parameters.push({parameter_id:'browser-phi',name:'phi',value:.2,unit:'1',parameter_type:'phi',
+    source_type:'assumption',source_reference:'SOFTWARE_ONLY input editor fixture',review_status:'extracted'});
+  const seed=await context.request.post('/api/platform/projects',{data:{project:current,expected_revision:current.revision}});
+  expect(seed.status(),await seed.text()).toBe(200);
+  await page.reload();
+  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+  await page.getByLabel('Open saved workflow').selectOption('method-display');
+  await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M3',exact:true}).click();
+  await panel.getByRole('tab',{name:'Parameters',exact:true}).click();
+  await panel.getByRole('button',{name:'Edit phi',exact:true}).click();
+  await panel.getByLabel('Value for phi',{exact:true}).fill('0.3');
+  await panel.getByRole('button',{name:'Save parameter',exact:true}).click();
+  await expect(panel.getByRole('button',{name:'Edit phi',exact:true})).toHaveText('0.3');
+  await expect(page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M3',exact:true})).toBeVisible();
+  const afterEdit=await (await context.request.get(`/api/platform/projects/${project.id}`)).json();
+  expect(afterEdit.scientific_project.config.parameters.find((p:{parameter_id:string})=>p.parameter_id==='browser-phi').value).toBe(.2);
+  expect(afterEdit.scientific_project.config.parameters.find((p:{supersedes:string})=>p.supersedes==='browser-phi')).toMatchObject({value:.3,unit:'1',review_status:'extracted',source_reference:'SOFTWARE_ONLY input editor fixture'});
+  await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M4',exact:true}).click();
+  await panel.getByRole('tab',{name:'Formulas',exact:true}).click();
   await panel.locator('summary').filter({hasText:'Edit method · new exploratory version'}).click();
   await panel.getByLabel('Formula base method').selectOption('m4-step0-step8');
   await panel.getByLabel('Formula to revise').selectOption(metadata.find((value:{id:string})=>value.id==='m4-step0-step8').formulas[0].id);
   await panel.getByLabel('Custom formula title').fill('Browser instruction draft');
   await panel.getByLabel('Custom formula source').fill('User-authored software test, not scientific evidence');
   await panel.getByLabel('Custom formula reason').fill('Document a proposed version only, no execution');
-  await panel.getByRole('button',{name:'Save separate unvalidated version',exact:true}).click();
-  await expect(panel.locator('summary').filter({hasText:'Browser instruction draft — version 1, unvalidated / not executable'})).toBeVisible();
+  await expect(panel.getByRole('button',{name:'Save separate unvalidated version',exact:true})).toBeDisabled();
+  await expect(panel.getByLabel('Proposed formula LaTeX')).toHaveCount(0);
   await panel.getByLabel('Custom formula title').fill('Browser executable scalar draft');
-  await panel.getByLabel('Proposed formula LaTeX').fill('x/(k+x)');
   await panel.getByLabel('Custom formula reason').fill('Independent synthetic scalar test, not an original M4 result');
   await panel.getByLabel('Executable scalar expression').fill('x/(k+x)');
   await panel.getByLabel('Formula result unit').fill('1');
@@ -51,11 +72,10 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
     await panel.getByLabel(`Formula input ${index} name`).fill(name);
     await panel.getByLabel(`Formula input ${index} value`).fill(value);
     await panel.getByLabel(`Formula input ${index} unit`).fill(unit);
-    await panel.getByLabel(`Formula input ${index} source`).fill('Synthetic admission fixture, no workstation evaluation');
   }
   await panel.getByRole('button',{name:'Save separate unvalidated version',exact:true}).click();
-  await expect(panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 2, unvalidated / exploratory execution available'})).toBeVisible();
-  await panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 2,'}).click();
+  await expect(panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 1, unvalidated / exploratory execution available'})).toBeVisible();
+  await panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 1,'}).click();
   await panel.getByRole('button',{name:'Prepare exploratory workflow',exact:true}).click();
   await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeVisible();
   expect(await (await context.request.get('/api/platform/runs')).json()).toEqual([]);

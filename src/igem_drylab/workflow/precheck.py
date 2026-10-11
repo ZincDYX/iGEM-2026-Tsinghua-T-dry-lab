@@ -73,6 +73,12 @@ def precheck(project: Project, through: str | None = None) -> ScientificPrecheck
                             missing.append(KnownMissingInput(stage=stage,code="ER_parameter_binding",field_path="scientific_project.config.parameters",
                                 construct_id=construct_id,condition_id=request.condition_id,reason_codes=[reason],source_kind="reviewed_ER_entity_condition_method_parameter"))
                     continue  # Never ask an ER design for cytosolic phi/anchor Kd.
+                from .parameter_edits import pending_replacements
+                for record in pending_replacements(config,stage):
+                    if record.construct_id not in {None,construct_id} or record.condition_id not in {None,condition_id}: continue
+                    missing.append(KnownMissingInput(stage=stage,code=record.name,field_path='scientific_project.config.parameters',
+                        construct_id=construct_id,condition_id=condition_id,reason_codes=['parameter_override_requires_review'],
+                        source_kind='human_review_of_saved_override'))
                 for requirement in requirements_for_stage(config,stage):
                     result=resolve_requirement(registry,requirement,config.experimental_context,
                         allow_assumptions=config.execution.allow_assumptions,construct_id=construct_id,condition_id=condition_id,

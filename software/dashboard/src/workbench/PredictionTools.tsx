@@ -15,12 +15,14 @@ export function PredictionTools({
   onPlan,
   onOpenResource,
   catalog = [],
+  onMethod,
 }: {
   project: ProjectView;
   catalog?: import("../contracts/ToolCatalogPage.generated").ModuleTool[];
   busy: boolean;
   onPlan: (workflow: Workflow) => void;
   onOpenResource: (fileId: string) => void;
+  onMethod:(method:'original-m1'|'original-m2'|'original-m3'|'original-m4')=>void;
 }) {
   const [rows, setRows] = useState<PredictionToolView[]>([]);
   const [sequences, setSequences] = useState<SequencePage>();
@@ -108,7 +110,9 @@ export function PredictionTools({
           </tr>
         </thead>
         <tbody>
-          {catalog.filter(tool=>!rows.some(row=>row.id===tool.id)).map(tool=><tr key={tool.id}><td>{tool.name}</td><td>{tool.description}</td><td>Registered · not tested</td><td>{tool.id==="fusion.sequence_metrics"?<button disabled={busy||!sequenceId} onClick={()=>{const input=sequences?.items[Number(sequenceId)];if(input)onPlan({id:"sequence-statistics",name:input.label,version:"1",description:"Sequence statistics",execution_policy:defaultPolicy(),nodes:[{id:"metrics",label:"Sequence statistics",tool_id:tool.id,inputs:{item:input.ref},depends_on:[],map:null}]});}}>Run</button>:<span>Configure this module in Workflow</span>}</td></tr>)}
+          {catalog.filter(tool=>!rows.some(row=>row.id===tool.id)).map(tool=><tr key={tool.id}><td>{tool.name}</td><td>{tool.description}</td><td>Registered · not tested</td><td>{tool.id==="fusion.sequence_metrics"?<button disabled={busy||!sequenceId} onClick={()=>{const input=sequences?.items[Number(sequenceId)];if(input)onPlan({id:"sequence-statistics",name:input.label,version:"1",description:"Sequence statistics",execution_policy:defaultPolicy(),nodes:[{id:"metrics",label:"Sequence statistics",tool_id:tool.id,inputs:{item:input.ref},depends_on:[],map:null}]});}}>Run</button>
+            :['project.m1','project.m2','project.m3','project.m4'].includes(tool.id)?<><button disabled={busy||!project.scientific_project} onClick={()=>onMethod(('original-'+tool.id.slice(-2)) as 'original-m1'|'original-m2'|'original-m3'|'original-m4')}>Run</button><p>Uses the project's bound plan and required upstream modules, through {tool.id.slice(-2).toUpperCase()}. Import a plan in Inputs if absent.</p></>
+            :<span>Requires its own model inputs in Workflow</span>}</td></tr>)}
           {rows.map((row) => (
             <tr key={row.id}>
               <td>

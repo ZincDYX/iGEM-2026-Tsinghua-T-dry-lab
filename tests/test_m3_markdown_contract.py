@@ -250,6 +250,17 @@ def test_pipeline_finite_site_mode_consumes_m2_geometry_and_s1_e6_parameters(tmp
     assert abs(records[0].mass_balance_residual_um["OC"]) < 1e-10
     assert records[0].binding_recruited_fraction["OC"] < records[0].fraction_in_dense["OC"]
     assert records[0].m4_candidate_context is not None
+    # Same production resolver and original S1--E6 kernel, with a reviewed
+    # immutable replacement as created by the parameter editor. Server only.
+    original=records[0].model_dump(mode='json')
+    old=next(record for record in config.parameters if record.name=='kd_sh3')
+    config.parameters.append(old.model_copy(update={'parameter_id':'kd-sh3-edited','value':4000.,'unit':'nM',
+        'supersedes':old.parameter_id,'parameter_version':2,'approved_by':'synthetic contract reviewer'}))
+    revised,_=run_m3(config,tmp_path/'edited',[assessment])
+    assert revised[0].equilibrium_inputs['kd_sh3_um']==4.0
+    assert 'kd-sh3-edited' in revised[0].parameter_ids and old.parameter_id not in revised[0].parameter_ids
+    assert revised[0].bound_dense_concentration['OC'] < records[0].bound_dense_concentration['OC']
+    assert records[0].model_dump(mode='json')==original
 
 
 def test_stdio_mcp_server_calls_m3_solver() -> None:

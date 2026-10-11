@@ -174,6 +174,9 @@ def stage_tools():
         def handler(payload: StageInput, context: NodeContext, *, stage=stage, predecessor=predecessor):
             if int(stage[1:]) > int(payload.project.config.prepared_through[1:]):
                 raise WorkflowError("stage_configuration_not_prepared:" + stage)
+            from .parameter_edits import pending_replacements
+            if pending_replacements(payload.project.config,stage):
+                raise WorkflowError('parameter_override_requires_review')
             from igem_drylab.pipeline import stages
             upstream = bound_predecessor(payload,context,stage)
             payload.project.verify()

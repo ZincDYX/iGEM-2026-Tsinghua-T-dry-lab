@@ -45,6 +45,11 @@ def test_actual_module_method_api_is_read_only_and_does_not_claim_real_tool_job(
         assert value['methods'][0]['id'] == 'm3-s1-e10'
         assert app.state.platform_store.runs() == [] and app.state.fixture_calls == []
         assert client.get('/api/platform/projects/not-owned/module-method?tool_id=project.m3').status_code == 404
+        proposed=client.post('/api/platform/method-plans',json={'project_id':'software-fixture','method':'original-m3'})
+        assert proposed.status_code==200,proposed.text
+        assert [node['tool_id'] for node in proposed.json()['workflow']['nodes']]==['project.m1','project.m2','project.m3']
+        assert all(node['inputs']['project']=={'kind':'project','path':['scientific_project']} for node in proposed.json()['workflow']['nodes'])
+        assert app.state.platform_store.runs()==[] and app.state.fixture_calls==[]
 
 
 def test_frozen_module_parameters_use_actual_snapshot_not_live_draft(tmp_path):

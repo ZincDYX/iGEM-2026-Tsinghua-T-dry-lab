@@ -141,7 +141,7 @@ test("three pointer/keyboard splitters persist view only and narrow drawer leave
     page.getByRole("complementary", { name: "Inspector", exact: true }),
   ).not.toBeVisible();
   await page.getByText("View", { exact: true }).click();
-  await page.getByRole("menuitem", { name: "Inspector", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Assistant", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Close inspector" }),
   ).toBeVisible();

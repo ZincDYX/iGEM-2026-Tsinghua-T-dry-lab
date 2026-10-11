@@ -189,7 +189,7 @@ test("authenticated real HTTP compiler/ledger/handlers, staged control, provenan
   );
   await page.setViewportSize({ width: 800, height: 650 });
   await page.getByText("View", { exact: true }).click();
-  await page.getByRole("menuitem", { name: "Inspector", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Assistant", exact: true }).click();
   await expect(page.locator(".workspace-center")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("workbench-800x650.png") });
   expect(errors).toEqual([]);

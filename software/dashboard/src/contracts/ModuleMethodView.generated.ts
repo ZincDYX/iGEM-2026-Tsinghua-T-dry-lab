@@ -40,6 +40,26 @@ export type ParameterRecords = {
 export type ParameterRequirements = {
   [k: string]: unknown;
 }[];
+export type Id4 = string;
+export type ProjectId1 = string;
+export type ProjectRevision1 = number;
+export type Version2 = number;
+export type BaseMethodId = string;
+export type BaseVersion = string;
+export type Title3 = string;
+export type FormulaId = string;
+export type OriginalLatex = string;
+export type Latex1 = string;
+export type Reason = string;
+export type SourceReference1 = string;
+export type PreviousId = string | null;
+export type ValidationStatus = "unvalidated";
+export type Executable = boolean;
+export type Expression = string;
+export type Value = number;
+export type Unit = string;
+export type Source = string;
+export type OutputUnit = string;
 
 export interface ModuleMethodView {
   project_id: ProjectId;
@@ -51,6 +71,7 @@ export interface ModuleMethodView {
   parameter_records: ParameterRecords;
   parameter_requirements: ParameterRequirements;
   parameter_source_options: ParameterSourceOptions;
+  scalar_method: MethodDraftView | null;
 }
 export interface MethodDefinition {
   id: Id;
@@ -95,4 +116,35 @@ export interface ModuleTool {
 }
 export interface ParameterSourceOptions {
   [k: string]: string[];
+}
+export interface MethodDraftView {
+  id: Id4;
+  project_id: ProjectId1;
+  project_revision: ProjectRevision1;
+  version: Version2;
+  base_method_id: BaseMethodId;
+  base_version: BaseVersion;
+  title: Title3;
+  formula_id: FormulaId;
+  original_latex: OriginalLatex;
+  latex: Latex1;
+  reason: Reason;
+  source_reference: SourceReference1;
+  previous_id: PreviousId;
+  validation_status: ValidationStatus;
+  executable: Executable;
+  execution_spec: FormulaSpec | null;
+}
+export interface FormulaSpec {
+  expression: Expression;
+  variables: Variables;
+  output_unit: OutputUnit;
+}
+export interface Variables {
+  [k: string]: FormulaVariable;
+}
+export interface FormulaVariable {
+  value: Value;
+  unit: Unit;
+  source: Source;
 }

@@ -12,6 +12,7 @@ class PublicError(Contract):
 
 
 ERROR_GUIDANCE = {
+    'parameter_override_requires_review': ('A saved parameter override has not been reviewed. This stage did not fall back to the old value.', ['scientific_project.config.parameters'], ['Open Workflow → Parameters and review the saved candidate before starting a new run']),
     'trusted_plugin_install_requires_deployment_authorization': ('This hosted workspace does not permit trusted-code installation.', [], ['Use a trusted local workspace or ask the deployment administrator to install the reviewed plugin']),
     'assistant_private_secret_unavailable': ('The saved model credential is unavailable in this OS user context.', [], ['Configure the optional model again in your current private workspace; never copy credentials into a project']),
     'parameter_source_record_immutable': ('This saved parameter value or source cannot be overwritten.', ['scientific_project.config.parameters'], ['Create a linked Override candidate, explain the reason, then review it separately']),
