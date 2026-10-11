@@ -56,6 +56,12 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   const afterEdit=await (await context.request.get(`/api/platform/projects/${project.id}`)).json();
   expect(afterEdit.scientific_project.config.parameters.find((p:{parameter_id:string})=>p.parameter_id==='browser-phi').value).toBe(.2);
   expect(afterEdit.scientific_project.config.parameters.find((p:{supersedes:string})=>p.supersedes==='browser-phi')).toMatchObject({value:.3,unit:'1',review_status:'extracted',source_reference:'SOFTWARE_ONLY input editor fixture'});
+  await page.reload();
+  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+  await page.getByLabel('Open saved workflow').selectOption('method-display');
+  await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M3',exact:true}).click();
+  await panel.getByRole('tab',{name:'Parameters',exact:true}).click();
+  await expect(panel.getByRole('button',{name:'Edit phi',exact:true})).toHaveText('0.3');
   await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M4',exact:true}).click();
   await panel.getByRole('tab',{name:'Formulas',exact:true}).click();
   await panel.locator('summary').filter({hasText:'Edit method · new exploratory version'}).click();
