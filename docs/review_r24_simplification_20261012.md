@@ -49,12 +49,16 @@
 
 ## 大小、性能与交付边界
 
-主入口 JS gzip 从此前约 107.32 kB 降至约 103.60 kB。Plotly 与真实 3D 仍按需加载。没有通过删除真实科学功能、降低求解精度或重复引入依赖来缩小软件。
+主入口 JS gzip 从此前约 107.32 kB 降至约 103.65 kB。Plotly 与真实 3D 仍按需加载。没有通过删除真实科学功能、降低求解精度或重复引入依赖来缩小软件。
 
 桌面版仍包含独立 Python 和现有锁定依赖，不能把几 kB 的入口删减说成整个 EXE 大幅瘦身。真实浏览器完成资源循环与正常交互检查；没有系统 CPU / 内存基准，也不保证所有硬件都更快。
 
 新 portable release 为 `FusionLab-Windows-20261012-r24-purple`：需解压并保留整个文件夹，不可单独复制 EXE。默认本地，不包含实验室服务器地址、模型身份或凭据。资源清单 / 源码快照 / ZIP 字节一致性及原生启动、认证、重开和子进程回收另行机械验收。源码、锁定依赖、Apache-2.0 LICENSE 保留；EXE 不替代正式仓库源码。
 
 最终原生截图还发现新项目尚未保存时查询未完成导入，误报恢复失败。已使用现有 saved-project 身份判断是否查询，不把草稿修订号当持久化证据；真正的已保存项目恢复失败仍显示错误。增加两项回归检查，导入时首次保存不会重置当前预览。
+
+最后一轮并行编译/浏览器出现 Windows 明确的 Out of memory、浏览器 ERR_INSUFFICIENT_RESOURCES 和导入请求 Failed to fetch；该轮不计通过。编译结束后同版本、同断言串行重跑，7 项安装版浏览器检查全部通过，未增加重试或放宽条件。这是资源压力下的验收记录，不是正式内存基准，也不据此证明不存在任何内存问题。
+
+IUPred 实测使用已安装的 [saezlab IUPred 打包版](https://github.com/saezlab/iupred)，0.1.2 是其 Python 包版本，执行 `iupred(sequence, mode='long')` 的 IUPred2 路线，不是 AIUPred 或自行设计的替代模型。原始工具输出及执行来源留在私有后端证据中；包本身不随本桌面 release 分发。
 
 仍需要外部条件：SignalP / DeepTMHMM / TANGO / PASTA 合法访问；真实融合体模型、完整置信度/残基映射与必要实验、运输和 ER 参数；模型服务的 function-call parser 配置；官方 GitLab 匹配的 CI Runner。缺少这些时不能宣称完整生物学流程、湿实验验证、所有真实工具作业、CI 或 Best Software 已全部达标。
