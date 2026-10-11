@@ -180,8 +180,12 @@ export function WorkspaceShell() {
   const workflowChanged = !!workflowDocument && JSON.stringify(workflowDocument.workflow) !== JSON.stringify(proposal?.workflow);
   const visiblePolicy = runSelected && run ? run.workflow.execution_policy : policy;
   const node = workflow?.nodes.find((value) => value.id === selected);
-  const m1Dependencies=new Set(run?.workflow.nodes.filter(n=>n.tool_id==='method.m1.decision').flatMap(n=>n.depends_on));
+  const m1Dependencies=new Set(run?.workflow.nodes.filter(n=>n.tool_id==='method.m1.decision').flatMap(dependencies));
   const resultNodes = run?.nodes.filter(item => item.parent_id === null && !m1Dependencies.has(item.id)) ?? [];
+  useEffect(()=>{
+    if(tab==='results'&&run&&(!runSelected||!resultNodes.some(item=>item.id===selected)))
+      setSelection(selectRunNode(run,resultNodes[0]?.id??''));
+  },[tab,run?.id,run?.state_version,runSelected,selected]);
   const stopped =
     run &&
     ["succeeded", "failed", "paused", "cancelled", "interrupted"].includes(
@@ -411,6 +415,9 @@ export function WorkspaceShell() {
       )
         return;
       setProposal(value);
+      setTab('plan');
+      setInspector('agent');
+      setInspectorOpen(true);
       setSelection(
         value.workflow
           ? {
@@ -542,8 +549,6 @@ export function WorkspaceShell() {
           throw new Error("Input revision changed; save and check again.");
         setInputCheck(result);
         setTab("inputs");
-        setBottom("problems");
-        setBottomOpen(true);
       }
     });
   }
@@ -849,11 +854,6 @@ export function WorkspaceShell() {
                     </p>
                   </>
                 )}
-                <p>
-                  Internal tool stepping, hard memory limits and cross-run
-                  result reuse are unsupported. Stopping Agent proposals does
-                  not cancel authorized numerical jobs.
-                </p>
               </fieldset>
               <WorkflowImporter
                 key={`workflow-import:${currentProject?.id}`}

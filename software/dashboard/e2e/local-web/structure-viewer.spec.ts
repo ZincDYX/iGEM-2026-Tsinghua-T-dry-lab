@@ -8,7 +8,7 @@ const cif = process.env.FUSIONLAB_STRUCTURE_CIF;
 test.skip(!pdb || !cif, 'Provide actual PDB and mmCIF files; no synthetic coordinate substitute.');
 
 async function importStructure(page: import('@playwright/test').Page, filename: string, source: string) {
-  await page.getByRole('button',{name:'Inputs',exact:true}).click();
+  await page.getByRole('tab',{name:'Inputs',exact:true}).click();
   await page.getByLabel('Import data file').setInputFiles({name:filename,mimeType:'text/plain',buffer:fs.readFileSync(source)});
   await expect(page.getByRole('heading',{name:filename,exact:true})).toBeVisible();
   const duplicate = page.getByLabel(`Duplicate: ${filename}`,{exact:true});
@@ -83,7 +83,7 @@ test('real PDB/mmCIF rotate, image export, file switch and twenty GPU lifecycle 
   const baseline = (await cdp.send('Runtime.getHeapUsage')).usedSize;
   const cycles: {cycle:number; heap:number; gpuLive:number}[] = [];
   for (let cycle=1;cycle<=20;cycle++) {
-    await page.getByRole('button',{name:'Inputs',exact:true}).click();
+    await page.getByRole('tab',{name:'Inputs',exact:true}).click();
     await expect(viewport).toHaveCount(0);
     const liveHandles = () => page.evaluate(() => (window as unknown as {fusionlabGlLedger:{created:number;deleted:number;releasedByContext:number}[]}).fusionlabGlLedger.reduce((sum,row)=>sum+row.created-row.deleted-row.releasedByContext,0));
     await expect.poll(liveHandles,{message:`GPU resource handles after closing cycle ${cycle}`}).toBe(0);
