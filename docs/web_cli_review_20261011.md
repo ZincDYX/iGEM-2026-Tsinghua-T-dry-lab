@@ -402,6 +402,17 @@ and target as disabled, with no draft Start/Review action. Graph/List retained
 These are actual server computations within explicitly synthetic scope, not
 wet-lab validation or completion of formal M1–M4/ER inputs.
 
+The final read-only GitLab query succeeded after bypassing the workstation's
+environment proxy for this private diagnostic only. The prior UI batch did not
+fail tests: GitLab reports `stuck_pending_no_matching_runners`, no assigned runner,
+about 3,963 s queued and an empty job trace. The latest code job is pending, again
+without an assigned runner; shared runners are disabled. This establishes a runner
+scheduling failure, not a source-code failure or successful CI run. It does not
+establish whether a group runner can be enabled. A repository/runner administrator
+must provide an eligible runner; no runner was registered, installed, enabled or
+given private compute access in this task. Latest reported repository storage is
+5,540,361 bytes with zero LFS; it is not official freeze/eligibility confirmation.
+
 ## Remaining review acceptance tasks
 
 | ID | Required outcome | Current status |
