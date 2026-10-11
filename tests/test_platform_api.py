@@ -11,7 +11,9 @@ from igem_drylab.software.dashboard import create_app
 def test_import_confirm_execute_and_reopen_local_database(tmp_path: Path) -> None:
     client = TestClient(create_app(data_dir=tmp_path, deployment_mode="development"))
     project = client.post("/api/platform/projects", json={"project": {"id": "p", "name": "Generic fusion"}}).json()
-    preview = client.post("/api/platform/imports/preview", json={"filename": "fusion.fasta", "content": ">enzyme-tag\nMAGSGS\n>scaffold\nMKKGGSS\n"}).json()
+    # .faa explicitly declares protein. A generic .fasta alphabet can also be
+    # nucleic acid and must not be silently accepted as an amino-acid sequence.
+    preview = client.post("/api/platform/imports/preview", json={"filename": "fusion.faa", "content": ">enzyme-tag\nMAGSGS\n>scaffold\nMKKGGSS\n"}).json()
     assert client.get("/api/platform/projects").json()[0]["sequences"] == []
     project.update(preview["patch"])
     project["files"] = [preview["file"]]
@@ -41,4 +43,7 @@ def test_duplicate_fasta_and_invalid_pathway_are_rejected(tmp_path: Path) -> Non
     assert client.post("/api/platform/imports/preview", json={"filename": "invalid.json", "content": "{\"id\": \"fake\"}", "input_kind": "pathway"}).status_code == 422
     generic = client.post("/api/platform/imports/preview", json={"filename": "configuration.json", "content": "{\"id\": \"fake\"}"})
     assert generic.status_code == 200
-    assert generic.json()["kind"] == "configuration_display_only" and generic.json()["patch"] == {}
+    assert generic.json()["kind"] == "configuration_display_only"
+    patch=generic.json()["patch"]
+    assert set(patch)=={"datasets"} and patch['datasets'][0]['records']==[]
+    assert patch['datasets'][0]['unresolved_inputs'][0]['code']=='configuration_role_required'

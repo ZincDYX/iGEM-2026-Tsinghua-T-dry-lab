@@ -88,6 +88,26 @@ with example outputs. Public GFP descriptors are not formal M1–M4 validation.
 See the [review acceptance ledger](docs/web_cli_review_20261011.md) for remaining
 requirements rather than treating this new entry point as full review completion.
 
+File, folder and ZIP imports share one saved preview. Ambiguous FASTA asks for
+DNA, RNA or protein; nucleic acids are not translated automatically. In the
+browser, resume an unfinished import or add missing relative files to it. The
+same operations are available without editing SHA values in the CLI:
+
+```text
+fusionlab import design.fa --project <project-id> --preview
+fusionlab import-review <import-id> --project <project-id> --file design.fa --molecule-type DNA
+fusionlab import missing-files-folder --project <project-id> --into <import-id>
+fusionlab import-commit <import-id> --project <project-id>
+```
+
+CSV/TSV are fully shape/type-checked and need explicit measurement column roles
+and units. JSON/YAML require a known schema or a chosen role. PDB/mmCIF/BCIF
+retain model and author/label identities, but coordinates alone do not approve
+confidence, enzyme identity or a functional pocket. Chemical identity parsing
+requires an available RDKit chemistry profile; an unparsed SDF is an attachment,
+not a verified substrate. SBOL/SBML semantic import remains pending. Uploaded
+source files are never executed by normal Import.
+
 ## Start the desktop
 
 Obtain a verified Windows portable release from the team's distribution.

@@ -13,7 +13,7 @@ test('corrected package imports, approved real kernels execute and synthetic sco
   await page.getByLabel('Project name').fill('PS-v3 browser acceptance');
   await page.getByLabel('Import data file').setInputFiles(packagePath!);
   await expect(page.getByText('Synthetic demo.',{exact:true}).first()).toBeVisible();
-  await page.getByRole('button',{name:'Confirm import into draft',exact:true}).click();
+  await page.getByRole('button',{name:'Confirm import',exact:true}).click();
   await page.getByRole('button',{name:'Review synthetic demonstration workflow',exact:true}).click();
   await expect(page.getByRole('tab',{name:'Workflow',exact:true})).toHaveAttribute('aria-selected','true');
   await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();

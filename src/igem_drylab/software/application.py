@@ -36,6 +36,8 @@ class ApplicationService:
         from igem_drylab.workflow.plugins import PluginManager
         self.plugins = PluginManager(self.data_dir/'plugins',self.store,self.tools,disclosure=self.boundary)
         self.plugins.load_installed()
+        from .import_service import ImportService
+        self.imports=ImportService(self)
 
     def create_project(self,name):
         return self.save_project(Project(id=str(uuid4()),name=name))
@@ -73,25 +75,17 @@ class ApplicationService:
         return preview_import(self.data_dir,self.boundary,filename,content,input_kind)
 
     def import_files(self,project_id,paths,input_kind='auto'):
-        public=self.boundary.project(self.store.project(project_id))
-        revision=public['revision']
-        previews=[]
-        for path in paths:
-            if path.suffix.lower()=='.zip':
-                from igem_drylab.workflow.synthetic_ps import preview_ps_archive
-                previews.append(preview_ps_archive(self,path.name,path.read_bytes()))
-            else: previews.append(self.preview_import(path.name,path.read_text(encoding='utf-8'),input_kind))
-        for preview in previews:
-            for incoming in preview['patch'].get('sequences',[]):
-                existing=next((row for row in public['sequences'] if row['id']==incoming['id']),None)
-                if existing and existing['sequence']!=incoming['sequence']:
-                    raise WorkflowError('sequence_conflict_requires_explicit_revision:'+incoming['id'])
-                if not existing: public['sequences'].append(incoming)
-            if 'pathway' in preview['patch']: public['pathway']=preview['patch']['pathway']
-            for incoming in preview['patch'].get('datasets',[]):
-                if incoming.get('id') not in {row.get('id') for row in public['datasets']}: public['datasets'].append(incoming)
-            if preview['file']['id'] not in {row['id'] for row in public['files']}: public['files'].append(preview['file'])
-        return self.save_project(Project.model_validate(public),revision)
+        preview=self.preview_files(project_id,paths,input_kind)
+        return self.imports.commit(project_id,preview.id)
+
+    def preview_files(self,project_id,paths,input_kind='auto',transaction_id=None):
+        paths=[Path(path).resolve() for path in paths]
+        root=Path(__import__('os').path.commonpath([str(path.parent) for path in paths])) if paths else self.data_dir
+        files=[(path.relative_to(root).as_posix(),path.read_bytes()) for path in paths]
+        options={name:{'role':input_kind} for name,_ in files} if input_kind!='auto' else None
+        if transaction_id is not None:
+            return self.imports.append(project_id,transaction_id,files)
+        return self.imports.preview(project_id,files,options)
 
     def validate_workflow(self,workflow: Workflow):
         self.boundary.check(workflow.model_dump(mode='json'))

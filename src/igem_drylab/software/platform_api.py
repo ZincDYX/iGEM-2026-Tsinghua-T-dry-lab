@@ -34,6 +34,15 @@ class ImportRequest(Contract):
     input_kind: Literal["auto", "pathway", "wetlab"] = "auto"
 
 
+class ImportRevisionRequest(Contract):
+    options: dict[str,dict[str,Any]] = Field(default_factory=dict)
+    expected_revision: int | None = None
+
+
+class ImportCommitRequest(Contract):
+    choices: dict[str,Literal['reuse','replace','new_version']] = Field(default_factory=dict)
+
+
 class SeriesMappingRequest(Contract):
     project_id: str
     expected_revision: int
@@ -465,6 +474,50 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     @router.post("/imports/preview")
     def import_preview(request: ImportRequest) -> dict[str, Any]:
         return application.preview_import(request.filename,request.content,request.input_kind)
+
+    async def uploaded_files(request):
+        # Multipart streams file/folder contents into the same parser service.
+        # Filename paths are checked before any filesystem publication.
+        from starlette.datastructures import UploadFile
+        files=[];received=0
+        async with request.form(max_files=256,max_fields=1,max_part_size=20_000_000) as form:
+            for _,value in form.multi_items():
+                if not isinstance(value,UploadFile): raise WorkflowError('import_requires_files')
+                chunks=[]
+                while chunk:=await value.read(65536):
+                    received+=len(chunk)
+                    if received>20_000_000: raise WorkflowError('scientific_upload_budget_exceeded',status_code=413)
+                    chunks.append(chunk)
+                files.append((value.filename or '',b''.join(chunks)))
+        return files
+
+    @router.post('/projects/{project_id}/imports')
+    async def transaction_preview(project_id: str,request: Request):
+        return application.imports.preview(project_id,await uploaded_files(request)).model_dump(mode='json')
+
+    @router.get('/projects/{project_id}/imports')
+    def transaction_pending(project_id: str):
+        return {'transaction_ids':application.imports.pending(project_id)}
+
+    @router.post('/projects/{project_id}/imports/{transaction_id}/files')
+    async def transaction_append(project_id: str,transaction_id: str,request: Request):
+        return application.imports.append(project_id,transaction_id,await uploaded_files(request)).model_dump(mode='json')
+
+    @router.get('/projects/{project_id}/imports/{transaction_id}')
+    def transaction_inspect(project_id: str,transaction_id: str):
+        return application.imports.inspect(project_id,transaction_id).model_dump(mode='json')
+
+    @router.patch('/projects/{project_id}/imports/{transaction_id}')
+    def transaction_revise(project_id: str,transaction_id: str,request: ImportRevisionRequest):
+        return application.imports.revise(project_id,transaction_id,request.options,request.expected_revision).model_dump(mode='json')
+
+    @router.post('/projects/{project_id}/imports/{transaction_id}/commit')
+    def transaction_commit(project_id: str,transaction_id: str,request: ImportCommitRequest):
+        return application.imports.commit(project_id,transaction_id,request.choices)
+
+    @router.post('/projects/{project_id}/imports/{transaction_id}/discard')
+    def transaction_discard(project_id: str,transaction_id: str):
+        return application.imports.discard(project_id,transaction_id).model_dump(mode='json')
 
     @router.get('/projects/{project_id}/designs/{design_id}')
     def genbank_design(project_id: str, design_id: str, record_index: int = Query(0, ge=0),

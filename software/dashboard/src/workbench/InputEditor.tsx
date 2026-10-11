@@ -10,15 +10,12 @@ import * as client from "./client";
 import { downloadResource } from "../api";
 import { LazyJson } from "../contracts/LazyJson";
 import { PrecheckPanel, type InputIssue } from "./PrecheckPanel";
-import { ScientificBundleImporter } from "./ScientificBundleImporter";
+import { UnifiedImport } from "./UnifiedImport";
 import { ScientificInputForms } from "./ScientificInputForms";
 import { StructureAnnotationLinker } from "./StructureAnnotationLinker";
 import {GenBankDesigns} from './GenBankDesigns';
 import {
-  importedSequences,
-  sequenceConflicts,
   mergeImportDraft,
-  type ConflictChoice,
 } from "./importDraft";
 import {
   ScientificSetup,
@@ -40,6 +37,8 @@ export function InputEditor({
   onOpenResource,
   inputTarget,
   onPlanMethod,
+  prepareImport,
+  onImported,
 }: {
   project: ProjectView;
   busy: boolean;
@@ -54,15 +53,13 @@ export function InputEditor({
   onOpenResource: (fileId: string) => void;
   inputTarget?: InputIssue;
   onPlanMethod?: (method:'ps-v3-demo')=>void;
+  prepareImport:()=>Promise<ProjectView|undefined>;
+  onImported:(project:ProjectView)=>void;
 }) {
-  const [kind, setKind] = useState("auto");
   const [preview, setPreview] = useState<ImportView>();
   const [scientific, setScientific] = useState<ScientificPreviewView>();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
-  const [conflictChoices, setConflictChoices] = useState<
-    Record<string, ConflictChoice>
-  >({});
   const { schema, error: schemaError } = useScientificSchema();
   useEffect(() => {
     if (!inputTarget) return;
@@ -94,8 +91,6 @@ export function InputEditor({
     onEditing(true);
   }
   const scope = project.scientific_project;
-  const incomingSequences = preview ? importedSequences(project, preview) : [];
-  const conflicts = sequenceConflicts(project, incomingSequences);
   return (
     <section aria-label="Project inputs and evidence">
       <header className="panel-heading">
@@ -120,248 +115,22 @@ export function InputEditor({
             }
           />
         </label>
-        <section className="input-section">
-          <h3>Import files</h3>
-          <label>
-            Data type
-            <select
-              value={kind}
-              onChange={(e) => {
-                ++epoch.current;
-                setKind(e.target.value);
-                setPreview(undefined);
-              }}
-            >
-              <option value="auto">
-                Sequence / table / display-only JSON / image / structure
-              </option>
-              <option value="pathway">pathway JSON</option>
-              <option value="wetlab">WetLabResult Measurements JSON</option>
-            </select>
-          </label>
-          <input
-            aria-label="Import data file"
-            type="file"
-            accept=".fasta,.fa,.faa,.gb,.gbk,.genbank,.json,.csv,.tsv,.png,.jpg,.jpeg,.pdb,.cif,.mmcif,.bcif,.zip"
-            disabled={busy}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const stamp = ++epoch.current;
-              setPreview(undefined);
-              setConflictChoices({});
-              void action(async () => {
-                const value = await client.importFile(file, kind);
-                if (mounted.current && stamp === epoch.current)
-                  setPreview(value);
-              });
-            }}
-          />
-          {preview && (
-            <div>
-              <p>
-                Preview: {preview.kind} · {preview.file.name}
-              </p>
-              {preview.kind === 'genbank_design' && <p>Original DNA, feature locations, directions and qualifiers will be retained. Missing CDS translations remain explicit gaps; no proteins are inferred from DNA.</p>}
-              {preview.kind==='synthetic_ps_v3'&&<p><strong>Synthetic demo.</strong> Four closed reference scenarios; not formal prediction, actual M2 geometry or experimental validation. Uploaded scripts are never executed.</p>}
-              {incomingSequences.length > 0 ? (
-                <>
-                  <p>
-                    {incomingSequences.length} sequences. New identifiers are
-                    appended; existing sequences are retained unless you select
-                    Replace.
-                  </p>
-                  {conflicts.map((sequence) => (
-                    <label key={sequence.id}>
-                      Conflicting sequence: {sequence.id}
-                      <select
-                        aria-label={`Resolve sequence ${sequence.id}`}
-                        value={conflictChoices[sequence.id] ?? ""}
-                        onChange={(e) =>
-                          setConflictChoices({
-                            ...conflictChoices,
-                            [sequence.id]: e.target.value as ConflictChoice,
-                          })
-                        }
-                      >
-                        <option value="" disabled>
-                          Choose an action
-                        </option>
-                        <option value="keep">Keep existing</option>
-                        <option value="replace">Replace in draft</option>
-                        <option value="separate">
-                          Import as separate sequence
-                        </option>
-                      </select>
-                    </label>
-                  ))}
-                </>
-              ) : (
-                <LazyJson value={preview.patch} />
-              )}
-              <button
-                disabled={
-                  busy ||
-                  conflicts.some((sequence) => !conflictChoices[sequence.id])
-                }
-                onClick={() => {
-                  const draft = mergeImportDraft(
-                    project,
-                    preview,
-                    conflictChoices,
-                  );
-                  change(draft);
-                  setPreview(undefined);
-                }}
-              >
-                Confirm import into draft
-              </button>
-              <button onClick={() => setPreview(undefined)}>
-                Discard import
-              </button>
-            </div>
-          )}
-          <StructureAnnotationLinker
-            key={project.id}
-            project={project}
-            disabled={busy || dirty}
-            action={action}
-            onPreview={setPreview}
-          />
-        </section>
+        <section aria-label="Biological data">
+          <h2>Biological data</h2>
+          <UnifiedImport project={project} busy={busy||editing} dirty={dirty} action={action} prepare={prepareImport} onCommitted={onImported}/>
+          <section aria-label="Imported biological objects"><h3>Imported biological objects</h3>
+            <table><thead><tr><th>Name</th><th>Type</th><th>Scope</th><th>Source readiness</th></tr></thead><tbody>
+              {project.datasets.filter(row=>typeof row.file_id==='string'&&!['genbank_design','wetlab','ProjectConfig','AnalysisPlan','ParameterSet','synthetic_ps_v3'].includes(String(row.kind))).map(row=>
+                <tr key={String(row.id)}><td>{String(row.name)}</td><td>{String(row.kind)}</td><td>{String(row.supported_scope??'Imported source; scientific applicability not established')}</td>
+                  <td>{row.has_unresolved_inputs?'Review missing inputs':'Parsed, not scientifically approved'}</td></tr>)}
+            </tbody></table>
+          </section>
+          <StructureAnnotationLinker project={project} disabled={busy||dirty} action={action} onPreview={setPreview}/>
+          {preview&&<div><p>Reviewed annotation binding candidate; original source is retained.</p>
+            <button disabled={busy} onClick={()=>{change(mergeImportDraft(project,preview,{}));setPreview(undefined);}}>Confirm annotation binding into draft</button>
+            <button onClick={()=>setPreview(undefined)}>Discard annotation binding</button>
+          </div>}
         <GenBankDesigns project={project} dirty={dirty} action={action}/>
-        {project.datasets.some(row=>row.kind==='synthetic_ps_v3')&&<section>
-          <h3>Synthetic reference demonstration</h3>
-          <p>Original M3/competitive amount-model kernels recompute canonical inputs. E3 remains blocked; there is no fermentation or ER advantage claim.</p>
-          <button disabled={busy||editing} onClick={()=>onPlanMethod?.('ps-v3-demo')}>Review synthetic demonstration workflow</button>
-        </section>}
-        <section id="input-conditions" className="input-section">
-          {!scope && (
-            <ScientificSetup
-              project={project}
-              dirty={dirty}
-              busy={busy || editing}
-              onPreview={setScientific}
-              schema={schema}
-              schemaError={schemaError}
-            />
-          )}
-          <ScientificBundleImporter
-            busy={busy || editing}
-            action={action}
-            onPreview={(value) => {
-              ++epoch.current;
-              setScientific(value);
-            }}
-          />
-          {scientific && (
-            <div>
-              <p>
-                Validated typed configuration, binding{" "}
-                {scientific.scientific_project.evidence_files.length} original
-                files; import does not approve evidence.
-              </p>
-              <LazyJson value={scientific.scientific_project} />
-              <button
-                disabled={busy}
-                onClick={() => {
-                  change({
-                    ...project,
-                    scientific_project: scientific.scientific_project,
-                  });
-                  setScientific(undefined);
-                }}
-              >
-                Confirm scientific inputs into draft
-              </button>
-            </div>
-          )}
-          {scope ? (
-            <>
-              <p>
-                Execution mode: {scope.config.execution.mode} · Authoritative
-                conditions are below. Ordinary project notes do not enter
-                computation.
-              </p>
-              <div className="field-grid">
-                {(["host", "strain", "assay_system"] as const).map((key) => (
-                  <label key={key}>
-                    {key}
-                    <input
-                      value={scope.config.experimental_context[key] ?? ""}
-                      onChange={(e) =>
-                        change({
-                          ...project,
-                          scientific_project: {
-                            ...scope,
-                            config: {
-                              ...scope.config,
-                              experimental_context: {
-                                ...scope.config.experimental_context,
-                                [key]: e.target.value || null,
-                              },
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                ))}
-                {(["temperature_c", "pH"] as const).map((key) => (
-                  <label key={key}>
-                    {key}
-                    <input
-                      aria-label={key}
-                      type="number"
-                      step="any"
-                      value={scope.config.experimental_context[key] ?? ""}
-                      onChange={(e) =>
-                        change({
-                          ...project,
-                          scientific_project: {
-                            ...scope,
-                            config: {
-                              ...scope.config,
-                              experimental_context: {
-                                ...scope.config.experimental_context,
-                                [key]:
-                                  e.target.value === ""
-                                    ? null
-                                    : Number(e.target.value),
-                              },
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-              <p>
-                Network {scope.config.stages.m4_reaction.network_variant} · Unit{" "}
-                {scope.config.stages.m4_reaction.unit_mode} · Missing values
-                remain absent.
-              </p>
-              <ScientificInputForms
-                project={project}
-                section="parameters"
-                onChange={change}
-                schema={schema}
-                inputTarget={inputTarget}
-              />
-              <ScientificSettings
-                project={project}
-                onChange={change}
-                schema={schema}
-              />
-            </>
-          ) : (
-            <p>
-              Full scientific pipeline not attached; standalone sequence
-              statistics are not a formal M1–M5 project.
-            </p>
-          )}
-        </section>
         <h3 id="input-evidence">Registered input files</h3>
         <table>
           <thead>
@@ -502,6 +271,134 @@ export function InputEditor({
           value={project.assemblies}
           label="Assembly declarations (not experimental confirmation)"
         />
+        </section>
+        <section aria-label="Analysis plan and configuration">
+        {project.datasets.some(row=>row.kind==='synthetic_ps_v3')&&<section>
+          <h3>Synthetic reference demonstration</h3>
+          <p>Original M3/competitive amount-model kernels recompute canonical inputs. E3 remains blocked; there is no fermentation or ER advantage claim.</p>
+          <button disabled={busy||editing} onClick={()=>onPlanMethod?.('ps-v3-demo')}>Review synthetic demonstration workflow</button>
+        </section>}
+        <section id="input-conditions" className="input-section">
+          <h2>Analysis plan &amp; configuration</h2>
+          {!scope && (
+            <ScientificSetup
+              project={project}
+              dirty={dirty}
+              busy={busy || editing}
+              onPreview={setScientific}
+              schema={schema}
+              schemaError={schemaError}
+            />
+          )}
+          {scientific && (
+            <div>
+              <p>
+                Validated typed configuration, binding{" "}
+                {scientific.scientific_project.evidence_files.length} original
+                files; import does not approve evidence.
+              </p>
+              <LazyJson value={scientific.scientific_project} />
+              <button
+                disabled={busy}
+                onClick={() => {
+                  change({
+                    ...project,
+                    scientific_project: scientific.scientific_project,
+                  });
+                  setScientific(undefined);
+                }}
+              >
+                Confirm scientific inputs into draft
+              </button>
+            </div>
+          )}
+          {scope ? (
+            <>
+              <p>
+                Execution mode: {scope.config.execution.mode} · Authoritative
+                conditions are below. Ordinary project notes do not enter
+                computation.
+              </p>
+              <div className="field-grid">
+                {(["host", "strain", "assay_system"] as const).map((key) => (
+                  <label key={key}>
+                    {key}
+                    <input
+                      value={scope.config.experimental_context[key] ?? ""}
+                      onChange={(e) =>
+                        change({
+                          ...project,
+                          scientific_project: {
+                            ...scope,
+                            config: {
+                              ...scope.config,
+                              experimental_context: {
+                                ...scope.config.experimental_context,
+                                [key]: e.target.value || null,
+                              },
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+                {(["temperature_c", "pH"] as const).map((key) => (
+                  <label key={key}>
+                    {key}
+                    <input
+                      aria-label={key}
+                      type="number"
+                      step="any"
+                      value={scope.config.experimental_context[key] ?? ""}
+                      onChange={(e) =>
+                        change({
+                          ...project,
+                          scientific_project: {
+                            ...scope,
+                            config: {
+                              ...scope.config,
+                              experimental_context: {
+                                ...scope.config.experimental_context,
+                                [key]:
+                                  e.target.value === ""
+                                    ? null
+                                    : Number(e.target.value),
+                              },
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              <p>
+                Network {scope.config.stages.m4_reaction.network_variant} · Unit{" "}
+                {scope.config.stages.m4_reaction.unit_mode} · Missing values
+                remain absent.
+              </p>
+              <ScientificInputForms
+                project={project}
+                section="parameters"
+                onChange={change}
+                schema={schema}
+                inputTarget={inputTarget}
+              />
+              <ScientificSettings
+                project={project}
+                onChange={change}
+                schema={schema}
+              />
+            </>
+          ) : (
+            <p>
+              Full scientific pipeline not attached; standalone sequence
+              statistics are not a formal M1–M5 project.
+            </p>
+          )}
+        </section>
+        </section>
       </fieldset>
       <PrecheckPanel
         result={inputCheck}

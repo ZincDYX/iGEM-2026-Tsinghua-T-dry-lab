@@ -31,3 +31,4 @@ export type { Workflow } from "./Workflow.generated";
 export type { ScientificObservation } from "./ScientificObservation.generated";
 export type { GenBankDesign } from "./GenBankDesign.generated";
 export type { GenBankPage } from "./GenBankPage.generated";
+export type { ImportTransactionPreview } from "./ImportTransactionPreview.generated";

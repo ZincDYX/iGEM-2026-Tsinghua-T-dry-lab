@@ -133,16 +133,77 @@ where scientific regression is prohibited. E3 and all formal experimental
 claims remain blocked. General typed import transactions and the remaining
 Results/structure acceptance requirements are still pending.
 
+## Batch 2: unified saved input transactions (partial review completion)
+
+Web, File-menu file/folder import, ZIP and CLI now use one ParserRegistry and
+project-scoped ImportService. Inputs shows Biological data and Analysis plan
+and configuration. The redundant standalone ScientificBundleImporter UI was
+removed; original versions remain recoverable from Git history.
+
+Preview IDs and immutable source assets survive restart. Molecule choices,
+table roles/units, source identities and duplicate decisions are explicit.
+Commit is project-revision checked and atomic. Missing dependencies can be
+appended without retransmitting/reparsing unchanged originals; relative paths
+cannot escape the transaction. Multiple project configs cannot silently use
+the last file. Unknown configuration trees or non-measurement tables can be
+explicitly retained as evidence rather than treated as model inputs.
+
+Native GenBank metadata and missing translations are retained. PDB uses the
+existing native model-scope parser; mmCIF/BCIF retain auth/label identities and
+insertion codes. Water/ligand residues are not invented amino acids in sequence
+binding proposals. No B-factor is labelled pLDDT. Typed path/hash credentials
+are supplied from project-owned registered assets in the backend; supplied
+conflicting identities are rejected. Source/condition/unit gates remain intact.
+
+Actual acceptance evidence:
+
+- Compute-server full suite with immutable author inputs and actual original
+  LAMMPS/2PDZ references: 890 passed, 12 skipped (103.37 s). Nine skips require
+  the separate FreeSASA profile; the other three are Windows-only entry tests.
+- The existing chemistry/structure tool profile separately ran 56 tests,
+  including real FreeSASA/2PDZ and original LAMMPS potential oracles: all passed.
+  No second scientific installation was downloaded.
+- Updated shared-import PS-v3 browser → explicit approval → actual compute
+  server → E1 table/Plotly → scoped CSV chain passed (8.7 s).
+- Original supplied M1/M2 server data: eight files / 6,141,204 bytes imported
+  without user SHA fields; six confirmed actual design/baseline proteins,
+  15-model/30-protein-chain 2PDZ, and 24 distinct label-chain FTH1 assembly were
+  checked. The initial acceptance script incorrectly expected 15 chains rather
+  than 15 models; corrected against independent Biopython model/chain identities.
+  All original structure/pocket applicability warnings remain. This is actual
+  format/data integration, not formal M1/M2 completion.
+- RDKit is absent from the selected light runtime. The actual SDF is explicitly
+  retained with chemistry_runtime_unavailable; no chemical identity was fabricated.
+- Three actual installed-wheel browser tasks passed (16.4 s): same-origin
+  session/GenBank preservation, restart/review of ambiguous DNA without protein
+  conversion, and adding a missing configuration dependency. No solver ran on
+  the workstation. Screenshot/video and original-file export were recorded.
+- Frontend suite: 61 passed with one bounded worker. Earlier concurrent Node
+  workers failed allocation on the workstation; those runs were failures, not
+  passes. A separate browser test initially read state before commit finished;
+  it now waits for committed preview closure. Existing GenBank protein records
+  are preserved, not incorrectly expected to disappear during DNA import.
+- Build cache contained obsolete Python/frontend files. The release builder
+  now cleans only its verified generated package directory. Actual same-source
+  Web wheel decreased from 5,510,428 to 3,218,009 bytes, with source/history kept.
+  The real setuptools isolation test and clean installed-wheel/browser passed.
+
+Still pending in this input batch: contextual Add/Use/Defer inspector actions,
+full typed parameter/measurement binding and AnalysisPlan opening into editable
+Workflow, standard-library SBOL/SBML semantic import and actual chemical-profile
+execution. No scientific equation, biological default, solver tolerance or
+scientific approval was changed by these interface/import/build changes.
+
 ## Remaining review acceptance tasks
 
 | ID | Required outcome | Current status |
 |---|---|---|
 | WEB-01 | Authenticated same-origin local Web package, Linux lock, container and clean startup | Local installed-wheel/browser and existing Linux closure verified; container/clean deployment pending |
-| CLI-01 / ARCH-01 | Shared application services and durable CLI workflow | Core project/approval/run parity verified; remaining service extraction and typed imports pending |
-| IN-01 | Inputs first, two regions, default project and single import controller | Pending |
-| IN-02 | Typed format registry, transactions and ambiguity handling | Pending |
+| CLI-01 / ARCH-01 | Shared application services and durable CLI workflow | Core project/approval/run and persisted typed-import parity verified; remaining route/service extraction pending |
+| IN-01 | Inputs first, two regions, default project and single import controller | Verified file/folder/ZIP shared transactions and installed Web first-start/browser import |
+| IN-02 | Typed format registry, transactions and ambiguity handling | Required core format/recovery/relative-binding paths verified; chemical profile, SBOL/SBML and full measurement/parameter binding pending |
 | IN-03 | Contextual gaps with Add/Use/Defer actions | Pending |
-| IN-04 | Server-calculated asset identity, no user SHA entry | Pending |
+| IN-04 | Server-calculated asset identity, no user SHA entry | Registered typed file references obtain hashes server-side; ownership/conflicting identities still rejected |
 | WF-01 | Graph/List editing of one workflow revision | Pending |
 | WF-02 | Versioned full method formulas, tools and parameter records | Pending |
 | WF-03 | Save/review/run and controls only in Workflow | Pending |

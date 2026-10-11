@@ -34,6 +34,10 @@ def output(ctx,value):
             if isinstance(item,dict): typer.echo(f'Missing {item["field_path"]}: {item["source_kind"]}')
             else: typer.echo('Missing: '+str(item))
         if 'missing' in value and not missing: typer.echo('Declared inputs checked; final scientific gates still apply.')
+        for item in value.get('items',[]):
+            typer.echo(f"{item['filename']}: {item['detected_format']} / {item['semantic_type']}")
+            for issue in item['issues']: typer.echo(f"{issue['severity'].capitalize()}: {issue['message']}"+(f" Field: {issue['field']}" if issue['field'] else ''))
+        if value.get('state')=='preview': typer.echo('Import preview retained. Confirm roles with import-review, then publish using import-commit. No job has started.')
     else: typer.echo(str(value))
 
 
@@ -53,12 +57,35 @@ def create(ctx: typer.Context,name: str=typer.Option(...,'--name')):
 
 @app.command('import')
 def import_files(ctx: typer.Context,paths: list[Path]=typer.Argument(...),project: str=typer.Option(...,'--project'),
-                 input_kind: str=typer.Option('auto','--input-kind')):
+                 input_kind: str=typer.Option('auto','--input-kind'),preview_only: bool=typer.Option(False,'--preview'),
+                 into: str|None=typer.Option(None,'--into',help='Add missing files to an existing saved import; review before committing.')):
     files=[]
     for path in paths:
         if path.is_dir(): files.extend(sorted(p for p in path.rglob('*') if p.is_file()))
         else: files.append(path)
-    output(ctx,execute(ctx,lambda application:application.import_files(project,files,input_kind)))
+    preview=execute(ctx,lambda application:application.preview_files(project,files,input_kind,into))
+    if preview_only or into:
+        output(ctx,preview);return
+    if any(item.duplicate_file_id or any(i.severity in {'error','confirmation'} for i in item.issues) for item in preview.items):
+        output(ctx,preview);raise typer.Exit(2)
+    output(ctx,execute(ctx,lambda application:application.imports.commit(project,preview.id)))
+
+
+@app.command('import-review')
+def review_import(ctx: typer.Context,transaction_id: str,project: str=typer.Option(...,'--project'),options: Path|None=typer.Option(None,'--options'),
+                  filename: str|None=typer.Option(None,'--file'),molecule_type: str|None=typer.Option(None,'--molecule-type')):
+    if bool(filename)!=bool(molecule_type): raise typer.BadParameter('Use --file and --molecule-type together.')
+    selections=json.loads(options.read_text()) if options else {}
+    if filename: selections[filename]={**selections.get(filename,{}),'molecule_type':molecule_type}
+    value=execute(ctx,lambda application:application.imports.revise(project,transaction_id,selections)
+        if selections else application.imports.inspect(project,transaction_id))
+    output(ctx,value)
+
+
+@app.command('import-commit')
+def commit_import(ctx: typer.Context,transaction_id: str,project: str=typer.Option(...,'--project'),choices: Path|None=typer.Option(None,'--choices')):
+    output(ctx,execute(ctx,lambda application:application.imports.commit(project,transaction_id,
+        json.loads(choices.read_text()) if choices else {})))
 
 
 @app.command('check-inputs')

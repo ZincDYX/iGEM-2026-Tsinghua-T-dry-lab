@@ -22,6 +22,34 @@ class ScientificSetupRequest(Contract):
     config: dict
 
 
+def fill_registered_file_hashes(value,schema,definitions,store,project_id):
+    """Derive file credentials from selected assets, not hidden user fields.
+
+    Only a typed path/sha256 pair is filled. Sequence hashes and other identity
+    fields are not guessed from filenames or substituted with file hashes.
+    Materialization subsequently verifies the original bytes at this boundary.
+    """
+    if '$ref' in schema:
+        schema=definitions[schema['$ref'].rsplit('/',1)[-1]]
+    if isinstance(value,dict):
+        properties=schema.get('properties',{})
+        if 'sha256' in properties and 'path' in properties and str(value.get('path','')).startswith('asset:'):
+            with store.connection() as db:
+                row=db.execute('SELECT hash,project_id FROM file_assets WHERE id=?',(str(value['path'])[6:],)).fetchone()
+            if row is None or row['project_id']!=project_id:
+                raise WorkflowError('file_project_mismatch',status_code=403)
+            if value.get('sha256') and value['sha256']!=row['hash']:
+                raise WorkflowError('file_identity_changed',status_code=409)
+            value['sha256']=row['hash']
+        for key,child in value.items():
+            additional=schema.get('additionalProperties',{})
+            fill_registered_file_hashes(child,properties.get(key,additional if isinstance(additional,dict) else {}),definitions,store,project_id)
+    elif isinstance(value,list):
+        for child in value: fill_registered_file_hashes(child,schema.get('items',{}),definitions,store,project_id)
+    for branch in schema.get('anyOf',[]):
+        if branch.get('type')!='null': fill_registered_file_hashes(value,branch,definitions,store,project_id)
+
+
 def form_schema(prepared_through="m5"):
     # Schema is the existing Pydantic contract; defaults are intentionally not
     # used to populate new scientific inputs or expose installation paths.
@@ -62,6 +90,8 @@ def preview_setup(request, store, boundary):
     boundary.check(raw)
     if 'tools' in raw or 'run' in raw:
         raise WorkflowError('runtime_settings_not_scientific_input')
+    schema=ProjectConfig.model_json_schema()
+    fill_registered_file_hashes(raw,schema,schema['$defs'],store,saved.id)
     # Validate the existing nested contract before traversing untrusted form
     # values. This supplies no form values and does not materialize file paths.
     ProjectConfig.model_validate({**raw, 'run': {'id': saved.id}})

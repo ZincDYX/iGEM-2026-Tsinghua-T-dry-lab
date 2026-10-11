@@ -1,5 +1,5 @@
 import { requestJson, requestBinary } from "../api";
-import { parsePublic, parseList } from "../contracts/validation";
+import { parsePublic, parseList, object } from "../contracts/validation";
 import type { Protocol } from "../contracts/validation";
 import type {
   ProjectView,
@@ -139,33 +139,26 @@ export const diff = (id: string, runId: string, signal?: AbortSignal) =>
     undefined,
     signal,
   );
-export const uploadScientific = (
-  configFilename: string,
-  files: { filename: string; content: string }[],
-) =>
-  read("ScientificPreviewView", "/scientific-projects/upload-preview", {
-    config_filename: configFilename,
-    files,
-  });
-export const importFile = async (file: File, inputKind: string) => {
-  if (file.size > 20_000_000)
-    throw new Error("Import exceeds the 20 MB source budget.");
-  if (/\.(png|jpe?g|pdb|cif|mmcif|bcif|zip)$/i.test(file.name))
-    return parsePublic(
-      "ImportView",
-      await (
-        await requestBinary(
-          `/imports/display-file?filename=${encodeURIComponent(file.name)}`,
-          file,
-        )
-      ).json(),
-    );
-  return read("ImportView", "/imports/preview", {
-    filename: file.name,
-    content: await file.text(),
-    input_kind: inputKind,
-  });
-};
+export async function importTransaction(projectId:string,files:File[],transactionId?:string,relativeName?:string){
+  if(files.length>256||files.reduce((total,file)=>total+file.size,0)>20_000_000)
+    throw Error('Import budget: 256 files / 20 MB.');
+  const form=new FormData();
+  for(const file of files) form.append('files',file,files.length===1&&relativeName?relativeName:file.webkitRelativePath||file.name);
+  const suffix=transactionId?`/${encodeURIComponent(transactionId)}/files`:'';
+  return parsePublic('ImportTransactionPreview',await (await requestBinary(`/projects/${encodeURIComponent(projectId)}/imports${suffix}`,form)).json());
+}
+export const inspectImport=(projectId:string,id:string)=>read('ImportTransactionPreview',`/projects/${encodeURIComponent(projectId)}/imports/${encodeURIComponent(id)}`);
+export async function pendingImports(projectId:string):Promise<string[]>{
+  const result=await requestJson(`/projects/${encodeURIComponent(projectId)}/imports`);
+  if(!object(result)||!Array.isArray(result.transaction_ids)||!result.transaction_ids.every(id=>typeof id==='string')) throw Error('Invalid import list response');
+  return result.transaction_ids;
+}
+export const reviseImport=async(projectId:string,id:string,options:Record<string,Record<string,unknown>>,revision?:number)=>
+  parsePublic('ImportTransactionPreview',await requestJson(`/projects/${encodeURIComponent(projectId)}/imports/${encodeURIComponent(id)}`,{options,expected_revision:revision},undefined,'PATCH'));
+export const commitImport=(projectId:string,id:string,choices:Record<string,string>)=>
+  read('ProjectView',`/projects/${encodeURIComponent(projectId)}/imports/${encodeURIComponent(id)}/commit`,{choices});
+export const discardImport=(projectId:string,id:string)=>
+  read('ImportTransactionPreview',`/projects/${encodeURIComponent(projectId)}/imports/${encodeURIComponent(id)}/discard`,{});
 export const bindMeasurement = (id: string, revision: number, fileId: string) =>
   read("BindingPreviewView", "/scientific-projects/bind-measurement", {
     project_id: id,

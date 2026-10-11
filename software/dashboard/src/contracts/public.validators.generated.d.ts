@@ -31,3 +31,4 @@ export function Workflow(value:unknown):value is import("./Workflow.generated").
 export function ScientificObservation(value:unknown):value is import("./ScientificObservation.generated").ScientificObservation;
 export function GenBankDesign(value:unknown):value is import("./GenBankDesign.generated").GenBankDesign;
 export function GenBankPage(value:unknown):value is import("./GenBankPage.generated").GenBankPage;
+export function ImportTransactionPreview(value:unknown):value is import("./ImportTransactionPreview.generated").ImportTransactionPreview;

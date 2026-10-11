@@ -549,7 +549,11 @@ export function WorkspaceShell() {
             {
               label: "Import project folder",
               disabled: !currentProject,
-              action: () => navigateInput("conditions"),
+              action: () => {navigateInput('import');requestAnimationFrame(()=>document.getElementById('input-import-folder')?.click());},
+            },
+            {
+              label:'Import files',disabled:!currentProject||busy,
+              action:()=>{navigateInput('import');requestAnimationFrame(()=>document.getElementById('input-import-file')?.click());},
             },
             {
               label: "Save",
@@ -874,6 +878,8 @@ export function WorkspaceShell() {
                 inputTarget={inputTarget}
                 onOpenResource={openResource}
                 onPlanMethod={method=>void proposeMethod(method)}
+                prepareImport={project.save}
+                onImported={value=>{project.adopt(value);invalidate();}}
               />
             </div>
           ) : tab === "inputs" ? (

@@ -24,6 +24,7 @@ vi.mock("./api", () => ({
     // and the production browser, not this empty-project App fixture.
     if (path.split("?")[0] === "/scientific-projects/form-schema")
       return { $defs: {}, properties: {} };
+    if (path === '/projects/test/imports') return {transaction_ids:[]};
     throw Error("Unexpected App fixture request: " + path);
   }),
 }));

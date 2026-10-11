@@ -1,6 +1,39 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: WEB_RELEASE_STALE_BUILD_ARTIFACTS
+    group: platform
+    test_nodeids: ["tests/test_web_build_assets.py::test_rebuilding_removes_obsolete_generated_chunks_and_modules_only"]
+    requirement_or_formula_source: 20261011 WEB-01 PERF-01 reproducible source build
+    oracle_type: independent current_source_and_frontend_filenames_in_real_setuptools_build
+    fixture_scope: software_only_minimal_build_checkout_no_scientific_calculation
+    formula_version: not_applicable
+    units: file_count
+    tolerance_basis: exact current_source_bytes_and_exclusion_of_obsolete_chunks
+    expected_faults: [removed_module_in_new_wheel, duplicate_old_frontend_chunks, source_deleted_by_build_cleanup]
+  - risk_id: SEMANTIC_IMPORT_TRANSACTIONS
+    group: integration
+    test_nodeids:
+      - "tests/test_import_transactions.py::test_ambiguous_fasta_revises_once_and_DNA_never_becomes_protein"
+      - "tests/test_import_transactions.py::test_duplicate_reuse_and_changed_revision_do_not_publish_partial_import"
+      - "tests/test_import_transactions.py::test_full_csv_shape_is_checked_beyond_preview_and_null_not_zero"
+      - "tests/test_import_transactions.py::test_zip_and_folder_use_same_records_with_no_uploaded_code_execution"
+      - "tests/test_import_transactions.py::test_project_config_relative_file_binds_without_manual_hash_and_no_M4_defaults_run"
+      - "tests/test_import_transactions.py::test_config_cannot_read_outside_this_transaction"
+      - "tests/test_import_transactions.py::test_multipart_API_owns_transaction_and_original_GenBank_round_trips"
+      - "tests/test_import_transactions.py::test_BCIF_preserves_auth_label_insertion_and_never_calls_Bfactor_confidence"
+      - "tests/test_import_transactions.py::test_missing_dependency_can_be_added_without_reupload_or_reparse_original"
+      - "tests/test_import_transactions.py::test_non_PS_canonical_archive_is_not_misclassified_and_configs_do_not_last_win"
+      - "tests/test_import_transactions.py::test_CLI_uses_saved_import_molecule_confirmation_and_same_published_objects"
+      - "tests/test_import_transactions.py::test_registered_file_credentials_are_derived_not_user_entered_and_wrong_identity_rejected"
+      - "tests/test_import_transactions.py::test_text_content_detects_FASTA_without_reinterpreting_uploaded_scripts"
+    requirement_or_formula_source: 20261011 review IN-01 through IN-04
+    oracle_type: independently declared sequence alphabets, original GenBank metadata, BCIF author/label numbering, and SQLite revision
+    fixture_scope: software_only_no_solver_or_biological_validation
+    formula_version: not_applicable
+    units: original_measurement_units_retained
+    tolerance_basis: exact source bytes, no translation/approval/jobs, revision and coordinate identity
+    expected_faults: [DNA_screened_as_protein, preview_only_CSV_validation, upload_code_execution, unauthorized_configuration_path, stale_import_overwrites_project, Bfactor_as_confidence]
   - risk_id: WEB_CLI_SYNTHETIC_SCOPE
     group: integration
     test_nodeids: ["tests/test_synthetic_ps_scope.py::test_valid_inner_result_never_removes_outer_synthetic_restriction", "tests/test_synthetic_ps_scope.py::test_archive_preview_reads_only_named_inputs_and_does_not_execute_attachment", "tests/test_synthetic_ps_scope.py::test_synthetic_package_obeys_same_upload_identity_boundary"]

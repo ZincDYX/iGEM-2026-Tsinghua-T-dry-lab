@@ -29411,5 +29411,205 @@
     ],
     "title": "GenBankPage",
     "type": "object"
+  },
+  "ImportTransactionPreview": {
+    "$defs": {
+      "ImportIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warning",
+              "confirmation",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Field"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "severity",
+          "field"
+        ],
+        "title": "ImportIssue",
+        "type": "object"
+      },
+      "ImportedItem": {
+        "additionalProperties": false,
+        "properties": {
+          "detected_format": {
+            "title": "Detected Format",
+            "type": "string"
+          },
+          "semantic_type": {
+            "title": "Semantic Type",
+            "type": "string"
+          },
+          "records": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/ImportIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "proposed_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Proposed Links",
+            "type": "array"
+          },
+          "supported_scope": {
+            "title": "Supported Scope",
+            "type": "string"
+          },
+          "input_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Roles",
+            "type": "array"
+          },
+          "patch": {
+            "additionalProperties": true,
+            "title": "Patch",
+            "type": "object"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "file": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "File",
+            "type": "object"
+          },
+          "duplicate_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duplicate File Id"
+          }
+        },
+        "required": [
+          "detected_format",
+          "semantic_type",
+          "records",
+          "issues",
+          "proposed_links",
+          "supported_scope",
+          "input_roles",
+          "patch",
+          "filename",
+          "file",
+          "duplicate_file_id"
+        ],
+        "title": "ImportedItem",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "expected_revision": {
+        "title": "Expected Revision",
+        "type": "integer"
+      },
+      "state": {
+        "enum": [
+          "preview",
+          "committed",
+          "discarded"
+        ],
+        "title": "State",
+        "type": "string"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/$defs/ImportedItem"
+        },
+        "title": "Items",
+        "type": "array"
+      },
+      "issues": {
+        "items": {
+          "$ref": "#/$defs/ImportIssue"
+        },
+        "title": "Issues",
+        "type": "array"
+      },
+      "proposed_links": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Proposed Links",
+        "type": "array"
+      },
+      "requires_confirmation": {
+        "default": true,
+        "title": "Requires Confirmation",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "project_id",
+      "expected_revision",
+      "state",
+      "items",
+      "issues",
+      "proposed_links",
+      "requires_confirmation"
+    ],
+    "title": "ImportTransactionPreview",
+    "type": "object"
   }
 }

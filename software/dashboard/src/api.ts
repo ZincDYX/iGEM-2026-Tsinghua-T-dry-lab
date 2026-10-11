@@ -70,10 +70,11 @@ export async function requestJson(
   path: string,
   body?: unknown,
   signal?: AbortSignal,
+  method?: 'POST'|'PATCH',
 ): Promise<unknown> {
   await ready();
   const response = await fetch(`${baseUrl}/api/platform${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: method ?? (body === undefined ? "GET" : "POST"),
     headers: {
       "Content-Type": "application/json",
       ...(sessionToken ? { "X-FusionLab-Token": sessionToken } : {}),
@@ -94,14 +95,14 @@ export async function requestJson(
 }
 export async function requestBinary(
   path: string,
-  body?: Blob,
+  body?: Blob | FormData,
   signal?: AbortSignal,
 ): Promise<Response> {
   await ready();
   const response = await fetch(`${baseUrl}/api/platform${path}`, {
     method: body ? "POST" : "GET",
     headers: {
-      ...(body ? { "Content-Type": "application/octet-stream" } : {}),
+      ...(body instanceof Blob ? { "Content-Type": "application/octet-stream" } : {}),
       ...(sessionToken ? { "X-FusionLab-Token": sessionToken } : {}),
     },
     body,
