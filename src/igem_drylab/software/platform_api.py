@@ -326,6 +326,10 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
     def save_method_draft(project_id: str,request: MethodDraftInput):
         return application.method_drafts.save(project_id,request)
 
+    @router.post('/projects/{project_id}/method-drafts/{draft_id}/workflow')
+    def prepare_method_workflow(project_id: str,draft_id: str):
+        return application.method_drafts.workflow(project_id,draft_id)
+
     @router.get("/projects/{project_id}/sequences")
     def project_sequence_choices(project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
         from igem_drylab.workflow.sequence_index import sequence_page

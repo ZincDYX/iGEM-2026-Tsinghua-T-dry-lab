@@ -102,7 +102,7 @@ export const testAssistantSettings = () => read('AssistantProbeView','/assistant
 export const skills = (offset=0) => read('SkillPage',`/skills?offset=${offset}`);
 export const saveSkill = (text:string,enabled:boolean,id?:string,revision?:number) => read('SkillView',id?`/skills/${encodeURIComponent(id)}`:'/skills',{text,enabled,expected_revision:revision??null});
 export const methodDrafts = (projectId:string,offset=0) => read('MethodDraftPage',`/projects/${encodeURIComponent(projectId)}/method-drafts?offset=${offset}`);
-export const saveMethodDraft = (projectId:string,value:{base_method_id:string;base_version:string;title:string;formula_id:string;latex:string;reason:string;source_reference:string;previous_id:string|null;expected_project_revision:number}) =>
+export const saveMethodDraft = (projectId:string,value:{base_method_id:string;base_version:string;title:string;formula_id:string;latex:string;reason:string;source_reference:string;previous_id:string|null;expected_project_revision:number;execution_spec?:import('../contracts/generated').MethodDraftView['execution_spec']}) =>
   read('MethodDraftView',`/projects/${encodeURIComponent(projectId)}/method-drafts`,value);
 export const revise = (id: string, prompt: string, workflow?: Workflow) =>
   read('ProposalView', `/proposals/${encodeURIComponent(id)}/revise`, {prompt, workflow});
@@ -184,6 +184,8 @@ export const bindMeasurement = (id: string, revision: number, fileId: string) =>
   });
 export const planMethod=(projectId:string,method:'sequence-properties'|'galatea-m1-m2'|'ps-v3-demo')=>
   read('ProposalView','/method-plans',{project_id:projectId,method});
+export const methodWorkflow=(projectId:string,draftId:string)=>
+  read('Workflow',`/projects/${encodeURIComponent(projectId)}/method-drafts/${encodeURIComponent(draftId)}/workflow`,{});
 export const linkStructureAnnotations = (value: {
   project_id: string;
   expected_revision: number;

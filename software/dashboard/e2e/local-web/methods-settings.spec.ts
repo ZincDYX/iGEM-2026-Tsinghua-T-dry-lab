@@ -43,6 +43,24 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   await panel.getByLabel('Custom formula reason').fill('Document a proposed version only, no execution');
   await panel.getByRole('button',{name:'Save separate unvalidated version',exact:true}).click();
   await expect(panel.locator('summary').filter({hasText:'Browser instruction draft — version 1, unvalidated / not executable'})).toBeVisible();
+  await panel.getByLabel('Custom formula title').fill('Browser executable scalar draft');
+  await panel.getByLabel('Proposed formula LaTeX').fill('x/(k+x)');
+  await panel.getByLabel('Custom formula reason').fill('Independent synthetic scalar test, not an original M4 result');
+  await panel.getByLabel('Executable scalar expression').fill('x/(k+x)');
+  await panel.getByLabel('Formula result unit').fill('1');
+  for(const [index,name,value,unit] of [[1,'x','500','nM'],[2,'k','0.5','uM']] as const){
+    await panel.getByRole('button',{name:'Add formula input',exact:true}).click();
+    await panel.getByLabel(`Formula input ${index} name`).fill(name);
+    await panel.getByLabel(`Formula input ${index} value`).fill(value);
+    await panel.getByLabel(`Formula input ${index} unit`).fill(unit);
+    await panel.getByLabel(`Formula input ${index} source`).fill('Synthetic admission fixture, no workstation evaluation');
+  }
+  await panel.getByRole('button',{name:'Save separate unvalidated version',exact:true}).click();
+  await expect(panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 2, unvalidated / exploratory execution available'})).toBeVisible();
+  await panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 2,'}).click();
+  await panel.getByRole('button',{name:'Prepare exploratory workflow',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeVisible();
+  expect(await (await context.request.get('/api/platform/runs')).json()).toEqual([]);
   await page.getByRole('navigation',{name:'Workbench menus'}).getByText('Tools',{exact:true}).click();
   await page.getByRole('menuitem',{name:'Assistant Settings',exact:true}).click();
   await expect(page.getByLabel('Assistant provider')).toHaveValue('none');

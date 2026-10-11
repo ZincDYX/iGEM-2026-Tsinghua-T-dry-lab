@@ -44,3 +44,4 @@ export function SkillView(value:unknown):value is import("./SkillView.generated"
 export function ToolCatalogPage(value:unknown):value is import("./ToolCatalogPage.generated").ToolCatalogPage;
 export function MethodDraftView(value:unknown):value is import("./MethodDraftView.generated").MethodDraftView;
 export function MethodDraftPage(value:unknown):value is import("./MethodDraftPage.generated").MethodDraftPage;
+export function FormulaResult(value:unknown):value is import("./FormulaResult.generated").FormulaResult;

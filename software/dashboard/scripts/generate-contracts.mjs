@@ -85,7 +85,7 @@ const families={
   planning:['ProposalView','AssistantPage','ProposalDiff','PlanView','WorkflowDocument','ScientificObservation'],
   results:['RunSummaryView','RunListView','EventPage','TablePage','ScanPage','SeriesPage','StructurePage','ResourcePage','LineagePage','ComparePage'],
   imports:['ImportTransactionPreview','ScientificPreviewView','BindingPreviewView','IterationView','GenBankPage','SequencePage','ScientificPrecheckView'],
-  tools:['ToolCatalogPage','PluginInspectionView','PredictionToolView','AssistantSettingsView','AssistantProbeView','SkillView','SkillPage','MethodDefinition','ModuleMethodView','MethodDraftView','MethodDraftPage'],
+  tools:['ToolCatalogPage','PluginInspectionView','PredictionToolView','AssistantSettingsView','AssistantProbeView','SkillView','SkillPage','MethodDefinition','ModuleMethodView','MethodDraftView','MethodDraftPage','FormulaResult'],
   basic:['ProjectSummaryView','ActionView','InputDiffView'],
 };
 const assigned=Object.values(families).flat();

@@ -14,7 +14,12 @@ export type Reason = string;
 export type SourceReference = string;
 export type PreviousId = string | null;
 export type ValidationStatus = "unvalidated";
-export type Executable = false;
+export type Executable = boolean;
+export type Expression = string;
+export type Value = number;
+export type Unit = string;
+export type Source = string;
+export type OutputUnit = string;
 
 export interface MethodDraftView {
   id: Id;
@@ -32,4 +37,18 @@ export interface MethodDraftView {
   previous_id: PreviousId;
   validation_status: ValidationStatus;
   executable: Executable;
+  execution_spec: FormulaSpec | null;
+}
+export interface FormulaSpec {
+  expression: Expression;
+  variables: Variables;
+  output_unit: OutputUnit;
+}
+export interface Variables {
+  [k: string]: FormulaVariable;
+}
+export interface FormulaVariable {
+  value: Value;
+  unit: Unit;
+  source: Source;
 }

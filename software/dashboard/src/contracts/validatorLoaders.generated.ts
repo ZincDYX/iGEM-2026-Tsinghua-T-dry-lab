@@ -43,6 +43,7 @@ export const validatorLoaders={
 "ModuleMethodView":()=>import("./validators.tools.generated.js"),
 "MethodDraftView":()=>import("./validators.tools.generated.js"),
 "MethodDraftPage":()=>import("./validators.tools.generated.js"),
+"FormulaResult":()=>import("./validators.tools.generated.js"),
 "ProjectSummaryView":()=>import("./validators.basic.generated.js"),
 "ActionView":()=>import("./validators.basic.generated.js"),
 "InputDiffView":()=>import("./validators.basic.generated.js"),

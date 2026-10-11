@@ -892,7 +892,8 @@ export function WorkspaceShell() {
               {workflowChanged && selection?.kind !== 'run-node' && <p role="status">Workflow changes are saved but not authorized. Review and accept a new proposal before running.</p>}
               {tab === 'plan' && node && currentProject && <Suspense fallback={<p>Loading method details…</p>}><MethodPanel
                 key={node.id} project={currentProject} toolId={node.tool_id} runId={runSelected ? run?.id : undefined}
-                disabled={busy || editing} onChange={value => {project.edit(value); invalidate();}} onReview={reviewParameter}/></Suspense>}
+                disabled={busy || editing} onChange={value => {project.edit(value); invalidate();}} onReview={reviewParameter}
+                onPlan={value=>void importWorkflow(async()=>value)}/></Suspense>}
               <fieldset className="policy-editor" disabled={busy || editing || !!runSelected || (!!proposal?.workflow && !workflowDocument)}>
                 <h3>Execution settings</h3>
                 {!!proposal?.workflow && !workflowDocument && !runSelected && <p role="status">Saving this workflow before execution settings can be edited.</p>}

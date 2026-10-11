@@ -1,6 +1,33 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: CUSTOM_FORMULA_EXPLORATORY_EXECUTION
+    group: scientific_algorithm
+    test_nodeids:
+      - "tests/test_custom_formula.py::test_numeric_independent_unit_conversion_oracle_and_durable_engine"
+      - "tests/test_custom_formula.py::test_actual_application_accept_start_and_reload_custom_result"
+      - "tests/test_custom_formula.py::test_scalar_function_independent_oracles"
+      - "tests/test_custom_formula.py::test_domain_errors_are_not_results"
+    requirement_or_formula_source: user request 20261011 executable separate custom formulas without original replacement
+    oracle_type: independent exact ratio_half, SI concentration conversion, analytic elementary identities and real domain refusals
+    fixture_scope: synthetic_scalar_math_not_biological_validation_server_only_numerical_acceptance
+    formula_version: custom-scalar-v1_not_original_M1_M4
+    units: explicit_SI_length_time_amount_mass_dimensions_and_requested_output_unit
+    tolerance_basis: 1e-14 relative_and_absolute_floating_point_scalar_identity
+    expected_faults: [wrong_molar_scale, stale_draft_inputs, false_evidence_approval, real_domain_violation]
+  - risk_id: CUSTOM_FORMULA_ADMISSION_AND_OWNERSHIP
+    group: data_contract
+    test_nodeids:
+      - "tests/test_custom_formula.py::test_reject_unexecutable_syntax_units_and_unbounded_exponents"
+      - "tests/test_custom_formula.py::test_admission_output_units_and_unused_variables"
+      - "tests/test_custom_formula.py::test_save_prepare_freezes_owned_version_without_creating_jobs"
+    requirement_or_formula_source: executable formula request preserves original source, explicit unit/source requirements and existing workflow approval
+    oracle_type: independently prohibited AST programs, incompatible_dimensions, immutable_older_owned_version_and_zero_jobs
+    fixture_scope: software_admission_no_expression_evaluation
+    formula_version: custom-scalar-v1_not_original_M1_M4
+    units: explicit_input_output_dimensional_admission
+    tolerance_basis: exact_refusal_original_values_versions_and_database_job_count
+    expected_faults: [arbitrary_code_execution, unknown_symbol, incompatible_unit, cross_project_access, silent_old_version_overwrite, execution_on_save]
   - risk_id: WORKFLOW_DOCUMENT_REVISION_AND_NATIVE_CONTRACT
     group: platform
     test_nodeids:

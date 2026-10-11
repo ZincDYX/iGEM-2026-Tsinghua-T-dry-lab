@@ -63,6 +63,8 @@ def pathway_analysis(payload: PathwayInput, context: NodeContext) -> dict[str, A
 
 def builtin_tools() -> WorkflowTools:
     tools = WorkflowTools()
+    from .custom_formula import custom_formula_tool
+    tools.register(custom_formula_tool())
     from .synthetic_ps import SyntheticPSInput,run_ps_tool
     tools.register(ToolDefinition('synthetic.ps_v3','PS-v3 synthetic demonstration','Recompute canonical synthetic inputs with the original M3 and amount-model kernels. Not formal prediction or validation.',
         '1',SyntheticPSInput,run_ps_tool,'synthetic_demonstration',implementation_files=(Path(__file__).with_name('synthetic_ps.py'),

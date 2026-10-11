@@ -31104,6 +31104,69 @@
     "type": "object"
   },
   "MethodDraftView": {
+    "$defs": {
+      "FormulaSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "expression": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression",
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/$defs/FormulaVariable"
+            },
+            "maxProperties": 64,
+            "minProperties": 1,
+            "title": "Variables",
+            "type": "object"
+          },
+          "output_unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Output Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expression",
+          "variables",
+          "output_unit"
+        ],
+        "title": "FormulaSpec",
+        "type": "object"
+      },
+      "FormulaVariable": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "source"
+        ],
+        "title": "FormulaVariable",
+        "type": "object"
+      }
+    },
     "additionalProperties": false,
     "properties": {
       "id": {
@@ -31172,10 +31235,20 @@
         "type": "string"
       },
       "executable": {
-        "const": false,
         "default": false,
         "title": "Executable",
         "type": "boolean"
+      },
+      "execution_spec": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/FormulaSpec"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       }
     },
     "required": [
@@ -31193,13 +31266,75 @@
       "source_reference",
       "previous_id",
       "validation_status",
-      "executable"
+      "executable",
+      "execution_spec"
     ],
     "title": "MethodDraftView",
     "type": "object"
   },
   "MethodDraftPage": {
     "$defs": {
+      "FormulaSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "expression": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression",
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/$defs/FormulaVariable"
+            },
+            "maxProperties": 64,
+            "minProperties": 1,
+            "title": "Variables",
+            "type": "object"
+          },
+          "output_unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Output Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expression",
+          "variables",
+          "output_unit"
+        ],
+        "title": "FormulaSpec",
+        "type": "object"
+      },
+      "FormulaVariable": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "source"
+        ],
+        "title": "FormulaVariable",
+        "type": "object"
+      },
       "MethodDraftView": {
         "additionalProperties": false,
         "properties": {
@@ -31269,10 +31404,20 @@
             "type": "string"
           },
           "executable": {
-            "const": false,
             "default": false,
             "title": "Executable",
             "type": "boolean"
+          },
+          "execution_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FormulaSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -31290,7 +31435,8 @@
           "source_reference",
           "previous_id",
           "validation_status",
-          "executable"
+          "executable",
+          "execution_spec"
         ],
         "title": "MethodDraftView",
         "type": "object"
@@ -31315,6 +31461,180 @@
       "has_more"
     ],
     "title": "MethodDraftPage",
+    "type": "object"
+  },
+  "FormulaResult": {
+    "$defs": {
+      "FormulaExecution": {
+        "additionalProperties": false,
+        "properties": {
+          "method_id": {
+            "title": "Method Id",
+            "type": "string"
+          },
+          "method_version": {
+            "minimum": 1,
+            "title": "Method Version",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "base_method_id": {
+            "title": "Base Method Id",
+            "type": "string"
+          },
+          "base_version": {
+            "title": "Base Version",
+            "type": "string"
+          },
+          "latex": {
+            "title": "Latex",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/$defs/FormulaSpec"
+          }
+        },
+        "required": [
+          "method_id",
+          "method_version",
+          "title",
+          "base_method_id",
+          "base_version",
+          "latex",
+          "reason",
+          "source_reference",
+          "spec"
+        ],
+        "title": "FormulaExecution",
+        "type": "object"
+      },
+      "FormulaSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "expression": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression",
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/$defs/FormulaVariable"
+            },
+            "maxProperties": 64,
+            "minProperties": 1,
+            "title": "Variables",
+            "type": "object"
+          },
+          "output_unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Output Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expression",
+          "variables",
+          "output_unit"
+        ],
+        "title": "FormulaSpec",
+        "type": "object"
+      },
+      "FormulaVariable": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "source"
+        ],
+        "title": "FormulaVariable",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "custom-formula-v1",
+        "default": "custom-formula-v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "method": {
+        "$ref": "#/$defs/FormulaExecution"
+      },
+      "value": {
+        "title": "Value",
+        "type": "number"
+      },
+      "unit": {
+        "title": "Unit",
+        "type": "string"
+      },
+      "validation_status": {
+        "const": "unvalidated",
+        "default": "unvalidated",
+        "title": "Validation Status",
+        "type": "string"
+      },
+      "evidence_ready": {
+        "const": false,
+        "default": false,
+        "title": "Evidence Ready",
+        "type": "boolean"
+      },
+      "claim_scope": {
+        "const": "exploratory_scalar_calculation",
+        "default": "exploratory_scalar_calculation",
+        "title": "Claim Scope",
+        "type": "string"
+      },
+      "interpretation": {
+        "default": "User formula, explicit SI conversions; not an original M1–M4 result or approved evidence.",
+        "title": "Interpretation",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "method",
+      "value",
+      "unit",
+      "validation_status",
+      "evidence_ready",
+      "claim_scope",
+      "interpretation"
+    ],
+    "title": "FormulaResult",
     "type": "object"
   }
 }

@@ -44,3 +44,4 @@ export type { SkillView } from "./SkillView.generated";
 export type { ToolCatalogPage } from "./ToolCatalogPage.generated";
 export type { MethodDraftView } from "./MethodDraftView.generated";
 export type { MethodDraftPage } from "./MethodDraftPage.generated";
+export type { FormulaResult } from "./FormulaResult.generated";

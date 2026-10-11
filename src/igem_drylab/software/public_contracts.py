@@ -28,6 +28,7 @@ from igem_drylab.workflow.documents import WorkflowDocument
 from igem_drylab.workflow.methods import MethodDefinition, ModuleMethodView, ToolCatalogPage,MethodDraftView,MethodDraftPage
 from igem_drylab.workflow.assistant_settings import AssistantSettingsView, AssistantProbeView
 from igem_drylab.workflow.skills import SkillPage, SkillView
+from igem_drylab.workflow.custom_formula import FormulaResult
 
 
 class AssetIdentity(Contract):
@@ -222,6 +223,7 @@ PUBLIC_MODELS['SkillView'] = SkillView
 PUBLIC_MODELS['ToolCatalogPage'] = ToolCatalogPage
 PUBLIC_MODELS['MethodDraftView'] = MethodDraftView
 PUBLIC_MODELS['MethodDraftPage'] = MethodDraftPage
+PUBLIC_MODELS['FormulaResult'] = FormulaResult
 
 
 def public_schemas():

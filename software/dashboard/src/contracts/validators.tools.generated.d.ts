@@ -9,3 +9,4 @@ export function MethodDefinition(value:unknown):value is import("./MethodDefinit
 export function ModuleMethodView(value:unknown):value is import("./ModuleMethodView.generated").ModuleMethodView;
 export function MethodDraftView(value:unknown):value is import("./MethodDraftView.generated").MethodDraftView;
 export function MethodDraftPage(value:unknown):value is import("./MethodDraftPage.generated").MethodDraftPage;
+export function FormulaResult(value:unknown):value is import("./FormulaResult.generated").FormulaResult;

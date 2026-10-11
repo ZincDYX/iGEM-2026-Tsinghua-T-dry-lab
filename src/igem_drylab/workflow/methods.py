@@ -7,6 +7,7 @@ kept separate; rendering a method never grants evidence or parameter approval.
 from typing import Literal
 from pydantic import Field
 from .models import Contract
+from .custom_formula import FormulaSpec
 
 
 class MethodFormula(Contract):
@@ -76,6 +77,7 @@ class MethodDraftInput(Contract):
     source_reference: str = Field(min_length=1,max_length=2000)
     previous_id: str | None = None
     expected_project_revision: int
+    execution_spec: FormulaSpec | None = None
 
 
 class MethodDraftView(Contract):
@@ -93,7 +95,8 @@ class MethodDraftView(Contract):
     source_reference: str
     previous_id: str | None
     validation_status: Literal['unvalidated'] = 'unvalidated'
-    executable: Literal[False] = False
+    executable: bool = False
+    execution_spec: FormulaSpec | None = None
 
 
 class MethodDraftPage(Contract):
@@ -104,8 +107,7 @@ class MethodDraftPage(Contract):
 class MethodDrafts:
     """Immutable proposed versions; original formulas/solvers are untouched.
 
-    There is deliberately no expression evaluator. A changed formula needs a
-    separately implemented, tested tool version before scientific execution.
+    Scalar execution is separate and unvalidated; originals are never replaced.
     """
     def __init__(self,store,boundary):
         self.store,self.boundary=store,boundary
@@ -147,9 +149,27 @@ class MethodDrafts:
                     raise WorkflowError('method_draft_parent_mismatch')
                 version=previous.version+1
             result=MethodDraftView(id=str(uuid4()),project_id=project_id,project_revision=revision,version=version,
-                original_latex=original.latex,**request.model_dump(exclude={'expected_project_revision'}))
+                original_latex=original.latex,executable=request.execution_spec is not None,
+                **request.model_dump(exclude={'expected_project_revision'}))
             db.execute('INSERT INTO method_drafts VALUES(?,?,?)',(result.id,project_id,canonical(result.model_dump(mode='json'))))
         return result
+
+    def workflow(self,project_id,draft_id):
+        from .models import Workflow, WorkflowNode, LiteralInput, WorkflowError
+        from .custom_formula import FormulaExecution
+        self.store.project(project_id)
+        with self.store.connection() as db:
+            row=db.execute('SELECT payload FROM method_drafts WHERE id=? AND project_id=?',(draft_id,project_id)).fetchone()
+        if row is None: raise WorkflowError('method_draft_not_owned',status_code=403)
+        draft=MethodDraftView.model_validate_json(row[0])
+        if draft.execution_spec is None: raise WorkflowError('method_draft_has_no_execution_spec')
+        payload=FormulaExecution(method_id=draft.id,method_version=draft.version,title=draft.title,
+            base_method_id=draft.base_method_id,base_version=draft.base_version,latex=draft.latex,
+            reason=draft.reason,source_reference=draft.source_reference,spec=draft.execution_spec)
+        return Workflow(id='custom-formula-'+draft.id,name=draft.title,
+            description='Separate unvalidated exploratory formula. Review the frozen expression, all values, units and sources; Accept then Start. Not formal M1–M4 evidence.',
+            nodes=[WorkflowNode(id='formula',label=draft.title,tool_id='workflow.custom_formula',
+                inputs={name:LiteralInput(value=value) for name,value in payload.model_dump(mode='json').items()})])
 
 
 def module_method(project, definition):
@@ -175,7 +195,7 @@ def module_method(project, definition):
         configured_mode=configured_mode,limitations=[
             'Registration/configuration is not a real successful tool job. External tool evidence and license gates remain authoritative.',
             'The original method is shown for review. A differently configured historical/dynamic mode is not relabeled as this method.',
-            'Custom formulas require a separate validated backend implementation/version; this read-only registry does not execute arbitrary expressions.'],
+            'Custom scalar formulas use a separate unit-checked exploratory tool, not an original method or approved scientific evidence. LaTeX alone is not executable.'],
         parameter_records=[record.model_dump(mode='json') for record in science.config.parameters] if science else [])
 
 

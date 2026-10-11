@@ -110,3 +110,25 @@ def test_skill_is_plain_instructions_revision_bound_and_not_scientific_authority
         assert client.post('/api/platform/skills/'+skill['id'],json={'text':text,'enabled':True,'expected_revision':1}).status_code==409
         assert app.state.application.skills.guidance()==''
         assert app.state.platform_store.runs()==[] and app.state.fixture_calls==[]
+
+
+def test_workspace_client_rejects_truncated_json_even_if_fragment_is_parseable():
+    from igem_drylab.workflow.assistant_settings import WorkspaceChatClient
+    from igem_drylab.workflow.models import WorkflowError
+    from contextlib import contextmanager
+    client=WorkspaceChatClient({'secret':'','endpoint':'https://software-fixture.invalid/chat/completions','model':'fixture'},'')
+    captured={}
+    class Response:
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def iter_content(self,size):
+            yield b'{"choices":[{"finish_reason":"length","message":{"content":"{\\"ok\\":true}"}}]}'
+    def post(payload,**kwargs):
+        captured.update(payload)
+        return Response()
+    client.post=post
+    import pytest
+    with pytest.raises(WorkflowError,match='assistant_response_truncated'):
+        client.complete_json('Fixture no real LLM')
+    assert captured['max_tokens']==4096
+    assert client.last_response_metadata=={'finish_reason':'length'}

@@ -1,37 +1,51 @@
 import {useEffect, useRef, useState} from 'react';
 import temml from 'temml';
 import 'temml/dist/Temml-Local.css';
-import type {ModuleMethodView, ProjectView,MethodDefinition,MethodDraftPage,MethodDraftView} from '../contracts/generated';
+import type {ModuleMethodView, ProjectView,MethodDefinition,MethodDraftPage,MethodDraftView,Workflow} from '../contracts/generated';
 import {requestJson} from '../api';
 import {parsePublicAsync as parsePublic} from '../contracts/validation';
 import {ScientificInputForms} from './ScientificInputForms';
 import type {FieldSchema} from './ScientificFields';
 import * as client from './client';
 
-function FormulaDraftEditor({project,methods,disabled}:{project:ProjectView;methods:MethodDefinition[];disabled:boolean}) {
+function FormulaDraftEditor({project,methods,disabled,onPlan}:{project:ProjectView;methods:MethodDefinition[];disabled:boolean;onPlan:(value:Workflow)=>void}) {
   const [page,setPage]=useState<MethodDraftPage>(),[offset,setOffset]=useState(0),[refresh,setRefresh]=useState(0),[previous,setPrevious]=useState<MethodDraftView>();
   const [methodId,setMethodId]=useState(''),[formulaId,setFormulaId]=useState(''),[latex,setLatex]=useState('');
   const [title,setTitle]=useState(''),[reason,setReason]=useState(''),[source,setSource]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [expression,setExpression]=useState(''),[outputUnit,setOutputUnit]=useState('');
+  const [variables,setVariables]=useState<{name:string;value:string;unit:string;source:string}[]>([]);
+  const incomplete=!!expression.trim()&&(!outputUnit.trim()||!variables.length||variables.some(v=>!v.name.trim()||!v.value.trim()||!Number.isFinite(Number(v.value))||!v.unit.trim()||!v.source.trim())||new Set(variables.map(v=>v.name)).size!==variables.length);
   const method=methods.find(value=>value.id===methodId);
   const original=method?.formulas.find(value=>value.id===formulaId);
   useEffect(()=>{let active=true;void client.methodDrafts(project.id,offset).then(value=>{if(active)setPage(value);}).catch(reason=>{if(active)setError(String(reason));});return()=>{active=false;};},[project.id,offset,refresh]);
   return <section aria-label="Custom formula versions"><h4>Propose a separate formula version</h4>
-    <p>Original methods stay read-only. A draft is explicitly unvalidated and cannot be executed. It needs a separately implemented and verified backend tool version; saving LaTeX is not scientific computation or approval.</p>
+    <p>Original methods stay read-only. LaTeX alone is not executable. Add an explicit scalar expression and sourced inputs to prepare a separate exploratory workflow; review and Accept, then Start. Its result remains scientifically unvalidated, never formal M1–M4 evidence.</p>
     {error&&<p role="alert">{error}</p>}
     <fieldset disabled={disabled||busy}><legend>Custom formula draft</legend>
-      <label>Original method<select aria-label="Formula base method" value={methodId} onChange={event=>{setMethodId(event.target.value);setFormulaId('');setLatex('');setPrevious(undefined);}}><option value="">Choose original version</option>{methods.map(value=><option key={value.id} value={value.id}>{value.title} ({value.version})</option>)}</select></label>
-      <label>Formula<select aria-label="Formula to revise" value={formulaId} onChange={event=>{setFormulaId(event.target.value);setLatex(method!.formulas.find(value=>value.id===event.target.value)?.latex??'');setPrevious(undefined);}}><option value="">Choose original formula</option>{method?.formulas.map(value=><option key={value.id} value={value.id}>{value.id}: {value.title}</option>)}</select></label>
+      <label>Original method<select aria-label="Formula base method" value={methodId} onChange={event=>{setMethodId(event.target.value);setFormulaId('');setLatex('');setPrevious(undefined);setExpression('');setOutputUnit('');setVariables([]);}}><option value="">Choose original version</option>{methods.map(value=><option key={value.id} value={value.id}>{value.title} ({value.version})</option>)}</select></label>
+      <label>Formula<select aria-label="Formula to revise" value={formulaId} onChange={event=>{setFormulaId(event.target.value);setLatex(method!.formulas.find(value=>value.id===event.target.value)?.latex??'');setPrevious(undefined);setExpression('');setOutputUnit('');setVariables([]);}}><option value="">Choose original formula</option>{method?.formulas.map(value=><option key={value.id} value={value.id}>{value.id}: {value.title}</option>)}</select></label>
       {original&&<><label>New method title<input aria-label="Custom formula title" value={title} maxLength={200} onChange={event=>setTitle(event.target.value)}/></label>
         <label>Exact proposed LaTeX<textarea aria-label="Proposed formula LaTeX" value={latex} maxLength={8000} rows={4} onChange={event=>setLatex(event.target.value)}/></label>
         <Formula latex={latex}/><label>Source reference<input aria-label="Custom formula source" value={source} maxLength={2000} onChange={event=>setSource(event.target.value)}/></label>
         <label>Reason and changed assumptions<textarea aria-label="Custom formula reason" value={reason} maxLength={4000} onChange={event=>setReason(event.target.value)}/></label>
-        <button disabled={!latex.trim()||!title.trim()||!reason.trim()||!source.trim()} onClick={()=>{setBusy(true);setError('');
+        <label>Optional executable expression<input aria-label="Executable scalar expression" value={expression} maxLength={2000} onChange={event=>setExpression(event.target.value)}/></label>
+        <p>Supported: + − * /, integer powers ** (-16 to 16), sqrt, exp, ln, log10, abs. No automatic LaTeX translation, summation, ODEs or code execution. Units: 1, M/mM/uM/nM, mol, L, m/mm/um/nm, s/min/h, kg/g and products/ratios/powers. Inputs are explicitly converted to SI before evaluation; the result is converted to your chosen unit. No inferred biological values.</p>
+        {!!expression.trim()&&<><label>Result unit<input aria-label="Formula result unit" value={outputUnit} onChange={event=>setOutputUnit(event.target.value)}/></label>
+          {variables.map((variable,index)=><fieldset key={index}><legend>Input {index+1}</legend>{(['name','value','unit','source'] as const).map(field=><label key={field}>{field}<input aria-label={`Formula input ${index+1} ${field}`} value={variable[field]} onChange={event=>setVariables(values=>values.map((v,i)=>i===index?{...v,[field]:event.target.value}:v))}/></label>)}
+            <button onClick={()=>setVariables(values=>values.filter((_,i)=>i!==index))}>Remove input {index+1}</button></fieldset>)}
+          <button disabled={variables.length>=64} onClick={()=>setVariables(values=>[...values,{name:'',value:'',unit:'',source:''}])}>Add formula input</button></>}
+        <button disabled={incomplete||!latex.trim()||!title.trim()||!reason.trim()||!source.trim()} onClick={()=>{setBusy(true);setError('');
           void client.saveMethodDraft(project.id,{base_method_id:method!.id,base_version:method!.version,title,formula_id:formulaId,latex,reason,source_reference:source,
+            execution_spec:expression.trim()?{expression,output_unit:outputUnit,variables:Object.fromEntries(variables.map(v=>[v.name,{value:Number(v.value),unit:v.unit,source:v.source}]))}:null,
             previous_id:previous?.id??null,expected_project_revision:project.revision}).then(value=>{setPrevious(value);setRefresh(value=>value+1);}).catch(reason=>setError(String(reason))).finally(()=>setBusy(false));}}>Save separate unvalidated version</button>
       </>}
     </fieldset>
-    <ul>{page?.items.map(value=><li key={value.id}><details><summary>{value.title} — version {value.version}, unvalidated / not executable</summary><p>Original {value.base_method_id} ({value.base_version}), formula {value.formula_id}. {value.reason}</p><p>Source: {value.source_reference}</p><Formula latex={value.latex}/>
-      <button disabled={disabled||busy} onClick={()=>{setPrevious(value);setMethodId(value.base_method_id);setFormulaId(value.formula_id);setLatex(value.latex);setTitle(value.title);setSource(value.source_reference);setReason(value.reason);}}>Revise as a new version</button></details></li>)}</ul>
+    <ul>{page?.items.map(value=><li key={value.id}><details><summary>{value.title} — version {value.version}, unvalidated / {value.executable?'exploratory execution available':'not executable'}</summary><p>Original {value.base_method_id} ({value.base_version}), formula {value.formula_id}. {value.reason}</p><p>Source: {value.source_reference}</p><Formula latex={value.latex}/>
+      {value.execution_spec&&<><p>Executed expression (not inferred from LaTeX): <code>{value.execution_spec.expression}</code>. Result unit: {value.execution_spec.output_unit}</p>
+        <table><thead><tr><th>Input</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead><tbody>{Object.entries(value.execution_spec.variables).map(([name,v])=><tr key={name}><td>{name}</td><td>{v.value}</td><td>{v.unit}</td><td>{v.source}</td></tr>)}</tbody></table>
+        <button disabled={disabled||busy} onClick={()=>{setBusy(true);void client.methodWorkflow(project.id,value.id).then(onPlan).catch(reason=>setError(String(reason))).finally(()=>setBusy(false));}}>Prepare exploratory workflow</button></>}
+      <button disabled={disabled||busy} onClick={()=>{setPrevious(value);setMethodId(value.base_method_id);setFormulaId(value.formula_id);setLatex(value.latex);setTitle(value.title);setSource(value.source_reference);setReason(value.reason);
+        setExpression(value.execution_spec?.expression??'');setOutputUnit(value.execution_spec?.output_unit??'');setVariables(Object.entries(value.execution_spec?.variables??{}).map(([name,v])=>({name,...v,value:String(v.value)})));}}>Revise as a new version</button></details></li>)}</ul>
     <nav aria-label="Formula draft pages"><button disabled={!offset} onClick={()=>setOffset(value=>value-20)}>Previous versions</button><button disabled={!page?.has_more} onClick={()=>setOffset(value=>value+20)}>Next versions</button></nav>
   </section>;
 }
@@ -56,9 +70,10 @@ export function Formula({latex}: {latex: string}) {
     <details><summary>Exact LaTeX source</summary><code>{latex}</code></details></>;
 }
 
-export function MethodPanel({project, toolId, runId, disabled, onChange, onReview}: {
+export function MethodPanel({project, toolId, runId, disabled, onChange, onReview,onPlan}: {
   project: ProjectView; toolId: string; runId?: string; disabled: boolean; onChange: (value: ProjectView) => void;
   onReview: (id: string, stage: 'm3'|'m4', name: string, reviewer: string, reason: string) => Promise<void>;
+  onPlan:(value:Workflow)=>void;
 }) {
   const [value, setValue] = useState<ModuleMethodView>();
   const [schema, setSchema] = useState<FieldSchema>();
@@ -106,7 +121,7 @@ export function MethodPanel({project, toolId, runId, disabled, onChange, onRevie
             <p>Backend implementation: {formula.implementation.join(', ')}</p></details>)}
         </section>)}
         <p>Formal formulas are read-only. No calculation or formula simplification occurs in this viewer.</p>
-        {!runId && value.methods.length>0 && <FormulaDraftEditor key={project.id+toolId} project={project} methods={value.methods} disabled={disabled}/>}
+        {!runId && value.methods.length>0 && <FormulaDraftEditor key={project.id+toolId} project={project} methods={value.methods} disabled={disabled} onPlan={onPlan}/>}
       </>}
       {tab === 'parameters' && <>{runId ? <><p>Frozen run parameters are read-only. These are from the recorded run revision, not the current draft. Create an iteration to change them.</p>
         <table><thead><tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Condition</th><th>Source</th><th>Review</th></tr></thead><tbody>

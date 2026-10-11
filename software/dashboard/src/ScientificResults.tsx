@@ -17,6 +17,7 @@ import { messages } from "./workbench/messages.en";
 import { PredictionResult } from "./workbench/PredictionResult";
 import { M1MethodResult } from "./workbench/M1MethodResult";
 import {SyntheticPSResult} from './workbench/SyntheticPSResult';
+import {CustomFormulaResult} from './workbench/CustomFormulaResult';
 const Series = lazy(() =>
   import("./workbench/viewers/SeriesViewer").then((m) => ({
     default: m.SeriesViewer,
@@ -262,6 +263,8 @@ function NodeResult({
   const output = node.output;
   if (tool==='synthetic.ps_v3'&&object(output)&&output.schema_version==='synthetic-ps-v3-run-v1')
     return <SyntheticPSResult output={output} projectId={projectId}/>;
+  if (tool==='workflow.custom_formula'&&object(output)&&output.schema_version==='custom-formula-v1')
+    return <CustomFormulaResult output={output}/>;
   if (object(output) && output.schema_version === "m1-method-check-v1")
     return <M1MethodResult output={output} />;
   if (object(output) && output.schema_version === "sequence-prediction-v1")
