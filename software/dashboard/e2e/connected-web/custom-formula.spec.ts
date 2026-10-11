@@ -5,10 +5,15 @@ test('owned server executes reviewed scalar version and renders frozen unvalidat
   // workspace, never a workstation calculator or a real user project.
   await page.goto('/');
   await expect(page.getByLabel('Project name')).toBeVisible();
-  await page.getByLabel('Project name').fill('Custom formula server acceptance');
-  await page.getByRole('button',{name:'Create project',exact:true}).click();
+  await page.getByText('File',{exact:true}).click();
+  await page.getByRole('menuitem',{name:'New project',exact:true}).click();
+  const name='Custom formula server acceptance '+Date.now();
+  await page.getByLabel('Project name').fill(name);
+  await page.getByText('File',{exact:true}).click();
+  await page.getByRole('menuitem',{name:'Save',exact:true}).click();
+  await expect(page.getByText(/Draft synchronized/)).toBeVisible();
   const projects=await (await context.request.get('/api/platform/projects')).json();
-  const project=projects.find((p:{name:string})=>p.name==='Custom formula server acceptance');
+  const project=projects.find((p:{name:string})=>p.name===name);
   expect(project).toBeTruthy();
   const method=(await (await context.request.get('/api/platform/methods')).json()).find((m:{id:string})=>m.id==='m3-s1-e10');
     const saved=await page.evaluate(async({project,method})=>{
@@ -22,10 +27,14 @@ test('owned server executes reviewed scalar version and renders frozen unvalidat
   expect(saved.status,saved.text).toBe(200);
   await page.getByRole('button',{name:'Workflow',exact:true}).click();
   await page.getByLabel('Open saved workflow').selectOption('formula-display');
+  await expect(page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module Server scalar ratio',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Review plan',exact:true}).click();
   await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Start approved workflow',exact:true})).toBeEnabled();
-  await page.getByRole('button',{name:'Start approved workflow',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Start run',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Start run',exact:true}).click();
+  await expect(page.getByText('Job completed',{exact:true}).first()).toBeVisible();
+  await page.getByRole('navigation',{name:'Project navigation'}).getByRole('button',{name:'Results',exact:true}).click();
+  await page.getByLabel('Project and run tree').getByRole('button',{name:/^Server scalar ratio/}).click();
   await expect(page.getByLabel('Custom formula result')).toContainText('0.5 1');
   await expect(page.getByLabel('Custom formula result')).toContainText('scientifically unvalidated');
   await page.reload();

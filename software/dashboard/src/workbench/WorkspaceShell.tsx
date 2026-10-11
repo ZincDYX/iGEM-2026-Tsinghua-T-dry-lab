@@ -533,7 +533,8 @@ export function WorkspaceShell() {
   }
   async function reviewWorkflow() {
     if (workflowDocument && !runSelected) return importWorkflow(async () => workflowDocument.workflow);
-    return propose();
+    if (proposal?.workflow && !runSelected) return importWorkflow(async()=>proposal.workflow!);
+    setError('Choose a method or open a saved workflow before reviewing a plan.');
   }
   async function checkInputs() {
     if (editing) return;
@@ -860,6 +861,7 @@ export function WorkspaceShell() {
           {tab === "plan" && (
             <>
               <WorkflowControls primary={primary} disabled={busy || !currentProject || editing}
+                reviewDisabled={!workflowDocument && !proposal?.workflow}
                 pausePending={!!run?.control}
                 startDisabled={workflowChanged || project.dirty} executing={!!executing && runSelected}
                 cancellable={!!run && runSelected && ['queued','running','paused','interrupted'].includes(run.status) && run.control!=='cancel'}
