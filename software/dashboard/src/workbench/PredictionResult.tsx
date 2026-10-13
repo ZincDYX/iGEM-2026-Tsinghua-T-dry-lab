@@ -49,6 +49,17 @@ export function PredictionResult({
           <p>{show(parsed.interpretation)}</p>
         </>
       )}
+      {parsed && typeof parsed.raw_score === "number" && (
+        <p>Original {show(parsed.tool)} global score: {show(parsed.raw_score)}. {show(parsed.interpretation)}</p>
+      )}
+      {parsed && Array.isArray(parsed.native_profile) && (
+        <Suspense fallback={<p>Loading original propensity profile…</p>}><Plot
+          data={[{type:'scatter', mode:'lines', name:'Original catGRANULE profile', connectgaps:false,
+            x:parsed.native_profile.filter(object).map(row=>typeof row.native_position==='number'?row.native_position:null),
+            y:parsed.native_profile.filter(object).map(row=>typeof row.score==='number'?row.score:null)}]}
+          title="Original catGRANULE propensity profile" xLabel="Native profile position" yLabel="Native propensity score"
+          dataIdentity={String(output.input_sequence_sha256)}/></Suspense>
+      )}
       <p>
         Diagnostic output, not formal M1/M2 acceptance. Pocket, activity and
         assembly conclusions require their separate evidence-gated analyses.

@@ -16,6 +16,7 @@ export function M1MethodResult({output}: {output: Record<string, unknown>}) {
     top2_fraction:'Top two residues fraction',fcr:'Fraction charged residues',ncpr:'Net charge per residue',
     mean_hydropathy:'Mean hydropathy',shannon_entropy:'Shannon entropy',net_charge_proxy:'Net charge proxy',max_hydrophobic_run:'Longest hydrophobic run (aa)'};
   const gaps = screen.missing_required_evidence ?? current.missing;
+  const predictors = (current.predictor_scores ?? []).filter(object);
   return <section aria-label="M1 method checks"><h2>M1 candidates</h2><p>Sequence checks; not experimental validation.</p>
     <table><thead><tr><th>Candidate</th><th>Decision</th><th>Risk / reason</th><th>Key features</th></tr></thead><tbody>
       {rows.map(row=>{const p=object(row.precheck)?row.precheck:{};const s=object(row.screen)?row.screen:{};const f=object(p.features)?p.features:{};
@@ -26,6 +27,22 @@ export function M1MethodResult({output}: {output: Record<string, unknown>}) {
     <details><summary>Features</summary><table aria-label="Computed sequence features"><thead><tr><th>Feature</th><th>Value</th></tr></thead><tbody>
       {Object.entries(featureLabels).filter(([key])=>typeof features[key]==='number').map(([key,label])=><tr key={key}><td>{label}</td><td>{show(features[key])}</td></tr>)}
     </tbody></table></details>
+    {predictors.length>0&&<details><summary>Original LLPS outputs</summary><table><thead><tr><th>Tool</th><th>Native global score</th></tr></thead><tbody>
+      {predictors.map(score=><tr key={String(score.tool)}><td>{show(score.tool)}</td><td>{show(score.raw_score)}</td></tr>)}
+    </tbody></table><p>Predictor scores do not establish phase separation. Ranking requires the reviewed original policy.</p></details>}
     <details><summary>Calculation details</summary><p>Decision: {current.verdict}. {show(screen.hard_reject_reasons??precheck.hard_reject_reasons)}</p>{Array.isArray(screen.review_reasons)&&screen.review_reasons.length>0&&<p>Review reasons: {show(screen.review_reasons)}</p>}</details>
+  </section>;
+}
+
+export function M1RankingResult({output}: {output: Record<string, unknown>}) {
+  const rows = Array.isArray(output.candidates) ? output.candidates.filter(object) : [];
+  const order = Array.isArray(output.ranked_IDR_candidate_ids) ? output.ranked_IDR_candidate_ids : [];
+  return <section aria-label="M1 batch ranking"><h2>M1 batch ranking</h2><p>{show(output.status)}</p>
+    {Array.isArray(output.missing)&&<p>Required: {show(output.missing).replaceAll('_',' ')}</p>}
+    {rows.length>0&&<table><thead><tr><th>Candidate</th><th>Risk</th><th>Consensus</th><th>Rank score</th><th>Rank</th><th>Missing evidence</th></tr></thead><tbody>
+      {rows.map(row=><tr key={String(row.candidate_id)}><td>{show(row.candidate_id)}</td><td>{show(row.risk)}</td><td>{show(row.consensus)}</td><td>{show(row.rank_score)}</td>
+        <td>{order.includes(row.candidate_id)?order.indexOf(row.candidate_id)+1:'Not ranked'}</td><td>{show(row.missing).replaceAll('_',' ')}</td></tr>)}
+    </tbody></table>}
+    <p>Only candidates with complete original predictor evidence and a reviewed policy are ranked. Linkers have no invented composite score.</p>
   </section>;
 }

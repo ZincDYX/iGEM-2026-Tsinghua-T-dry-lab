@@ -891,12 +891,13 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
                 AND json_extract(r.snapshot,'$.runtime_profile.hash') IS ? ORDER BY r.updated_at DESC""",
                 (project_id, profile["hash"] if profile else None)).fetchall()
         rows = []
-        for name in ("iupred2a", "seg", "colabfold", "pscore", "jpred", "signalp", "deeptmhmm", "tango"):
+        for name in ("iupred2a", "seg", "colabfold", "pscore", "jpred", "signalp", "deeptmhmm", "tango", "catgranule"):
             config = ToolConfig.model_validate(private.get(name, {}))
             adapter = create_tool_adapter(name, config)
             executed = next((row for row in last if row['tool_id']=='prediction.'+name), None)
-            from igem_drylab.workflow.sequence_predictions import uses_native_jpred_route
-            complete_route = name!="jpred" or uses_native_jpred_route(config)
+            from igem_drylab.workflow.sequence_predictions import uses_native_jpred_route, uses_native_route
+            complete_route = (name!="jpred" or uses_native_jpred_route(config)) and (
+                name!="catgranule" or uses_native_route(config, "catgranule_runner"))
             status = "configured_unverified" if complete_route and adapter.is_available() else "not_configured"
             latest_file, checked, problem, failure_step = None, None, None, None
             if executed:

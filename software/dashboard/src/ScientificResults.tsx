@@ -15,7 +15,7 @@ import { M5View } from "./workbench/M5View";
 import { lazy, Suspense } from "react";
 import { messages } from "./workbench/messages.en";
 import { PredictionResult } from "./workbench/PredictionResult";
-import { M1MethodResult } from "./workbench/M1MethodResult";
+import { M1MethodResult, M1RankingResult } from "./workbench/M1MethodResult";
 import {SyntheticPSResult} from './workbench/SyntheticPSResult';
 import {CustomFormulaResult} from './workbench/CustomFormulaResult';
 import type {FileContext} from './workbench/FileDocument';
@@ -186,6 +186,8 @@ function NodeResult({
     return <CustomFormulaResult output={output}/>;
   if (object(output) && m1Checks(output))
     return <M1MethodResult output={output} />;
+  if (tool==='method.m1.rank'&&object(output))
+    return <M1RankingResult output={output}/>;
   if (object(output) && output.schema_version === "sequence-prediction-v1")
     return <PredictionResult output={output} />;
   const records = stageRecords(tool, output);

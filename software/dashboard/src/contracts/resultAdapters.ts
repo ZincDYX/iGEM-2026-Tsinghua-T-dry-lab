@@ -23,6 +23,7 @@ export function show(value: unknown): string {
 export interface M1Check {
   schema_version: 'm1-method-check-v1'; candidate_id: string; verdict: string;
   precheck?: Record<string, unknown>; screen?: Record<string, unknown>; missing?: unknown[];
+  predictor_scores?: unknown[];
 }
 export function m1Checks(output: unknown): M1Check[] | null {
   const values = object(output) && Array.isArray(output.items) ? output.items : [output];

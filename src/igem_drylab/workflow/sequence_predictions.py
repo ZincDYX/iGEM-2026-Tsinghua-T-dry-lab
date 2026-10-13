@@ -18,11 +18,35 @@ from .tools import NodeContext, ToolDefinition, ToolDeferred, ToolFailure
 
 
 def uses_native_jpred_route(config):
+    return uses_native_route(config, "jpred_runner")
+
+
+def uses_native_route(config, module):
     from igem_drylab.pipeline.adapters import _split_command
     if not config.command:
         return False
     command=_split_command(config.command)
-    return any(command[index:index+2]==["-m","igem_drylab.jpred_runner"] for index in range(len(command)-1))
+    return any(command[index:index+2]==["-m","igem_drylab."+module] for index in range(len(command)-1))
+
+
+def reconcile_catgranule(node_directory):
+    state_file = node_directory / "remote-job.json"
+    if not state_file.is_file():
+        return False
+    state = json.loads(state_file.read_text())
+    if state.get("protocol") != "catgranule2016-official-form-v1":
+        return False
+    if state.get("job_id"):
+        return True
+    ack = Path(state["acknowledgement_file"])
+    if not ack.is_file():
+        return False
+    from igem_drylab.catgranule_runner import _accepted
+    try:
+        _accepted(json.loads(ack.read_text()))
+    except (ValueError, KeyError):
+        return False
+    return True
 
 
 def reconcile_jpred(node_directory):
@@ -67,6 +91,9 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
     if fusion_tool and payload.item.role != "full_fusion":
         result.update(tool_status="not_eligible",blocker="Full-fusion predictors require the complete actual fusion sequence.")
         return result
+    if tool == "catgranule" and payload.item.role != "idr":
+        result.update(tool_status="not_eligible", blocker="The original M1 LLPS ranking route applies to explicitly bound IDRs.")
+        return result
     if payload.prechecks:
         matching = [row for row in payload.prechecks if row.get("candidate_id") == payload.item.id]
         if len(matching) != 1 or matching[0].get("input_sequence_sha256") != digest:
@@ -95,12 +122,18 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
             raise ToolFailure("jpred_requires_recoverable_native_route", "A submit-only or arbitrary command cannot recover a JPred job. Configure the native JPred runner with the official client.")
         config = config.model_copy(update={"command":config.command + " --poll-once"})
         adapter = create_tool_adapter(tool, config)
+    if tool == "catgranule" and not uses_native_route(config, "catgranule_runner"):
+        raise ToolFailure("catgranule_requires_recoverable_native_route", "Use the original web-form runner; unknown submissions must not be repeated.")
     run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
         sequence=sequence,
         job_state=context.work_dir.parent / "remote-job.json",
         input_files={"sequence": source}, timeout_seconds=7200)
     result["tool_status"] = run.status
     if run.status != "succeeded":
+        if tool == "catgranule":
+            if not reconcile_catgranule(context.work_dir.parent):
+                raise ToolFailure("remote_submission_reconciliation_required", "Original service acknowledgement unknown; do not resubmit.")
+            raise ToolFailure("remote_retrieval_failed", "Retrieve only the saved original catGRANULE job.", retryable=True)
         if tool == "jpred" and native:
             state_file = context.work_dir.parent / "remote-job.json"
             if state_file.is_file() and not json.loads(state_file.read_text()).get("job_id"):
@@ -113,6 +146,11 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         if state["status"] == "waiting_for_result":
             raise ToolDeferred(state["job_id"],poll_after_seconds=60)
         raise ValueError("JPred returned neither validated results nor a known waiting job")
+    if tool == "catgranule" and not (output_dir / "scores.run.json").is_file():
+        state = json.loads((context.work_dir.parent / "remote-job.json").read_text())
+        if state["status"] == "waiting_for_result":
+            raise ToolDeferred(state["job_id"], poll_after_seconds=60)
+        raise ValueError("catGRANULE returned neither validated original results nor a known waiting job")
     parsed = None
     if fusion_tool:
         from igem_drylab.fusion_tool_import import NativeFusionArtifact, parse_native_artifact
@@ -165,7 +203,19 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         from igem_drylab.pscore_runner import parse_pscore_output
         output = output_dir / "pscore.txt"
         parsed = parse_pscore_output(output, sequence=sequence)
+        from igem_drylab.llps_artifacts import automated_predictor_score
+        parsed["predictor_scores"] = [automated_predictor_score(output, tool="PScore", sequence=sequence,
+            raw_score=parsed["pscore"]).model_dump(mode="json")]
         result["outputs"] = {"raw_output": str(output)}
+    elif tool == "catgranule":
+        from igem_drylab.llps_artifacts import read_native_llps, automated_predictor_score
+        output = output_dir / "scores.txt"
+        parsed = read_native_llps(output, format="catgranule2016_scores", sequence=sequence,
+            sequence_file=output_dir/"prot.fa", profile_file=output_dir/"profiles.txt")
+        parsed["predictor_scores"] = [automated_predictor_score(output, tool="catGRANULE_2016", sequence=sequence,
+            raw_score=parsed["raw_score"]).model_dump(mode="json")]
+        result["outputs"] = {"raw_output": str(output), "sequence_companion": str(output_dir/"prot.fa"),
+            "native_profile": str(output_dir/"profiles.txt")}
     else:
         output = output_dir / ("iupred2a.txt" if tool == "iupred2a" else "seg.fasta")
         if not output.is_file():
@@ -207,14 +257,16 @@ def sequence_prediction_tools():
         Path(__file__).parents[1] / "fusion_tool_import.py",Path(__file__).parents[1]/"tango_runner.py",
         Path(__file__).parents[1] / "deeptmhmm_runner.py",
         Path(__file__).parents[1] / "iupred_runner.py")
+    implementation += (Path(__file__).parents[1]/"llps_artifacts.py", Path(__file__).parents[1]/"catgranule_runner.py")
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
         implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False,
-        reconcile=reconcile_jpred if name == "jpred" else None)
+        reconcile=reconcile_jpred if name == "jpred" else reconcile_catgranule if name == "catgranule" else None)
         for name, label in (("iupred2a", "IUPred2 disorder prediction"), ("seg", "SEG low-complexity prediction"),
                             ("colabfold", "ColabFold enzyme / fusion prediction"),
                             ("pscore", "Original PScore — diagnostic LLPS propensity"),
                             ("jpred", "JPred — exact-sequence secondary structure"),
                             ("signalp", "SignalP 6 — actual full-fusion signal peptide"),
                             ("deeptmhmm", "DeepTMHMM 1 — actual full-fusion topology"),
-                            ("tango", "Licensed TANGO — actual full-fusion aggregation"))]
+                            ("tango", "Licensed TANGO — actual full-fusion aggregation"),
+                            ("catgranule", "Original catGRANULE — IDR propensity and native profile"))]

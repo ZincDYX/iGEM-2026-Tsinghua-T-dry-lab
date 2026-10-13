@@ -81,6 +81,12 @@ class M1PrioritizationInput(ScientificAnalysisInput):
     candidates: list[PrioritizationCandidate] = Field(min_length=1)
     policy: PrioritizationPolicy
 
+    @model_validator(mode="after")
+    def distinct_candidates(self):
+        if len({row.candidate_id for row in self.candidates}) != len(self.candidates):
+            raise ValueError("M1_ranking_requires_distinct_candidate_identities")
+        return self
+
 
 def prioritize_m1(payload: M1PrioritizationInput) -> dict:
     rows = []
@@ -96,7 +102,7 @@ def prioritize_m1(payload: M1PrioritizationInput) -> dict:
             missing.append("reviewed_complete_risk_directions_for_sequence_kind")
         for rule in rules or []:
             value = values.get(rule.feature)
-            if value is None:
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
                 missing.append("defined_algorithm_or_observation:"+rule.feature)
                 continue
             value = abs(value) if rule.transform=="absolute" else value
@@ -139,6 +145,14 @@ def prioritize_m1(payload: M1PrioritizationInput) -> dict:
                     native_scores=re.findall(r"(?:^|<br>)\s*PScore:\s*(-?\d+(?:\.\d+)?)\s*$",raw)
                     if len(native_scores)!=1 or float(native_scores[0]) != observation.raw_score:
                         raise ValueError("PScore_native_global_score_mismatch")
+                elif observation.tool in {"FuzDrop", "catGRANULE_2016"}:
+                    from .llps_artifacts import verify_native_predictor_score
+                    # Legacy reviewed scalar imports remain explicitly manual;
+                    # native imports/runners must also reparse original bytes.
+                    import json
+                    record = json.loads(observation.provenance.record_file.read_text())
+                    if record.get("native_format") or observation.provenance.origin != "manual_review":
+                        verify_native_predictor_score(observation)
                 elif observation.provenance.origin!="manual_review":
                     raise ValueError("predictor_requires_version_specific_parser_or_raw_value_review:"+rule.tool)
                 normalized = (observation.raw_score-rule.normalization_minimum)/(rule.normalization_maximum-rule.normalization_minimum)

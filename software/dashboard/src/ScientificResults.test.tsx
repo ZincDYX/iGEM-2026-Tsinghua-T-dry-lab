@@ -5,6 +5,14 @@ import {M2Metrics} from './workbench/ScreenResultTables';
 import type { Run } from "./types";
 
 afterEach(cleanup);
+it('M1 ranking exposes missing policy without fake scores or raw provenance',()=>{
+  render(<ScientificResults run={run('ranking',{status:'blocked',missing:['reviewed_ranking_policy'],
+    ranked_IDR_candidate_ids:[],candidate_count:272},'method.m1.rank')}/>);
+  expect(screen.getByRole('heading',{name:'M1 batch ranking'})).toBeTruthy();
+  expect(screen.getByText('Required: reviewed ranking policy')).toBeTruthy();
+  expect(screen.queryByRole('table')).toBeNull();
+  expect(screen.queryByText(/not supported.*Export/i)).toBeNull();
+});
 it('adapts known M1 map parents into readable candidates, not scheduling entries',()=>{
   render(<ScientificResults run={run('decisions',{items:['fusionA','linkerA'].map(candidate_id=>({
     schema_version:'m1-method-check-v1',candidate_id,verdict:'blocked',missing:['IUPred2A','IUPred2A'],

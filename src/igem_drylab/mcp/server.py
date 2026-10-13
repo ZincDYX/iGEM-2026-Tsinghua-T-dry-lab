@@ -16,6 +16,7 @@ from igem_drylab.template_geometry import AssemblyPreparationInput
 from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeometryInput, RecruitmentEnsembleInput
 from igem_drylab.fusion_tool_import import FusionImportInput
 from igem_drylab.m1_prioritization import M1PrioritizationInput
+from igem_drylab.llps_artifacts import LLPSImportInput
 from igem_drylab.mpipi import MpipiAnalysisInput
 from igem_drylab.membrane_geometry import MembraneGeometryInput
 from igem_drylab.m3_er import ERRecruitmentInput
@@ -119,6 +120,11 @@ def m1_import_fusion_results(payload: FusionImportInput) -> dict[str,Any]:
 @server.tool(name="igem.m1.prioritize",title="Apply reviewed M1 soft risk and original ranking",structured_output=True)
 def m1_prioritize(payload: M1PrioritizationInput) -> dict[str,Any]:
     return _call_local("igem.m1.prioritize",{"payload":payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m1.import_llps_results",title="Read native LLPS global scores and profiles",structured_output=True)
+def m1_import_llps_results(payload: LLPSImportInput) -> dict[str, Any]:
+    return _call_local("igem.m1.import_llps_results", {"payload": payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m2.assess_regions", title="Assess actual full-length model regions", structured_output=True)

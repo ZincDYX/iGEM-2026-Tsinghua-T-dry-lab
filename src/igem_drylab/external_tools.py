@@ -157,8 +157,8 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             capability="aggregation-hotspot prediction",
             route="licensed_local_or_api",
             formal_stage="M1",
-            official_url="https://www.elixir-italy.org/services/pasta/",
-            notes="Alternative to TANGO; use the academic command-line distribution when obtained.",
+            official_url="https://biocomputingup.it/services/download/",
+            notes="Alternative to TANGO; current download form requests an institutional PI/senior applicant and its own accepted licence. Do not redistribute the academic binary.",
         ),
         ExternalToolSpec(
             name="colabfold",
@@ -206,14 +206,14 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             route="optional_local",
             formal_stage="M2",
             official_url="https://manual.gromacs.org/current/install-guide/index.html",
-            notes="Optional high-cost validation; no trajectory is treated as required M2 evidence by default.",
+            notes="Install/run when retained by the reviewed M2 protocol. An optional deployment route does not waive a protocol's required MD validation; do not shorten or replace its simulation silently.",
         ),
         ExternalToolSpec(
             name="catgranule",
             capability="Original catGRANULE LLPS propensity cross-check",
             route="manual_artifact",
-            official_url="https://service.tartaglialab.com/static_files/shared/tutorial_catGRANULES.html",
-            notes="Original catGRANULE (2016), not catGRANULE2 or a distilled surrogate. Native exported evidence is still required when retained by the protocol; it never substitutes for measured M3 inputs.",
+            official_url="https://tools.tartaglialab.com/new_submission/catGRANULES",
+            notes="Original catGRANULE (2016), not catGRANULE2. Authorized native export import or the observed original web-form driver with durable job identity; no documented API/local model is claimed. Scores never substitute for measured M3 inputs.",
         ),
         ExternalToolSpec(
             name="calvados",
