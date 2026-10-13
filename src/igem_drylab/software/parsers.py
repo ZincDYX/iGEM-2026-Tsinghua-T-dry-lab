@@ -97,6 +97,8 @@ class ParserRegistry:
             records.append({'id':row.id,'description':row.description,'sequence':sequence,'length':len(sequence),
                 'molecule_type':kind,'possible_molecule_types':candidates,'role':role,
                 'localization_context':context})
+            if metadata.get('source_records'):
+                records[-1]['source_records'] = metadata['source_records']
             if kind=='protein':
                 proteins.append(SequenceRecord(id=row.id,sequence=sequence,role=role,
                     localization_context=context).model_dump())

@@ -94,8 +94,10 @@ class ImportService:
     def preview(self,project_id,files,options=None):
         project=self.store.project(project_id)
         expanded=self._expand(files)
-        from .input_collection import collection_options
-        inferred=collection_options(expanded)
+        from .input_collection import prepare_collection
+        expanded, inferred=prepare_collection(expanded)
+        if len(expanded)>MAX_FILES or sum(len(raw) for _,raw in expanded)>MAX_BYTES:
+            raise WorkflowError('scientific_upload_budget_exceeded')
         for name, explicit in (options or {}).items():
             inferred[name]={**inferred.get(name,{}),**explicit}
         transaction_id=str(uuid4())

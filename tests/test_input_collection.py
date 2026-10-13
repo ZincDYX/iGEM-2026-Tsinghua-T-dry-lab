@@ -63,3 +63,34 @@ def test_protein_genbank_is_not_misclassified_as_DNA_or_inferred_CDS(tmp_path):
     assert parsed.semantic_type=='SequenceCollection'
     assert parsed.records[0]['molecule_type']=='protein' and parsed.patch['sequences'][0]['role']=='idr'
     assert not ParserRegistry().parse(path,{'bind_sequences':False}).patch['sequences']
+
+
+def test_secondround_import_owns_sequences_and_retains_original_workbook_cells(tmp_path):
+    from hashlib import sha256
+    from igem_drylab.software.input_collection import prepare_collection
+    ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    def inline(column,row,value):
+        return f'<c r="{column}{row}" t="inlineStr"><is><t>{value}</t></is></c>'
+    header=''.join(inline(c,3,v) for c,v in zip('ABC',['candidate_id','amino_acid_sequence','sequence_sha256']))
+    rows=''.join('<row r="'+str(i)+'">'+''.join(inline(c,i,v) for c,v in zip('ABC',
+        [identifier,sequence,sha256(sequence.encode()).hexdigest()]))+'</row>'
+        for i,(identifier,sequence) in enumerate([('new','GSGS'),('reference','MAGSGS')],4))
+    workbook=BytesIO()
+    with ZipFile(workbook,'w') as archive:
+        archive.writestr('xl/worksheets/sheet1.xml',f'<worksheet xmlns="{ns}"><sheetData><row r="3">{header}</row>{rows}</sheetData></worksheet>')
+    files=[('second/01_sequences/new_idr_library_120.fasta',b'>new\nGSGS\n'),
+        ('second/02_analysis/original.xlsx',workbook.getvalue()),
+        ('second/01_sequences/priority.fasta',b'>new\nGSGS\n'),
+        ('second/01_sequences/full_fusion.fasta',b'>fusion\nMAGSGSGS\n')]
+    expanded,options=prepare_collection(files)
+    derived='second/derived/old_reference_IDRs_from_workbook.fasta'
+    assert len(expanded)==len(files)+1
+    assert dict(expanded)[derived]==b'>reference\nMAGSGS\n'
+    assert options[files[0][0]]['role']=='idr'
+    assert not options[files[2][0]]['bind_sequences'] and not options[files[3][0]]['bind_sequences']
+    path=tmp_path/'library.fasta';path.write_bytes(files[0][1])
+    parsed=ParserRegistry().parse(path,options[files[0][0]])
+    assert parsed.records[0]['source_records'][0]['row']=='4'
+    assert parsed.records[0]['source_records'][0]['sequence_column']=='B'
+    with pytest.raises(ValueError,match='FASTA_workbook_sequence_mismatch'):
+        prepare_collection([(files[0][0],b'>new\nSGSG\n'),*files[1:]])
