@@ -116,6 +116,12 @@ def test_finite_exchange_matches_independent_exponential_and_conserves_amount():
 
 
 def test_rapid_equilibrium_preserves_amount_and_does_not_apply_independent_exchange():
+    from igem_drylab.m4_compartments import conserved_amount_basis
+    payload = network("rapid_equilibrium")
+    _, _, aggregate, index, _ = compartment_evaluator(payload)
+    # With no active reactions, exchanges or boundaries, every reduced amount
+    # is conserved independently. This also admits SciPy's declared 1.12 floor.
+    assert np.array_equal(conserved_amount_basis(payload, aggregate, index), np.eye(8))
     result = solve_compartment_network(network("rapid_equilibrium"))
     assert result["status"] == "numerically_solved"
     assert result["pools"]["a"]["amounts_umol"]["8"] == pytest.approx([1]*4)

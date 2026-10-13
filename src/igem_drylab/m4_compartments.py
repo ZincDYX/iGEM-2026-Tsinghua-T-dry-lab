@@ -267,7 +267,11 @@ def conserved_amount_basis(payload, aggregate, index):
     for boundary in payload.boundaries:
         if boundary.quantity.value > 0:
             column([((boundary.pool_id,boundary.compound),1 if boundary.kind == 'constant_feed' else -1)])
-    matrix = np.column_stack(columns) if columns else np.empty((aggregate.shape[0],0))
+    if not columns:
+        # No active process constrains these reduced amounts: the nullspace
+        # is the entire state space. Avoid SciPy 1.12's empty SVD LAPACK error.
+        return np.eye(aggregate.shape[0])
+    matrix = np.column_stack(columns)
     return null_space(matrix.T).T
 
 

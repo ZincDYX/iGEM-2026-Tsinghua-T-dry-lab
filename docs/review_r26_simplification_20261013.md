@@ -16,7 +16,7 @@
 | 3D | 默认模型及必要控件；只有实际可用着色，B-factor 不当作 pLDDT。Residues 显式加载，关闭销毁请求/React/WebGL。 |
 | Jobs/Tools/Settings | Jobs 一份任务列表；Output 可读级别日志，Problems 只放实际错误及修复。Tools 按所选工具要求数据，注册不等于可用，Review task 与 Run 不混称。插件/Skills 一个 Add 入口；统一 Settings 的 Appearance/Assistant/Connection，Save and test 测实际保存配置。密钥不进项目。 |
 
-本轮没有替换 M1–M4 科学内核、化简原方程或更改数值容差。M4 新增的是已知模型单位/体积基准的输出元数据，旧结果缺单位时不补猜测单位。
+本轮没有替换 M1–M4 科学内核、化简原方程或更改数值容差。M4 新增的是已知模型单位/体积基准的输出元数据，旧结果缺单位时不补猜测单位。推送后 CI 暴露旧守恒基算法在 SciPy 1.12 空矩阵上的兼容错误：没有活动反应/交换/边界列时，按定义返回完整单位基；非空矩阵仍用原 SVD，不修改 RHS、反应网络或容差。Python 3.13 构建测试缺 setuptools 也补入 test extra，并在 CI 复用固定构建锁。依据 [SciPy 1.12 null_space 定义](https://docs.scipy.org/doc/scipy-1.12.0/reference/generated/scipy.linalg.null_space.html)及其[实际实现](https://github.com/scipy/scipy/blob/v1.12.0/scipy/linalg/_decomp_svd.py)，不跳过失败测试或放宽断言。
 
 ## 已实际验证的范围
 

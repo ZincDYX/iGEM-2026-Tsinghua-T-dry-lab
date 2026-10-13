@@ -19,7 +19,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install declared numerical floor or current range
-        run: python -m pip install '.[test,software]' '${{ matrix.numpy }}' '${{ matrix.scipy }}'
+        run: |
+          python -m pip install -r requirements/build-py313.lock
+          python -m pip install '.[test,software]' '${{ matrix.numpy }}' '${{ matrix.scipy }}'
       - name: Scientific and workflow regressions
         run: python -m pytest -q
       - name: Build source distribution and wheel
