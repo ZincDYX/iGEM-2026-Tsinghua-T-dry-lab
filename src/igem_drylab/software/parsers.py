@@ -177,7 +177,10 @@ class ParserRegistry:
         kind=options.get('role')
         if kind=='evidence_attachment':
             return ParsedInput(detected_format='JSON' if path.suffix.lower()=='.json' else 'YAML',semantic_type='EvidenceAttachment',
-                records=[{'value':raw}],supported_scope='Parsed attachment only; not a model or scientific parameter.',input_roles=['evidence_attachment'])
+                records=[{'keys':sorted(raw) if isinstance(raw,dict) else None,
+                    'record_count':len(raw) if isinstance(raw,(dict,list)) else 1,
+                    'full_content':'original asset; not duplicated into project snapshots'}],
+                supported_scope='Parsed attachment only; not a model or scientific parameter.',input_roles=['evidence_attachment'])
         if kind in {'analysis_plan','project_config','parameter_set'} and not isinstance(raw,dict):
             raise WorkflowError('configuration_requires_object')
         if schema=='analysis-plan-v1' or kind=='analysis_plan':
