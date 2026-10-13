@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type DocumentId = "plan" | "inputs" | "results" | "compare" | "settings" | "assistant-settings" | "tools" | "artifacts";
-const valid: DocumentId[] = ["plan", "inputs", "results", "compare", "settings", "assistant-settings", "tools", "artifacts"];
+export type DocumentId = "plan" | "inputs" | "results" | "compare" | "settings" | "tools" | "help" | `file:${string}`;
+const valid: DocumentId[] = ["plan", "inputs", "results", "compare", "settings", "tools", "help"];
 type State = { active: DocumentId; open: DocumentId[] };
 const initial: State = { active: "inputs", open: ["inputs"] };
 
@@ -19,7 +19,7 @@ export function useDocuments(workspace: string, dirty: boolean, onBlockedClose: 
   const key = `fusionlab.documents.${workspace}`;
   const [state, setState] = useState<State & { key: string }>(() => ({ ...restore(key), key }));
   useEffect(() => { setState(current => current.key === key ? current : { ...restore(key), key }); }, [key]);
-  useEffect(() => { if (state.key === key) localStorage.setItem(key, JSON.stringify(state)); }, [key, state]);
+  useEffect(() => { if (state.key === key) localStorage.setItem(key, JSON.stringify({active:valid.includes(state.active)?state.active:'inputs',open:state.open.filter(id=>valid.includes(id))})); }, [key, state]);
   const activate = useCallback((active: DocumentId) => setState(current => ({
     ...current, active, open: current.open.includes(active) ? current.open : [...current.open, active],
   })), []);

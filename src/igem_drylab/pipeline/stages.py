@@ -1122,6 +1122,7 @@ def _run_m4_base(config: ProjectConfig, run_dir: Path, assessments: list[M3Conce
             combined_provenance = _merge_provenance(item.m4_candidate_context.provenance_summary, _provenance_summary(selected.values()))
             records.append(M4ReactionPrediction(candidate_id=item.candidate_id, construct_id=construct_id, condition_id=condition_id, target_product=gates.target_product, status="valid", data_quality=_data_quality_from_summary(combined_provenance),
                 final_15=final_15, final_13=final_13, side_product_fraction_13=side_product_fraction, leakage_fraction=side_product_fraction, productivity=delta_15 / gates.t_end,
+                quantity_units={'final_15':'uM','final_13':'uM','productivity':'uM/h'},
                 recommendation=recommendation, candidate_context=item.m4_candidate_context,
                 simulation_inputs={"parameters": values, "initial": initial.model_dump(), "pt_gate": gates.pt_gate.model_dump(), "oc_gate": gates.oc_gate.model_dump(), "dmt_gate": gates.dmt_gate.model_dump(), "t_end": gates.t_end},
                 baseline_comparison={"13_reduction": ((baseline_13 - initial.x13) - delta_13) / (baseline_13 - initial.x13) if baseline_13 != initial.x13 else 0.0, "15_improvement": (delta_15 - (baseline_15 - initial.x15)) / (baseline_15 - initial.x15) if baseline_15 != initial.x15 else 0.0, "peak_11_change": float(delayed.x11.max() - baseline.x11.max())},
@@ -1246,6 +1247,7 @@ def _run_markdown_steady_m4(
             status="valid",
             data_quality="mixed",
             final_15=result.concentrations_cell_average_um["15"],
+            quantity_units={'final_15':'uM','final_13':'uM','yield_abs':'1','secretion_loss':'1','steady_state_residuals':'uM/h','steady_state_fluxes':'uM/h'},
             final_13=result.concentrations_cell_average_um["13"],
             yield_abs=result.yield_abs,
             secretion_loss=result.secretion_loss_8_to_14,
@@ -1394,6 +1396,7 @@ def _run_full_network_m4(config: ProjectConfig, run_dir: Path, assessments: list
             candidate_id=item.candidate_id, construct_id=context.construct_id, condition_id=context.condition_id,
             target_product=settings.target_product, status="valid", data_quality=_data_quality_from_summary(provenance),
             final_15=None if author_native else result.diagnostics["final_15_total"], final_13=None if author_native else result.diagnostics["final_13_total"],
+            quantity_units={} if author_native else {'final_15':'uM (cell-volume equivalent)','final_13':'uM (cell-volume equivalent)','productivity':'uM/h (cell-volume equivalent)'},
             side_product_fraction_13=result.diagnostics["side_product_fraction_13"],
             leakage_fraction=None, productivity=None if author_native else max(0.0, result.diagnostics["net_15_generated_cell_volume_equivalent"]) / settings.t_end,
             recommendation="iterate", recommendation_evidence=["comparative_negative_screen_requires_control_comparison"],

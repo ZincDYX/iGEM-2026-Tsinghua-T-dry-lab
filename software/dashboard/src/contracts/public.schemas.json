@@ -24002,6 +24002,101 @@
           "analysis_grade"
         ]
       },
+      "ExecutionPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "target_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Node Id"
+          },
+          "max_completed_stages": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Completed Stages"
+          },
+          "checkpoints_before": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Checkpoints Before",
+            "type": "array"
+          },
+          "checkpoints_after": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Checkpoints After",
+            "type": "array"
+          },
+          "allowed_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Tools",
+            "type": "array"
+          },
+          "max_tool_calls": {
+            "default": 1000,
+            "minimum": 1,
+            "title": "Max Tool Calls",
+            "type": "integer"
+          },
+          "stop_after_seconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stop After Seconds"
+          },
+          "memory_limit_mb": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Memory Limit Mb"
+          }
+        },
+        "title": "ExecutionPolicy",
+        "type": "object",
+        "required": [
+          "target_node_id",
+          "max_completed_stages",
+          "checkpoints_before",
+          "checkpoints_after",
+          "allowed_tools",
+          "max_tool_calls",
+          "stop_after_seconds",
+          "memory_limit_mb"
+        ]
+      },
       "ExperimentalContext": {
         "additionalProperties": false,
         "properties": {
@@ -24582,6 +24677,26 @@
           "sequence_kind"
         ],
         "title": "LinkerConfig",
+        "type": "object"
+      },
+      "LiteralInput": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "literal",
+            "default": "literal",
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "title": "LiteralInput",
         "type": "object"
       },
       "M1Config": {
@@ -25685,6 +25800,48 @@
           "fit_plan"
         ]
       },
+      "MapSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "literal": "#/$defs/LiteralInput",
+                "node": "#/$defs/NodeInput",
+                "project": "#/$defs/ProjectInput",
+                "sequence": "#/$defs/SequenceRef"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/LiteralInput"
+              },
+              {
+                "$ref": "#/$defs/ProjectInput"
+              },
+              {
+                "$ref": "#/$defs/NodeInput"
+              },
+              {
+                "$ref": "#/$defs/SequenceRef"
+              }
+            ],
+            "title": "Items"
+          },
+          "item_argument": {
+            "default": "item",
+            "title": "Item Argument",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "item_argument"
+        ],
+        "title": "MapSpec",
+        "type": "object"
+      },
       "MembraneConformer": {
         "additionalProperties": false,
         "properties": {
@@ -26144,6 +26301,42 @@
           "review_parameter_ids"
         ],
         "title": "MembraneTopologyEvidence",
+        "type": "object"
+      },
+      "NodeInput": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "node",
+            "default": "node",
+            "title": "Kind",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "path": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Path",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "node_id",
+          "path"
+        ],
+        "title": "NodeInput",
         "type": "object"
       },
       "OrderedPartConfig": {
@@ -26707,6 +26900,37 @@
         ],
         "title": "PrioritizationPolicy",
         "type": "object"
+      },
+      "ProjectInput": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "project",
+            "default": "project",
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Path",
+            "type": "array"
+          }
+        },
+        "title": "ProjectInput",
+        "type": "object",
+        "required": [
+          "kind",
+          "path"
+        ]
       },
       "ProjectView": {
         "additionalProperties": false,
@@ -27400,6 +27624,61 @@
         "title": "SequenceRecord",
         "type": "object"
       },
+      "SequenceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "sequence",
+            "default": "sequence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "project",
+              "scientific_fasta"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Id"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "sequence_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sequence Sha256",
+            "type": "string"
+          },
+          "construct_version": {
+            "minimum": 1,
+            "title": "Construct Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "file_id",
+          "record_id",
+          "sequence_sha256",
+          "construct_version"
+        ],
+        "title": "SequenceRef",
+        "type": "object"
+      },
       "StagesConfig": {
         "additionalProperties": false,
         "properties": {
@@ -27626,10 +27905,141 @@
         ],
         "title": "TruncationMapping",
         "type": "object"
+      },
+      "Workflow": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "version": {
+            "default": "1",
+            "title": "Version",
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/$defs/WorkflowNode"
+            },
+            "minItems": 1,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "execution_policy": {
+            "$ref": "#/$defs/ExecutionPolicy"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "version",
+          "nodes",
+          "execution_policy"
+        ],
+        "title": "Workflow",
+        "type": "object"
+      },
+      "WorkflowNode": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "tool_id": {
+            "title": "Tool Id",
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "discriminator": {
+                "mapping": {
+                  "literal": "#/$defs/LiteralInput",
+                  "node": "#/$defs/NodeInput",
+                  "project": "#/$defs/ProjectInput",
+                  "sequence": "#/$defs/SequenceRef"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/LiteralInput"
+                },
+                {
+                  "$ref": "#/$defs/ProjectInput"
+                },
+                {
+                  "$ref": "#/$defs/NodeInput"
+                },
+                {
+                  "$ref": "#/$defs/SequenceRef"
+                }
+              ]
+            },
+            "title": "Inputs",
+            "type": "object"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Depends On",
+            "type": "array"
+          },
+          "map": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MapSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "tool_id",
+          "inputs",
+          "depends_on",
+          "map"
+        ],
+        "title": "WorkflowNode",
+        "type": "object"
       }
     },
     "additionalProperties": false,
     "properties": {
+      "workflow": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Workflow"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
       "project": {
         "$ref": "#/$defs/ProjectView"
       },
@@ -27651,6 +28061,7 @@
       }
     },
     "required": [
+      "workflow",
       "project",
       "parent_run_id",
       "parent_snapshot_sha256",
@@ -29553,13 +29964,26 @@
             ],
             "default": null,
             "title": "Field"
+          },
+          "expected_filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Filename"
           }
         },
         "required": [
           "code",
           "message",
           "severity",
-          "field"
+          "field",
+          "expected_filename"
         ],
         "title": "ImportIssue",
         "type": "object"
@@ -30328,13 +30752,39 @@
               }
             ],
             "title": "After"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Node Id"
+          },
+          "input_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Input Name"
           }
         },
         "required": [
           "kind",
           "target",
           "before",
-          "after"
+          "after",
+          "node_id",
+          "input_name"
         ],
         "title": "ProposalChange",
         "type": "object"
@@ -31026,6 +31476,55 @@
           }
         ],
         "default": null
+      },
+      "scalar_expression": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Scalar Expression"
+      },
+      "formula_inputs": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Formula Inputs",
+        "type": "array"
+      },
+      "parameter_model_paths": {
+        "additionalProperties": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "title": "Parameter Model Paths",
+        "type": "object"
+      },
+      "workflow_numeric_inputs": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Workflow Numeric Inputs",
+        "type": "array"
       }
     },
     "required": [
@@ -31038,7 +31537,11 @@
       "parameter_records",
       "parameter_requirements",
       "parameter_source_options",
-      "scalar_method"
+      "scalar_method",
+      "scalar_expression",
+      "formula_inputs",
+      "parameter_model_paths",
+      "workflow_numeric_inputs"
     ],
     "title": "ModuleMethodView",
     "type": "object"

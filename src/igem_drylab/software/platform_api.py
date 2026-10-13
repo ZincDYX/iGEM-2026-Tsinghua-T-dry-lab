@@ -312,9 +312,18 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
                 raise WorkflowError('tool_not_in_frozen_run',status_code=403)
             project = Project.model_validate(run['snapshot']['project'])
         result = module_method(project, tools.get(tool_id))
+        if not result.methods and tool_id!='workflow.custom_formula' and node_id and (run_id or workflow_id):
+            from igem_drylab.workflow.models import Workflow,LiteralInput
+            workflow=Workflow.model_validate(run['snapshot']['workflow']) if run_id else application.workflow_documents.get(project_id,workflow_id).workflow
+            node=next((item for item in workflow.nodes if item.id==node_id and item.tool_id==tool_id),None)
+            if node is None: raise WorkflowError('module_not_in_workflow',status_code=404)
+            fields=tools.get(tool_id).input_model.model_fields
+            properties=tools.get(tool_id).input_model.model_json_schema().get('properties',{})
+            result.workflow_numeric_inputs=[{'name':name,'value':value.value,'unit':(fields[name].json_schema_extra or {}).get('unit','Not declared')}
+                for name,value in node.inputs.items() if name in fields and 'const' not in properties.get(name,{}) and not properties.get(name,{}).get('readOnly') and isinstance(value,LiteralInput) and type(value.value) in (float,int)]
         if tool_id == 'workflow.custom_formula' and node_id:
             from igem_drylab.workflow.models import Workflow, LiteralInput
-            from igem_drylab.workflow.custom_formula import FormulaExecution, expression_latex
+            from igem_drylab.workflow.custom_formula import FormulaExecution, expression_latex, expression_view
             if not run_id and not workflow_id: raise WorkflowError('formula_saved_literal_binding_required')
             workflow = Workflow.model_validate(run['snapshot']['workflow']) if run_id else application.workflow_documents.get(project_id,workflow_id).workflow
             node=next((item for item in workflow.nodes if item.id==node_id and item.tool_id==tool_id),None)
@@ -326,6 +335,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
             # inputs, rather than a second, potentially unrelated draft table.
             result.scalar_method=draft.model_copy(update={'execution_spec':payload.spec,
                 'latex':expression_latex(payload.spec.expression),'version':payload.method_version,'title':payload.title})
+            result.scalar_expression=expression_view(payload.spec.expression)
             from igem_drylab.workflow.methods import METHODS
             result.methods=[METHODS[draft.base_method_id]]
         if run_id:
@@ -574,7 +584,7 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         return Response(raw, media_type="image/png", headers={"X-Preview-SHA256": sha256(raw).hexdigest(), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
     @router.get("/files/{file_id}/structure-metadata")
-    def structure_metadata(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
+    def structure_metadata(file_id: str, project_id: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=0, le=500)):
         return resources.structure(project_id, file_id, offset, limit)[0]
 
     @router.get("/files/{file_id}/structure-annotations")
@@ -725,6 +735,36 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         boundary.check_original(path)
         return FileResponse(path,filename=row["name"],headers={"X-Content-SHA256":sha256(raw).hexdigest()})
 
+    @router.get('/files/{file_id}/sequence-records')
+    def source_sequences(file_id: str, project_id: str, offset: int = Query(0,ge=0),
+                         limit: int = Query(100,ge=1,le=500), record_id: str | None = None):
+        from igem_drylab.software.parsers import ParserRegistry
+        project=store.project(project_id)
+        with store.connection() as db:
+            row=db.execute('SELECT project_id,name FROM file_assets WHERE id=?',(file_id,)).fetchone()
+        if row is None or row['project_id']!=project_id: raise WorkflowError('file_project_mismatch',status_code=403)
+        path=Path(boundary.resolve_asset(file_id,project_id))
+        boundary.check_original(path)
+        descriptor=next((item for item in project.datasets if item.get('file_id')==file_id),{})
+        options=descriptor.get('parser_options',{})
+        if not options and project.scientific_project:
+            from igem_drylab.workflow.scientific_project import ScientificProject
+            declared=ScientificProject.model_validate(project.scientific_project).config.inputs.protein_fasta
+            if declared.resolve()==path.resolve():options={'molecule_type':'protein'}
+        parsed=ParserRegistry().parse(path,options)
+        if parsed.semantic_type!='SequenceCollection': raise WorkflowError('file_is_not_sequence_collection')
+        records=[]
+        for item in parsed.records[offset:offset+limit]:
+            record={key:value for key,value in item.items() if key!='sequence'}
+            record['sequence']=item['sequence'] if item['id']==record_id else None
+            bound=next((sequence for sequence in project.sequences if item['molecule_type']=='protein' and sequence.id==item['id'] and sequence.sequence==item['sequence']),None)
+            record['bound_sequence_id']=bound.id if bound else None
+            record['role']=bound.role if bound else None
+            records.append(record)
+        result={'file_id':file_id,'name':row['name'],'offset':offset,'total':len(parsed.records),'records':records}
+        boundary.check(result)
+        return result
+
     @router.get("/files/{file_id}/data")
     def scientific_data(file_id: str,project_id: str,offset: int = Query(0,ge=0),limit: int = Query(100,ge=1,le=500)):
         with store.connection() as db:
@@ -832,15 +872,17 @@ def platform_router(data_dir: Path, *, discover_tools: bool = True, planning_bac
         boundary.check(result.model_dump(mode='json'))
         return result
 
+    @router.get('/prediction-tools')
     @router.get("/projects/{project_id}/prediction-tools")
-    def prediction_tool_list(project_id: str):
+    def prediction_tool_list(project_id: str | None = None):
         from igem_drylab.software.public_contracts import PredictionToolView
         from igem_drylab.workflow.runtime_profiles import RuntimeProfiles
         from igem_drylab.pipeline.adapters import create_tool_adapter
         from igem_drylab.pipeline.config import ToolConfig
         from igem_drylab.external_tools import tool_spec
-        project = store.project(project_id)
-        profile, private = RuntimeProfiles(store).get(project.runtime_profile_ref) if project.runtime_profile_ref else (None, {})
+        project = store.project(project_id) if project_id else None
+        profile_id=project.runtime_profile_ref if project else (application.backend_profile or {}).get('id')
+        profile, private = RuntimeProfiles(store).get(profile_id) if profile_id else (None, {})
         with store.connection() as db:
             last = db.execute("""SELECT n.output,n.error,n.status,r.updated_at,json_extract(w.value,'$.tool_id') AS tool_id
                 FROM nodes n JOIN runs r ON n.run_id=r.id JOIN json_each(r.snapshot,'$.workflow.nodes') w

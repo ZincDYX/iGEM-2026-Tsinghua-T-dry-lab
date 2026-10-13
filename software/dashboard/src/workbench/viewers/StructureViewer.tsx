@@ -66,6 +66,7 @@ function CoordinateViewer({
   const [error, setError] = useState("");
   const [chain, setChain] = useState("");
   const [offset, setOffset] = useState(0);
+  const [residuesOpen,setResiduesOpen]=useState(false);
   const [ready, setReady] = useState(false);
   const [displayBusy, setDisplayBusy] = useState(false);
   const [representation, setRepresentation] = useState("cartoon");
@@ -73,6 +74,7 @@ function CoordinateViewer({
   const overlayRoot = useRef<string>(undefined);
   const overlayRequest = useRef<AbortController>(undefined);
   const [overlayIndex, setOverlayIndex] = useState<number>();
+  const hasAnnotation=(field:'region'|'reference_residue'|'pocket'|'clash'|'plddt')=>[...annotationIndex.current.values()].some(value=>value[field]!==null&&value[field]!==undefined&&value[field]!==false);
   useEffect(() => {
     const controller = new AbortController();
     let owned: PluginUIContext | undefined;
@@ -89,7 +91,7 @@ function CoordinateViewer({
     async function load() {
       const [raw, response, annotationRaw] = await Promise.all([
         requestJson(
-          `/files/${encodeURIComponent(fileId)}/structure-metadata?project_id=${encodeURIComponent(projectId)}&limit=100`,
+          `/files/${encodeURIComponent(fileId)}/structure-metadata?project_id=${encodeURIComponent(projectId)}&limit=0`,
           undefined,
           controller.signal,
         ),
@@ -235,7 +237,7 @@ function CoordinateViewer({
     };
   }, [fileId, projectId]);
   useEffect(() => {
-    if (!offset && (!meta || meta.offset === 0)) return;
+    if(!residuesOpen||!meta||(!offset&&meta.offset===0&&meta.residues.length>0))return;
     const controller = new AbortController();
     void requestJson(
       `/files/${encodeURIComponent(fileId)}/structure-metadata?project_id=${encodeURIComponent(projectId)}&offset=${offset}&limit=100`,
@@ -259,7 +261,7 @@ function CoordinateViewer({
         if (!controller.signal.aborted) setError("Residue page unavailable.");
       });
     return () => controller.abort();
-  }, [offset, fileId, projectId]);
+  }, [offset, fileId, projectId,residuesOpen]);
   function focus(
     chainId: string,
     residue?: string,
@@ -572,11 +574,7 @@ function CoordinateViewer({
   }
   return (
     <section>
-      <p>
-        Coordinate-only view. B-factor is not pLDDT. Confidence,
-        fusion/reference mapping and pockets are shown only from a linked
-        annotation source. No inferred overlays or activity claims.
-      </p>
+      {meta&&(meta.confidence_status!=='source_registered_not_scientific_approval'||meta.mapping_status!=='source_registered_not_scientific_approval')&&<p>Some confidence or part annotations are missing. B-factor is not pLDDT.</p>}
       {error && <p role="alert">{error}</p>}
       <div
         ref={root}
@@ -606,24 +604,12 @@ function CoordinateViewer({
           onChange={(e) => void display(representation, e.target.value)}
         >
           <option value="chain">Chain</option>
-          <option
-            value="region"
-            disabled={
-              meta?.mapping_status !==
-              "source_registered_not_scientific_approval"
-            }
-          >
+          {meta?.mapping_status==='source_registered_not_scientific_approval'&&<option value="region">
             Registered parts (full model)
-          </option>
-          <option
-            value="confidence"
-            disabled={
-              meta?.confidence_status !==
-              "source_registered_not_scientific_approval"
-            }
-          >
+          </option>}
+          {meta?.confidence_status==='source_registered_not_scientific_approval'&&<option value="confidence">
             Registered pLDDT (full model)
-          </option>
+          </option>}
         </select>
       </label>
       <button
@@ -633,15 +619,7 @@ function CoordinateViewer({
         Reset structure view
       </button>
       <button disabled={!ready || displayBusy} onClick={() => void exportImage()}>Export structure image</button>
-      <p>
-        Display {representation} / {colorMode}.{" "}
-        {annotationsReady
-          ? "Full-model annotations loaded; unannotated residues are gray."
-          : "Loading full-model annotations…"}{" "}
-        Continuous pLDDT color scale: red 0 to blue 100, no approval thresholds.
-        Rotate/zoom/pan in the viewport; no new geometry or alignment is
-        computed.
-      </p>
+      <button onClick={()=>setResiduesOpen(value=>!value)} aria-expanded={residuesOpen}>Residues</button>
       {allowReference &&
         meta?.overlays.map((overlay, index) => (
           <section key={index}>
@@ -660,7 +638,7 @@ function CoordinateViewer({
             </p>
           </section>
         ))}
-      {meta && (
+      {meta && residuesOpen && (
         <>
           <p>
             Mapping: {meta.mapping_status}; pocket: {meta.pocket_status};
@@ -717,11 +695,11 @@ function CoordinateViewer({
                 <th>Chain</th>
                 <th>Residue / insertion code</th>
                 <th>Name</th>
-                <th>Fusion position / region</th>
-                <th>Reference residue</th>
-                <th>Registered pocket</th>
-                <th>Registered clash</th>
-                <th>pLDDT (registered source)</th>
+                {hasAnnotation('region')&&<th>Fusion position / region</th>}
+                {hasAnnotation('reference_residue')&&<th>Reference residue</th>}
+                {hasAnnotation('pocket')&&<th>Registered pocket</th>}
+                {hasAnnotation('clash')&&<th>Registered clash</th>}
+                {hasAnnotation('plddt')&&<th>pLDDT (registered source)</th>}
               </tr>
             </thead>
             <tbody>
@@ -754,26 +732,26 @@ function CoordinateViewer({
                       </button>
                     </td>
                     <td>{r.residue_name}</td>
-                    <td>
+                    {hasAnnotation('region')&&<td>
                       {annotation?.full_fusion_position ?? "Not registered"} /{" "}
                       {annotation?.region ?? "Not registered"}
-                    </td>
-                    <td>
+                    </td>}
+                    {hasAnnotation('reference_residue')&&<td>
                       {annotation?.reference_residue
                         ? `${annotation.reference_residue.model}:${annotation.reference_residue.chain}:${annotation.reference_residue.residue_number}${annotation.reference_residue.insertion_code}`
                         : "Not registered"}
-                    </td>
-                    <td>
+                    </td>}
+                    {hasAnnotation('pocket')&&<td>
                       {annotation?.pocket
                         ? "Yes — select residue to highlight"
                         : "Not registered"}
-                    </td>
-                    <td>
+                    </td>}
+                    {hasAnnotation('clash')&&<td>
                       {annotation?.clash
                         ? "Yes — select residue to highlight"
                         : "Not registered"}
-                    </td>
-                    <td>{annotation?.plddt ?? "Not registered"}</td>
+                    </td>}
+                    {hasAnnotation('plddt')&&<td>{annotation?.plddt ?? "Not registered"}</td>}
                   </tr>
                 );
               })}
@@ -791,7 +769,7 @@ function CoordinateViewer({
                   {a.reference_residue?.residue_number}
                 </button>
               ))}
-          <button
+          {meta.total>100&&<><button
             disabled={!offset}
             onClick={() => setOffset(Math.max(0, offset - 100))}
           >
@@ -802,7 +780,7 @@ function CoordinateViewer({
             onClick={() => setOffset(offset + 100)}
           >
             Next residues
-          </button>
+          </button></>}
           <p>
             {offset + 1}–{offset + meta.residues.length} / {meta.total}
           </p>

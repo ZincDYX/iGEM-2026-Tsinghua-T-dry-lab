@@ -17,21 +17,17 @@ const run: RunSummaryView = {id:'r', name:'Recorded run', project_id:'p', status
       numerically_solved_count:4, evidence_ready_count:0, missing_input_count:3, claim_scope:'Synthetic reference only; not formal prediction'},
   }]};
 
-it('Graph and List show backend numerical/evidence counts independently of completed jobs',()=>{
+it('Graph and List expose one conservative status, not approval or duplicate evidence summaries',()=>{
   render(<WorkflowGraph workflow={workflow} run={run} selected="demo" onSelect={vi.fn()}/>);
   const module=screen.getByRole('button',{name:'Module Recorded scenarios'});
-  expect(module.textContent).toContain('Job: Job completed');
-  expect(module.textContent).toContain('Numerical results: 4/5 solved');
-  expect(module.textContent).toContain('Evidence: 0/5 ready');
-  expect(module.textContent).toContain('Run experimental validation: not established');
+  expect(module.textContent).toContain('Completed — missing scientific evidence');
+  expect(module.textContent).not.toMatch(/approved|4\/5 solved|experimental validation:/);
   cleanup();
   render(<PlanPanel workflow={workflow} run={run} selected="demo" onSelect={vi.fn()}/>);
   const row=screen.getByRole('button',{name:'Recorded scenarios'}).closest('tr')!;
-  expect(within(row).getByText('Job completed')).toBeTruthy();
-  expect(row.textContent).toContain('Numerical results: 4/5 solved');
-  expect(row.textContent).toContain('Evidence: 0/5 ready');
-  expect(row.textContent).toContain('Missing inputs: 3');
-  expect(row.textContent).toContain('Synthetic reference only; not formal prediction');
+  expect(within(row).getByText('Completed — missing scientific evidence')).toBeTruthy();
+  expect(row.textContent).not.toMatch(/approved|4\/5 solved|experimental validation:/);
+  expect(screen.getAllByRole('columnheader')).toHaveLength(3);
 });
 
 it('a changed scientific binding with the same node identity cannot inherit the old run status',()=>{
@@ -39,8 +35,7 @@ it('a changed scientific binding with the same node identity cannot inherit the 
   edited.nodes[0].inputs.package_file={kind:'project',path:['files',1,'path']};
   render(<WorkflowGraph workflow={edited} run={run} selected="demo" onSelect={vi.fn()}/>);
   const module=screen.getByRole('button',{name:'Module Recorded scenarios'});
-  expect(module.textContent).toContain('Job: Not started');
-  expect(module.textContent).toContain('Numerical results: Not assessed');
+  expect(module.textContent).toContain('Not started');
   expect(module.textContent).not.toContain('4/5 solved');
   cleanup();
   render(<PlanPanel workflow={edited} run={run} selected="demo" onSelect={vi.fn()}/>);
@@ -52,8 +47,8 @@ it('no scientific record is Not assessed rather than a zero-valued or approved r
   const unassessed={...run, nodes:[{...run.nodes[0],scientific_summary:null}]};
   render(<WorkflowGraph workflow={workflow} run={unassessed} selected="demo" onSelect={vi.fn()}/>);
   const module=screen.getByRole('button',{name:'Module Recorded scenarios'});
-  expect(module.textContent).toContain('Job: Job completed');
-  expect(module.textContent).toContain('Evidence: Not assessed');
+  expect(module.textContent).toContain('Completed');
+  expect(module.textContent).not.toContain('Numerical results recorded');
   expect(module.textContent).not.toContain('0/0');
 });
 

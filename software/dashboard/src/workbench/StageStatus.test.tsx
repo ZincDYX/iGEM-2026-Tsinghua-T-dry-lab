@@ -82,11 +82,8 @@ it("keeps job completion separate from missing evidence and revision-bound prech
       inputCheck={check}
     />,
   );
-  expect(screen.getByText("Missing evidence")).toBeTruthy();
-  expect(screen.getByText('Job completed')).toBeTruthy();
-  expect(screen.getByText('Numerical results: 0/2 solved')).toBeTruthy();
-  expect(screen.getByText('Evidence: 0/2 ready')).toBeTruthy();
-  expect(screen.getByText('Run experimental validation: not established')).toBeTruthy();
-  expect(screen.getByText("Not checked for these inputs")).toBeTruthy();
+  expect(screen.getByText('Completed — missing scientific evidence')).toBeTruthy();
+  expect(screen.getAllByRole('columnheader').map(header=>header.textContent)).toEqual(['Module','Depends on','Status']);
+  expect(screen.queryByText(/solved|approved|experimental validation:/)).toBeNull();
   expect(screen.queryByText(/validated|yield:|ranking:/i)).toBeNull();
 });

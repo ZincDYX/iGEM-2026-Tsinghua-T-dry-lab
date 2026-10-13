@@ -186,7 +186,7 @@ class ImportService:
                     relative=target.relative_to(root).as_posix()
                     if relative not in names:
                         item.issues.append(ImportIssue(code='missing_transaction_dependency',message='Add the referenced file to this import: '+relative,
-                            severity='confirmation',field=field))
+                            severity='confirmation',field=field,expected_filename=relative))
                     else:
                         target_item=next(i for i in items if i.filename==relative)
                         item.proposed_links.append({'kind':'configuration_file_reference','field':field,

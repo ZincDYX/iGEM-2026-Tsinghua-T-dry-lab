@@ -13,18 +13,27 @@ export function SeriesViewer({
   projectId,
   targetSpecies,
   scopeMarked = false,
+  initialSeriesIds,
+  initialDataOpen = false,
+  onSelectionChange,
+  onData,
 }: {
   fileId: string;
   projectId: string;
   targetSpecies?: string;
   scopeMarked?: boolean;
+  initialSeriesIds?: string[];
+  initialDataOpen?: boolean;
+  onSelectionChange?:(ids:string[])=>void;
+  onData?:(ids:string[])=>void;
 }) {
-  const [dataOpen,setDataOpen] = useState(false);
+  const [dataOpen,setDataOpen] = useState(initialDataOpen);
+  const [adding,setAdding]=useState(false);
   const [offset, setOffset] = useState(0),
     [rangeOffset, setRangeOffset] = useState(0);
   const [page, setPage] = useState<SeriesPage>(),
     [overview, setOverview] = useState<SeriesPage>();
-  const [selected, setSelected] = useState<string[]>([]),
+  const [selected, setSelected] = useState<string[]>(initialSeriesIds??[]),
     [point, setPoint] = useState<number>();
   const [error, setError] = useState(""),
     [unitError, setUnitError] = useState("");
@@ -67,6 +76,7 @@ export function SeriesViewer({
     return () => controller.abort();
   }, [fileId, projectId, offset, targetSpecies]);
   const seriesKey = selected.join(",");
+  useEffect(()=>{if(selected.length)onSelectionChange?.(selected);},[seriesKey]);
   useEffect(() => {
     if (!selected.length) {
       setOverview(undefined);
@@ -144,14 +154,13 @@ export function SeriesViewer({
       {Object.keys(page.pool_volumes).length>0&&<details><summary>Actual pool volumes</summary>
         {Object.entries(page.pool_volumes).map(([id,pool])=><p key={id}>{id}: {String(pool.volume_L)} L ({String(pool.role)}). Amount divided by this pool's volume gives its concentration.</p>)}
       </details>}
-      <button onClick={()=>void downloadResource(`/files/${encodeURIComponent(fileId)}/series.csv?project_id=${encodeURIComponent(projectId)}`,'recorded-series.csv').catch(()=>setError('Recorded CSV export unavailable.'))}>Export exact recorded CSV</button>
       <details>
         <summary>Series provenance</summary>
         <p>
           {page.model_kind} · {page.source_reference ?? "Source file"}
         </p>
       </details>
-      <div className="result-controls">
+      {initialDataOpen&&initialSeriesIds?.length?<p>{selected.map(id=>{const series=page.series.find(series=>series.id===id);return series?`${series.species} — ${series.compartment} — ${series.quantity??'Recorded value'} (${series.unit})`:'Selected series unavailable';}).join('; ')}</p>:<div className="result-controls">
         {(['species','phase','quantity'] as const).map(kind=>{
           const current=page.series.find(s=>s.id===selected[0]);
           const valueOf=(s:SeriesPage['series'][number])=>kind==='species'?(s.species_id??s.species):kind==='phase'?s.compartment:(s.quantity??'Recorded value');
@@ -161,40 +170,14 @@ export function SeriesViewer({
               setSelected(next?[next.id]:[]);setRangeOffset(0);setUnitError('');}}>
             <option value="">Choose {kind}</option>{[...new Set(relevant.map(valueOf))].map(value=><option key={value}>{value}</option>)}
           </select></label>;})}
-      </div>
+      </div>}
       {!selected.length&&<p>Select the target species, phase and quantity; no target is inferred from column order.</p>}
-      <details>
-        <summary>Overlay recorded series</summary>
-        {page.series.map((s) => (
-          <label key={s.id}>
-            <input
-              type="checkbox"
-              checked={selected.includes(s.id)}
-              onChange={(e) => {
-                const next = e.target.checked
-                  ? [...selected, s.id]
-                  : selected.filter((id) => id !== s.id);
-                if (
-                  new Set(
-                    page.series
-                      .filter((c) => next.includes(c.id))
-                      .map((c) => c.unit),
-                  ).size > 1
-                ) {
-                  setUnitError(
-                    "Incompatible declared units. Select matching units; no automatic conversion.",
-                  );
-                  return;
-                }
-                setSelected(next);
-                setRangeOffset(0);
-                setUnitError("");
-              }}
-            />
-            {s.compartment} / {s.species} ({s.unit})
-          </label>
-        ))}
-      </details>
+      {!!selected.length&&!initialDataOpen&&<button onClick={()=>setAdding(value=>!value)}>Add series</button>}
+      {adding&&<label>Comparable series<select aria-label="Additional series" value="" onChange={event=>{if(!event.target.value)return;setSelected(values=>[...values,event.target.value]);setAdding(false);setRangeOffset(0);}}>
+        <option value="">Choose a series</option>{page.series.filter(series=>{const current=page.series.find(value=>value.id===selected[0]);return current&&!selected.includes(series.id)&&series.unit===current.unit&&series.quantity===current.quantity&&series.compartment===current.compartment;})
+          .map(series=><option key={series.id} value={series.id}>{series.species} — {series.compartment} ({series.unit})</option>)}
+      </select></label>}
+      {selected.slice(1).map(id=><button key={id} onClick={()=>setSelected(values=>values.filter(value=>value!==id))}>Remove {page.series.find(series=>series.id===id)?.species}</button>)}
       {unitError && <p role="alert">{unitError}</p>}
       {overview && (
         <>
@@ -231,7 +214,7 @@ export function SeriesViewer({
               }
               onPoint={(i) => {
                 const original = overview.offset + i;
-                setPoint(original);setDataOpen(true);
+                setPoint(original);
                 setOffset(Math.floor(original / 500) * 500);
               }}
             />
@@ -265,7 +248,7 @@ export function SeriesViewer({
         </>
       )}
       {overview?.time.length ? <p className="result-status">{overview.series[0]?.species}: {show(overview.values[overview.series[0]?.id]?.at(-1))} {overview.series[0]?.unit} at {show(overview.time.at(-1))} {overview.time_unit}, {overview.series[0]?.compartment}. Transient endpoint, not steady state.</p> : null}
-      <button aria-expanded={dataOpen} onClick={()=>setDataOpen(value=>!value)}>Data</button>
+      <button aria-expanded={dataOpen} onClick={()=>onData?onData(selected):setDataOpen(value=>!value)}>Data</button>
       {dataOpen&&<section aria-label="Recorded numerical data">
       <p>
         Exact contiguous page, {offset + 1}–{offset + page.time.length} /{" "}

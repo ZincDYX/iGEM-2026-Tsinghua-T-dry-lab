@@ -72,6 +72,8 @@ class ProposalChange(Contract):
     target: str
     before: str | None
     after: str | None
+    node_id: str | None = None
+    input_name: str | None = None
 
 
 class AssistantPage(Contract):
@@ -289,22 +291,22 @@ class PlanningService:
         old = {n.id:n for n in previous.workflow.nodes} if previous and previous.workflow else {}
         new = {n.id:n for n in proposal.workflow.nodes} if proposal.workflow else {}
         changes = []
-        def add(kind,target,before,after):
+        def add(kind,target,before,after,node_id=None,input_name=None):
             if before != after:
-                changes.append(ProposalChange(kind=kind,target=target,before=before,after=after))
+                changes.append(ProposalChange(kind=kind,target=target,before=before,after=after,node_id=node_id,input_name=input_name))
         def text(value):
             from .store import canonical
             return canonical(value) if value is not None else None
         for key in sorted(old.keys()|new.keys()):
             a,b = old.get(key),new.get(key)
-            add("node",key,a.label if a else None,b.label if b else None)
-            add("tool",key,a.tool_id if a else None,b.tool_id if b else None)
+            add("node",key,a.label if a else None,b.label if b else None,key)
+            add("tool",key,a.tool_id if a else None,b.tool_id if b else None,key)
             names = (a.inputs.keys() if a else set()) | (b.inputs.keys() if b else set())
             for name in sorted(names):
                 before = a.inputs[name].model_dump(mode="json") if a and name in a.inputs else None
                 after = b.inputs[name].model_dump(mode="json") if b and name in b.inputs else None
-                add("binding",key+"."+name,text(before),text(after))
-            add("dependency",key,text(sorted(a.dependencies())) if a else None,text(sorted(b.dependencies())) if b else None)
+                add("binding",key+"."+name,text(before),text(after),key,name)
+            add("dependency",key,text(sorted(a.dependencies())) if a else None,text(sorted(b.dependencies())) if b else None,key)
         add("permission","Execution scope and permissions",text(previous.workflow.execution_policy.model_dump(mode="json")) if previous and previous.workflow else None,
             text(proposal.workflow.execution_policy.model_dump(mode="json")) if proposal.workflow else None)
         result = ProposalDiff(proposal_id=proposal_id,previous_proposal_id=previous_id,changes=changes,

@@ -4,11 +4,11 @@ import {parsePublic} from '../contracts/validation';
 import {downloadResource} from '../api';
 import * as client from './client';
 
-export function GenBankDesigns({project, dirty, action}: {
-  project: ProjectView; dirty: boolean;
+export function GenBankDesigns({project, dirty, action,fileId}: {
+  project: ProjectView; dirty: boolean;fileId?:string;
   action: (job: () => Promise<unknown>) => Promise<void>;
 }) {
-  const designs = project.datasets.filter(item => item.kind === 'genbank_design')
+  const designs = project.datasets.filter(item => item.kind === 'genbank_design'&&(!fileId||item.file_id===fileId))
     .map(item => parsePublic('GenBankDesign', item));
   const [page, setPage] = useState<GenBankPage>();
   const epoch = useRef(0);
@@ -32,20 +32,20 @@ export function GenBankDesigns({project, dirty, action}: {
     {page && !dirty && <div>
       <h4>{page.record_id} · {page.nucleotide_count} nt · {page.molecule_type}</h4>
       <p>{page.description}</p>
-      <label>Record <select aria-label='GenBank record' value={page.record_index} onChange={e => open(page.design_id, Number(e.target.value))}>
+      {designs.find(d=>d.id===page.design_id)!.records.length>1&&<label>Record <select aria-label='GenBank record' value={page.record_index} onChange={e => open(page.design_id, Number(e.target.value))}>
         {designs.find(d => d.id === page.design_id)?.records.map(r => <option key={r.record_index} value={r.record_index}>{r.record_id}</option>)}
-      </select></label>
-      <details><summary>Source record annotations and database links</summary><pre>{JSON.stringify({annotations:page.annotations,dbxrefs:page.dbxrefs},null,2)}</pre></details>
+      </select></label>}
+      <details><summary>Source record annotations and database links</summary><dl>{Object.entries(page.annotations).map(([name,value])=><div key={name}><dt>{name.replaceAll('_',' ')}</dt><dd>{Array.isArray(value)?value.map(String).join('; '):String(value)}</dd></div>)}</dl><p>{page.dbxrefs.join('; ')}</p></details>
       {page.nucleotide_fragment === null ? <p>Source provides no bases for this segment. Annotations and original export remain available.</p> : <p>Nucleotides {page.nucleotide_start_1based}–{page.nucleotide_start_1based+page.nucleotide_fragment.length-1} (1-based)</p>}
       <pre className='dna-fragment'>{page.nucleotide_fragment}</pre>
-      <button disabled={page.nucleotide_start_1based === 1} onClick={() => open(page.design_id,page.record_index,page.feature_offset,Math.max(0,page.nucleotide_start_1based-2001))}>Previous DNA segment</button>
-      <button disabled={page.nucleotide_start_1based+2000-1 >= page.nucleotide_count} onClick={() => open(page.design_id,page.record_index,page.feature_offset,page.nucleotide_start_1based+1999)}>Next DNA segment</button>
+      {page.nucleotide_count>2000&&<><button disabled={page.nucleotide_start_1based === 1} onClick={() => open(page.design_id,page.record_index,page.feature_offset,Math.max(0,page.nucleotide_start_1based-2001))}>Previous DNA segment</button>
+      <button disabled={page.nucleotide_start_1based+2000-1 >= page.nucleotide_count} onClick={() => open(page.design_id,page.record_index,page.feature_offset,page.nucleotide_start_1based+1999)}>Next DNA segment</button></>}
       <p>Locations below use zero-based half-open coordinates; fuzzy positions, strand and compound locations are preserved. Original GenBank export retains its native notation.</p>
       <table><thead><tr><th>Feature</th><th>Location / direction</th><th>Protein link</th><th>Source qualifiers</th></tr></thead>
-        <tbody>{page.features.map(f => <tr key={f.feature_index}><td>{f.type}</td><td>{f.location ?? 'Not specified'}</td><td>{f.linked_sequence_id ?? 'Not linked'}<br/>{f.translation_status.replaceAll('_',' ')}</td><td><details><summary>Annotations</summary><pre>{JSON.stringify(f.qualifiers,null,2)}</pre></details></td></tr>)}</tbody>
+        <tbody>{page.features.map(f => <tr key={f.feature_index}><td>{f.type}</td><td>{f.location ?? 'Not specified'}</td><td>{f.linked_sequence_id ?? 'Not linked'}<br/>{f.translation_status.replaceAll('_',' ')}</td><td><details><summary>Annotations</summary><dl>{Object.entries(f.qualifiers).map(([name,values])=><div key={name}><dt>{name.replaceAll('_',' ')}</dt><dd>{values.join('; ')}</dd></div>)}</dl></details></td></tr>)}</tbody>
       </table>
-      <button disabled={page.feature_offset === 0} onClick={() => open(page.design_id,page.record_index,Math.max(0,page.feature_offset-100),page.nucleotide_start_1based-1)}>Previous features</button>
-      <button disabled={page.feature_offset+page.features.length >= page.feature_total} onClick={() => open(page.design_id,page.record_index,page.feature_offset+100,page.nucleotide_start_1based-1)}>Next features</button>
+      {page.feature_total>100&&<><button disabled={page.feature_offset === 0} onClick={() => open(page.design_id,page.record_index,Math.max(0,page.feature_offset-100),page.nucleotide_start_1based-1)}>Previous features</button>
+      <button disabled={page.feature_offset+page.features.length >= page.feature_total} onClick={() => open(page.design_id,page.record_index,page.feature_offset+100,page.nucleotide_start_1based-1)}>Next features</button></>}
     </div>}
   </section>;
 }

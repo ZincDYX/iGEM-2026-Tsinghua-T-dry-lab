@@ -7,14 +7,16 @@ export function StructureAnnotationLinker({
   disabled,
   action,
   onPreview,
+  targetFileId,
 }: {
   project: ProjectView;
   disabled: boolean;
   action: (job: () => Promise<unknown>) => Promise<void>;
   onPreview: (value: ImportView) => void;
+  targetFileId?:string;
 }) {
   const [source, setSource] = useState("");
-  const [target, setTarget] = useState("");
+  const [target, setTarget] = useState(targetFileId??"");
   const [reference, setReference] = useState("");
   const [sequence, setSequence] = useState("");
   const [sequenceId, setSequenceId] = useState("");
@@ -50,7 +52,7 @@ export function StructureAnnotationLinker({
             )}
           </select>
         </label>
-        <label>
+        {!targetFileId&&<label>
           Target structure
           <select
             aria-label="Annotation target structure"
@@ -60,7 +62,7 @@ export function StructureAnnotationLinker({
             <option value="">Choose target</option>
             {options(structures)}
           </select>
-        </label>
+        </label>}
         <label>
           Reference structure (if declared)
           <select

@@ -11,55 +11,22 @@ export function InputIssues({
   stale: boolean;
   onLocate: (issue: InputIssue) => void;
 }) {
-  if (!result) return <p>No input check recorded for this project.</p>;
+  if (!result) return null;
   return (
     <section aria-label="Input check issues">
-      <p>
-        Saved revision {result.project_revision}
-        {stale ? " · Stale — inputs changed; check again." : " · Checked"}
-      </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Stage / Missing evidence</th>
-            <th>Field</th>
-            <th>Construct / Conditions</th>
-            <th>Required source / Reason</th>
-          </tr>
-        </thead>
-        <tbody>
+      {stale&&<p>Inputs changed. Check the saved version again.</p>}
+      <ul>
           {result.missing.map((item, index) => (
-            <tr key={index}>
-              <td>
-                {item.stage} / {item.code}
-              </td>
-              <td>
-                {fieldLabel(item.field_path)}{" "}
-                <button onClick={() => onLocate(item)}>Add data</button>
-              </td>
-              <td>
-                {item.construct_id ?? "Not declared"} /{" "}
-                {item.condition_id ?? "Not declared"}
-              </td>
-              <td>
-                {item.source_kind.replaceAll("_", " ")} /{" "}
+            <li key={index}><strong>{item.stage.toUpperCase()}{item.construct_id?' — '+item.construct_id:''}</strong>: {fieldLabel(item.field_path)}.{' '}
                 {item.reason_codes
                   .map((code) => code.replaceAll("_", " "))
                   .join(", ")}
-              </td>
-            </tr>
+                <button onClick={() => onLocate(item)}>Add data</button></li>
           ))}
-        </tbody>
-      </table>
+      </ul>
       {!result.missing.length && (
         <p>No known contract omissions; final stage gates still apply.</p>
       )}
-      <details>
-        <summary>Check scope and provenance</summary>
-        {result.limitations.map((text) => (
-          <p key={text}>{text}</p>
-        ))}
-      </details>
     </section>
   );
 }

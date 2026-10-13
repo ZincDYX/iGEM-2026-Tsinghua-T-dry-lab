@@ -1,199 +1,171 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  lazy,
-  Suspense,
   type CSSProperties,
 } from "react";
 import type {
+  ImportView,
+  ProjectView,
   ProposalView,
   RunListView,
   RuntimeInfoView,
   ScientificPrecheckView,
+  Workflow,
   WorkflowDocument,
 } from "../contracts/generated";
 import type { ExecutionPolicy } from "../contracts/Workflow.generated";
 import type { Goal } from "../types";
-import { LazyJson } from "../contracts/LazyJson";
-import { show } from "../contracts/resultAdapters";
 import * as client from "./client";
 import { useProject } from "./useProject";
 import { useRun } from "./useRun";
+import { useSelectedResult } from "./useSelectedResult";
+import { useWorkbenchLayout } from "./useWorkbenchLayout";
+import { useDocuments, type DocumentId } from "./useDocuments";
+import { usePlanController } from "./usePlanController";
+import { matchesRun, selectRunNode, type Selection } from "./selection";
 import { dependencies, statusLabel } from "./PlanPanel";
-import { ModuleScientificStatus } from './ModuleStatus';
-import { WorkflowWorkspace } from './WorkflowWorkspace';
-import { WorkflowControls } from './WorkflowControls';
+import { WorkflowWorkspace } from "./WorkflowWorkspace";
 import { AgentPanel } from "./AgentPanel";
 import { InputEditor } from "./InputEditor";
 import { InputIssues, type InputIssue } from "./PrecheckPanel";
 import { SelectedResult } from "./SelectedResult";
+import type { ResultViewState } from "../ScientificResults";
 import { ComparisonPanel } from "./ComparisonPanel";
-import { InputDiffPanel } from "./InputDiffPanel";
-import { WorkflowImporter } from "./WorkflowImporter";
-import { LocalSettings } from "./LocalSettings";
+import { FileDocument, type FileContext } from "./FileDocument";
+import { RunPanel } from "./RunPanel";
 import { Splitter } from "./Splitter";
-import { useWorkbenchLayout } from "./useWorkbenchLayout";
-import { useSelectedResult } from "./useSelectedResult";
-import { matchesRun, selectRunNode, type Selection } from "./selection";
-import "./workbench.css";
-import { ResourceBrowser } from "./ResourceBrowser";
 import { WorkbenchMenus } from "./WorkbenchMenus";
-import { primaryCommand } from "./workbenchCommands";
-import { usePlanController } from "./usePlanController";
-import { useDocuments } from "./useDocuments";
-const MethodPanel = lazy(() => import('./MethodPanel').then(module => ({default: module.MethodPanel})));
-const AssistantSettings = lazy(() => import('./AssistantSettings').then(module=>({default:module.AssistantSettings})));
-const ExtensionsPanel = lazy(() => import('./ExtensionsPanel').then(module=>({default:module.ExtensionsPanel})));
+import "./workbench.css";
+const MethodPanel = lazy(() =>
+  import("./MethodPanel").then((m) => ({ default: m.MethodPanel })),
+);
+const Settings = lazy(() =>
+  import("./LocalSettings").then((m) => ({ default: m.LocalSettings })),
+);
+const Extensions = lazy(() =>
+  import("./ExtensionsPanel").then((m) => ({ default: m.ExtensionsPanel })),
+);
 
-type Tab =
-  | "plan"
-  | "inputs"
-  | "results"
-  | "compare"
-  | "settings"
-  | "assistant-settings"
-  | "tools"
-  | "artifacts";
-const tabs: { id: Tab; label: string }[] = [
+const homeTabs = [
   { id: "inputs", label: "Inputs" },
   { id: "plan", label: "Workflow" },
   { id: "results", label: "Results" },
-  { id: "compare", label: "Compare" },
-  { id: "artifacts", label: "Resources" },
-  { id: "settings", label: "Settings" },
-  { id: "assistant-settings", label: "Assistant Settings" },
-  { id: "tools", label: "Tools & extensions" },
-];
-function Tabs({
-  values,
-  selected,
-  onChange,
-  label,
-  onClose,
-}: {
-  values: { id: string; label: string }[];
-  selected: string;
-  onChange: (id: string) => void;
-  label: string;
-  onClose?: (id: string) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label={label}
-      onKeyDown={(e) => {
-        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-        const index = values.findIndex((tab) => tab.id === selected);
-        const next =
-          (index + (e.key === "ArrowRight" ? 1 : -1) + values.length) %
-          values.length;
-        onChange(values[next].id);
-        e.preventDefault();
-        const nodes =
-          e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]");
-        nodes[next]?.focus();
-      }}
-    >
-      {values.map((tab) => (
-        <span key={tab.id} className={`workbench-tab ${selected===tab.id?'selected':''}`}>
-        <button
-          role="tab"
-          key={tab.id}
-          tabIndex={selected === tab.id ? 0 : -1}
-          aria-selected={selected === tab.id}
-          onClick={() => onChange(tab.id)}
-        >
-          {tab.label}
-        </button>
-        {onClose && !['inputs','plan','results'].includes(tab.id) && <button aria-label={`Close ${tab.label}`} onClick={() => onClose(tab.id)}>×</button>}
-        </span>
-      ))}
-    </div>
-  );
-}
+] as const;
+const extraLabels: Record<string, string> = {
+  tools: "Tools",
+  settings: "Settings",
+  compare: "Compare",
+  help: "Help",
+};
 export function WorkspaceShell() {
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(0);
-  const busy = pending > 0;
+  const [error, setError] = useState(""),
+    [pending, setPending] = useState(0);
   const fail = useCallback(
     (reason: unknown) =>
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "Operation incomplete. Check the safe diagnostic.",
+        reason instanceof Error ? reason.message : "Operation incomplete.",
       ),
     [],
   );
-  const project = useProject(fail);
-  const [runId, setRunId] = useState<string>();
-  const [refresh, setRefresh] = useState(0);
-  const { run, events } = useRun(runId, project.draft?.id, refresh, fail);
-  const [info, setInfo] = useState<RuntimeInfoView>();
-  const [history, setHistory] = useState<RunListView[]>([]);
-  const [proposal, setProposal] = useState<ProposalView>();
-  const [workflowDocument, setWorkflowDocument] = useState<WorkflowDocument>();
-  useLayoutEffect(() => {if(proposal?.workflow)setWorkflowDocument(current => current &&
-    JSON.stringify(current.workflow) === JSON.stringify(proposal.workflow) ? current : undefined);}, [proposal?.id]);
-  const [goal, setGoal] = useState<Goal>("fusion_screen");
-  const [inputTarget, setInputTarget] = useState<InputIssue>();
-  const [objective, setObjective] = useState("");
-  const [mode, setMode] = useState<"template" | "hybrid">(()=>localStorage.getItem("fusionlab.planner")==="hybrid"?"hybrid":"template");
-  const [permission, setPermission] = useState(false);
-  const [policy, setPolicy] = useState<ExecutionPolicy>(client.defaultPolicy);
-  const { tab, setTab, openDocuments, closeDocument } = useDocuments(info?.workspace_id ?? "initial", project.dirty,
-    () => setError("Save or discard input edits before closing Inputs."));
-  const [resourceFile, setResourceFile] = useState<string>();
-  const [resourceRunScope, setResourceRunScope] = useState(false);
-  const [resourcesVisited, setResourcesVisited] = useState(false);
-  const resourceReturn = useRef<{ tab: Tab; scroll: number }>({
-    tab: "plan",
-    scroll: 0,
-  });
-  const [inspector, setInspector] = useState("agent");
-  const [bottom, setBottom] = useState("queue");
-  const [selection, setSelection] = useState<Selection>();
-  const view = useWorkbenchLayout();
-  const { layout, bottomOpen, setBottomOpen, inspectorOpen, setInspectorOpen } =
-    view;
-  const [infoRefresh, setInfoRefresh] = useState(0);
-  const goalChosen = useRef(false);
-  const planController = usePlanController();
-  const planGeneration = planController.generation;
-  const [inputCheck, setInputCheck] = useState<ScientificPrecheckView>();
-  const currentProject = project.draft;
+  const project = useProject(fail),
+    current = project.draft,
+    busy = pending > 0;
+  const [runId, setRunId] = useState<string>(),
+    [refresh, setRefresh] = useState(0);
+  const { run, events } = useRun(runId, current?.id, refresh, fail);
+  const [info, setInfo] = useState<RuntimeInfoView>(),
+    [infoRefresh, setInfoRefresh] = useState(0),
+    [history, setHistory] = useState<RunListView[]>([]);
+  const [proposal, setProposal] = useState<ProposalView>(),
+    [document, setDocument] = useState<WorkflowDocument>(),
+    [selection, setSelection] = useState<Selection>();
+  const [goal, setGoal] = useState<Goal>("fusion_screen"),
+    [mode, setMode] = useState<"template" | "hybrid">(() =>
+      localStorage.getItem("fusionlab.planner") === "hybrid"
+        ? "hybrid"
+        : "template",
+    );
+  const [permission, setPermission] = useState(false),
+    [policy, setPolicy] = useState<ExecutionPolicy>(client.defaultPolicy);
+  const [chatDrafts, setChatDrafts] = useState<Record<string, string>>({});
+  const [chatIntents, setChatIntents] = useState<
+    Record<string, "new" | "modify">
+  >({});
+  const objective = chatDrafts[current?.id ?? "new"] ?? "";
+  const chatIntent = chatIntents[current?.id ?? "new"] ?? "new";
+  const setChatIntent = (value: "new" | "modify") =>
+    setChatIntents((values) => ({ ...values, [current?.id ?? "new"]: value }));
+  const chatDraftKey=info&&current?`fusionlab.chat-draft.${info.workspace_id}.${current.id}`:undefined;
+  const setObjective = (value: string) =>{
+    setChatDrafts((drafts) => ({ ...drafts, [current?.id ?? "new"]: value }));
+    if(chatDraftKey)sessionStorage.setItem(chatDraftKey,value);
+  };
+  useEffect(()=>{if(!chatDraftKey||!current)return;const text=sessionStorage.getItem(chatDraftKey)??'';
+    setChatDrafts(values=>Object.hasOwn(values,current.id)?values:{...values,[current.id]:text});
+  },[chatDraftKey]);
+  const [inputCheck, setInputCheck] = useState<ScientificPrecheckView>(),
+    [inputTarget, setInputTarget] = useState<InputIssue>();
+  const [files, setFiles] = useState<Record<string, FileContext>>({}),
+    [settingsSection, setSettingsSection] = useState<
+      "appearance" | "assistant" | "connection"
+    >("appearance");
+  const [resultViews, setResultViews] = useState<
+    Record<string, ResultViewState>
+  >({});
+  const [rename, setRename] = useState(false),
+    [renameValue, setRenameValue] = useState("");
+  const view = useWorkbenchLayout(),
+    { layout, bottomOpen, setBottomOpen, inspectorOpen, setInspectorOpen } =
+      view;
+  const { tab, setTab, openDocuments, closeDocument } = useDocuments(
+    info?.workspace_id ?? "initial",
+    project.dirty,
+    () => setError("Save or discard the input draft first."),
+  );
+  const plans = usePlanController();
+  const iterationSeed = useRef<
+    { projectId: string; document: WorkflowDocument } | undefined
+  >(undefined);
   const selected =
     selection && selection.kind !== "resource" ? selection.nodeId : "";
-  const runSelected = matchesRun(selection, run, currentProject?.id);
-  const result = useSelectedResult(
-    runSelected ? run : undefined,
-    currentProject?.id,
-    runSelected ? selected : "",
-  );
-  const nodeData = result.data;
-  const workflow =
-    selection?.kind === "run-node"
-      ? run?.workflow
-      : (workflowDocument?.workflow ?? proposal?.workflow ?? run?.workflow);
-  const workflowChanged = !!workflowDocument && JSON.stringify(workflowDocument.workflow) !== JSON.stringify(proposal?.workflow);
-  const visiblePolicy = runSelected && run ? run.workflow.execution_policy : policy;
+  const resultKey = `${runId}:${selected}`;
+  const frozen = matchesRun(selection, run, current?.id);
+  const workflow = frozen
+    ? run?.workflow
+    : (document?.workflow ?? proposal?.workflow);
   const node = workflow?.nodes.find((value) => value.id === selected);
-  const m1Dependencies=new Set(run?.workflow.nodes.filter(n=>n.tool_id==='method.m1.decision').flatMap(dependencies));
-  const resultNodes = run?.nodes.filter(item => item.parent_id === null && !m1Dependencies.has(item.id)) ?? [];
-  useEffect(()=>{
-    if(tab==='results'&&run&&(!runSelected||!resultNodes.some(item=>item.id===selected)))
-      setSelection(selectRunNode(run,resultNodes[0]?.id??''));
-  },[tab,run?.id,run?.state_version,runSelected,selected]);
-  const stopped =
-    run &&
-    ["succeeded", "failed", "paused", "cancelled", "interrupted"].includes(
-      run.status,
-    );
-  const executing = run && ["queued", "running"].includes(run.status);
-
-  useEffect(()=>{if(run?.status==='succeeded')setBottomOpen(false);},[run?.status]);
+  const changed =
+    !!document &&
+    JSON.stringify(document.workflow) !== JSON.stringify(proposal?.workflow);
+  const approved =
+    proposal?.status === "accepted" &&
+    !changed &&
+    !project.dirty &&
+    proposal.confirmation?.project_revision === current?.revision;
+  const result = useSelectedResult(
+    frozen ? run : undefined,
+    current?.id,
+    frozen ? selected : "",
+  );
+  const executing = !!run && ["queued", "running"].includes(run.status);
+  const m1Dependencies = new Set(
+    run?.workflow.nodes
+      .filter((n) => n.tool_id === "method.m1.decision")
+      .flatMap(dependencies),
+  );
+  const resultNodes =
+    run?.nodes.filter(
+      (n) => n.parent_id === null && !m1Dependencies.has(n.id),
+    ) ?? [];
+  const check =
+    current && inputCheck?.project_id === current.id ? inputCheck : undefined;
+  const checkStale =
+    project.dirty || check?.project_revision !== current?.revision;
 
   async function action(job: () => Promise<unknown>) {
     setPending((value) => value + 1);
@@ -207,30 +179,42 @@ export function WorkspaceShell() {
     }
   }
   function invalidate() {
-    planController.invalidate();
+    plans.invalidate();
     setProposal(undefined);
-    setWorkflowDocument(undefined);
-    setSelection(undefined);
   }
-  function updatePolicy(value: ExecutionPolicy) {
-    if (workflowDocument && currentProject && !runSelected) {
-      const document = workflowDocument, stamp = project.generation.current;
-      void action(async () => {
-        const revised = structuredClone(document.workflow);
-        revised.execution_policy = value;
-        const saved = await client.saveWorkflowDocument(currentProject.id, document.id, {
-          workflow: revised, layout: document.layout, selected_node_id: document.selected_node_id, view: document.view,
-        }, currentProject.revision, document.revision);
-        if (stamp !== project.generation.current) return;
-        setWorkflowDocument(saved);
-        setPolicy(saved.workflow.execution_policy);
-        planController.invalidate();
-      });
-      return;
-    }
-    setPolicy(value);
+  useLayoutEffect(() => {
     invalidate();
-  }
+    setHistory([]);
+    setFiles({});
+    setInputCheck(undefined);
+    setInputTarget(undefined);
+    setPermission(false);
+    const pendingSeed = iterationSeed.current;
+    const seed =
+      pendingSeed && pendingSeed.projectId === current?.id
+        ? pendingSeed.document
+        : undefined;
+    iterationSeed.current = undefined;
+    setDocument(seed);
+    setPolicy(seed?.workflow.execution_policy ?? client.defaultPolicy());
+    setSelection(
+      seed
+        ? {
+            kind: "proposal-node",
+            proposalId: seed.id,
+            nodeId: seed.selected_node_id ?? seed.workflow.nodes[0].id,
+          }
+        : undefined,
+    );
+    setGoal(
+      current?.scientific_project ? "scientific_pipeline" : "fusion_screen",
+    );
+    setRunId(
+      current
+        ? (localStorage.getItem(`fusionlab.run.${current.id}`) ?? undefined)
+        : undefined,
+    );
+  }, [current?.id]);
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
@@ -239,7 +223,7 @@ export function WorkspaceShell() {
         const value = await client.info(controller.signal);
         if (controller.signal.aborted) return;
         setInfo(value);
-        if (value.capabilities.scientific_mcp === "checking" || executing)
+        if (executing || value.capabilities.scientific_mcp === "checking")
           timer = setTimeout(load, 2500);
       } catch (reason) {
         if (!controller.signal.aborted) fail(reason);
@@ -250,38 +234,12 @@ export function WorkspaceShell() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [!!executing, infoRefresh, fail]);
-  useLayoutEffect(() => {
-    // Reset project-scoped commands before the new project's controls are interactive.
-    invalidate();
-    setSelection(undefined);
-    setHistory([]);
-    setPolicy(client.defaultPolicy());
-    setResourceFile(undefined);
-    setResourceRunScope(false);
-    setResourcesVisited(false);
-    goalChosen.current = false;
-    setRunId(
-      currentProject
-        ? (localStorage.getItem(`fusionlab.run.${currentProject.id}`) ??
-            undefined)
-        : undefined,
-    );
-    setGoal(
-      currentProject?.scientific_project
-        ? "scientific_pipeline"
-        : "fusion_screen",
-    );
-  }, [currentProject?.id]);
+  }, [executing, infoRefresh, fail]);
   useEffect(() => {
-    if (currentProject?.scientific_project && !goalChosen.current)
-      setGoal("scientific_pipeline");
-  }, [currentProject?.id, !!currentProject?.scientific_project]);
-  useEffect(() => {
-    if (!currentProject || project.saved?.id !== currentProject.id) return;
+    if (!current || project.saved?.id !== current.id) return;
     const controller = new AbortController();
-    client
-      .history(currentProject.id, 0, controller.signal)
+    void client
+      .history(current.id, 0, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) setHistory(value);
       })
@@ -289,322 +247,397 @@ export function WorkspaceShell() {
         if (!controller.signal.aborted) fail(reason);
       });
     return () => controller.abort();
-  }, [currentProject?.id, project.saved?.id, run?.status, fail]);
+  }, [current?.id, project.saved?.id, run?.status, fail]);
   useEffect(() => {
-    if (!run || proposal) return;
     if (
-      !selection ||
-      (selection.kind === "run-node" &&
-        selection.runId === run.id &&
-        !runSelected)
+      tab === "results" &&
+      run &&
+      (!frozen || !resultNodes.some((n) => n.id === selected))
     )
-      setSelection(
-        selectRunNode(
-          run,
-          selection?.kind === "run-node"
-            ? selection.nodeId
-            : (resultNodes[0]?.id ?? ""),
-        ),
-      );
-  }, [run?.id, run?.state_version, proposal?.id]);
+      setSelection(selectRunNode(run, resultNodes[0]?.id ?? ""));
+  }, [tab, run?.id, run?.state_version, frozen, selected]);
+  useEffect(() => {
+    if (run?.status === "succeeded") setBottomOpen(false);
+    else if (run?.status === "failed") setBottomOpen(true);
+  }, [run?.status]);
   function selectRun(id: string) {
     if (run) setSelection(selectRunNode(run, id));
   }
   function selectPlan(id: string) {
-    if (selection?.kind !== "run-node" && (workflowDocument || proposal?.workflow))
+    if (frozen) selectRun(id);
+    else
       setSelection({
         kind: "proposal-node",
-        proposalId: proposal?.id ?? workflowDocument!.id,
+        proposalId: proposal?.id ?? document?.id ?? "",
         nodeId: id,
       });
-    else selectRun(id);
   }
-
-  async function propose(scope = policy) {
+  function openSettings(section: "appearance" | "assistant" | "connection") {
+    setSettingsSection(section);
+    setTab("settings");
+  }
+  function showProposal(value: ProposalView) {
+    setProposal(value);
+    setInspectorOpen(true);
+    if (!document && !frozen && value.workflow)
+      setSelection({
+        kind: "proposal-node",
+        proposalId: value.id,
+        nodeId: value.workflow.nodes[0].id,
+      });
+  }
+  async function propose() {
     await action(() =>
-      planController.guarded(
+      plans.guarded(
         project.generation,
         project.save,
         (saved) =>
           client.propose(
-            (saved as import("../contracts/generated").ProjectView).id,
+            (saved as ProjectView).id,
             goal,
             objective,
             mode,
-            scope,
+            policy,
             permission,
           ),
         (value) => {
-          setPolicy(scope);
-          setProposal(value);
-          setTab("plan");
-          setInspector("agent");
-          setInspectorOpen(true);
-          setSelection(
-            value.workflow
-              ? {
-                  kind: "proposal-node",
-                  proposalId: value.id,
-                  nodeId: value.workflow.nodes[0].id,
-                }
-              : undefined,
-          );
+          showProposal(value);
+          setObjective("");
         },
       ),
     );
   }
-  async function proposeMethod(method:Parameters<typeof client.planMethod>[1]) {
-    await action(()=>planController.guarded(project.generation,project.save,
-      saved=>client.planMethod((saved as import('../contracts/generated').ProjectView).id,method),
-      value=>{setProposal(value);setTab('plan');setInspector('agent');setInspectorOpen(true);
-        setSelection(value.workflow?{kind:'proposal-node',proposalId:value.id,nodeId:value.workflow.nodes[0].id}:undefined);}
-    ));
+  async function proposeMethod(
+    method: Parameters<typeof client.planMethod>[1],
+  ) {
+    await action(() =>
+      plans.guarded(
+        project.generation,
+        project.save,
+        (saved) => client.planMethod((saved as ProjectView).id, method),
+        showProposal,
+      ),
+    );
+  }
+  async function proposeWorkflow(value: Workflow) {
+    await action(() =>
+      plans.guarded(
+        project.generation,
+        project.save,
+        (saved) =>
+          client.proposeCustom((saved as ProjectView).id, value, objective),
+        showProposal,
+      ),
+    );
+  }
+  async function reviewWorkflow() {
+    if (proposal?.status === "proposed") {
+      setInspectorOpen(true);
+      return;
+    }
+    if (workflow && !frozen) return proposeWorkflow(workflow);
+    return propose();
   }
   async function decide(decision: "accept" | "reject") {
-    if (!proposal) return;
-    const stamp = planGeneration.current;
+    if (!proposal || !current) return;
+    const stamp = plans.generation.current;
     await action(async () => {
       const value = await client.decide(proposal.id, decision);
-      if (stamp === planGeneration.current) setProposal(value);
-    });
-  }
-  async function reviseProposal(prompt: string) {
-    if (!proposal) return;
-    const stamp = planGeneration.current;
-    await action(async () => {
-      const value = await client.revise(proposal.id, prompt, workflowDocument?.workflow);
-      if (stamp === planGeneration.current) {
-        setProposal(value); setTab('plan');
-        if (value.workflow) setSelection({kind:'proposal-node',proposalId:value.id,nodeId:value.workflow.nodes[0].id});
+      if (stamp !== plans.generation.current) return;
+      if (decision === "accept" && value.workflow) {
+        const nextSelected = value.workflow.nodes.some((n) => n.id === selected)
+          ? selected
+          : value.workflow.nodes[0].id;
+        const existing =
+          document?.workflow.id === value.workflow.id ? document : undefined;
+        const positions = Object.fromEntries(
+          Object.entries(existing?.layout ?? {}).filter(([id]) =>
+            value.workflow!.nodes.some((n) => n.id === id),
+          ),
+        );
+        const saved = await client.saveWorkflowDocument(
+          current.id,
+          existing?.id ?? value.id,
+          {
+            workflow: value.workflow,
+            layout: positions,
+            selected_node_id: nextSelected,
+            view: existing?.view ?? "graph",
+          },
+          current.revision,
+          existing?.revision,
+        );
+        if (stamp !== plans.generation.current) return;
+        setDocument(saved);
+        setPolicy(saved.workflow.execution_policy);
+        setSelection({
+          kind: "proposal-node",
+          proposalId: value.id,
+          nodeId: nextSelected,
+        });
       }
-    });
-  }
-  async function openRecordedProposal(id:string) {
-    const stamp=planGeneration.current;
-    await action(async()=>{
-      const value=await client.proposal(id);
-      if(stamp!==planGeneration.current || value.project_id!==currentProject?.id) return;
-      setProposal(value);setTab('plan');
-      setSelection(value.workflow?.nodes.length?{kind:'proposal-node',proposalId:value.id,nodeId:value.workflow.nodes[0].id}:undefined);
-    });
-  }
-  async function reviewParameter(id: string, stage: 'm3'|'m4', name: string, reviewer: string, reason: string) {
-    await action(() => planController.guarded(project.generation,project.save,
-      saved => {const value = saved as import('../contracts/generated').ProjectView;
-        return client.reviewParameter(value.id,id,stage,name,reviewer,reason,value.revision);},
-      value => {project.adopt(value); planController.invalidate();setProposal(undefined);}));
-  }
-  async function saveParameterProject(value:import('../contracts/generated').ProjectView) {
-    const stamp=project.generation.current;
-    const saved=await client.save(value,project.saved?.revision);
-    if(stamp!==project.generation.current)return;
-    project.adopt(saved);planController.invalidate();setProposal(undefined);
-  }
-  async function replaceScalarWorkflow(prepared:import('../contracts/generated').Workflow) {
-    if(!currentProject||!workflowDocument||runSelected)throw Error('Open an editable saved workflow first.');
-    const document=workflowDocument,stamp=project.generation.current;
-    const revised=structuredClone(document.workflow);
-    const original=revised.nodes.find(item=>item.id===selected)!;
-    original.inputs=prepared.nodes[0].inputs;original.label=prepared.nodes[0].label;
-    const saved=await client.saveWorkflowDocument(currentProject.id,document.id,{workflow:revised,layout:document.layout,selected_node_id:selected,view:document.view},currentProject.revision,document.revision);
-    if(stamp!==project.generation.current)return;
-    setWorkflowDocument(saved);planController.invalidate();setProposal(undefined);
-  }
-  async function editCurrentWorkflow() {
-    if(!currentProject||!run||!runSelected)return;
-    await action(async()=>{
-      const stamp=project.generation.current;
-      const saved=await project.save();if(!saved||stamp!==project.generation.current)return;
-      const id='next-run-'+run.id;
-      const existing=(await client.workflowDocuments(saved.id)).find(document=>document.id===id);
-      const document=existing??await client.saveWorkflowDocument(saved.id,id,{workflow:run.workflow,layout:{},selected_node_id:selected,view:'graph'},saved.revision);
-      if(stamp!==project.generation.current)return;
-      planController.invalidate();setProposal(undefined);setWorkflowDocument(document);
-      setSelection({kind:'proposal-node',proposalId:document.id,nodeId:selected});
-    });
-  }
-  async function importWorkflow(
-    create: () => Promise<import("../contracts/generated").Workflow>,
-  ) {
-    await action(async () => {
-      const stamp = project.generation.current;
-      const planStamp = planGeneration.current;
-      const saved = await project.save();
-      if (!saved) return;
-      if (
-        stamp !== project.generation.current ||
-        planStamp !== planGeneration.current
-      )
-        return;
-      const workflow = await create();
-      const value = await client.proposeCustom(saved.id, workflow, objective);
-      if (
-        stamp !== project.generation.current ||
-        planStamp !== planGeneration.current
-      )
-        return;
       setProposal(value);
-      setTab('plan');
-      setInspector('agent');
-      setInspectorOpen(true);
-      setSelection(
-        value.workflow
-          ? {
-              kind: "proposal-node",
-              proposalId: value.id,
-              nodeId: value.workflow.nodes[0].id,
-            }
-          : undefined,
+    });
+  }
+  async function revise(prompt: string) {
+    if (!proposal) return;
+    const stamp = plans.generation.current;
+    await action(async () => {
+      const value = await client.revise(
+        proposal.id,
+        prompt,
+        document?.workflow,
       );
+      if (stamp !== plans.generation.current) return;
+      showProposal(value);
+      setObjective("");
+    });
+  }
+  async function openProposal(id: string) {
+    const stamp = plans.generation.current;
+    await action(async () => {
+      const value = await client.proposal(id);
+      if (
+        stamp === plans.generation.current &&
+        value.project_id === current?.id
+      )
+        showProposal(value);
     });
   }
   async function start() {
-    if (!proposal || workflowChanged) return;
+    if (!proposal || !approved) return;
     const stamp = project.generation.current;
     await action(async () => {
       const value = await client.start(proposal);
-      if (stamp === project.generation.current) {
-        setRunId(value.id);
-        setSelection(selectRunNode(value, value.nodes[0]?.id ?? ""));
-        setRefresh((value) => value + 1);
-        setProposal(undefined);
-        setBottom("queue");setBottomOpen(true);
-      }
+      if (stamp !== project.generation.current) return;
+      setRunId(value.id);
+      setSelection(selectRunNode(value, value.nodes[0]?.id ?? ""));
+      setProposal(undefined);
+      setRefresh((value) => value + 1);
+      setBottomOpen(true);
+      setTab("plan");
     });
   }
   async function control(kind: "pause" | "cancel" | "resume" | "retry") {
-    if (!run || !runSelected) return;
+    if (!run) return;
     const id = run.id;
     await action(async () => {
       await client.control(id, kind, kind === "retry" ? selected : undefined);
       if (runId === id) setRefresh((value) => value + 1);
     });
   }
-  function discardDraft(message: string) {
-    return (
-      !(project.dirty) ||
-      window.confirm(message + " (including unapplied  JSON edits). Continue?")
-    );
-  }
-  function chooseProject(id: string) {
-    if (!discardDraft("Switching projects discards the unsaved draft")) return;
-    invalidate();
-    setRunId(undefined);
-    void project.choose(id);
-  }
-  function navigateInput(section: string) {
-    setTab("inputs");
-    requestAnimationFrame(() => {
-      const target = document.getElementById(`input-${section}`);
-      if (!target) return;
-      const details =
-        target instanceof HTMLDetailsElement
-          ? target
-          : target.querySelector("details");
-      if (details) details.open = true;
-      target.scrollIntoView({ block: "start" });
-      target
-        .querySelector<HTMLInputElement>(
-          "input:not([disabled]),select:not([disabled])",
-        )
-        ?.focus({ preventScroll: true });
-    });
-  }
-  useEffect(() => {
-    if (tab === "artifacts") setResourcesVisited(true);
-  }, [tab]);
-  function openResource(fileId: string, fromRun = false) {
-    resourceReturn.current = {
-      tab,
-      scroll: document.querySelector(".workspace-content")?.scrollTop ?? 0,
-    };
-    setResourceFile(fileId);
-    setResourceRunScope(fromRun);
-    setTab("artifacts");
-  }
-  function returnFromResource() {
-    setTab(resourceReturn.current.tab);
-    requestAnimationFrame(() => {
-      const content = document.querySelector(".workspace-content");
-      if (content) content.scrollTop = resourceReturn.current.scroll;
-    });
-  }
-  function createIteration() {
-    if (
-      !run ||
-      !runSelected ||
-      !discardDraft("Creating an iteration discards the unsaved draft")
-    )
-      return;
-    void action(async () => {
-      const value = await client.iteration(run.id);
-      project.adopt(value.project);
-      setRunId(undefined);
-      invalidate();
-      setTab("inputs");
-    });
-  }
-  const primary = primaryCommand(
-    proposal,
-    run,
-    runSelected,
-    inputCheck?.project_id === currentProject?.id &&
-      inputCheck?.project_revision === currentProject?.revision &&
-      !project.dirty &&
-      true,
-  );
-  async function runPrimary() {
-    if (primary === "resume") return control("resume");
-    if (primary === "start") return start();
-    if (primary === "review") return reviewWorkflow();
-    if (primary === "check") return checkInputs();
-  }
-  async function reviewWorkflow() {
-    if (workflowDocument && !runSelected) return importWorkflow(async () => workflowDocument.workflow);
-    if (proposal?.workflow && !runSelected) return importWorkflow(async()=>proposal.workflow!);
-    setError('Choose a method or open a saved workflow before reviewing a plan.');
-  }
   async function checkInputs() {
     await action(async () => {
-      const stamp = project.generation.current;
-      const saved = await project.save();
-      if (saved && stamp === project.generation.current) {
-        const result = await client.precheck(saved.id);
-        if (stamp !== project.generation.current) return;
-        if (
-          result.project_id !== saved.id ||
-          result.project_revision !== saved.revision
-        )
-          throw new Error("Input revision changed; save and check again.");
-        setInputCheck(result);
-        setTab("inputs");
-      }
+      const stamp = project.generation.current,
+        saved = await project.save();
+      if (!saved || stamp !== project.generation.current) return;
+      const value = await client.precheck(saved.id);
+      if (stamp !== project.generation.current) return;
+      if (value.project_revision !== saved.revision)
+        throw Error("Inputs changed. Check the saved version again.");
+      setInputCheck(value);
+      setInspectorOpen(true);
     });
   }
-  const projectCheck =
-    inputCheck?.project_id === currentProject?.id ? inputCheck : undefined;
-  const checkStale =
-    project.dirty ||
-    projectCheck?.project_revision !== currentProject?.revision;
+  async function saveParameter(value: ProjectView) {
+    const stamp = project.generation.current;
+    const saved = await client.save(value, project.saved?.revision);
+    if (stamp !== project.generation.current) return;
+    project.adopt(saved);
+    invalidate();
+  }
+  async function reviewParameter(
+    id: string,
+    stage: "m3" | "m4",
+    name: string,
+    reviewer: string,
+    reason: string,
+  ) {
+    setPending((value) => value + 1);
+    setError("");
+    try {
+      await plans.guarded(
+        project.generation,
+        project.save,
+        (saved) => {
+          const value = saved as ProjectView;
+          return client.reviewParameter(
+            value.id,
+            id,
+            stage,
+            name,
+            reviewer,
+            reason,
+            value.revision,
+          );
+        },
+        (value) => {
+          project.adopt(value);
+          invalidate();
+        },
+      );
+    } catch (reason) {
+      fail(reason);
+      throw reason;
+    } finally {
+      setPending((value) => value - 1);
+    }
+  }
+  async function replaceScalar(prepared: Workflow) {
+    if (!current || !document || frozen)
+      throw Error("Open an editable workflow first.");
+    const stamp = project.generation.current,
+      revised = structuredClone(document.workflow),
+      target = revised.nodes.find((n) => n.id === selected)!;
+    if (target.tool_id !== prepared.nodes[0].tool_id)
+      throw Error(
+        "Create and review a separate plan to change the calculation tool.",
+      );
+    target.inputs = prepared.nodes[0].inputs;
+    target.label = prepared.nodes[0].label;
+    const value = await client.saveWorkflowDocument(
+      current.id,
+      document.id,
+      {
+        workflow: revised,
+        layout: document.layout,
+        selected_node_id: selected,
+        view: document.view,
+      },
+      current.revision,
+      document.revision,
+    );
+    if (stamp !== project.generation.current) return;
+    setDocument(value);
+    invalidate();
+  }
+  async function editAsNewRun() {
+    if (!run || !frozen) return;
+    const source = run;
+    await action(async () => {
+      if (project.dirty)
+        throw Error("Save or discard input edits before creating a new run.");
+      const value = await client.iteration(source.id);
+      const doc = await client.saveWorkflowDocument(
+        value.project.id,
+        "next-run-" + source.id,
+        {
+          workflow: value.workflow ?? source.workflow,
+          layout: {},
+          selected_node_id: selected,
+          view: "graph",
+        },
+        value.project.revision,
+      );
+      iterationSeed.current = { projectId: value.project.id, document: doc };
+      project.adopt(value.project);
+      setTab("plan");
+    });
+  }
+  async function updatePolicy(value: ExecutionPolicy) {
+    if (frozen) return;
+    setPolicy(value);
+    if (!current || !document) {
+      invalidate();
+      return;
+    }
+    await action(async () => {
+      const saved = await client.saveWorkflowDocument(
+        current.id,
+        document.id,
+        {
+          workflow: { ...document.workflow, execution_policy: value },
+          layout: document.layout,
+          selected_node_id: document.selected_node_id,
+          view: document.view,
+        },
+        current.revision,
+        document.revision,
+      );
+      setDocument(saved);
+      invalidate();
+    });
+  }
   function openInput(issue: InputIssue) {
     setInputTarget(issue);
-    const field = issue.field_path;
-    const section = field.includes("construct")
-      ? "constructs"
-      : field.includes("fasta")
-        ? "sequences"
-        : field.includes("parameter")
-          ? "evidence"
-          : field.includes("condition") ||
-              field.includes("experimental_context")
-            ? "conditions"
-            : field === "scientific_project"
-              ? "scientific-setup"
-              : field.includes("stages.")
-                ? "conditions"
-                : "evidence";
-    navigateInput(section);
+    setTab("inputs");
   }
+  function openFile(fileId: string, context: Partial<FileContext> = {}) {
+    const id = `file:${context.runId ?? "input"}:${fileId}` as DocumentId;
+    const name =
+      context.name ??
+      current?.files.find((file) => file.id === fileId)?.name ??
+      current?.scientific_project?.evidence_files.find(file=>file.id===fileId)?.name??
+      "Result file";
+    setFiles((values) => ({
+      ...values,
+      [id]: {
+        fileId,
+        name,
+        origin:
+          tab === "results" ? "results" : tab === "tools" ? "tools" : "inputs",
+        ...context,
+      },
+    }));
+    setTab(id);
+  }
+  function registered(value: ImportView) {
+    if (current)
+      void action(async () => {
+        const stamp = project.generation.current;
+        const saved = await client.save(
+          { ...current, files: [...current.files, value.file] },
+          project.saved?.revision,
+        );
+        if (stamp === project.generation.current) {
+          project.adopt(saved);
+          invalidate();
+        }
+      });
+  }
+  const [switchTo, setSwitchTo] = useState<string>();
+  function chooseProject(id: string) {
+    if (project.dirty) {
+      setSwitchTo(id);
+      return;
+    }
+    setTab("inputs");
+    if (id === "new") project.new();
+    else void project.choose(id);
+  }
+  async function switchProject(save: boolean) {
+    const id = switchTo;
+    if (!id) return;
+    if (save) await project.save();
+    setSwitchTo(undefined);
+    setTab("inputs");
+    if (id === "new") project.new();
+    else await project.choose(id);
+  }
+  const runLabel =
+    executing && frozen
+      ? "Stop"
+      : approved
+        ? "Run"
+        : workflow && !frozen
+          ? "Review changes"
+          : "Create plan";
+  function primary() {
+    if (executing && frozen) void control("cancel");
+    else if (runLabel === "Run") void start();
+    else void reviewWorkflow();
+  }
+  const file = files[tab];
+  const labels = [
+    ...homeTabs,
+    ...openDocuments
+      .filter(
+        (id) =>
+          !homeTabs.some((home) => home.id === id) &&
+          (!id.startsWith("file:") || files[id]),
+      )
+      .map((id) => ({ id, label: files[id]?.name ?? extraLabels[id] ?? id })),
+  ];
   const style = {
     "--right-width": `${layout.right}px`,
     "--bottom-height": `${layout.bottom}px`,
@@ -622,342 +655,507 @@ export function WorkspaceShell() {
             {
               label: "New project",
               disabled: busy,
+              action: () => chooseProject("new"),
+            },
+            {
+              label: "Import",
+              disabled: busy || !current,
               action: () => {
-                if (!discardDraft("New project discards the unsaved draft"))
-                  return;
-                project.new();
-                setRunId(undefined);
-                invalidate();
                 setTab("inputs");
+                requestAnimationFrame(() =>
+                  window.document.getElementById("input-import-file")?.click(),
+                );
               },
             },
             {
-              label: "Import project folder",
-              disabled: !currentProject,
-              action: () => {navigateInput('import');requestAnimationFrame(()=>document.getElementById('input-import-folder')?.click());},
-            },
-            {
-              label:'Import files',disabled:!currentProject||busy,
-              action:()=>{navigateInput('import');requestAnimationFrame(()=>document.getElementById('input-import-file')?.click());},
+              label: "Rename project",
+              disabled: !current,
+              action: () => {
+                setRenameValue(current?.name ?? "");
+                setRename(true);
+              },
             },
             {
               label: "Save",
-              disabled: busy || !currentProject,
-              action: () => void action(() => project.save()),
-            },
-            {
-              label: "Create iteration",
-              disabled: busy || !run || !runSelected,
-              action: createIteration,
+              disabled: busy || !current,
+              action: () => void action(project.save),
             },
           ]}
           view={[
             {
               label: "Assistant",
-              action: () => {setInspector('agent');setInspectorOpen((value) => !value);},
+              action: () => setInspectorOpen((value) => !value),
             },
             {
               label: "Jobs panel",
               action: () => setBottomOpen((value) => !value),
             },
-            {
-              label: "Artifacts",
-              disabled: !currentProject,
-              action: () => setTab("artifacts"),
-            },
           ]}
           tools={[
-            {
-              label: "Tools & extensions",
-              disabled: !currentProject,
-              action: () => setTab("tools"),
-            },
-            { label: "Settings", action: () => setTab("settings") },
-            { label: "Assistant Settings", action: () => setTab("assistant-settings") },
+            { label: "Tools & extensions", action: () => setTab("tools") },
+            { label: "Settings", action: () => openSettings("appearance") },
           ]}
           help={[
-            {
-              label: "Scientific boundaries",
-              action: () => {
-                setTab('plan');
-                setInspector("evidence");
-                setInspectorOpen(true);
-              },
-            },
+            { label: "Scientific boundaries", action: () => setTab("help") },
           ]}
         />
         <select
           aria-label="Current project"
-          disabled={busy}
-          value={currentProject?.id ?? ""}
-          onChange={(e) => chooseProject(e.target.value)}
+          value={current?.id ?? ""}
+          disabled={project.loading}
+          onChange={(event) => chooseProject(event.target.value)}
         >
           <option value="" disabled>
             Select or create a project
           </option>
-          {currentProject &&
-            !project.summaries.some((row) => row.id === currentProject.id) && (
-              <option value={currentProject.id}>
-                {currentProject.name} (draft)
-              </option>
+          {current &&
+            !project.summaries.some((row) => row.id === current.id) && (
+              <option value={current.id}>{current.name}</option>
             )}
           {project.summaries.map((row) => (
             <option key={row.id} value={row.id}>
-              {row.name} · r{row.revision}
+              {row.name}
             </option>
           ))}
         </select>
         <span className="workspace-state">
-          {info ? "Connected workspace" : "Connecting to backend"}
+          {info ? "Connected" : "Connecting"}
         </span>
       </header>
       <main className="workspace-center">
-        <Tabs
-          values={tabs.filter(item => ["inputs","plan","results"].includes(item.id) || openDocuments.includes(item.id))}
-          selected={tab}
-          label="Workspace documents"
-          onClose={(id) => {if (!["inputs","plan","results"].includes(id)) closeDocument(id as Tab);}}
-          onChange={(id) => {
-            const value = tabs.find((t) => t.id === id);
-            if (value) setTab(value.id);
+        <div
+          role="tablist"
+          aria-label="Workspace documents"
+          className="document-tabs"
+          onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+              return;
+            event.preventDefault();
+            const index = labels.findIndex((item) => item.id === tab);
+            const next =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? labels.length - 1
+                  : (index +
+                      (event.key === "ArrowRight" ? 1 : -1) +
+                      labels.length) %
+                    labels.length;
+            setTab(labels[next].id as DocumentId);
+            event.currentTarget
+              .querySelectorAll<HTMLButtonElement>("[role=tab]")
+              [next]?.focus();
           }}
-        />
+        >
+          {labels.map((item) => (
+            <span
+              className={`workbench-tab ${tab === item.id ? "selected" : ""}`}
+              key={item.id}
+            >
+              <button
+                role="tab"
+                tabIndex={tab === item.id ? 0 : -1}
+                aria-selected={tab === item.id}
+                onClick={() => setTab(item.id as DocumentId)}
+              >
+                {item.label}
+              </button>
+              {!homeTabs.some((home) => home.id === item.id) && (
+                <button
+                  aria-label={`Close ${item.label}`}
+                  onClick={() => {
+                    closeDocument(item.id as DocumentId);
+                    if (tab === item.id && files[item.id]?.origin)
+                      setTab(files[item.id].origin!);
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
         <div className="workspace-content" role="tabpanel">
-          <div className="document-status">
-            <span>
-              {currentProject?.name ?? "No project loaded"} ·{" "}
-              {project.dirty ? "Unsaved changes" : "Draft synchronized"}
-              {""}
-            </span>
-            <span>
-              {run
-                ? `${statusLabel(run.status)} / Inputs r${run.project_revision}`
-                : "No run started"}
-            </span>
-          </div>
           {error && (
             <div className="error-strip" role="alert">
               {error}
               <button onClick={() => setError("")}>Dismiss</button>
             </div>
           )}
-          {executing && run?.control && (
-            <p className="control-notice">
-              Requested {run.control === "pause" ? "Pause" : "Cancel"}; waiting
-              for the current step to finish. Scientific solvers are not
-              truncated.
-            </p>
+          {rename && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (current) {
+                  project.edit({ ...current, name: renameValue });
+                  invalidate();
+                  setRename(false);
+                }
+              }}
+            >
+              <label>
+                Project name
+                <input
+                  aria-label="Project name"
+                  value={renameValue}
+                  onChange={(event) => setRenameValue(event.target.value)}
+                />
+              </label>
+              <button>Rename</button>
+              <button type="button" onClick={() => setRename(false)}>
+                Cancel
+              </button>
+            </form>
+          )}
+          {switchTo && (
+            <section role="dialog" aria-label="Unsaved input changes">
+              <p>The input draft has unsaved changes.</p>
+              <button onClick={() => void action(() => switchProject(true))}>
+                Save and continue
+              </button>
+              <button onClick={() => void switchProject(false)}>
+                Discard and continue
+              </button>
+              <button onClick={() => setSwitchTo(undefined)}>Cancel</button>
+            </section>
           )}
           {project.loading ? (
             <p>Loading project…</p>
-          ) : currentProject ? (
-            <div hidden={tab !== "inputs"}>
-              <InputEditor
-                key={currentProject.id}
-                project={currentProject}
-                persisted={project.saved?.id===currentProject.id}
-                busy={busy}
-                dirty={project.dirty}
-                onChange={(value) => {
-                  project.edit(value);
-                  invalidate();
-                }}
-                action={action}
-                inputCheck={projectCheck}
-                checkStale={checkStale}
-                onCheck={() => void checkInputs()}
-                onLocate={openInput}
-                inputTarget={inputTarget}
-                onOpenResource={openResource}
-                onPlanMethod={method=>void proposeMethod(method)}
-                prepareImport={project.save}
-                onImported={value=>{project.adopt(value);invalidate();}}
-              />
-            </div>
-          ) : tab === "inputs" ? (
-            <p>Create or select a project first.</p>
-          ) : null}
+          ) : (
+            current && (
+              <div hidden={tab !== "inputs"}>
+                <InputEditor
+                  key={current.id}
+                  project={current}
+                  persisted={project.saved?.id === current.id}
+                  busy={busy}
+                  dirty={project.dirty}
+                  onChange={(value) => {
+                    project.edit(value);
+                    invalidate();
+                  }}
+                  action={action}
+                  inputCheck={check}
+                  checkStale={checkStale}
+                  onCheck={() => void checkInputs()}
+                  onLocate={openInput}
+                  inputTarget={inputTarget}
+                  onOpenResource={(id) => openFile(id)}
+                  onPlanMethod={(method) => void proposeMethod(method)}
+                  prepareImport={project.save}
+                  onImported={(value) => {
+                    project.adopt(value);
+                    if(value.scientific_project&&!current.scientific_project)setGoal('scientific_pipeline');
+                    invalidate();
+                  }}
+                />
+              </div>
+            )
+          )}
           {tab === "plan" && (
             <>
-              <WorkflowControls primary={primary} disabled={busy || !currentProject}
-                reviewDisabled={!workflowDocument && !proposal?.workflow}
-                pausePending={!!run?.control}
-                startDisabled={workflowChanged || project.dirty} executing={!!executing && runSelected}
-                cancellable={!!run && runSelected && ['queued','running','paused','interrupted'].includes(run.status) && run.control!=='cancel'}
-                retryable={runSelected && ['failed','interrupted'].includes(run?.nodes.find(n=>n.id===selected)?.status??'')}
-                frozen={runSelected} onPrimary={()=>void runPrimary()} onPause={()=>void control('pause')}
-                onCancel={()=>void control('cancel')} onRetry={()=>void control('retry')}
-                onReview={()=>void reviewWorkflow()}/>
-              <p aria-label="Selection context">
-                {selection?.kind === "proposal-node"
-                  ? "Draft proposal; no computed result yet."
-                  : runSelected
-                    ? `${run?.name} · Saved inputs ${run?.project_revision}`
-                    : "Select a proposal or a frozen run."}
-              </p>
+              <section
+                className="workflow-run-controls"
+                aria-label="Workflow run controls"
+              >
+                <button
+                  disabled={busy || !current || (frozen && !executing)}
+                  onClick={primary}
+                >
+                  {runLabel}
+                </button>
+                {executing && frozen && (
+                  <button
+                    disabled={busy || !!run?.control}
+                    onClick={() => void control("pause")}
+                  >
+                    Pause
+                  </button>
+                )}
+                {frozen &&
+                  run &&
+                  ["paused", "interrupted"].includes(run.status) && (
+                    <button
+                      disabled={busy}
+                      onClick={() => void control("resume")}
+                    >
+                      Resume
+                    </button>
+                  )}
+                {frozen && !executing && (
+                  <button disabled={busy} onClick={() => void editAsNewRun()}>
+                    Edit as new run
+                  </button>
+                )}
+                {!workflow && (
+                  <label>
+                    Task
+                    <select
+                      aria-label="Analysis task"
+                      value={goal}
+                      onChange={(event) => {
+                        setGoal(event.target.value as Goal);
+                        invalidate();
+                      }}
+                    >
+                      <option value="fusion_screen">Sequence statistics</option>
+                      <option value="m1_sequence_checks">M1 checks</option>
+                      <option value="scientific_pipeline">M1–M4</option>
+                      <option value="assembly_review">Assembly</option>
+                      <option value="pathway_simulation">Pathway</option>
+                    </select>
+                  </label>
+                )}
+                {workflow && !frozen && (
+                  <label>
+                    Run through
+                    <select
+                      aria-label="Run through module"
+                      disabled={busy || !document}
+                      value={policy.target_node_id ?? ""}
+                      onChange={(event) =>
+                        void updatePolicy({
+                          ...policy,
+                          target_node_id: event.target.value || null,
+                        })
+                      }
+                    >
+                      <option value="">All modules</option>
+                      {workflow.nodes.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {workflow && frozen && (
+                  <span>
+                    Recorded scope:{" "}
+                    {workflow.nodes.find(
+                      (node) =>
+                        node.id === workflow.execution_policy.target_node_id,
+                    )?.label ?? "All modules"}
+                    ; task budget {workflow.execution_policy.max_tool_calls}.
+                  </span>
+                )}
+              </section>
               <WorkflowWorkspace
-                key={`workflow:${currentProject?.id}`}
-                projectId={currentProject?.id}
-                projectRevision={currentProject?.revision}
-                seedId={selection?.kind === 'run-node' ? run?.id : proposal?.id}
-                seed={selection?.kind === 'run-node' ? run?.workflow : proposal?.workflow ?? undefined}
-                document={workflowDocument}
-                onDocument={value=>{setWorkflowDocument(value);setPolicy(value.workflow.execution_policy);setSelection({kind:'proposal-node',proposalId:proposal?.id??value.id,nodeId:value.selected_node_id??value.workflow.nodes[0].id});}}
-                frozen={selection?.kind === 'run-node'}
+                key={current?.id}
+                projectId={current?.id}
+                projectRevision={current?.revision}
+                seedId={frozen ? run?.id : !document ? proposal?.id : undefined}
+                seed={
+                  frozen
+                    ? run?.workflow
+                    : !document
+                      ? (proposal?.workflow ?? undefined)
+                      : undefined
+                }
+                document={document}
+                frozen={frozen}
                 busy={busy || project.dirty}
-                inputCheck={checkStale ? undefined : projectCheck}
-                run={selection?.kind === "proposal-node" ? undefined : run}
+                inputCheck={checkStale ? undefined : check}
+                run={frozen ? run : undefined}
                 selected={selected}
                 onSelect={selectPlan}
+                onDocument={(value) => {
+                  if (
+                    document &&
+                    value.semantic_revision !== document.semantic_revision
+                  )
+                    invalidate();
+                  setDocument(value);
+                  setPolicy(value.workflow.execution_policy);
+                  setSelection({
+                    kind: "proposal-node",
+                    proposalId: proposal?.id ?? value.id,
+                    nodeId:
+                      value.selected_node_id ?? value.workflow.nodes[0].id,
+                  });
+                }}
               />
-              {workflowChanged && selection?.kind !== 'run-node' && <p role="status">Workflow changes are saved but not authorized. Review and accept a new proposal before running.</p>}
-              {tab === 'plan' && node && currentProject && <Suspense fallback={<p>Loading method details…</p>}><MethodPanel
-                key={node.id} project={currentProject} toolId={node.tool_id} runId={runSelected ? run?.id : undefined} workflowId={workflowDocument?.id} nodeId={node.id}
-                disabled={busy} onChange={saveParameterProject} onReview={reviewParameter} onWorkflowChange={replaceScalarWorkflow} onEditDraft={()=>void editCurrentWorkflow()}
-                onPlan={value=>void importWorkflow(async()=>value)}/></Suspense>}
-              <fieldset className="policy-editor" disabled={busy || !!runSelected || (!!proposal?.workflow && !workflowDocument)}>
-                <h3>Execution settings</h3>
-                {!!proposal?.workflow && !workflowDocument && !runSelected && <p role="status">Saving this workflow before execution settings can be edited.</p>}
-                <p>{runSelected ? 'Recorded settings for this frozen run; not the current draft.' : 'Choose the execution scope here, then Review plan. Changing these settings requires a new accepted proposal; it does not approve scientific evidence.'}</p>
-                <label>
-                  Run through module
-                  <select aria-label="Run through module" value={visiblePolicy.target_node_id ?? ''}
-                    onChange={event => updatePolicy({...policy, target_node_id: event.target.value || null})}>
-                    <option value="">All modules in this workflow</option>
-                    {workflow?.nodes.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}
-                  </select>
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={visiblePolicy.max_completed_stages === 1}
-                    onChange={(e) =>
-                      updatePolicy({
-                        ...policy,
-                        max_completed_stages: e.target.checked ? 1 : null,
-                      })
-                    }
+              {node && current && (
+                <Suspense fallback={<p>Opening method…</p>}>
+                  <MethodPanel
+                    key={node.id}
+                    project={current}
+                    toolId={node.tool_id}
+                    runId={frozen ? run?.id : undefined}
+                    workflowId={document?.id}
+                    nodeId={node.id}
+                    workflow={workflow??undefined}
+                    disabled={busy||project.dirty}
+                    onChange={saveParameter}
+                    onReview={reviewParameter}
+                    onWorkflowChange={replaceScalar}
+                    onEditDraft={() => void editAsNewRun()}
+                    onPlan={(value) => void proposeWorkflow(value)}
                   />
-                  Pause after each completed module
-                </label>
-                {node && (
-                  <>
-                    <label>
-                      <input type="checkbox" checked={visiblePolicy.checkpoints_before.includes(selected)}
-                      onChange={() =>
-                        updatePolicy({
-                          ...policy,
-                          checkpoints_before:
-                            policy.checkpoints_before.includes(selected)
-                              ? policy.checkpoints_before.filter(
-                                  (id) => id !== selected,
-                                )
-                              : [...policy.checkpoints_before, selected],
-                        })
-                      }
-                      />
-                      Pause before {node.label}
-                    </label>
-                    <label>
-                      <input type="checkbox" checked={visiblePolicy.checkpoints_after.includes(selected)}
-                      onChange={() =>
-                        updatePolicy({
-                          ...policy,
-                          checkpoints_after: policy.checkpoints_after.includes(
-                            selected,
-                          )
-                            ? policy.checkpoints_after.filter(
-                                (id) => id !== selected,
-                              )
-                            : [...policy.checkpoints_after, selected],
-                        })
-                      }
-                      />
-                      Pause after {node.label}
-                    </label>
-                    <p>
-                      Pauses before: {visiblePolicy.checkpoints_before.map(id => workflow?.nodes.find(value => value.id === id)?.label ?? 'Unavailable module').join(', ') || 'None'}.
-                      Pauses after: {visiblePolicy.checkpoints_after.map(id => workflow?.nodes.find(value => value.id === id)?.label ?? 'Unavailable module').join(', ') || 'None'}.
-                      Frozen run snapshots do not change.
-                    </p>
-                  </>
-                )}
-              </fieldset>
-              <WorkflowImporter
-                key={`workflow-import:${currentProject?.id}`}
-                busy={busy}
-                enabled={!!currentProject}
-                submit={importWorkflow}
-                onEdit={invalidate}
-              />
+                </Suspense>
+              )}
             </>
           )}
-          {tab === "results" && <>
-            <label>Run version<select aria-label="Run version" value={runId ?? ''} onChange={event=>{invalidate();setRunId(event.target.value||undefined);setRefresh(value=>value+1);}}>
-              <option value="">Choose recorded run</option>{history.map(value=><option key={value.id} value={value.id}>{value.name} · {statusLabel(value.status)}</option>)}
-            </select></label>
-            {history.length>=50&&<button onClick={()=>void action(async()=>{const values=await client.history(currentProject!.id,history.length);setHistory(previous=>[...previous,...values.filter(row=>!previous.some(item=>item.id===row.id))]);})}>More runs</button>}
-            {run ? <>
-              <p>Batch jobs: {statusLabel(run.status)}{run.scientific_assessment.numerical_state==='partial_or_blocked'?' · scientific results partially complete':''}</p>
-              <label>Module<select aria-label="Result object" value={runSelected ? selected : ''} onChange={e=>selectRun(e.target.value)}>
-                <option value="">Select module</option>{resultNodes.map(value=><option key={value.id} value={value.id}>{value.label}</option>)}
-              </select></label>
-              {runSelected?<SelectedResult onAddData={()=>navigateInput('evidence')} run={run} selected={selected} data={nodeData} error={result.error} offset={result.offset}
-                onOffset={result.setOffset} onOpenResource={id=>openResource(id,true)} onSelect={selectRun} action={action}/>:<p>Select a recorded module result.</p>}
-            </>:<p>No run selected; no example results generated.</p>}
-          </>}
+          {tab === "results" && (
+            <section>
+              <header className="panel-heading">
+                <h2>Results</h2>
+                <button
+                disabled={!run}
+                  onClick={() => setTab("compare")}
+                >
+                  Compare
+                </button>
+              </header>
+              <label>
+                Run version
+                <select
+                  aria-label="Run version"
+                  value={runId ?? ""}
+                  onChange={(event) => {
+                    setRunId(event.target.value || undefined);
+                    setSelection(undefined);
+                  }}
+                >
+                  <option value="">Choose a run</option>
+                  {history.map((value) => (
+                    <option key={value.id} value={value.id}>
+                      {value.name} — {statusLabel(value.status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {history.length >= 50 && (
+                <button
+                  onClick={() =>
+                    void action(async () => {
+                      const values = await client.history(
+                        current!.id,
+                        history.length,
+                      );
+                      setHistory((previous) => previous.concat(values));
+                    })
+                  }
+                >
+                  Earlier runs
+                </button>
+              )}
+              {run && resultNodes.length > 1 && (
+                <label>
+                  Module
+                  <select
+                    aria-label="Result object"
+                    value={frozen ? selected : ""}
+                    onChange={(event) => selectRun(event.target.value)}
+                  >
+                    {resultNodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {run && frozen ? (
+                <SelectedResult
+                  run={run}
+                  selected={selected}
+                  data={result.data}
+                  error={result.error}
+                  offset={result.offset}
+                  onOffset={result.setOffset}
+                  onSelect={selectRun}
+                  action={action}
+                  viewState={resultViews[resultKey]}
+                  onViewChange={(value) =>
+                    setResultViews((previous) => ({
+                      ...previous,
+                      [resultKey]: { ...previous[resultKey], ...value },
+                    }))
+                  }
+                  onAddData={() => setTab("inputs")}
+                  onOpenResource={(id, context) =>
+                    openFile(id, { runId: run.id, ...context })
+                  }
+                />
+              ) : (
+                <p>No recorded result selected.</p>
+              )}
+            </section>
+          )}
           {tab === "compare" && (
             <ComparisonPanel history={history} current={run} />
           )}
-          {currentProject && (tab === "artifacts" || resourcesVisited) && (
-            <div hidden={tab !== "artifacts"}>
-              <ResourceBrowser
-                key={`${currentProject.id}:${run?.id ?? "inputs"}`}
-                projectId={currentProject.id}
-                runId={run?.id}
-                revision={currentProject.revision}
-                active={tab === "artifacts"}
-                initialFileId={resourceFile}
-                initialRunScope={resourceRunScope}
-                onRegistered={(value) => {
-                  project.edit({
-                    ...currentProject,
-                    files: [...currentProject.files, value.file],
-                  });
-                  invalidate();
-                  setResourceFile(value.file.id);
-                  setResourceRunScope(false);
-                }}
-              />
-            </div>
-          )}
-          {tab === "artifacts" && (
-            <button onClick={returnFromResource}>Return to source</button>
-          )}
-          {(tab === "settings" || tab === "artifacts") && (
-            <button onClick={() => setTab("plan")}>Back to Workflow</button>
-          )}
-          {tab === "settings" && (
-            <LocalSettings
-              goal={goal} mode={mode} onGoal={value=>{goalChosen.current=true;setGoal(value);invalidate();}} onMode={value=>{setMode(value);localStorage.setItem("fusionlab.planner",value);invalidate();}}
-              layout={layout}
-              onLayout={view.update}
-              info={info}
-              onRefresh={() => setInfoRefresh((value) => value + 1)}
+          {file && current && (
+            <FileDocument
+              projectId={current.id}
+              revision={current.revision}
+              file={file}
+              project={current}
+              onRegistered={registered}
             />
           )}
-          {tab === "assistant-settings" && <Suspense fallback={<p>Loading Assistant settings…</p>}><AssistantSettings onSaved={()=>{setInfoRefresh(value=>value+1);setPermission(false);invalidate();}}/></Suspense>}
+          {tab === "settings" && (
+            <Suspense fallback={<p>Opening Settings…</p>}>
+              <Settings
+                layout={layout}
+                onLayout={view.update}
+                info={info}
+                onRefresh={() => setInfoRefresh((value) => value + 1)}
+                goal={goal}
+                onGoal={setGoal}
+                mode={mode}
+                onMode={(value) => {
+                  setMode(value);
+                  localStorage.setItem("fusionlab.planner", value);
+                }}
+                section={settingsSection}
+                onSection={setSettingsSection}
+              />
+            </Suspense>
+          )}
           {tab === "tools" && (
-            <Suspense fallback={<p>Loading Tools &amp; extensions…</p>}><ExtensionsPanel
-              key={`${info?.workspace_id}:${currentProject?.id}`}
-              workspace={info?.workspace_id ?? 'initial'}
-              project={currentProject}
-              busy={busy}
-              onMethod={method=>void proposeMethod(method)}
-              action={action}
-              onPlan={(workflow) => void importWorkflow(async () => workflow).then(() => setTab("plan"))}
-              onOpenResource={(id) => openResource(id, false)}
-            /></Suspense>
+            <Suspense fallback={<p>Opening tools…</p>}>
+              <Extensions
+                key={`${info?.workspace_id}:${current?.id}`}
+                workspace={info?.workspace_id ?? "initial"}
+                project={current}
+                persisted={project.saved?.id === current?.id}
+                busy={busy}
+                action={action}
+                onMethod={(method) => void proposeMethod(method)}
+                onPlan={(value) => void proposeWorkflow(value)}
+                onOpenResource={(id,context) => openFile(id,context)}
+              />
+            </Suspense>
+          )}
+          {tab === "help" && (
+            <section>
+              <h2>Scientific boundaries</h2>
+              <p>
+                Job completion, numerical results, evidence readiness and
+                experimental validation are separate. Missing evidence remains
+                blocked; an accepted plan does not approve scientific
+                parameters.
+              </p>
+              <p>
+                Import data in Inputs. Edit model inputs and methods in
+                Workflow. Review the proposed change once, then Run. Results
+                retain the model and input version actually used.
+              </p>
+              <p>
+                Synthetic examples and exploratory formulas are not experimental
+                validation. Restricted predictors require legal access; missing
+                inputs are never filled with invented values.
+              </p>
+              <a
+                href="https://gitlab.igem.org/2026/software/tsinghua-t/galatea/-/blob/develop/README.md"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Installation, CLI and method documentation
+              </a>
+            </section>
           )}
         </div>
       </main>
@@ -970,274 +1168,112 @@ export function WorkspaceShell() {
           onChange={(value, save) => view.resize("right", value, save)}
         />
       )}
-      <aside
-        id="workspace-inspector"
-        className="workspace-inspector"
-        aria-label="Inspector"
-      >
-        <div className="inspector-heading">
-          <span>
-            {view.narrow
-              ? "Inspector drawer; run controls remain above"
-              : "Inspector"}
-          </span>
-          <button onClick={() => setInspectorOpen(false)}>
-            Close inspector
-          </button>
-        </div>
-        <Tabs
-          label="Inspector tabs"
-          values={[
-            { id: "agent", label: "Assistant" },
-            { id: "evidence", label: "Inputs / Evidence" },
-          ]}
-          selected={inspector}
-          onChange={setInspector}
-        />
-        <div className="inspector-content">
-          {inspector === "agent" && (
+      {inspectorOpen && (
+        <aside
+          id="workspace-inspector"
+          className="workspace-inspector"
+          aria-label="Assistant"
+        >
+          <header className="inspector-heading">
+            <strong>Assistant</strong>
+            <button onClick={() => setInspectorOpen(false)}>
+              Close Assistant
+            </button>
+          </header>
+          <div className="inspector-content">
             <AgentPanel
               proposal={proposal}
-              projectId={project.saved?.id===currentProject?.id?project.saved?.id:undefined}
+              projectId={
+                project.saved?.id === current?.id
+                  ? project.saved?.id
+                  : undefined
+              }
               projectRevision={project.saved?.revision}
-              context={`${tab === 'inputs' ? 'Inputs and missing data' : tab === 'plan' ? 'Workflow' : tab === 'results' ? 'Recorded results' : 'Workspace'}${node ? ' · '+node.label : ''}`}
               info={info}
+              context={
+                tab === "plan"
+                  ? `Workflow${node ? " — " + node.label : ""}`
+                  : tab === "results"
+                    ? "Recorded results"
+                    : file
+                      ? file.name
+                      : tab === "inputs"
+                        ? "Input data"
+                        : "Workspace"
+              }
               goal={goal}
               objective={objective}
               mode={mode}
               permission={permission}
               busy={busy}
-              canPlan={!!currentProject}
-              onGoal={(value) => {
-                goalChosen.current = true;
-                setGoal(value);
-                invalidate();
-              }}
-              onObjective={(value) => {
-                setObjective(value);
-                invalidate();
-              }}
-              onMode={(value) => {
-                setMode(value);
-                invalidate();
-              }}
-              onPermission={(value) => {
-                setPermission(value);
-                invalidate();
-              }}
+              canPlan={!!current}
+              intent={chatIntent}
+              onIntent={setChatIntent}
+              onGoal={setGoal}
+              onObjective={setObjective}
+              onMode={setMode}
+              onPermission={setPermission}
               onPropose={() => void propose()}
               onDecision={(value) => void decide(value)}
-              onRevise={reviseProposal}
-              onOpenProposal={openRecordedProposal}
-            />
-          )}
-          {inspector === "evidence" && (
-            <section>
-              <h2>Selected object / Source</h2>
-              <p>
-                {selection?.kind === "proposal-node"
-                  ? "Draft proposal; planned inputs only."
-                  : runSelected
-                    ? run?.name
-                    : "No selected run result."}
-              </p>
-              <p>{node?.label ?? "No stage selected"}</p>
-              {node && (
+              onRevise={revise}
+              onOpenProposal={openProposal}
+              onSettings={() => openSettings("assistant")}
+              inputCheck={
                 <>
-                  <p>
-                    Tool: {node.tool_id} · Dependencies:{" "}
-                    {dependencies(node).join(", ") || "None"}
-                  </p>
-                  <p>Job completion, numerical results, evidence readiness and experimental validation are separate. Missing evidence remains blocked; an accepted plan does not approve scientific parameters.</p>
-                  <ModuleScientificStatus summary={runSelected ? run?.nodes.find(value => value.id === selected)?.scientific_summary : undefined}
-                    experimentalValidation={runSelected ? run?.scientific_assessment.experimental_validation : undefined}/>
-                  <LazyJson
-                    value={node.inputs}
-                    label="Input bindings (not client scientific flags)"
-                  />
-                  <LazyJson
-                    value={
-                      selection?.kind === "proposal-node"
-                        ? proposal?.review_identity
-                        : run?.tools[node.tool_id]
-                    }
-                    label="Calculation method and version"
-                  />
-                </>
-              )}
-              <p>
-                Current draft r{currentProject?.revision ?? "Not recorded"} ·
-                Selected frozen input r{run?.project_revision ?? "Not recorded"}
-                ; editing the draft does not overwrite a frozen run.
-              </p>
-              {currentProject && (
-                <InputDiffPanel
-                  project={currentProject}
-                  runId={run?.id}
-                  dirty={project.dirty}
-                />
-              )}
-              <LazyJson
-                value={
-                  currentProject?.scientific_project?.config
-                    .experimental_context
-                }
-                label="Authoritative scientific conditions"
-              />
-              <p aria-label="Loaded result identity">
-                {nodeData
-                  ? `Loaded: ${node?.label ?? "Stage result"} · attempt ${nodeData.node.attempts} · candidate page ${Math.floor(nodeData.offset / 20) + 1}`
-                  : "Selected result not loaded; other stage values are not shown."}
-              </p>
-              <LazyJson
-                value={nodeData?.node.output}
-                label="Current result page values / Unit / Source"
-              />
-              <button onClick={() => setTab("inputs")}>
-                Locate inputs and sources
-              </button>
-              <button
-                disabled={!run || !selected}
-                onClick={() => setTab("results")}
-              >
-                Locate stage result
-              </button>
-            </section>
-          )}
-        </div>
-      </aside>
-      {bottomOpen && (
-        <Splitter
-          dimension="bottom"
-          value={layout.bottom}
-          {...view.bounds.bottom}
-          defaultValue={view.defaults.bottom}
-          onChange={(value, save) => view.resize("bottom", value, save)}
-        />
-      )}
-      <section
-        id="workspace-bottom"
-        className="workspace-bottom"
-        aria-label="Jobs and actions"
-      >
-        <Tabs
-          label="Bottom panel tabs"
-          values={[
-            { id: "queue", label: "Jobs" },
-            { id: "events", label: "Output" },
-            { id: "problems", label: "Problems" },
-          ]}
-          selected={bottom}
-          onChange={setBottom}
-        />
-        <div className="bottom-content">
-          {bottom === "queue" && (
-            <>
-              <p>
-                Workspace jobs: {show(info?.resources.active_tasks)} Execution /{" "}
-                {show(info?.resources.queued_tasks)} Queued · CPU pool{" "}
-                {info?.max_workers ?? "Not recorded"} · GPU slots{" "}
-                {show(info?.resources.gpu_slots)} · Hard memory limits
-                unsupported
-              </p>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Job / Frozen input</th>
-                    <th>Actual status</th>
-                    <th>Control request</th>
-                    <th>Scope</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {run && (
-                    <tr>
-                      <td>
-                        {run.name} · Inputs {run.project_revision}
-                      </td>
-                      <td>{statusLabel(run.status)}</td>
-                      <td>{run.control ?? "None"}</td>
-                      <td>
-                        {run.workflow.execution_policy.target_node_id ??
-                          "Authorized plan"}
-                      </td>
-                    </tr>
+                  <button
+                    disabled={busy || !current}
+                    onClick={() => void checkInputs()}
+                  >
+                    Check inputs
+                  </button>
+                  {check && !checkStale && (
+                    <InputIssues
+                      result={check}
+                      stale={false}
+                      onLocate={openInput}
+                    />
                   )}
-                </tbody>
-              </table>
-            </>
-          )}
-          {bottom === "events" && (
-            <table>
-              <thead>
-                <tr>
-                  <th>Sequence number</th>
-                  <th>Node</th>
-                  <th>Actual event</th>
-                  <th>Public status / Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((event) => (
-                  <tr key={event.seq}>
-                    <td>{event.seq}</td>
-                    <td>{event.node_id ?? "Run"}</td>
-                    <td>{event.event}</td>
-                    <td>{show(event.payload)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {bottom==="queue"&&run&&<table aria-label="Execution jobs"><thead><tr><th>Step</th><th>Status</th><th>Output / log</th></tr></thead><tbody>{run.nodes.map(job=><tr key={job.id}><td>{job.label}</td><td>{statusLabel(job.status)}</td><td><button onClick={()=>{selectRun(job.id);setBottom('problems');}}>View diagnostic</button></td></tr>)}</tbody></table>}
-          {bottom === "problems" && (
-            <>
-              {nodeData?.node.error && <section aria-label="Selected module problem">
-                <h3>{node?.label ?? 'Selected module'} — job problem</h3>
-                <p>{typeof nodeData.node.error.message === 'string' ? nodeData.node.error.message : 'The job failed; its private backend diagnostic is retained.'}</p>
-                {Array.isArray(nodeData.node.error.actions) && <ul>{nodeData.node.error.actions.filter((value): value is string => typeof value === 'string').map((value, index) => <li key={index}>{value}</li>)}</ul>}
-                <p>Non-idempotent interruptions require reconciliation of the original job. Tool or input changes require a new reviewed iteration.</p>
-              </section>}
-              <InputIssues
-                result={projectCheck}
-                stale={checkStale}
-                onLocate={openInput}
-              />
-              <p>
-                {error ||
-                  "No current public  API error; not proof of evidence completeness."}
-              </p>
-              <p>
-                Proposal: {proposal?.status ?? "Not generated"} · Scientific
-                parameters/measurement approvals: only explicit existing records
-                apply; accepting a proposal does not approve parameters.
-              </p>
-              {proposal?.missing_inputs.map((item) => (
-                <p key={item}>{item}</p>
-              ))}
-              <button
-                disabled={!proposal || proposal.status !== "proposed"}
-                onClick={() => void decide("reject")}
-              >
-                Stop / Reject current Agent Proposal
+                </>
+              }
+            />
+            {approved && (
+              <button disabled={busy} onClick={() => void start()}>
+                Run approved task
               </button>
-              <p>
-                Use Cancel run for numerical jobs; proposals and runs are
-                different objects.
-              </p>
-            </>
-          )}
-        </div>
-      </section>
+            )}
+          </div>
+        </aside>
+      )}
+      {bottomOpen && (
+        <>
+          <Splitter
+            dimension="bottom"
+            value={layout.bottom}
+            {...view.bounds.bottom}
+            defaultValue={view.defaults.bottom}
+            onChange={(value, save) => view.resize("bottom", value, save)}
+          />
+          <RunPanel
+            run={run}
+            events={events}
+            data={result.data}
+            error={result.error ?? ""}
+            selected={selected}
+            onSelect={selectRun}
+            onControl={(kind) => void control(kind)}
+          />
+        </>
+      )}
       <footer className="workbench-footer">
         <span>
           {busy
             ? "Working"
-            : stopped
-              ? "Run "+run.status.replaceAll("_", " ")
-              : executing
-                ? "Backend executing"
+            : run && executing
+              ? `${statusLabel(run.status)} — ${run.nodes.filter((n) => n.status === "succeeded").length}/${run.nodes.length} tasks`
+              : run
+                ? `Last run: ${statusLabel(run.status)}`
                 : "Ready"}
+          {project.dirty ? " — Unsaved input edits" : ""}
         </span>
       </footer>
     </div>

@@ -1,8 +1,10 @@
 import type { NodePage, RunSummaryView } from "../contracts/generated";
-import { ScientificResults } from "../ScientificResults";
-import { downloadArtifact } from "../api";
+import { ScientificResults,type ResultViewState } from "../ScientificResults";
+import { downloadArtifact,downloadResource } from "../api";
+import {useState} from 'react';
 import { show } from "../contracts/resultAdapters";
 import { SequenceMapTable } from "./SequenceMapTable";
+import type {FileContext} from './FileDocument';
 
 export function SelectedResult({
   run,
@@ -15,6 +17,7 @@ export function SelectedResult({
   action,
   onOpenResource,
   onAddData,
+  viewState,onViewChange,
 }: {
   run: RunSummaryView;
   selected: string;
@@ -24,21 +27,14 @@ export function SelectedResult({
   onOffset: (value: number) => void;
   onSelect: (id: string) => void;
   action: (job: () => Promise<unknown>) => Promise<void>;
-  onOpenResource?: (fileId: string) => void;
+  onOpenResource?: (fileId: string,context?:Partial<FileContext>) => void;
   onAddData?:()=>void;
+  viewState?:ResultViewState;onViewChange?:(value:ResultViewState)=>void;
 }) {
+  const [exportOpen,setExportOpen]=useState(false);
   if (error) return <p role="alert">{error}</p>;
   if (!selected) return <p>Select a stage in Workflow or Results.</p>;
   if (!data) return <p>Loading selected stage…</p>;
-  const files = new Set<string>();
-  function visit(value: unknown) {
-    if (typeof value === "string" && value.startsWith("asset:"))
-      files.add(value.slice(6));
-    else if (Array.isArray(value)) value.forEach(visit);
-    else if (value && typeof value === "object")
-      Object.values(value).forEach(visit);
-  }
-  visit(data.node.output);
   return (
     <section>
       {data.node.error && <p role="alert">{show(data.node.error.message)}</p>}
@@ -55,6 +51,8 @@ export function SelectedResult({
           key={`${run.id}:${selected}:${data.node.attempts}:${data.artifact?.hash}:${offset}`}
           projectId={run.project_id}
           onAddData={onAddData}
+          onOpenResource={onOpenResource}
+          viewState={viewState} onViewChange={onViewChange}
           run={{
             id: run.id,
             snapshot: {
@@ -65,7 +63,7 @@ export function SelectedResult({
           }}
         />
       )}
-      {data.total_records > 0 && (
+      {data.total_records > 20 && (
         <p>
           <button
             disabled={!offset}
@@ -84,17 +82,11 @@ export function SelectedResult({
         </p>
       )}
       {data.artifact && (
-        <button
-          onClick={() =>
-            void action(() =>
-              downloadArtifact(data.artifact!.id, run.project_id),
-            )
-          }
-        >
-          Export result
-        </button>
+        <><button onClick={()=>setExportOpen(value=>!value)}>Export</button>{exportOpen&&<div>
+          <button onClick={()=>void action(()=>downloadArtifact(data.artifact!.id,run.project_id))}>Result record</button>
+          {viewState?.trajectoryFileId&&<button onClick={()=>void action(()=>downloadResource(`/files/${encodeURIComponent(viewState.trajectoryFileId!)}/series.csv?project_id=${encodeURIComponent(run.project_id)}`,'recorded-series.csv'))}>Recorded time course CSV</button>}
+        </div>}</>
       )}
-      {onOpenResource&&files.size>0&&<details><summary>Sources</summary>{[...files].map((id,index)=><button key={id} onClick={()=>onOpenResource(id)}>View source {index+1}</button>)}</details>}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useMemo,useState } from "react";
 import { object } from "../contracts/validation";
 import { show } from "../contracts/resultAdapters";
 const Plot = lazy(() =>
@@ -16,6 +16,9 @@ export function M3View({record}:{record:Record<string,unknown>}) {
 }
 
 export function M4View({ record }: { record: Record<string, unknown> }) {
+  const [detail,setDetail]=useState<'fluxes'|'checks'|'sensitivity'|'metrics'>();
+  const units=object(record.quantity_units)?record.quantity_units:{};
+  const unitFor=(field:string)=>typeof units[field]==='string'?String(units[field]):'unit not recorded';
   const residuals = object(record.steady_state_residuals)
     ? record.steady_state_residuals
     : {};
@@ -50,32 +53,35 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
     <section>
       <h3>M4 recorded quantities</h3>
       {(typeof record.final_15==='number' || typeof record.final_13==='number') && <p>
-        Endpoint compound 15 {show(record.final_15)} · compound 13{" "}
-        {show(record.final_13)}. Endpoint titers, dimensionless yield and
-        secretion flux are not interchangeable.
+        {['15','13'].filter(species=>typeof record['final_'+species]==='number').map(species=>`Compound ${species}: ${show(record['final_'+species])} (${unitFor('final_'+species)})`).join(' · ')}
       </p>}
-      {["yield_abs", "productivity", "secretion_loss"].some(field=>typeof record[field]==='number') && <table>
+      <div>{Object.keys(fluxes).length>0&&<button onClick={()=>setDetail(detail==='fluxes'?undefined:'fluxes')}>Fluxes</button>}
+        {Object.keys(residuals).length>0&&<button onClick={()=>setDetail(detail==='checks'?undefined:'checks')}>Solver checks</button>}
+        {Object.keys(ranks).length>0&&<button onClick={()=>setDetail(detail==='sensitivity'?undefined:'sensitivity')}>Sensitivity</button>}
+        {["yield_abs","productivity","secretion_loss"].some(field=>typeof record[field]==='number')&&<button onClick={()=>setDetail(detail==='metrics'?undefined:'metrics')}>Yield and losses</button>}
+      </div>
+      {detail==='metrics'&&["yield_abs", "productivity", "secretion_loss"].some(field=>typeof record[field]==='number') && <table>
         <thead>
           <tr>
-            <th>Original field</th>
+              <th>Quantity</th>
             <th>Recorded value</th>
           </tr>
         </thead>
         <tbody>
           {["yield_abs", "productivity", "secretion_loss"].filter(field=>typeof record[field]==='number').map((field) => (
             <tr key={field}>
-              <td>{field}</td>
-              <td>{show(record[field])}</td>
+              <td>{{yield_abs:'Absolute yield',productivity:'Productivity',secretion_loss:'Secretion loss'}[field as 'yield_abs']}</td>
+              <td>{show(record[field])} {field==='yield_abs'?'(1)':`(${unitFor(field)})`}</td>
             </tr>
           ))}
         </tbody>
       </table>}
-      {Object.keys(residuals).length > 0 && (
+      {detail==='checks'&&Object.keys(residuals).length > 0 && (
         <table>
           <thead>
             <tr>
               <th>Species</th>
-              <th>Steady residual (uM/h)</th>
+              <th>Steady residual ({unitFor('steady_state_residuals')})</th>
             </tr>
           </thead>
           <tbody>
@@ -88,12 +94,12 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
           </tbody>
         </table>
       )}
-      {Object.keys(fluxes).length > 0 && (
+      {detail==='fluxes'&&Object.keys(fluxes).length > 0 && (
         <table>
           <thead>
             <tr>
               <th>Reaction</th>
-              <th>Recorded flux (uM/h)</th>
+              <th>Recorded flux ({unitFor('steady_state_fluxes')})</th>
             </tr>
           </thead>
           <tbody>
@@ -106,14 +112,14 @@ export function M4View({ record }: { record: Record<string, unknown> }) {
           </tbody>
         </table>
       )}
-      {Object.keys(robustness).length>0&&<><h3>Recorded robustness</h3>
+      {detail==='sensitivity'&&Object.keys(robustness).length>0&&<><h3>Recorded robustness</h3>
       <p>
         Robustness {show(robustness.value)} · sigma {show(robustness.sigma)} ·
         ddof {show(robustness.ddof)} · scope {show(robustness.scope)}. No
         uncertainty interval is invented.
       </p>
       </>}
-      {Object.keys(ranks).length > 0 && (
+      {detail==='sensitivity'&&Object.keys(ranks).length > 0 && (
         <Suspense fallback={<p>Loading local plot renderer…</p>}>
           <Plot
             data={data}

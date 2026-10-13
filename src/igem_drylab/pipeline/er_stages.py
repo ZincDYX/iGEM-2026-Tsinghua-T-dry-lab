@@ -31,7 +31,7 @@ def quantities(value):
         for child in value: yield from quantities(child)
 
 
-def registry_gaps(config, request, *, skip_ids=()):
+def registry_gaps(config, request, *, skip_ids=(), only_ids=None):
     """Exact canonical bindings; no global native-assay to fusion transfer.
 
 Entity basis and applicability live in the existing ParameterRecord conditions.
@@ -47,6 +47,7 @@ unit is a different binding here, not permission to reinterpret a number.
             gaps.append("ER_formal_requires_provenance_without_assumptions")
     for quantity in quantities(request):
         if quantity.parameter_id in skip_ids: continue
+        if only_ids is not None and quantity.parameter_id not in only_ids: continue
         record = records.get(quantity.parameter_id)
         reason = None
         if record is None:

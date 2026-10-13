@@ -45,7 +45,7 @@ it("unknown, old, incomplete and failed MCP envelopes fall back without zeros or
       {ok:true,result:{...base,schema_version:"future"}}, null]) {
     expect(adaptSteadyResult("igem.m4.solve_steady_state", output)).toBeNull();
     render(<ScientificResults run={run("pathway", output)} />);
-    expect(screen.getByText(/Unknown\/legacy\/incomplete/)).toBeTruthy();
+    expect(screen.getByText(/not supported.*Export/i)).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
     cleanup();
   }

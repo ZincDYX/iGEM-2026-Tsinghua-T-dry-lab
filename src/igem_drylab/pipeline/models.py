@@ -178,6 +178,7 @@ class M4CandidateContext(BaseModel):
 
 
 class M4ReactionPrediction(ScientificResult):
+    quantity_units: dict[str,str] = Field(default_factory=dict)
     compartment_result: dict[str,Any] | None = None
     experimental_contract: dict[str, Any] = Field(default_factory=dict)
     transport_report: dict[str, Any] = Field(default_factory=dict)

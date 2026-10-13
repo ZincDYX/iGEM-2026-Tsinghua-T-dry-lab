@@ -1,5 +1,6 @@
 """Byte-preserving dependency closure and atomic project/grant publication."""
 from hashlib import sha256
+import json
 from pathlib import Path
 import os
 import shutil
@@ -73,11 +74,46 @@ def create_iteration(store, boundary, engine, run_id, data_dir):
                 ScientificProject.model_validate(draft.scientific_project).verify()
             with store.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
+                # References follow this exact copied source closure, not the
+                # current project's newer datasets or another project's grant.
+                grants={}
+                for row in db.execute('SELECT id,path FROM file_assets WHERE project_id=?',(project.id,)).fetchall():
+                    source=Path(row['path']).resolve()
+                    if source in logical:
+                        grants[row['id']]=boundary.asset(published/logical[source],project_id=draft.id,db=db)['id']
+                for dataset in draft.datasets:
+                    old=dataset.get('file_id')
+                    if old in grants:
+                        dataset['file_id']=grants[old]
+                        if dataset.get('id')==old: dataset['id']=grants[old]
+                from .models import Workflow,LiteralInput,SequenceRef
+                workflow=Workflow.model_validate(rebind_paths(frozen['snapshot']['workflow'],{source:published/relative for source,relative in logical.items()}))
+                for node in workflow.nodes:
+                    for name,value in node.inputs.items():
+                        if isinstance(value,SequenceRef):
+                            value.construct_version=draft.revision
+                            if value.file_id in grants: value.file_id=grants[value.file_id]
+                        elif node.tool_id=='synthetic.ps_v3' and name=='package_file_id' and isinstance(value,LiteralInput):
+                            if value.value in grants: value.value=grants[value.value]
+                    if node.tool_id=='workflow.custom_formula' and all(isinstance(value,LiteralInput) for value in node.inputs.values()):
+                        from .methods import MethodDraftView
+                        from .custom_formula import FormulaExecution,expression_latex
+                        execution=FormulaExecution.model_validate({name:value.value for name,value in node.inputs.items()})
+                        row=db.execute('SELECT payload FROM method_drafts WHERE id=? AND project_id=?',(execution.method_id,project.id)).fetchone()
+                        if row is None: raise WorkflowError('iteration_owned_method_missing')
+                        if row:
+                            original_method=MethodDraftView.model_validate_json(row['payload'])
+                            method=original_method.model_copy(update={'id':str(uuid4()),'project_id':draft.id,'project_revision':draft.revision,'previous_id':None,
+                                'version':execution.method_version,'title':execution.title,'execution_spec':execution.spec,'latex':expression_latex(execution.spec.expression)})
+                            db.execute('INSERT INTO method_drafts VALUES(?,?,?)',(method.id,draft.id,method.model_dump_json()))
+                            node.inputs['method_id']=LiteralInput(value=method.id)
                 updated = store.save_project(draft, db=db)
                 public = boundary.project(updated, db=db)
+                public_workflow=boundary.tree(workflow.model_dump(mode='json'),project_id=draft.id,db=db)
+                boundary.check(public_workflow)
                 db.execute("INSERT INTO scientific_bundles VALUES(?,?)", (identity, str(published)))
             committed = True
-            return {"project": public, "parent_run_id": run_id, "parent_snapshot_sha256": frozen["snapshot_hash"],
+            return {"project": public, "workflow":public_workflow,"parent_run_id": run_id, "parent_snapshot_sha256": frozen["snapshot_hash"],
                     "reuse_supported": False,
                     "explanation": "Independent byte-preserving iteration from the frozen snapshot. Review a new plan; cross-run computation reuse is not supported."}
     except (OSError, ValueError) as error:

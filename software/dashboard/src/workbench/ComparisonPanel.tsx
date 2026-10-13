@@ -6,40 +6,40 @@ import type {
   RunSummaryView,
 } from "../contracts/generated";
 import { requestJson } from "../api";
-import { parsePublicAsync as parsePublic } from "../contracts/validation";
-import { LazyJson } from "../contracts/LazyJson";
+import { parsePublicAsync } from "../contracts/validation";
+import { show } from "../contracts/resultAdapters";
 
 export function ComparisonPanel({
   current,
   history,
 }: {
-  history: RunListView[];
   current?: RunSummaryView;
+  history: RunListView[];
 }) {
-  const [lineage, setLineage] = useState<LineagePage>();
-  const [lineageOffset, setLineageOffset] = useState(0);
-  const [other, setOther] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [page, setPage] = useState<ComparePage>();
-  const [error, setError] = useState("");
+  const [lineage, setLineage] = useState<LineagePage>(),
+    [other, setOther] = useState(""),
+    [page, setPage] = useState<ComparePage>();
+  const [lineageOffset, setLineageOffset] = useState(0),
+    [offset, setOffset] = useState(0),
+    [error, setError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
     setOther("");
     setPage(undefined);
-    setLineage(undefined);
+    setError("");
     if (current)
       void requestJson(
         `/projects/${encodeURIComponent(current.project_id)}/lineage?offset=${lineageOffset}`,
         undefined,
         controller.signal,
       )
-        .then(async (raw) => {
-          if (!controller.signal.aborted)
-            {const value=await parsePublic("LineagePage",raw);if(!controller.signal.aborted)setLineage(value);}
+        .then((raw) => parsePublicAsync("LineagePage", raw))
+        .then((value) => {
+          if (!controller.signal.aborted) setLineage(value);
         })
         .catch(() => {
           if (!controller.signal.aborted)
-            setError("Authorized lineage unavailable.");
+            setError("Related runs could not be loaded.");
         });
     return () => controller.abort();
   }, [current?.project_id, lineageOffset]);
@@ -53,150 +53,162 @@ export function ComparisonPanel({
         undefined,
         controller.signal,
       )
-        .then(async (raw) => {
-          if (!controller.signal.aborted) {
-            const value = await parsePublic("ComparePage", raw);
-            if(controller.signal.aborted)return;
-            if (
-              value.left.run_id !== other ||
-              value.right.run_id !== current.id ||
-              value.right.snapshot_hash !== current.snapshot_hash
-            )
-              throw new Error("Comparison identity changed.");
-            setPage(value);
-          }
+        .then((raw) => parsePublicAsync("ComparePage", raw))
+        .then((value) => {
+          if (
+            value.left.run_id !== other ||
+            value.right.run_id !== current.id ||
+            value.right.snapshot_hash !== current.snapshot_hash
+          )
+            throw Error("Comparison identity changed.");
+          if (!controller.signal.aborted) setPage(value);
         })
         .catch(() => {
           if (!controller.signal.aborted)
-            setError("Comparison denied or frozen evidence changed.");
+            setError(
+              "These runs cannot be compared, or their recorded evidence changed.",
+            );
         });
     return () => controller.abort();
   }, [current?.id, current?.snapshot_hash, other, offset]);
+  const name = (id: string) =>
+    lineage?.items.find((item) => item.run_id === id)?.name ||
+    history.find((item) => item.id === id)?.name ||
+    "Related run";
   return (
     <section>
-      <h2>Compare frozen runs</h2>
-      <p>
-        Authorized parent/child lineage only. Inputs and evidence remain visible
-        when numerical comparison is blocked. No automatic ranking.
-      </p>
-      <label>
-        Related run
-        <select
-          value={other}
-          onChange={(e) => {
-            setOther(e.target.value);
-            setOffset(0);
-          }}
-        >
-          <option value="">Select related run</option>
-          {lineage?.items
-            .filter((r) => r.run_id !== current?.id)
-            .map((r) => (
-              <option key={r.run_id} value={r.run_id}>
-                {r.name ||
-                  history.find((item) => item.id === r.run_id)?.name ||
-                  "Related run"}{" "}
-                · Inputs {r.revision} · {r.status}
-                {r.created_at &&
-                  ` · ${new Date(r.created_at).toLocaleString()}`}
-              </option>
-            ))}
-        </select>
-      </label>
-      <button
-        disabled={!lineageOffset}
-        onClick={() => setLineageOffset(Math.max(0, lineageOffset - 50))}
-      >
-        Previous lineage page
-      </button>
-      <button
-        disabled={!lineage?.has_more}
-        onClick={() => setLineageOffset(lineageOffset + 50)}
-      >
-        Next lineage page
-      </button>
-      {error && <p role="alert">{error}</p>}
-      {page && (
+      <h2>Compare runs</h2>
+      {!current ? (
+        <p>Select a recorded run in Results first.</p>
+      ) : (
         <>
           <p>
-            {page.left.name ||
-              history.find((item) => item.id === page.left.run_id)?.name ||
-              "Related run"}{" "}
-            · Inputs {page.left.revision}
-            <br />
-            {current?.name ?? "Current run"} · Inputs {page.right.revision}
+            Current run: {current.name}. Only compatible recorded metrics are
+            compared; missing evidence is not ranked.
           </p>
-          <h3>Changed input fields</h3>
-          <ul>
-            {page.input_changed_fields.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-          {page.input_diff_truncated && (
-            <p>Input differences truncated to 200 fields.</p>
+          <label>
+            Related run
+            <select
+              aria-label="Related run"
+              value={other}
+              onChange={(event) => {
+                setOther(event.target.value);
+                setOffset(0);
+              }}
+            >
+              <option value="">Select a related run</option>
+              {lineage?.items
+                .filter((item) => item.run_id !== current.id)
+                .map((item) => (
+                  <option key={item.run_id} value={item.run_id}>
+                    {name(item.run_id)} — {item.status.replaceAll("_", " ")}
+                    {item.created_at
+                      ? ` — ${new Date(item.created_at).toLocaleString()}`
+                      : ""}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {(lineageOffset > 0 || lineage?.has_more) && (
+            <nav>
+              <button
+                disabled={!lineageOffset}
+                onClick={() =>
+                  setLineageOffset((value) => Math.max(0, value - 50))
+                }
+              >
+                Previous runs
+              </button>
+              <button
+                disabled={!lineage?.has_more}
+                onClick={() => setLineageOffset((value) => value + 50)}
+              >
+                Next runs
+              </button>
+            </nav>
           )}
-          <table>
-            <thead>
-              <tr>
-                <th>Stage</th>
-                <th>Left identity / evidence</th>
-                <th>Right identity / evidence</th>
-                <th>F3 gate / values</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.rows.map((r, i) => (
-                <tr key={i}>
-                  <td>{r.module}</td>
-                  <td>
-                    {r.left?.record_id ?? "Missing"}
-                    <br />
-                    {r.left?.sequence_identity_sha256
-                      ? "Sequence registered"
-                      : "Sequence not registered"}
-                    <br />
-                    {r.left?.status} / evidence{" "}
-                    {String(r.left?.evidence_ready ?? false)}
-                  </td>
-                  <td>
-                    {r.right?.record_id ?? "Missing"}
-                    <br />
-                    {r.right?.sequence_identity_sha256
-                      ? "Sequence registered"
-                      : "Sequence not registered"}
-                    <br />
-                    {r.right?.status} / evidence{" "}
-                    {String(r.right?.evidence_ready ?? false)}
-                  </td>
-                  <td>
-                    {r.comparable
-                      ? `${r.left?.value} → ${r.right?.value} (${r.metric_unit}); ${r.metric_definition}`
-                      : `Not comparable: ${r.reason_codes.join(", ")}`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <LazyJson
-            value={page.rows}
-            label="Data, F3 contracts and artifact identities"
-          />
-          <button
-            disabled={!offset}
-            onClick={() => setOffset(Math.max(0, offset - 20))}
-          >
-            Previous comparison page
-          </button>
-          <button
-            disabled={!page.has_more}
-            onClick={() => setOffset(offset + 20)}
-          >
-            Next comparison page
-          </button>
-          <p>
-            {Math.min(offset + 1, page.total)}–
-            {Math.min(offset + 20, page.total)} / {page.total}
-          </p>
+          {error && <p role="alert">{error}</p>}
+          {page && (
+            <>
+              <h3>
+                {name(page.left.run_id)} compared with {current.name}
+              </h3>
+              {!!page.input_changed_fields.length && (
+                <section>
+                  <h4>Changed inputs</h4>
+                  <ul>
+                    {[
+                      ...new Set(
+                        page.input_changed_fields.map(
+                          (field) =>
+                            field
+                              .split(".")
+                              .filter(
+                                (part) =>
+                                  !/^\d+$/.test(part) && !part.includes("-"),
+                              )
+                              .map((part) => part.replaceAll("_", " "))
+                              .join(" / ") || "Model input",
+                        ),
+                      ),
+                    ].map((field) => (
+                      <li key={field}>{field}</li>
+                    ))}
+                  </ul>
+                  {page.input_diff_truncated && (
+                    <p>Additional changes are not shown on this page.</p>
+                  )}
+                </section>
+              )}
+              <table>
+                <thead>
+                  <tr>
+                    <th>Module</th>
+                    <th>Earlier run</th>
+                    <th>Current run</th>
+                    <th>Metric</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {page.rows.map((row, index) => (
+                    <tr key={index}>
+                      <td>{row.module.toUpperCase()}</td>
+                      {[row.left, row.right].map((record, i) => (
+                        <td key={i}>
+                          {record
+                            ? `${record.status.replaceAll("_", " ")}; ${record.evidence_ready ? "evidence ready" : "missing evidence"}`
+                            : "No matching record"}
+                        </td>
+                      ))}
+                      <td>
+                        {row.comparable
+                          ? `${show(row.left?.value)} → ${show(row.right?.value)} ${row.metric_unit ?? ""} — ${row.metric_definition ?? ""}`
+                          : `Not comparable: ${row.reason_codes.map((reason) => reason.replaceAll("_", " ")).join("; ")}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(offset > 0 || page.has_more) && (
+                <nav>
+                  <button
+                    disabled={!offset}
+                    onClick={() =>
+                      setOffset((value) => Math.max(0, value - 20))
+                    }
+                  >
+                    Previous comparison page
+                  </button>
+                  <button
+                    disabled={!page.has_more}
+                    onClick={() => setOffset((value) => value + 20)}
+                  >
+                    Next comparison page
+                  </button>
+                </nav>
+              )}
+            </>
+          )}
         </>
       )}
     </section>

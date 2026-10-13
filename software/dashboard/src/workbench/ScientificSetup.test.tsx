@@ -9,7 +9,7 @@ it('editing only the selected construct clears its review, without mutating othe
   const change=vi.fn();
   render(<ConstructObject project={project} selected="record:A" onChange={change}/>);
   expect(screen.queryByLabelText('Construct host')).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:'Edit construct conditions'}));
+  fireEvent.click(screen.getByRole('button',{name:'Correct declaration'}));
   fireEvent.change(screen.getByLabelText('Construct host'),{target:{value:'new host'}});
   const updated=change.mock.calls[0][0].scientific_project.config.inputs.construct_records;
   expect(updated[0]).toEqual({...records[0],host:'new host',review_status:'extracted',m1_review:null});
@@ -18,7 +18,7 @@ it('editing only the selected construct clears its review, without mutating othe
 });
 it('viewing a different construct retains the approval attached to its identity and does not open a schema form',()=>{
   const change=vi.fn(),view=render(<ConstructObject project={project} selected="record:B" onChange={change}/>);
-  expect(screen.getByText(/review: approved/)).toBeTruthy();
+  expect(screen.getByText(/Host: original host — approved/)).toBeTruthy();
   view.rerender(<ConstructObject project={project} selected="record:A" onChange={change}/>);
   expect(screen.getByRole('heading',{name:'A'})).toBeTruthy();
   expect(change).not.toHaveBeenCalled();

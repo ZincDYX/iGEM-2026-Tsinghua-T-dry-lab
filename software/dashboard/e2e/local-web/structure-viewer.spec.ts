@@ -1,3 +1,4 @@
+import {ready,commitImport} from './helpers';
 import {test, expect} from '@playwright/test';
 import fs from 'node:fs';
 
@@ -16,12 +17,8 @@ async function importStructure(page: import('@playwright/test').Page, filename: 
     await duplicate.selectOption({label:'Keep as new version'});
     await expect(duplicate).toHaveValue('new_version');
   }
-  await page.getByRole('button',{name:'Confirm import',exact:true}).click();
+  await commitImport(page);
   await expect(page.getByLabel('Import transaction preview')).toHaveCount(0);
-}
-async function openResources(page: import('@playwright/test').Page) {
-  await page.getByText('View',{exact:true}).click();
-  await page.getByRole('menuitem',{name:'Artifacts',exact:true}).click();
 }
 
 test('real PDB/mmCIF rotate, image export, file switch and twenty GPU lifecycle cycles',async({page,context},testInfo)=>{
@@ -55,13 +52,15 @@ test('real PDB/mmCIF rotate, image export, file switch and twenty GPU lifecycle 
   page.on('pageerror',error => errors.push(error.message));
   const started = Date.now();
   await page.goto('/');
-  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
+  await ready(page);
   await importStructure(page,'actual.pdb',pdb!);
   await importStructure(page,'actual.cif',cif!);
-  await openResources(page);
-  await page.getByRole('button',{name:'actual.pdb · structure',exact:true}).click();
+  await page.getByLabel('Input objects').getByRole('button',{name:'actual.pdb',exact:true}).click();
   const viewport = page.locator('.structure-canvas');
   await expect(viewport).toHaveAttribute('data-state','ready',{timeout:30000});
+  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(page.getByText('Registered artifacts',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Residues',exact:true}).click();
   await expect(page.getByLabel('Chain',{exact:true})).toHaveValue('A');
   await expect(page.getByText('B-factor is not pLDDT.',{exact:false})).toBeVisible();
   const before = await viewport.screenshot();
@@ -75,7 +74,8 @@ test('real PDB/mmCIF rotate, image export, file switch and twenty GPU lifecycle 
   const png = fs.readFileSync((await download.path())!);
   expect(png.subarray(0,8).toString('hex')).toBe('89504e470d0a1a0a');
   expect(png.length).toBeGreaterThan(1000);
-  await page.getByRole('button',{name:'actual.cif · structure',exact:true}).click();
+  await page.getByRole('tab',{name:'Inputs',exact:true}).click();
+  await page.getByLabel('Input objects').getByRole('button',{name:'actual.cif',exact:true}).click();
   await expect(viewport).toHaveAttribute('data-state','ready',{timeout:30000});
   await expect(page.getByRole('heading',{name:'actual.cif',exact:true})).toBeVisible();
   const cdp = await context.newCDPSession(page);
@@ -83,12 +83,12 @@ test('real PDB/mmCIF rotate, image export, file switch and twenty GPU lifecycle 
   const baseline = (await cdp.send('Runtime.getHeapUsage')).usedSize;
   const cycles: {cycle:number; heap:number; gpuLive:number}[] = [];
   for (let cycle=1;cycle<=20;cycle++) {
-    await page.getByRole('tab',{name:'Inputs',exact:true}).click();
+    await page.getByRole('button',{name:'Close actual.cif',exact:true}).click();
     await expect(viewport).toHaveCount(0);
     const liveHandles = () => page.evaluate(() => (window as unknown as {fusionlabGlLedger:{created:number;deleted:number;releasedByContext:number}[]}).fusionlabGlLedger.reduce((sum,row)=>sum+row.created-row.deleted-row.releasedByContext,0));
     await expect.poll(liveHandles,{message:`GPU resource handles after closing cycle ${cycle}`}).toBe(0);
     const live = await liveHandles();
-    await page.getByRole('tab',{name:'Resources',exact:true}).click();
+    await page.getByLabel('Input objects').getByRole('button',{name:'actual.cif',exact:true}).click();
     await expect(viewport).toHaveAttribute('data-state','ready',{timeout:30000});
     expect(await viewport.count()).toBe(1);
     await cdp.send('HeapProfiler.collectGarbage');
@@ -112,12 +112,14 @@ test('real coordinate metadata survives actual WebGL-unavailable fallback',async
     } as typeof original;
   });
   await page.goto('/');
-  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
+  await ready(page);
   await importStructure(page,'fallback.pdb',pdb!);
-  await openResources(page);
-  await page.getByRole('button',{name:'fallback.pdb · structure',exact:true}).click();
+  await page.getByLabel('Input objects').getByRole('button',{name:'fallback.pdb',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'WebGL is required'})).toBeVisible({timeout:30000});
+  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(page.getByText('Registered artifacts',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Residues',exact:true}).click();
   await expect(page.getByLabel('Chain',{exact:true})).toHaveValue('A');
-  await expect(page.getByRole('button',{name:'Download authorized original'})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Export file'})).toBeEnabled();
   await expect(page.getByRole('button',{name:'Export structure image'})).toBeDisabled();
 });

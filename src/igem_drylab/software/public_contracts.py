@@ -119,6 +119,7 @@ class BindingPreviewView(Contract):
 
 
 class IterationView(Contract):
+    workflow: Workflow | None = None
     project: ProjectView
     parent_run_id: str
     parent_snapshot_sha256: str

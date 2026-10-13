@@ -19,6 +19,7 @@ export function ScanViewer({
   const [selected, setSelected] = useState<number>(),
     [error, setError] = useState(""),
     [mode, setMode] = useState("scatter");
+  const [dataOpen,setDataOpen]=useState(false),[rangeOpen,setRangeOpen]=useState(false);
   useEffect(() => {
     const controller = new AbortController();
     setError("");
@@ -193,7 +194,9 @@ export function ScanViewer({
               setOffset(Math.floor((ordinal - range) / 100) * 100);
             }}
           />
-          <div className="table-scroll">
+          <button onClick={()=>setDataOpen(value=>!value)}>Data</button>{(range>0||page.has_more)&&<button onClick={()=>setRangeOpen(value=>!value)}>Range</button>}
+          {selected!==undefined&&<p>Selected point {selected+1}: {show(page.points.find(point=>point.ordinal===selected)?.metric_value)} {page.metric_unit??'unit not declared'}</p>}
+          {dataOpen&&<><div className="table-scroll">
             <table>
               <thead>
                 <tr>
@@ -230,7 +233,7 @@ export function ScanViewer({
               </tbody>
             </table>
           </div>
-          <button
+          {page.points.length>100&&<><button
             disabled={!offset}
             onClick={() => setOffset(Math.max(0, offset - 100))}
           >
@@ -241,8 +244,8 @@ export function ScanViewer({
             onClick={() => setOffset(offset + 100)}
           >
             Next scan points
-          </button>
-          {(range > 0 || page.has_more) && (
+          </button></>}</>}
+          {rangeOpen&&(range > 0 || page.has_more) && (
             <>
               <p>
                 Display budget: 10,000 exact scan points per range; table

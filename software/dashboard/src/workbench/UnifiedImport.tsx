@@ -1,7 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import type {ImportTransactionPreview,ProjectView} from '../contracts/generated';
 import * as client from './client';
-import {LazyJson} from '../contracts/LazyJson';
 import {object} from '../contracts/validation';
 
 export function UnifiedImport({project,persisted,busy,dirty,action,prepare,onCommitted}:{
@@ -13,7 +12,7 @@ export function UnifiedImport({project,persisted,busy,dirty,action,prepare,onCom
   const [choices,setChoices]=useState<Record<string,string>>({});
   const [pending,setPending]=useState<string[]>([]);
   const [restoreError,setRestoreError]=useState(false);
-  const [relativeName,setRelativeName]=useState('');
+  const [relativeName,setRelativeName]=useState(''),[importMenu,setImportMenu]=useState(false),[updating,setUpdating]=useState(false);
   const fileInput=useRef<HTMLInputElement>(null),folderInput=useRef<HTMLInputElement>(null);
   const additionalInput=useRef<HTMLInputElement>(null);
   const generation=useRef(0);
@@ -40,13 +39,21 @@ export function UnifiedImport({project,persisted,busy,dirty,action,prepare,onCom
     });
   }
   const blocking=preview?.items.some(item=>item.issues.some(issue=>issue.severity==='error'||issue.severity==='confirmation'));
+  const missing=[...new Set(preview?.items.flatMap(item=>item.issues.map(issue=>issue.expected_filename).filter((value):value is string=>!!value))??[])];
+  useEffect(()=>{
+    if(!preview||!Object.keys(options).length||dirty)return;
+    const stamp=generation.current;let active=true;setUpdating(true);
+    const timer=setTimeout(()=>{void client.reviseImport(project.id,preview.id,options,project.revision).then(value=>{if(active&&stamp===generation.current)setPreview(value);})
+      .catch(()=>{if(active)setRestoreError(true);}).finally(()=>{if(active)setUpdating(false);});},250);
+    return()=>{active=false;clearTimeout(timer);};
+  },[project.id,project.revision,preview?.id,options,dirty]);
   return <section id="input-import" aria-label="Unified data import" className="input-section">
     <div className="import-dropzone" onDragOver={e=>e.preventDefault()} onDrop={e=>{
       e.preventDefault();if(!busy)void choose(Array.from(e.dataTransfer.files));
     }}>
-      <p>Drop data files or ZIP here. Files, folders and ZIP use the same preview and confirmation.</p>
-      <button disabled={busy} onClick={()=>fileInput.current?.click()}>Import files</button>
-      <button disabled={busy} onClick={()=>folderInput.current?.click()}>Import folder</button>
+      <p>Drop files or ZIP here.</p>
+      <button disabled={busy} onClick={()=>fileInput.current?.click()}>Import</button><button aria-label="Import options" disabled={busy} onClick={()=>setImportMenu(value=>!value)}>⌄</button>
+      {importMenu&&<button disabled={busy} onClick={()=>{setImportMenu(false);folderInput.current?.click();}}>Choose folder</button>}
       <input hidden id="input-import-file" ref={fileInput} aria-label="Import data file" type="file" multiple
         onChange={e=>{void choose(Array.from(e.target.files??[]));e.target.value='';}}/>
       <input hidden id="input-import-folder" ref={node=>{folderInput.current=node;node?.setAttribute('webkitdirectory','');}}
@@ -59,16 +66,14 @@ export function UnifiedImport({project,persisted,busy,dirty,action,prepare,onCom
       })}>Resume saved import {index+1}</button>)}
     </div>}
     {preview&&<article aria-label="Import transaction preview">
-      <h3>Review imported objects</h3>
-      <p>Original bytes are retained. Import is not tool execution or scientific approval.</p>
+      <h3>Import {preview.items.length} objects</h3>
       {(dirty||preview.expected_revision!==project.revision)&&<p role="alert">Inputs changed since this preview. Save changes and refresh the import before confirmation; no unsaved changes will be overwritten.</p>}
       {preview.items.map(item=><section key={item.file.id}>
-        <h4>{item.filename}</h4><p>{item.detected_format} · {item.semantic_type} · {item.records.length} parsed records</p>
-        <p>{item.supported_scope}</p>
+        <h4>{item.filename}</h4><p>{item.detected_format}{item.records.length?` — ${item.records.length} records`:''}</p>
         {item.semantic_type==='DesignRecord'&&<p>Missing CDS translations remain explicit gaps; DNA is not automatically translated.</p>}
         {item.semantic_type==='SyntheticDemonstration'&&<p><strong>Synthetic demo.</strong> Not formal prediction or experimental validation. E3 remains blocked.</p>}
         {item.issues.map((issue,index)=><p key={index} role={issue.severity==='error'?'alert':undefined}>
-          {issue.severity}: {issue.message}{issue.field&&` (${issue.field.replaceAll('_',' ')})`}
+          {issue.message}
         </p>)}
         {item.semantic_type==='SequenceCollection'&&item.issues.some(i=>i.field==='molecule_type')&&<label>Molecule type for {item.filename}
           <select aria-label={`Molecule type for ${item.filename}`} value={String(options[item.filename]?.molecule_type??'')}
@@ -109,20 +114,16 @@ export function UnifiedImport({project,persisted,busy,dirty,action,prepare,onCom
           <select aria-label={`Duplicate: ${item.filename}`} value={choices[item.filename]??''} onChange={e=>setChoices({...choices,[item.filename]:e.target.value})}>
             <option value="">Choose reuse or version action</option><option value="reuse">Reuse existing</option><option value="replace">Replace in new revision</option><option value="new_version">Keep as new version</option>
           </select></label>}
-        <LazyJson value={item.records} label="Parsed source details"/>
       </section>)}
-      <p>{preview.proposed_links.length} source/sequence binding proposals. None implies pocket or enzyme identity approval.</p>
-      <label>Relative filename for one missing file (optional)<input value={relativeName} onChange={e=>setRelativeName(e.target.value)} placeholder="study/proteins.faa"/></label>
-      <button disabled={busy||dirty||preview.expected_revision!==project.revision} onClick={()=>additionalInput.current?.click()}>Add missing files to this import</button>
+      {missing.map(name=><button key={name} disabled={busy} onClick={()=>{setRelativeName(name);additionalInput.current?.click();}}>Add file: {name}</button>)}
       <input hidden ref={additionalInput} aria-label="Add missing import files" type="file" multiple onChange={e=>{
         void choose(Array.from(e.target.files??[]),true);e.target.value='';
       }}/>
-      <button disabled={busy} onClick={()=>void action(async()=>{
-        const saved=await prepare();
-        if(saved)setPreview(await client.reviseImport(saved.id,preview.id,options,saved.revision));
-      })}>Update preview with confirmed roles</button>
-      <button disabled={busy||dirty||preview.expected_revision!==project.revision||blocking||preview.items.some(i=>i.duplicate_file_id&&!choices[i.filename])}
-        onClick={()=>void action(async()=>{const value=await client.commitImport(project.id,preview.id,choices);onCommitted(value);setPending(p=>p.filter(id=>id!==preview.id));setPreview(undefined);})}>Confirm import</button>
+      {updating&&<p role="status">Checking choices…</p>}
+      <button disabled={busy||updating||blocking||preview.items.some(i=>i.duplicate_file_id&&!choices[i.filename])}
+        onClick={()=>void action(async()=>{const saved=await prepare();if(!saved)return;const checked=saved.revision===preview.expected_revision?preview:await client.reviseImport(saved.id,preview.id,options,saved.revision);
+          if(checked.items.some(item=>item.issues.some(issue=>issue.severity==='error'||issue.severity==='confirmation'))){setPreview(checked);return;}
+          const value=await client.commitImport(saved.id,checked.id,choices);onCommitted(value);setPending(p=>p.filter(id=>id!==preview.id));setPreview(undefined);setOptions({});})}>Import objects</button>
       <button disabled={busy} onClick={()=>void action(async()=>{await client.discardImport(project.id,preview.id);setPending(p=>p.filter(id=>id!==preview.id));setPreview(undefined);})}>Discard import</button>
     </article>}
   </section>;

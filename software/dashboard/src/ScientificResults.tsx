@@ -8,7 +8,6 @@ import {
   stageRecords,
   m1Checks,
 } from "./contracts/resultAdapters";
-import { LazyJson } from "./contracts/LazyJson";
 import { M1Matrix, M2Metrics } from "./workbench/ScreenResultTables";
 import { MissingEvidence } from "./workbench/MissingEvidence";
 import { M3View, M4View, SequencePlot } from "./workbench/StageViews";
@@ -19,6 +18,9 @@ import { PredictionResult } from "./workbench/PredictionResult";
 import { M1MethodResult } from "./workbench/M1MethodResult";
 import {SyntheticPSResult} from './workbench/SyntheticPSResult';
 import {CustomFormulaResult} from './workbench/CustomFormulaResult';
+import type {FileContext} from './workbench/FileDocument';
+export type ResultViewState={scenario?:string;candidate?:number;seriesIds?:string[];trajectoryFileId?:string};
+type ResultNavigation={onOpenResource?:(id:string,context?:Partial<FileContext>)=>void;viewState?:ResultViewState;onViewChange?:(value:ResultViewState)=>void};
 const Series = lazy(() =>
   import("./workbench/viewers/SeriesViewer").then((m) => ({
     default: m.SeriesViewer,
@@ -109,7 +111,7 @@ function StageResult({
   return (
     <section>
       <h2>{module} · Scientific project results</h2>
-      <label>
+      {records.length>1&&<label>
         Current candidate
         <select
           aria-label="Current candidate"
@@ -122,29 +124,17 @@ function StageResult({
             </option>
           ))}
         </select>
-      </label>
+      </label>}
       <p className="result-status">{record.numerically_solved === true ? 'Numerically solved' : record.status === 'insufficient_data' ? 'Blocked · missing data' : show(record.status)}{record.data_quality==='demo_fixture'?' · synthetic':''}</p>
       {module !== 'M2' && <MissingEvidence module={module} missing={record.missing_inputs} status={record.status}/>}
       {module === "M1" && (
         <>
           <M1Matrix records={records} />
-          <LazyJson
-            value={record.part_screens}
-            label="Original part features, rules and rejection reasons"
-          />
-          <LazyJson
-            value={record.full_fusion_screen}
-            label="Full fusion sequence screen and rule sources"
-          />
         </>
       )}
       {module === "M2" && (
         <>
           <M2Metrics record={record} onAddData={onAddData} />
-          <LazyJson
-            value={record.construct_definition}
-            label="Construct / Residue mapping source"
-          />
         </>
       )}
       {module === "M3" && <M3View record={record} />}
@@ -159,25 +149,6 @@ function StageResult({
                 : record.trajectory_artifact
             }
           />
-          {(record.transport_report || record.steady_state_residuals || record.analysis_result) && <LazyJson
-            label="Transport/secretion, steady residuals and local stability"
-            value={{
-              transport: record.transport_report,
-              residuals: record.steady_state_residuals,
-              analysis: record.analysis_result,
-            }}
-          />}
-          {(record.robustness || record.sensitivity) && <LazyJson
-            label="F2: sensitivity and robustness (recorded analysis)"
-            value={{
-              robustness: record.robustness,
-              sensitivity: record.sensitivity,
-            }}
-          />}
-          {record.design_comparison && <LazyJson
-            label="Design comparison"
-            value={record.design_comparison}
-          />}
         </>
       )}
       {module === "M5" && (
@@ -190,10 +161,6 @@ function StageResult({
               : "None"}{" "}
             · Fit warnings: {show(record.fit_warnings)}
           </p>
-          <LazyJson
-            value={record}
-            label="Condition matching, measurements, residuals and frozen holdout records"
-          />
         </>
       )}
     </section>
@@ -204,16 +171,17 @@ function NodeResult({
   node,
   projectId,
   onAddData,
+  onOpenResource,viewState,onViewChange,
 }: {
   run: ResultRun;
   node: ResultRun["nodes"][number];
   projectId?: string;
   onAddData?:()=>void;
-}) {
+} & ResultNavigation) {
   const tool = nodeTool(run, node);
   const output = node.output;
   if (tool==='synthetic.ps_v3'&&object(output)&&output.schema_version==='synthetic-ps-v3-run-v1')
-    return <SyntheticPSResult output={output} projectId={projectId}/>;
+    return <SyntheticPSResult output={output} projectId={projectId} onOpenResource={onOpenResource} viewState={viewState} onViewChange={onViewChange}/>;
   if (tool==='workflow.custom_formula'&&object(output)&&output.schema_version==='custom-formula-v1')
     return <CustomFormulaResult output={output}/>;
   if (object(output) && m1Checks(output))
@@ -240,7 +208,6 @@ function NodeResult({
           Sequence statistics; activity and assembly are not experimentally
           assessed.
         </p>
-        <LazyJson value={output} />
       </section>
     );
   if (
@@ -268,7 +235,6 @@ function NodeResult({
           Declared inventory calculation, not a prediction of assembly success
           or interface stability.
         </p>
-        <LazyJson value={output} />
       </section>
     );
   const adapted = adaptSteadyResult(tool, output);
@@ -276,13 +242,11 @@ function NodeResult({
     return (
       <section>
         <h2>
-          {tool ?? "Unknown tool"} · {node.id}
+          Recorded result
         </h2>
         <p>
-          Unknown/legacy/incomplete result schema. Inspect the authorized
-          original artifact。
+          This result format is not supported for display. Export the authorized result record.
         </p>
-        <LazyJson value={output} />
       </section>
     );
   const { data, title, maps } = adapted;
@@ -353,7 +317,6 @@ function NodeResult({
           ; not proof of global stability or uniqueness.
         </p>
       )}
-      <LazyJson value={output} />
     </section>
   );
 }
@@ -361,18 +324,19 @@ export function ScientificResults({
   run,
   projectId,
   onAddData,
+  onOpenResource,viewState,onViewChange,
 }: {
   run: ResultRun;
   projectId?: string;
   onAddData?:()=>void;
-}) {
+} & ResultNavigation) {
   return (
     <>
       {run.nodes
         .filter((node) => node.status === "succeeded")
         .map((node) => (
           <ResultBoundary key={`${run.id}:${node.id}`}>
-            <NodeResult run={run} node={node} projectId={projectId} onAddData={onAddData}/>
+            <NodeResult run={run} node={node} projectId={projectId} onAddData={onAddData} onOpenResource={onOpenResource} viewState={viewState} onViewChange={onViewChange}/>
           </ResultBoundary>
         ))}
     </>

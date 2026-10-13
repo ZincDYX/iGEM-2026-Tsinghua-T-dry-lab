@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { NodePage } from "../contracts/generated";
-import { LazyJson } from "../contracts/LazyJson";
 import { sequenceOutput, show } from "../contracts/resultAdapters";
 
 export function SequenceMapTable({
@@ -65,8 +64,7 @@ export function SequenceMapTable({
       {!value.rows.length && (
         <p>No registered children on this page. No values were generated.</p>
       )}
-      <LazyJson value={value.tool_identity} label="Calculation method" />
-      <LazyJson value={value} label="Data and provenance" />
+      <details><summary>Calculation method</summary><p>Recorded sequence statistics. Inspect the selected sequence for its features and source; export the result record for full provenance.</p></details>
     </section>
   );
 }

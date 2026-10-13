@@ -118,7 +118,9 @@ class ApplicationService:
         # twice. Exclude only this candidate while retaining its complete lineage.
         review_config = science.config.model_copy(update={'parameters':[p for p in science.config.parameters if p.parameter_id != parameter_id]})
         checked = candidate.model_copy(update={'review_status':'validated'})
-        validate_candidate_for_approval(review_config,checked,_requirement(review_config,stage,requirement_name),reviewer)
+        from igem_drylab.workflow.parameter_edits import validate_er_candidate
+        if not validate_er_candidate(review_config,checked,stage,requirement_name,reviewer):
+            validate_candidate_for_approval(review_config,checked,_requirement(review_config,stage,requirement_name),reviewer)
         approved = candidate.model_copy(update={'review_status':'approved','approved_by':reviewer.strip(),
             'updated_at':datetime.now(timezone.utc),'notes':candidate.notes+'\nHuman review reason: '+reason.strip(),
             'validation_flags':[*candidate.validation_flags,'approved_by:'+reviewer.strip()]})

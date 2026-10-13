@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { Workflow, WorkflowDocument, RunSummaryView, ScientificPrecheckView } from '../contracts/generated';
-import { dependencies } from './PlanPanel';
+import { dependencies,statusLabel } from './PlanPanel';
 import { matchingRun, ModuleStatus, inputCheckLabel } from './ModuleStatus';
 
 type Position = {x: number; y: number};
@@ -21,11 +21,12 @@ export function defaultPositions(workflow: Workflow): Record<string, Position> {
   }));
 }
 
-export function WorkflowGraph({workflow, layout, selected, disabled, onSelect, onMove, run, inputCheck}: {
+export function WorkflowGraph({workflow, layout, selected, disabled, onSelect, onMove, run, inputCheck,onSelectEdge}: {
   workflow: Workflow; layout?: WorkflowDocument['layout']; selected: string;
   disabled?: boolean; onSelect: (id: string) => void;
   onMove?: (id: string, position: Position) => void;
   run?: RunSummaryView; inputCheck?: ScientificPrecheckView;
+  onSelectEdge?:(from:string,to:string)=>void;
 }) {
   const snapshot = matchingRun(workflow, run);
   const [drag, setDrag] = useState<{id: string; position: Position}>();
@@ -41,6 +42,8 @@ export function WorkflowGraph({workflow, layout, selected, disabled, onSelect, o
           const start = positions[parent], end = positions[node.id];
           const reference = Object.values(node.inputs).some(input => input.kind === 'node' && input.node_id === parent) || (node.map?.items.kind === 'node' && node.map.items.node_id === parent);
           return <path key={`${parent}:${node.id}`} className={reference ? 'data-edge' : 'control-edge'}
+            role="button" tabIndex={onSelectEdge?0:-1} aria-label={`Connection ${workflow.nodes.find(n=>n.id===parent)!.label} to ${node.label}`}
+            onClick={()=>onSelectEdge?.(parent,node.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectEdge?.(parent,node.id);}}}
             data-from={parent} data-to={node.id} markerEnd="url(#workflow-arrow)"
             d={`M${start.x + 218},${start.y + 38} C${start.x + 250},${start.y + 38} ${end.x - 35},${end.y + 38} ${end.x},${end.y + 38}`}>
             <title>{`${workflow.nodes.find(n => n.id === parent)!.label} → ${node.label}: ${reference ? 'data binding' : 'ordering dependency'}`}</title>
@@ -79,9 +82,9 @@ export function WorkflowGraph({workflow, layout, selected, disabled, onSelect, o
           setDrag(undefined);
         }}
         onPointerCancel={() => {pointer.current = undefined; setDrag(undefined);}}
-      ><strong>{node.label}</strong><span>{node.tool_id}</span><span>{node.map ? 'Fan-out over a collection' : 'Single module'}</span>
-        <ModuleStatus run={snapshot} nodeId={node.id}/>
-        {inputCheck && <span>{inputCheckLabel(node.tool_id, inputCheck, run)}</span>}
+      ><strong>{node.label}</strong><span>{(()=>{const task=snapshot?.nodes.find(value=>value.id===node.id);if(!task)return'Not started';
+        if(task.status!=='succeeded')return statusLabel(task.status);const science=task.scientific_summary;
+        return science?.missing_input_count?'Completed — missing scientific evidence':science?.numerically_solved_count?'Numerical results recorded':'Completed';})()}</span>
       </button>)}
     </div>
   </div>;

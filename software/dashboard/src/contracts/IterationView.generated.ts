@@ -2,14 +2,48 @@
 
 export type Id = string;
 export type Name = string;
-export type Revision = number;
 export type Description = string;
+export type Version = string;
+/**
+ * @minItems 1
+ */
+export type Nodes = [WorkflowNode, ...WorkflowNode[]];
 export type Id1 = string;
+export type Label = string;
+export type ToolId = string;
+export type Kind = "literal";
+export type Kind1 = "project";
+export type Path = (string | number)[];
+export type Kind2 = "node";
+export type NodeId = string;
+export type Path1 = (string | number)[];
+export type Kind3 = "sequence";
+export type Source = "project" | "scientific_fasta";
+export type FileId = string | null;
+export type RecordId = string;
+export type SequenceSha256 = string;
+export type ConstructVersion = number;
+export type DependsOn = string[];
+export type Items = LiteralInput | ProjectInput | NodeInput | SequenceRef;
+export type ItemArgument = string;
+export type TargetNodeId = string | null;
+export type MaxCompletedStages = number | null;
+export type CheckpointsBefore = string[];
+export type CheckpointsAfter = string[];
+export type AllowedTools = string[];
+export type MaxToolCalls = number;
+export type StopAfterSeconds = number | null;
+export type MemoryLimitMb = number | null;
+export type Id2 = string;
+export type Name1 = string;
+export type Revision = number;
+export type Description1 = string;
+export type Id3 = string;
 export type Sequence = string;
 export type Role = string;
 export type Sequences = SequenceRecord[];
-export type Id2 = string;
-export type Description1 = string;
+export type Id4 = string;
+export type Description2 = string;
 export type Assemblies = AssemblyRecord[];
 export type Pathway = {
   [k: string]: unknown;
@@ -20,11 +54,11 @@ export type Datasets = {
 export type RuntimeProfileRef = string | null;
 export type ParentRunId = string | null;
 export type ParentSnapshotSha256 = string | null;
-export type Id3 = string;
-export type FileId = string;
-export type Path = string;
+export type Id5 = string;
+export type FileId1 = string;
+export type Path2 = string;
 export type Sha256 = string;
-export type Name1 = string;
+export type Name2 = string;
 export type Files = AssetIdentity[];
 export type PreparedThrough = "m1" | "m2" | "m3" | "m4" | "m5";
 export type Mode = "demo" | "real";
@@ -37,32 +71,32 @@ export type TemperatureC = number | null;
 export type Ph = number | null;
 export type AssaySystem = string | null;
 export type ProteinFasta = string;
-export type Id4 = string;
-export type Name2 = string;
+export type Id6 = string;
+export type Name3 = string;
 export type Role1 = string;
 export type Sdf = string | null;
 export type Ligands = LigandConfig[];
-export type Id5 = string;
+export type Id7 = string;
 export type ProteinId = string;
 export type ReactionRole = string;
 export type StructurePdb = string | null;
-export type SequenceSha256 = string | null;
+export type SequenceSha2561 = string | null;
 export type Enzymes = EnzymeConfig[];
-export type Id6 = string;
-export type Description2 = string;
+export type Id8 = string;
+export type Description3 = string;
 export type OligomericState = number;
 export type StructurePdb1 = string | null;
 export type Scaffolds = ScaffoldConfig[];
-export type Id7 = string;
+export type Id9 = string;
 export type Sequence1 = string;
-export type Source = string;
+export type Source1 = string;
 export type SequenceKind = "idr" | "enzyme_ligand_linker" | "scaffold_linker" | "rigid_linker";
 export type Linkers = LinkerConfig[];
 export type IdrId = string | null;
-export type Id8 = string;
+export type Id10 = string;
 export type Components = string[];
-export type Id9 = string;
-export type Kind = "protein" | "idr" | "enzyme_ligand_linker" | "scaffold_linker" | "rigid_linker" | "tag";
+export type Id11 = string;
+export type Kind4 = "protein" | "idr" | "enzyme_ligand_linker" | "scaffold_linker" | "rigid_linker" | "tag";
 export type Sequence2 = string | null;
 export type Parts = OrderedPartConfig[];
 export type DomainOrder = string[];
@@ -71,7 +105,7 @@ export type LocalizationContext = ("cytosolic" | "er_anchored") | null;
 export type LocalizationDesignEvidence = string | null;
 export type EvidenceId = string;
 export type ConstructId = string;
-export type ConstructVersion = string;
+export type ConstructVersion1 = string;
 export type ConditionId = string;
 export type InputSequenceSha256 = string;
 export type Start = number;
@@ -80,7 +114,7 @@ export type AnchorSourceRecord = string;
 export type Tool = "DeepTMHMM";
 export type ToolVersion = string;
 export type NativeRecordId = string;
-export type Path1 = string;
+export type Path3 = string;
 export type Sha2561 = string;
 export type BodySide = "cytosolic" | "luminal" | "unknown";
 export type OrientationSource = string | null;
@@ -144,7 +178,7 @@ export type CreatedAt = string;
 export type Supersedes = string | null;
 export type Notes = string;
 export type ConstructRecords = ConstructRecord[];
-export type Id10 = string;
+export type Id12 = string;
 /**
  * @minItems 1
  */
@@ -154,7 +188,7 @@ export type Host2 = string | null;
 export type ConditionId1 = string | null;
 export type Designs = DesignConfig[];
 export type ParameterId = string;
-export type Name3 = string;
+export type Name4 = string;
 export type Value = number | string;
 export type Unit = string | null;
 export type SpeciesId = string | null;
@@ -232,7 +266,7 @@ export type AnchorCountBasis = "explicit_subunit_composition";
 export type Conformers = [MembraneConformer, ...MembraneConformer[]];
 export type ModelId = string;
 export type ConformerId = string;
-export type Path2 = string;
+export type Path4 = string;
 export type ModelId1 = number | null;
 export type Altloc = string | null;
 export type SourceKind = "experimental" | "prediction";
@@ -352,7 +386,7 @@ export type PtrScale = number;
 export type PtScale = number;
 export type OcScale = number;
 export type DmtScale = number;
-export type Source1 = "published_author_model" | "explicit_sensitivity_input";
+export type Source2 = "published_author_model" | "explicit_sensitivity_input";
 export type Interpretation = "relative_enzyme_scale_not_measured_abundance";
 export type FormulaVersion2 = "m4-compartment-amount-v1-2026-10-10";
 export type ConstructId5 = string;
@@ -391,7 +425,7 @@ export type Reactions = M4ReactionInput[];
 export type BoundaryId = string;
 export type PoolId1 = string;
 export type Compound = "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15";
-export type Kind1 = "constant_feed" | "first_order_loss";
+export type Kind5 = "constant_feed" | "first_order_loss";
 export type Normalization = "physical_amount";
 export type Boundaries = AmountBoundary[];
 /**
@@ -516,11 +550,11 @@ export type Bounds = [unknown, unknown];
  * @minItems 1
  */
 export type Observables = ["13" | "15", ...("13" | "15")[]];
-export type Id11 = string;
+export type Id13 = string;
 export type EvidenceFiles = AssetIdentity[];
 export type DependencyScope = string;
 export type Status = "indexed" | "not_indexed";
-export type FileId1 = string;
+export type FileId2 = string;
 export type SourceSha256 = string;
 export type Count = number | null;
 export type ReasonCode = string | null;
@@ -530,17 +564,72 @@ export type ReuseSupported = boolean;
 export type Explanation = string;
 
 export interface IterationView {
+  workflow: Workflow | null;
   project: ProjectView;
   parent_run_id: ParentRunId1;
   parent_snapshot_sha256: ParentSnapshotSha2561;
   reuse_supported: ReuseSupported;
   explanation: Explanation;
 }
-export interface ProjectView {
+export interface Workflow {
   id: Id;
   name: Name;
-  revision: Revision;
   description: Description;
+  version: Version;
+  nodes: Nodes;
+  execution_policy: ExecutionPolicy;
+}
+export interface WorkflowNode {
+  id: Id1;
+  label: Label;
+  tool_id: ToolId;
+  inputs: Inputs;
+  depends_on: DependsOn;
+  map: MapSpec | null;
+}
+export interface Inputs {
+  [k: string]: LiteralInput | ProjectInput | NodeInput | SequenceRef;
+}
+export interface LiteralInput {
+  kind: Kind;
+  value: unknown;
+}
+export interface ProjectInput {
+  kind: Kind1;
+  path: Path;
+}
+export interface NodeInput {
+  kind: Kind2;
+  node_id: NodeId;
+  path: Path1;
+}
+export interface SequenceRef {
+  kind: Kind3;
+  source: Source;
+  file_id: FileId;
+  record_id: RecordId;
+  sequence_sha256: SequenceSha256;
+  construct_version: ConstructVersion;
+}
+export interface MapSpec {
+  items: Items;
+  item_argument: ItemArgument;
+}
+export interface ExecutionPolicy {
+  target_node_id: TargetNodeId;
+  max_completed_stages: MaxCompletedStages;
+  checkpoints_before: CheckpointsBefore;
+  checkpoints_after: CheckpointsAfter;
+  allowed_tools: AllowedTools;
+  max_tool_calls: MaxToolCalls;
+  stop_after_seconds: StopAfterSeconds;
+  memory_limit_mb: MemoryLimitMb;
+}
+export interface ProjectView {
+  id: Id2;
+  name: Name1;
+  revision: Revision;
+  description: Description1;
   sequences: Sequences;
   assemblies: Assemblies;
   conditions: Conditions;
@@ -553,14 +642,14 @@ export interface ProjectView {
   scientific_project: ScientificInputsView | null;
 }
 export interface SequenceRecord {
-  id: Id1;
+  id: Id3;
   sequence: Sequence;
   role: Role;
 }
 export interface AssemblyRecord {
-  id: Id2;
+  id: Id4;
   subunits: Subunits;
-  description: Description1;
+  description: Description2;
 }
 export interface Subunits {
   [k: string]: number;
@@ -569,11 +658,11 @@ export interface Conditions {
   [k: string]: unknown;
 }
 export interface AssetIdentity {
-  id: Id3;
-  file_id: FileId;
-  path: Path;
+  id: Id5;
+  file_id: FileId1;
+  path: Path2;
   sha256: Sha256;
-  name: Name1;
+  name: Name2;
 }
 export interface ScientificInputsView {
   config: ScientificConfig;
@@ -620,35 +709,35 @@ export interface SequenceRoles {
     "full_fusion" | "idr" | "enzyme" | "enzyme_ligand_linker" | "scaffold_linker" | "rigid_linker" | "protein";
 }
 export interface LigandConfig {
-  id: Id4;
-  name: Name2;
+  id: Id6;
+  name: Name3;
   role: Role1;
   sdf: Sdf;
 }
 export interface EnzymeConfig {
-  id: Id5;
+  id: Id7;
   protein_id: ProteinId;
   reaction_role: ReactionRole;
   structure_pdb: StructurePdb;
-  sequence_sha256: SequenceSha256;
+  sequence_sha256: SequenceSha2561;
 }
 export interface ScaffoldConfig {
-  id: Id6;
-  description: Description2;
+  id: Id8;
+  description: Description3;
   oligomeric_state: OligomericState;
   structure_pdb: StructurePdb1;
 }
 export interface LinkerConfig {
-  id: Id7;
+  id: Id9;
   sequence: Sequence1;
-  source: Source;
+  source: Source1;
   sequence_kind: SequenceKind;
 }
 /**
  * A wet-lab construct description; no fusion topology is inferred by code.
  */
 export interface ConstructDefinition {
-  id: Id8;
+  id: Id10;
   components: Components;
   parts: Parts;
   domain_order: DomainOrder;
@@ -672,14 +761,14 @@ export interface ConstructDefinition {
   oc_truncation_mapping: TruncationMapping | null;
 }
 export interface OrderedPartConfig {
-  id: Id9;
-  kind: Kind;
+  id: Id11;
+  kind: Kind4;
   sequence: Sequence2;
 }
 export interface MembraneTopologyEvidence {
   evidence_id: EvidenceId;
   construct_id: ConstructId;
-  construct_version: ConstructVersion;
+  construct_version: ConstructVersion1;
   condition_id: ConditionId;
   input_sequence_sha256: InputSequenceSha256;
   anchor: ResidueRange;
@@ -702,7 +791,7 @@ export interface ResidueRange {
   end: End;
 }
 export interface ArtifactReference {
-  path: Path1;
+  path: Path3;
   sha256: Sha2561;
 }
 export interface ReviewParameterIds {
@@ -767,7 +856,7 @@ export interface MeasuredOutputs {
   [k: string]: number | string;
 }
 export interface DesignConfig {
-  id: Id10;
+  id: Id12;
   protein_construct_ids: ProteinConstructIds;
   required_enzyme_ids: RequiredEnzymeIds;
   host: Host2;
@@ -783,7 +872,7 @@ export interface IntegrationSites {
 }
 export interface ParameterRecord {
   parameter_id: ParameterId;
-  name: Name3;
+  name: Name4;
   value: Value;
   unit: Unit;
   species_id: SpeciesId;
@@ -908,7 +997,7 @@ export interface MembraneConformer {
   coordinate_transform_reference: CoordinateTransformReference;
 }
 export interface StructureInput {
-  path: Path2;
+  path: Path4;
   model_id: ModelId1;
   altloc: Altloc;
   source_kind: SourceKind;
@@ -1079,7 +1168,7 @@ export interface AuthorNativeEnzymeScales {
   pt_scale: PtScale;
   oc_scale: OcScale;
   dmt_scale: DmtScale;
-  source: Source1;
+  source: Source2;
   interpretation: Interpretation;
 }
 export interface M4Config {
@@ -1194,7 +1283,7 @@ export interface AmountBoundary {
   boundary_id: BoundaryId;
   pool_id: PoolId1;
   compound: Compound;
-  kind: Kind1;
+  kind: Kind5;
   quantity: ScientificQuantity;
   normalization: Normalization;
 }
@@ -1330,11 +1419,11 @@ export interface FitPlanConfig {
   observables: Observables;
 }
 export interface PublicRunInput {
-  id: Id11;
+  id: Id13;
 }
 export interface SequenceIndexView {
   status: Status;
-  file_id: FileId1;
+  file_id: FileId2;
   source_sha256: SourceSha256;
   count: Count;
   reason_code: ReasonCode;

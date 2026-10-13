@@ -15,6 +15,7 @@ export function PluginPanel({
   const [trusted, setTrusted] = useState(false);
   const [installed,setInstalled]=useState<PluginInspectionView[]>([]);
   const [error,setError]=useState(''),[operation,setOperation]=useState('');
+  const [add,setAdd]=useState(false),[versions,setVersions]=useState<string>();
   async function perform(label:string,job:()=>Promise<unknown>) {
     await action(async()=>{setOperation(label);setError('');try{return await job();}catch(reason){setError(reason instanceof Error?reason.message:String(reason));throw reason;}finally{setOperation('');}});
   }
@@ -26,6 +27,8 @@ export function PluginPanel({
         Install only code you trust. Shared deployments require administrator authorization; plugins are not a security sandbox.
       </p>
       {operation&&<p role="status">{operation}</p>}{error&&<p role="alert">{error}</p>}
+      <button disabled={busy} onClick={()=>setAdd(value=>!value)}>Add plugin</button>
+      {add&&<>
       <label>
         Public iGEM GitLab or GitHub repository
         <input
@@ -94,9 +97,14 @@ export function PluginPanel({
           </button>
         </>
       )}
-      <h4>Installed versions</h4><p>A new install retains the old version for frozen runs. Disabling blocks the next dispatch; it does not stop an already-running process.</p>
-      <ul>{installed.map(value=><li key={value.hash}><strong>{value.manifest.name}</strong> {value.manifest.version} — {value.enabled?'Enabled':'Disabled'}
+      </>}
+      <h4>Installed plugins</h4>
+      {[...new Set(installed.map(value=>value.manifest.id))].map(id=>{const entries=installed.filter(value=>value.manifest.id===id),plugin=entries[0];return <section key={id}>
+        <strong>{plugin.manifest.name}</strong> — {entries.some(value=>value.enabled)?'Enabled':'Disabled'} <button onClick={()=>setVersions(versions===id?undefined:id)}>Versions</button>
+        {versions===id&&<><p>Disabling a version blocks new tasks, not already-running processes.</p><ul>{entries.map(value=><li key={value.hash}>{value.manifest.version} — {value.enabled?'Enabled':'Disabled'}
         <button disabled={busy} onClick={()=>void action(async()=>{await client.pluginEnabled(value.hash,!value.enabled);setInstalled(await client.installedPlugins());})}>{value.enabled?'Disable':'Enable'} {value.manifest.name}</button></li>)}</ul>
+        </>}
+      </section>;})}
     </section>
   );
 }

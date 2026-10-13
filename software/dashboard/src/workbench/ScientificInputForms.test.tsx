@@ -9,7 +9,7 @@ const parameter={parameter_id:'software',name:'declared',value:5,unit:'s^-1',sou
   review_status:'approved',approved_by:'SOFTWARE_REVIEW',validation_flags:['SOFTWARE_REVIEW'],parameter_version:1,
   derivation_type:'direct_measurement',derived_from:[],notes:'Fixture',construct_id:null,condition_id:null};
 const project={id:'SOFTWARE_EDITOR_SAMPLE',scientific_project:{config:{parameters:[parameter]}}} as unknown as ProjectView;
-const method={parameter_records:[parameter],parameter_requirements:[],parameter_source_options:{}} as unknown as ModuleMethodView;
+const method={parameter_records:[parameter],parameter_requirements:[],parameter_source_options:{},methods:[]} as unknown as ModuleMethodView;
 it('empty value is not zero; a new version retains the immutable original and cannot inherit its approval',async()=>{
   const changed=vi.fn();
   function Editor(){const [draft,setDraft]=useState(project);return <ModuleParameters project={draft} method={method} frozen={false} onScalarChange={async()=>{}} onChange={async value=>{changed(value);setDraft(value);}}/>;}

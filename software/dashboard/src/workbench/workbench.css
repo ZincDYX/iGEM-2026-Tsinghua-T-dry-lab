@@ -468,3 +468,17 @@ tr[aria-selected="true"] {
 .workbench-top select {max-width:260px;}
 .result-controls {display:flex;gap:16px;flex-wrap:wrap;}
 .result-status {font-weight:600;color:var(--accent);}
+.workbench h2{font-size:1.45rem;line-height:1.3;margin:1rem 0 .65rem;}
+.workbench h3{font-size:1.15rem;line-height:1.35;margin:.8rem 0 .5rem;}
+.workbench h4{font-size:1rem;margin:.6rem 0;}
+.bound-formula{display:flex;align-items:center;gap:.5rem;overflow-x:auto;padding:1rem .5rem;font-size:1.15rem;}
+.formula-fraction{display:inline-flex;flex-direction:column;text-align:center;vertical-align:middle;gap:.4rem;}
+.formula-fraction>span:first-child{border-bottom:1px solid currentColor;padding-bottom:.4rem;}
+.formula-input{display:inline-flex;align-items:center;gap:.25rem;}
+.formula-symbol{font-style:italic;}
+.formula-operator{padding:0 .3rem;}
+.editable-value{display:inline-flex;align-items:center;gap:.3rem;flex-wrap:wrap;}
+.editable-value input{width:9rem;}
+.parameter-unit{white-space:nowrap;}
+.log-error{color:var(--error);}.log-warning{color:#956000;}.log-success{color:#23784e;}
+.workflow-graph path[role=button]{pointer-events:stroke;cursor:pointer;stroke-width:3px;}

@@ -42,9 +42,8 @@ it('keyboard movement saves layout, while rejected deletion keeps all nodes and 
   await waitFor(()=>expect((screen.getByRole('button',{name:'Graph'}) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.keyDown(screen.getByRole('button',{name:'Module Input inventory'}),{key:'ArrowRight'});
   await waitFor(()=>expect(client.saveWorkflowDocument).toHaveBeenCalledWith('p','review',expect.objectContaining({layout:{a:{x:34,y:24}}}),1,1));
-  await waitFor(()=>expect((screen.getByRole('button',{name:'Delete selected module'}) as HTMLButtonElement).disabled).toBe(false));
-  expect(screen.getByText(/Removing it affects:/).textContent).toContain('Left branch, Right branch');
-  fireEvent.click(screen.getByRole('button',{name:'Delete selected module'}));
+  await waitFor(()=>expect((screen.getByRole('button',{name:'Remove module'}) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button',{name:'Remove module'}));
   await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('removed upstream'));
   expect(screen.getByRole('button',{name:'Module Input inventory'})).toBeTruthy();
   expect(screen.getByRole('button',{name:'Module Left branch'})).toBeTruthy();
@@ -74,9 +73,9 @@ it('saved workflow labels advance after a semantic save and reopening fetches th
   const latest={...changed,revision:3,semantic_revision:3,workflow:{...changed.workflow,name:'Newer server definition'}};
   vi.mocked(client.workflowDocument).mockResolvedValue(latest);
   render(<Harness/>);
-  await waitFor(()=>expect((screen.getByRole('button',{name:'Delete selected module'}) as HTMLButtonElement).disabled).toBe(false));
-  expect(screen.getByText(/Selected module:/).textContent).toContain('Right branch');
-  fireEvent.click(screen.getByRole('button',{name:'Delete selected module'}));
+  await waitFor(()=>expect((screen.getByRole('button',{name:'Remove module'}) as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByRole('button',{name:'Module Right branch'}).getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(screen.getByRole('button',{name:'Remove module'}));
   await screen.findByRole('option',{name:'Software graph (revision 2)'});
   fireEvent.change(screen.getByLabelText('Open saved workflow'),{target:{value:'review'}});
   await screen.findByRole('heading',{name:'Newer server definition'});
@@ -103,7 +102,7 @@ it('a delayed reopen cannot overwrite a newer policy save for the same document'
   fireEvent.click(screen.getByRole('button',{name:'Policy save completed'}));
   resolve(document());
   await waitFor(()=>expect(accepted).toHaveBeenCalledWith(latest));
-  expect(screen.getByText('Saved revision 2')).toBeTruthy();
+  expect(screen.getByRole('option',{name:'Software graph (revision 2)'})).toBeTruthy();
 });
 it('reopening the Workflow tab adopts the newer server revision instead of its retained old document',async()=>{
   const latest={...document(),revision:2,semantic_revision:2,workflow:{...workflow,name:'Externally revised workflow'}};

@@ -129,30 +129,32 @@ fusionlab workflow edit <document-id> --project <project-id> --view list
 fusionlab workflow review-draft <document-id> --project <project-id>
 ```
 
-Select an original M1–M4 module to inspect Tools, Formulas and Parameters. Original
+Select an original M1–M4 module in Workflow to inspect Tools and its calculation. Original
 method versions, assumptions and discrepancies are retained; frozen runs show
 their own recorded tool versions and parameters. In a historical run, click
-**Edit current draft**, then **Parameters**, click the value, and save its value/unit
-in the same row. The saved workflow stays selected. Review formal parameter
+**Edit as new run** to copy that run's actual model and sources, not a newer draft.
+Click a bound value in the formula: Enter saves, Escape cancels; its unit is inherited.
+Inputs not represented in a supported formula use a minimal Name / Value / Unit table.
+The saved workflow stays selected. Review formal parameter
 overrides before running; a pending replacement does not silently use its old value.
-Scalar bindings use this same table and create a new immutable executable version.
+Scalar bindings use their admitted expression tree and create a new immutable executable version.
 View → Assistant / Jobs panel are the only global panel controls.
 Custom formula versions remain scientifically unvalidated and never replace an
 original scientific kernel. LaTeX alone is not executable. Add an explicit scalar
 expression, sourced values and units, then **Prepare exploratory workflow →
-Review → Accept → Start run**. Results retain the exact version and original
+Review changes → Accept changes → Run**. Results retain the exact version and original
 inputs after restart. Supported syntax, unit conversions and boundaries are in
 [Custom formula execution](docs/custom_formula_execution.md).
 General typed module/binding creation remains pending. Editing/reviewing is not
 execution, scientific approval, or proof that an installed tool is validated.
-Fixed baseline rules and versioned ER/network bindings are explicitly read-only:
-import a revised structured model with matched evidence instead of overwriting
-an embedded value's record alone. Tools → Run for M1–M4 binds the existing project
-plan and required upstream modules automatically; confirmation is still required.
+Fixed baseline rules and unsupported model bindings remain read-only. Supported
+typed ER quantities update both their versioned record and actual model reference;
+plain reaction bindings still require a revised model and matched evidence.
+Tools explicitly distinguishes reviewing a task from running an approved task.
 
-Assistant retains project-scoped proposal history. Accept, Reject and Revise use
+Assistant retains project-scoped proposal history. Accept, Reject and Modify use
 the same workflow engine; a revision shows its actual graph/policy changes and
-requires new acceptance. Tools → Assistant Settings defaults to None: manual
+requires new acceptance. Settings → Assistant defaults to None: manual
 workflows do not require a model. Optional compatible/local model endpoints and
 write-only keys are stored in the private workspace, outside scientific exports.
 The connection test sends public test text only and can incur three small API
@@ -167,10 +169,12 @@ not hostile code; install only trusted code. Importing Skills never executes the
 scripts or approves evidence. Hosted raw shell access is unavailable; use your own
 trusted local terminal for the documented CLI.
 
-Results/Resources opens actual PDB/mmCIF geometry with rotation, chain selection,
+Inputs and Results open selected files directly in closeable named documents;
+there is no independent Resources/Artifacts catalogue. PDB/mmCIF geometry supports rotation, chain selection,
 reset and native PNG export. Original coordinates remain downloadable if WebGL is
 unavailable. B-factors are not relabelled pLDDT; references need recorded mappings
-and transforms, not an inferred alignment. Actual 1CRN display/lifecycle acceptance
+and transforms, not an inferred alignment. Residue tables load only when requested.
+Actual 1CRN display/lifecycle acceptance
 and scoped loading measurements are recorded in
 [the review implementation record](docs/web_cli_review_20261011.md).
 

@@ -1,74 +1,18 @@
-import { DesktopConnectionPanel } from "../DesktopConnectionPanel";
-import type { Goal } from "../types";
-import type { RuntimeInfoView } from "../contracts/generated";
-import { LazyJson } from "../contracts/LazyJson";
-import { defaultLayout, type Layout } from "./layout";
-
-export function LocalSettings({
-  layout,
-  onLayout,
-  info,
-  onRefresh,
-  goal, mode, onGoal, onMode,
-}: {
-  layout: Layout;
-  onLayout: (value: Layout) => void;
-  info?: RuntimeInfoView;
-  onRefresh: () => void;
-  goal: Goal; mode:"template"|"hybrid"; onGoal:(value:Goal)=>void; onMode:(value:"template"|"hybrid")=>void;
-}) {
-  return (
-    <section>
-      <h2>Local layout and capabilities</h2>
-      <p>
-        Drag separators, use arrow keys, or double-click to reset. Layout stays
-        local and do not change scientific inputs.
-      </p>
-      <label>
-        Table density
-        <select
-          value={layout.density}
-          onChange={(e) =>
-            onLayout({
-              ...layout,
-              density:
-                e.target.value === "comfortable" ? "comfortable" : "compact",
-            })
-          }
-        >
-          <option value="compact">Compact</option>
-          <option value="comfortable">Comfortable</option>
-        </select>
-      </label>
-      <label>
-        Theme
-        <select
-          value={layout.theme}
-          onChange={(e) =>
-            onLayout({
-              ...layout,
-              theme: e.target.value === "dark" ? "dark" : "light",
-            })
-          }
-        >
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </label>
-      <button onClick={() => onLayout(defaultLayout())}>Reset layout</button>
-      <h3>Planning preferences</h3>
-      <label>Analysis entry point<select aria-label="Analysis entry point" value={goal} onChange={e=>onGoal(e.target.value as Goal)}>
-        <option value="fusion_screen">Fusion sequence statistics</option><option value="m1_sequence_checks">M1 sequence checks</option><option value="scientific_pipeline">M1–M4 scientific pipeline</option><option value="assembly_review">Assembly inventory</option><option value="pathway_simulation">Uploaded pathway</option>
-      </select></label>
-      <label>Planner source<select aria-label="Planner source" value={mode} onChange={e=>onMode(e.target.value as "template"|"hybrid")}><option value="template">Built-in plan</option><option value="hybrid" disabled={info?.capabilities.hybrid_planning!=="ready"}>Configured model</option></select></label>
-      <DesktopConnectionPanel />
-      <button onClick={onRefresh}>Refresh connection and capabilities</button>
-      {info && (
-        <LazyJson
-          value={info}
-          label="Public protocol, capabilities and resource state"
-        />
-      )}
-    </section>
-  );
+import {lazy,Suspense} from 'react';
+import {DesktopConnectionPanel} from '../DesktopConnectionPanel';
+import {defaultLayout,type Layout} from './layout';
+import type {RuntimeInfoView} from '../contracts/generated';
+import type {Goal} from '../types';
+const Assistant=lazy(()=>import('./AssistantSettings').then(m=>({default:m.AssistantSettings})));
+export function LocalSettings({layout,onLayout,info,onRefresh,mode,onMode,section,onSection}:{layout:Layout;onLayout:(value:Layout)=>void;info?:RuntimeInfoView;onRefresh:()=>void;
+  mode:'template'|'hybrid';onMode:(value:'template'|'hybrid')=>void;goal:Goal;onGoal:(value:Goal)=>void;
+  section:'appearance'|'assistant'|'connection';onSection:(value:'appearance'|'assistant'|'connection')=>void}){
+  return <section><h2>Settings</h2><div role="tablist" aria-label="Settings sections">{(['appearance','assistant','connection'] as const).map(value=><button key={value} role="tab" aria-selected={section===value} onClick={()=>onSection(value)}>{value[0].toUpperCase()+value.slice(1)}</button>)}</div>
+    {section==='appearance'&&<><label>Theme<select value={layout.theme} onChange={event=>onLayout({...layout,theme:event.target.value==='dark'?'dark':'light'})}><option value="light">Light</option><option value="dark">Dark</option></select></label>
+      <label>Table density<select value={layout.density} onChange={event=>onLayout({...layout,density:event.target.value==='comfortable'?'comfortable':'compact'})}><option value="compact">Compact</option><option value="comfortable">Comfortable</option></select></label>
+      <button onClick={()=>onLayout(defaultLayout())}>Reset layout</button></>}
+    {section==='assistant'&&<><label>Planner<select aria-label="Planner source" value={mode} onChange={event=>onMode(event.target.value as typeof mode)}><option value="template">Built-in registered tasks</option><option value="hybrid" disabled={info?.capabilities.hybrid_planning!=='ready'}>Configured model</option></select></label>
+      <Suspense fallback={<p>Opening model settings…</p>}><Assistant onSaved={onRefresh}/></Suspense></>}
+    {section==='connection'&&<><DesktopConnectionPanel/><button onClick={onRefresh}>Refresh connection</button></>}
+  </section>;
 }

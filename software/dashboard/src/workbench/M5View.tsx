@@ -90,6 +90,7 @@ function RegisteredComparison({
   range: number;
   setRange: (n: number) => void;
 }) {
+  const [details,setDetails]=useState<'residuals'|'data'|'fit'>();
   const indices = Array.from(
     { length: Math.min(100, series.time.length - offset) },
     (_, i) => offset + i,
@@ -222,15 +223,17 @@ function RegisteredComparison({
           yLabel={`Concentration (uM) · ${show(series.compartment)}`}
           onPoint={onPoint}
         />
-        <Plot
+        {details==='residuals'&&<Plot
           dataIdentity={dataIdentity}
           data={residuals}
           title={`M5 ${metabolite} recorded residuals`}
           xLabel="Recorded time (h)"
           yLabel="Observed minus predicted (uM)"
           onPoint={onPoint}
-        />
+        />}
       </Suspense>
+      <div><button onClick={()=>setDetails(details==='residuals'?undefined:'residuals')}>Residuals</button><button onClick={()=>setDetails(details==='data'?undefined:'data')}>Data</button>
+        {object(comparison.fit)&&<button onClick={()=>setDetails(details==='fit'?undefined:'fit')}>Fit interval</button>}</div>
       {series.time.length > 100000 && (
         <div>
           <button
@@ -255,7 +258,7 @@ function RegisteredComparison({
           </button>
         </div>
       )}
-      <table>
+      {details==='data'&&<><table>
         <thead>
           <tr>
             <th>Time h</th>
@@ -281,7 +284,7 @@ function RegisteredComparison({
           ))}
         </tbody>
       </table>
-      <button
+      {series.time.length>100&&<><button
         disabled={!offset}
         onClick={() => setOffset(Math.max(0, offset - 100))}
       >
@@ -292,20 +295,22 @@ function RegisteredComparison({
         onClick={() => setOffset(offset + 100)}
       >
         Next comparison points
-      </button>
-      <p>
+      </button></>}
+      </>}
+      {details==='fit'&&object(comparison.fit)&&<p>
         Descriptive scale-fit parameter interval:{" "}
         {object(comparison.fit)
           ? show(comparison.fit.confidence_interval)
           : "Not recorded"}
         . This is not a prediction confidence band and does not approve a
         parameter.
-      </p>
+      </p>}
     </section>
   );
 }
 
 export function M5View({ record }: { record: Record<string, unknown> }) {
+  const [selected,setSelected]=useState('');
   const comparisons = object(record.metabolite_comparisons)
     ? record.metabolite_comparisons
     : {};
@@ -319,7 +324,8 @@ export function M5View({ record }: { record: Record<string, unknown> }) {
         ; flags {show(record.qc_flags)}. Fit candidate requires separate
         approval. Missing/legacy series are not reconstructed.
       </p>
-      {Object.entries(comparisons).map(([name, c]) =>
+      {Object.keys(comparisons).length>1&&<label>Observation<select aria-label="Observed metabolite" value={selected||Object.keys(comparisons)[0]} onChange={event=>setSelected(event.target.value)}>{Object.keys(comparisons).map(name=><option key={name}>{name}</option>)}</select></label>}
+      {Object.entries(comparisons).filter(([name])=>name===(selected||Object.keys(comparisons)[0])).map(([name, c]) =>
         object(c) ? (
           <Comparison
             key={`${String(record.experiment_id)}:${String(record.condition_id)}:${name}`}
@@ -332,14 +338,6 @@ export function M5View({ record }: { record: Record<string, unknown> }) {
       {!Object.keys(comparisons).length && (
         <p>No registered matched observations.</p>
       )}
-      <p>
-        Recorded parameter candidate CI:{" "}
-        {object(record.fit)
-          ? show(record.fit.confidence_interval)
-          : "Not recorded"}{" "}
-        · warnings {show(record.fit_warnings)}. No new confidence or holdout
-        evidence inferred.
-      </p>
     </section>
   );
 }

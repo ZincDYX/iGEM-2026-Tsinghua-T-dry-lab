@@ -20,6 +20,7 @@ class ImportIssue(Contract):
     message: str
     severity: Literal['error','warning','confirmation','info']
     field: str | None = None
+    expected_filename: str | None = None
 
 
 class ParsedInput(Contract):

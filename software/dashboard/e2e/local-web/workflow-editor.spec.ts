@@ -1,9 +1,10 @@
+import {ready} from './helpers';
 import {test, expect} from '@playwright/test';
 
 test('real persisted workflow Graph/List, fan-out, rejected edits and reopened selection',async({page,context})=>{
   // Only software graph/approval metadata. No numerical/scientific tool is run.
   await page.goto('/');
-  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
+  await ready(page);
   const projects=await (await context.request.get('/api/platform/projects')).json();
   const project=projects[0];
   const workflow={id:'browser-graph',name:'Browser workflow acceptance',nodes:[
@@ -41,6 +42,7 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   await page.mouse.move(box.x+10,box.y+30,{steps:5}); await page.mouse.up();
   await expect.poll(async()=> (await (await context.request.get(endpoint)).json()).layout.c?.x).toBe(264);
   expect((await (await context.request.get(endpoint)).json()).semantic_revision).toBe(1);
+  await page.getByRole('button',{name:'Connections',exact:true}).click();
   await page.getByLabel('Upstream module').selectOption('c');
   await page.getByLabel('Downstream module').selectOption('a');
   await page.getByRole('button',{name:'Connect modules'}).click();
@@ -48,14 +50,14 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   saved=await (await context.request.get(endpoint)).json(); expect(saved.semantic_revision).toBe(1);
   await expect(graph.getByRole('button',{name:'Module Original inputs'})).toBeEnabled();
   await graph.getByRole('button',{name:'Module Original inputs'}).click();
-  await expect(page.getByRole('button',{name:'Delete selected module'})).toBeEnabled();
-  await expect(page.getByText(/Removing it affects:/)).toContainText('First branch, Second branch');
-  await page.getByRole('button',{name:'Delete selected module'}).click();
+  await expect(page.getByRole('button',{name:'Remove module'})).toBeEnabled();
+  await expect(graph.locator('path[data-from="a"]')).toHaveCount(2);
+  await page.getByRole('button',{name:'Remove module'}).click();
   await expect(page.getByRole('alert')).toContainText('removed or unknown upstream');
   await expect(graph.getByRole('button',{name:'Module Original inputs'})).toBeVisible();
   await graph.getByRole('button',{name:'Module Second branch'}).click();
-  await expect(page.getByRole('button',{name:'Delete selected module'})).toBeEnabled();
-  await page.getByRole('button',{name:'Delete selected module'}).click();
+  await expect(page.getByRole('button',{name:'Remove module'})).toBeEnabled();
+  await page.getByRole('button',{name:'Remove module'}).click();
   await expect(graph.getByRole('button',{name:'Module Second branch'})).toHaveCount(0);
   saved=await (await context.request.get(endpoint)).json(); expect(saved.semantic_revision).toBe(2);
   await expect(page.getByRole('option',{name:'Browser workflow acceptance (revision 2)'})).toHaveCount(1);
@@ -63,27 +65,28 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   await page.getByRole('button',{name:'Arrange modules',exact:true}).click();
   await expect.poll(async()=> (await (await context.request.get(endpoint)).json()).layout.a).toEqual({x:24,y:24});
   expect((await (await context.request.get(endpoint)).json()).semantic_revision).toBe(2);
-  await expect(page.getByRole('button',{name:'Review plan',exact:true})).toHaveCount(1);
+  await expect(page.getByRole('button',{name:'Review changes',exact:true})).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Review stage-by-stage plan',exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Review run to selected stage',exact:true})).toHaveCount(0);
   await expect(page.getByLabel('Tool call budget')).toHaveCount(0);
   const dispatchBudget=(await (await context.request.get(endpoint)).json()).workflow.execution_policy.max_tool_calls;
   await page.getByLabel('Run through module').selectOption('a');
   await expect.poll(async()=> (await (await context.request.get(endpoint)).json()).workflow.execution_policy.target_node_id).toBe('a');
-  await page.getByRole('button',{name:'Review plan',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Review changes',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept changes',exact:true})).toBeVisible();
   const reviewed=(await (await context.request.get(endpoint)).json()).workflow;
   expect(reviewed.nodes.map((n:{id:string})=>n.id)).toEqual(['a','b']);
   expect(reviewed.execution_policy.max_tool_calls).toBe(dispatchBudget);
   expect(reviewed.execution_policy.target_node_id).toBe('a');
   // Real persisted Assistant decisions; the fixture graph is never executed.
-  await page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Accept changes',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept changes',exact:true})).toBeDisabled();
   const oldMessages=(await (await context.request.get(`/api/platform/projects/${project.id}/assistant`)).json()).messages;
   const originalProposal=oldMessages.at(-1).proposal_id;
-  await page.getByLabel('Additional revision request').fill('Keep the actual edited graph and do not invent scientific parameters.');
-  await page.getByRole('button',{name:'Revise proposal',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Modify',exact:true}).click();
+  await page.getByLabel('Assistant message').fill('Keep the actual edited graph and do not invent scientific parameters.');
+  await page.getByRole('button',{name:'Send',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept changes',exact:true})).toBeEnabled();
   await expect(page.getByLabel('Proposed changes')).toContainText('No graph or permission changes');
   expect((await (await context.request.get(`/api/platform/proposals/${originalProposal}`)).json()).status).toBe('rejected');
   await page.reload();
@@ -91,10 +94,10 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   await page.getByRole('menuitem',{name:'Assistant',exact:true}).click();
   await expect(page.getByRole('button',{name:'Open recorded proposal',exact:true}).last()).toBeEnabled();
   await page.getByRole('button',{name:'Open recorded proposal',exact:true}).last().click();
-  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Accept changes',exact:true})).toBeEnabled();
   await expect(page.getByLabel('Assistant conversation')).toContainText('do not invent scientific parameters');
-  await page.getByRole('button',{name:'Reject proposal',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Reject',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Accept changes',exact:true})).toBeDisabled();
   await page.getByRole('tab',{name:'Inputs',exact:true}).click();
   const current=await (await context.request.get(endpoint)).json();
   const updated=await page.evaluate(async({url,data})=>{
@@ -110,12 +113,13 @@ test('real persisted workflow Graph/List, fan-out, rejected edits and reopened s
   expect(reopened.workflow.name).toBe('Latest saved workflow');
   await expect(page.getByRole('option',{name:`Latest saved workflow (revision ${reopened.semantic_revision})`})).toHaveCount(1);
   expect(await (await context.request.get('/api/platform/runs')).json()).toEqual([]);
-  await expect(graph.getByRole('button',{name:'Module Original inputs'})).toContainText('Numerical results: Not assessed');
-  await expect(page.getByRole('tablist',{name:'Inspector tabs'}).getByRole('tab',{name:'Diagnostic',exact:true})).toHaveCount(0);
+  await expect(graph.getByRole('button',{name:'Module Original inputs'})).toContainText('Not started');
+  await expect(page.getByRole('tablist',{name:'Inspector tabs'})).toHaveCount(0);
   await page.getByText('Help',{exact:true}).click();
   await page.getByRole('menuitem',{name:'Scientific boundaries',exact:true}).click();
-  await expect(page.getByRole('tab',{name:'Inputs / Evidence',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByRole('tab',{name:'Help',exact:true})).toHaveAttribute('aria-selected','true');
   await expect(page.getByText('Job completion, numerical results, evidence readiness and experimental validation are separate. Missing evidence remains blocked; an accepted plan does not approve scientific parameters.',{exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   await page.locator('.workspace-content').evaluate(element=>element.scrollTop=0);
   await expect(page.getByLabel('Workflow run controls').getByRole('button').first()).toBeVisible();
   await page.screenshot({path:'test-results/workflow-persisted-graph.png',fullPage:true});

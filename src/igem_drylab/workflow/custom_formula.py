@@ -75,6 +75,19 @@ def expression_latex(expression):
     return render(tree(expression))
 
 
+def expression_view(expression):
+    """Read-only positions from the execution AST, not inferred from LaTeX."""
+    def render(node):
+        if isinstance(node, ast.Name): return {'kind':'variable','name':node.id}
+        if isinstance(node, ast.Constant): return {'kind':'constant','value':node.value}
+        if isinstance(node, ast.UnaryOp):
+            return {'kind':'unary','operator':'-' if isinstance(node.op,ast.USub) else '+','argument':render(node.operand)}
+        if isinstance(node, ast.BinOp):
+            return {'kind':'binary','operator':{ast.Add:'add',ast.Sub:'subtract',ast.Mult:'multiply',ast.Div:'divide',ast.Pow:'power'}[type(node.op)],'left':render(node.left),'right':render(node.right)}
+        return {'kind':'function','name':node.func.id,'argument':render(node.args[0])}
+    return render(tree(expression))
+
+
 def dimensions(node, names, *, unit=False):
     if (isinstance(node, ast.Constant) and type(node.value) in {int, float}
             and (not isinstance(node.value, int) or node.value.bit_length() <= 1023)

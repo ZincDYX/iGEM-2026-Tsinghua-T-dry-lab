@@ -13,6 +13,7 @@ export type Code = string;
 export type Message = string;
 export type Severity = "error" | "warning" | "confirmation" | "info";
 export type Field = string | null;
+export type ExpectedFilename = string | null;
 export type Issues = ImportIssue[];
 export type ProposedLinks = {
   [k: string]: unknown;
@@ -56,6 +57,7 @@ export interface ImportIssue {
   message: Message;
   severity: Severity;
   field: Field;
+  expected_filename: ExpectedFilename;
 }
 export interface Patch {
   [k: string]: unknown;

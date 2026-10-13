@@ -6,17 +6,15 @@ import { defaultLayout } from "./layout";
 
 afterEach(cleanup);
 
-it("selects the M1 workflow rather than silently retaining the old goal", () => {
+it("keeps analysis scope in Workflow, not appearance settings", () => {
   const onGoal = vi.fn();
   render(
     <LocalSettings layout={defaultLayout()} onLayout={vi.fn()} onRefresh={vi.fn()}
-      goal="fusion_screen" mode="template" onGoal={onGoal} onMode={vi.fn()}
+      goal="fusion_screen" mode="template" onGoal={onGoal} onMode={vi.fn()} section="appearance" onSection={vi.fn()}
     />,
   );
-  fireEvent.change(screen.getByLabelText("Analysis entry point"), {
-    target: { value: "m1_sequence_checks" },
-  });
-  expect(onGoal).toHaveBeenCalledWith("m1_sequence_checks");
+  expect(screen.queryByLabelText("Analysis entry point")).toBeNull();
+  expect(onGoal).not.toHaveBeenCalled();
 });
 
 it("shows original missing evidence without displaying internal identities", () => {

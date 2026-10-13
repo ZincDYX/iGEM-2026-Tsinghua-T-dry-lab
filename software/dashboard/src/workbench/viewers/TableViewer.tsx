@@ -89,7 +89,7 @@ export function TableViewer({
               </table>
             </div>
           )}
-          <button
+          {(offset>0||page.has_more)&&<><button
             disabled={!offset}
             onClick={() => setOffset(Math.max(0, offset - 500))}
           >
@@ -100,7 +100,7 @@ export function TableViewer({
             onClick={() => setOffset(offset + 500)}
           >
             Next table page
-          </button>
+          </button></>}
           {!!page.columns.length && (
             <details>
               <summary>Declare time-course columns</summary>

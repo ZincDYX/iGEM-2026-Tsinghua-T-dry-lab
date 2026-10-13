@@ -46,7 +46,7 @@ export function Splitter({
   useEffect(() => () => finish(true, false), []);
   const label =
     dimension === "right"
-        ? "Inspector"
+        ? "Assistant"
         : "Bottom pane";
   return (
     <div

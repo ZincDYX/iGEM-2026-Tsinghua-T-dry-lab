@@ -35,6 +35,25 @@ def test_registry_links_resolve_to_existing_python_modules_or_functions_without_
                     for node in ast.parse(module.read_text(encoding='utf-8')).body),reference
 
 
+def test_formula_positions_are_explicit_mode_matched_registry_bindings_not_latex_guesses(tmp_path):
+    app=fixture_app(tmp_path)
+    with TestClient(app) as client:
+        value=client.get('/api/platform/projects/software-fixture/module-method?tool_id=project.m3').json()
+    bindings=value['formula_inputs']
+    occupancy=next(item for item in bindings if item['symbol']=='theta_SH3')
+    assert occupancy['formula_id']=='E1' and occupancy['input_names']==['kd_sh3']
+    assert occupancy['tree']=={'kind':'binary','operator':'divide','left':{'kind':'variable','name':'x'},
+        'right':{'kind':'binary','operator':'add','left':{'kind':'variable','name':'kd_sh3'},'right':{'kind':'variable','name':'x'}}}
+    conservation=next(item for item in bindings if item['formula_id']=='E2')
+    assert set(conservation['input_names'])=={'phi','c_dense_scaffold','partition_oc'}
+    from igem_drylab.workflow.methods import bound_formula_inputs
+    from igem_drylab.workflow.scientific_project import ScientificProject
+    config=ScientificProject.model_validate(app.state.platform_store.project('software-fixture').scientific_project).config
+    config.stages.m3_concentration.recruitment_mode='legacy_independent_partition'
+    assert bound_formula_inputs(config,'project.m3')==[]
+    assert app.state.fixture_calls==[] and app.state.platform_store.runs()==[]
+
+
 def test_actual_module_method_api_is_read_only_and_does_not_claim_real_tool_job(tmp_path):
     app = fixture_app(tmp_path)
     with TestClient(app) as client:

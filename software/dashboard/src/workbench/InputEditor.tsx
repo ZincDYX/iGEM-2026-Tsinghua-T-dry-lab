@@ -1,21 +1,178 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   ProjectView,
-  ImportView,
-  ScientificPreviewView,
   ScientificPrecheckView,
 } from "../contracts/generated";
-import * as client from "./client";
-import { LazyJson } from "../contracts/LazyJson";
-import { PrecheckPanel, type InputIssue } from "./PrecheckPanel";
+import { requestJson,downloadResource } from "../api";
+import { object } from "../contracts/validation";
 import { UnifiedImport } from "./UnifiedImport";
-import {ConstructObject,NewConstruct} from "./ScientificInputForms";
-import { StructureAnnotationLinker } from "./StructureAnnotationLinker";
-import {GenBankDesigns} from './GenBankDesigns';
-import {
-  mergeImportDraft,
-} from "./importDraft";
-import {ScientificSetup} from "./ScientificSetup";
+import { ConstructObject, NewConstruct } from "./ScientificInputForms";
+import { GenBankDesigns } from "./GenBankDesigns";
+import type { InputIssue } from "./PrecheckPanel";
+
+const typeLabels: Record<string, string> = {
+  SequenceCollection: "Sequences",
+  StructureRecord: "Protein structure",
+  ProjectConfig: "Analysis plan",
+  genbank_design: "Annotated DNA",
+  MeasurementTable: "Measurements",
+  wetlab: "Measurements",
+  synthetic_ps_v3: "Synthetic demonstration",
+  EvidenceAttachment: "Evidence",
+  UnmappedTable: "Evidence table",
+};
+type SourceRecord = {
+  id: string;
+  length: number;
+  molecule_type: string | null;
+  role: string | null;
+  sequence: string | null;
+  bound_sequence_id: string | null;
+};
+function SourceSequences({
+  project,
+  fileId,
+  onChange,
+}: {
+  project: ProjectView;
+  fileId: string;
+  onChange: (value: ProjectView) => void;
+}) {
+  const [rows, setRows] = useState<SourceRecord[]>([]),
+    [selected, setSelected] = useState(""),
+    [offset, setOffset] = useState(0),
+    [total, setTotal] = useState(0),
+    [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    setError("");
+    const query = new URLSearchParams({
+      project_id: project.id,
+      offset: String(offset),
+    });
+    if (selected) query.set("record_id", selected);
+    void requestJson(
+      `/files/${encodeURIComponent(fileId)}/sequence-records?${query}`,
+      undefined,
+      controller.signal,
+    )
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        if (
+          !object(value) ||
+          value.file_id !== fileId ||
+          !Array.isArray(value.records)
+        )
+          throw Error("Sequence source unavailable.");
+        setRows(value.records as SourceRecord[]);
+        setTotal(Number(value.total));
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted) setError(String(reason));
+      });
+    return () => controller.abort();
+  }, [project.id, project.revision, fileId, offset, selected]);
+  const record = rows.find((row) => row.id === selected);
+  return (
+    <section aria-label="Source sequences">
+      {error && <p role="alert">{error}</p>}
+      <table>
+        <thead>
+          <tr>
+            <th>Sequence</th>
+            <th>Type</th>
+            <th>Length</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td>
+                <button onClick={() => setSelected(row.id)}>{row.id}</button>
+              </td>
+              <td>{row.molecule_type ?? "Unconfirmed"}</td>
+              <td>
+                {row.length} {row.molecule_type === "protein" ? "aa" : "bases"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {total > 100 && (
+        <nav>
+          <button
+            disabled={!offset}
+            onClick={() => {
+              setOffset((value) => Math.max(0, value - 100));
+              setSelected("");
+            }}
+          >
+            Previous sequences
+          </button>
+          <button
+            disabled={offset + 100 >= total}
+            onClick={() => {
+              setOffset((value) => value + 100);
+              setSelected("");
+            }}
+          >
+            Next sequences
+          </button>
+        </nav>
+      )}
+      {record && (
+        <section aria-label="Selected sequence">
+          <h3>{record.id}</h3>
+          <p className="sequence-text">
+            {record.sequence ?? "Opening source record…"}
+          </p>
+          {record.bound_sequence_id && (
+            <label>
+              Design role
+              <select
+                aria-label={`M1 role for ${record.id}`}
+                value={
+                  project.sequences.find(
+                    (value) => value.id === record.bound_sequence_id,
+                  )?.role ??
+                  record.role ??
+                  ""
+                }
+                onChange={(event) =>
+                  onChange({
+                    ...project,
+                    sequences: project.sequences.map((value) =>
+                      value.id === record.bound_sequence_id
+                        ? { ...value, role: event.target.value }
+                        : value,
+                    ),
+                  })
+                }
+              >
+                <option value={record.role ?? ""}>
+                  {record.role?.replaceAll("_", " ") ?? "Not declared"}
+                </option>
+                {[
+                  "idr",
+                  "enzyme_ligand_linker",
+                  "scaffold_linker",
+                  "rigid_linker",
+                  "full_fusion",
+                ]
+                  .filter((role) => role !== record.role)
+                  .map((role) => (
+                    <option key={role} value={role}>
+                      {role.replaceAll("_", " ")}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+        </section>
+      )}
+    </section>
+  );
+}
 
 export function InputEditor({
   project,
@@ -24,10 +181,6 @@ export function InputEditor({
   dirty,
   onChange,
   action,
-  inputCheck,
-  checkStale,
-  onCheck,
-  onLocate,
   onOpenResource,
   inputTarget,
   onPlanMethod,
@@ -44,240 +197,268 @@ export function InputEditor({
   checkStale: boolean;
   onCheck: () => void;
   onLocate: (issue: InputIssue) => void;
-  onOpenResource: (fileId: string) => void;
+  onOpenResource: (id: string) => void;
   inputTarget?: InputIssue;
-  onPlanMethod?: (method:'ps-v3-demo')=>void;
-  prepareImport:()=>Promise<ProjectView|undefined>;
-  onImported:(project:ProjectView)=>void;
+  onPlanMethod?: (method: "ps-v3-demo") => void;
+  prepareImport: () => Promise<ProjectView | undefined>;
+  onImported: (project: ProjectView) => void;
 }) {
-  const [rename,setRename]=useState(false),[selectedSequence,setSelectedSequence]=useState<string>(),[selectedConstruct,setSelectedConstruct]=useState('');
-  const [preview, setPreview] = useState<ImportView>();
-  const [scientific, setScientific] = useState<ScientificPreviewView>();
-  useEffect(() => {
-    if (!inputTarget) return;
-    if(inputTarget.construct_id){
-      const inputs=project.scientific_project?.config.inputs;
-      if(inputs?.constructs.some(c=>c.id===inputTarget.construct_id))setSelectedConstruct('definition:'+inputTarget.construct_id);
-      else if(inputs?.construct_records.some(c=>c.construct_id===inputTarget.construct_id))setSelectedConstruct('record:'+inputTarget.construct_id);
-    }
-    const target = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-input-path]"),
-    ).find((e) => e.dataset.inputPath === inputTarget.field_path);
-    if (!target) return;
-    for (let p = target.parentElement; p; p = p.parentElement)
-      if (p instanceof HTMLDetailsElement) p.open = true;
-    target.scrollIntoView({ block: "center" });
-    target.focus({ preventScroll: true });
-  }, [inputTarget,project.id]);
-  const mounted = useRef(true);
-  const epoch = useRef(0);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      ++epoch.current;
-    };
-  }, []);
-  function change(value: ProjectView) {
-    ++epoch.current;
-    onChange(value);
-  }
+  const [selected, setSelected] = useState(""),
+    [design, setDesign] = useState(""),
+    [planOpen, setPlanOpen] = useState(false);
+  const [manualSequence, setManualSequence] = useState("");
   const scope = project.scientific_project;
+  const files = [
+    ...new Map(
+      [...project.files, ...(scope?.evidence_files ?? [])].map((file) => [
+        file.id,
+        file,
+      ]),
+    ).values(),
+  ];
+  const dataset = project.datasets.find((row) => row.file_id === selected),
+    file = files.find((row) => row.id === selected);
+  useEffect(() => {
+    if (inputTarget) {
+      setPlanOpen(true);
+      if (inputTarget.construct_id)
+        setDesign("definition:" + inputTarget.construct_id);
+    }
+  }, [inputTarget]);
+  const unfiled =
+    !files.some((file) =>
+      project.datasets.some(
+        (row) => row.file_id === file.id && row.kind === "SequenceCollection",
+      ),
+    ) && project.sequences.length > 0;
   return (
     <section aria-label="Project inputs and evidence">
-      <header className="panel-heading">
-        <h2>Inputs and evidence</h2>
-      </header>
-      <fieldset className="input-fields" disabled={busy}>
-        <button onClick={()=>setRename(value=>!value)}>Rename project</button>
-        {rename&&<label>Project name<input aria-label="Project name" value={project.name} onChange={e=>change({...project,name:e.target.value})}/></label>}
-        <section id="input-evidence" aria-label="Biological data">
-          <h2>Biological data</h2>
-          <UnifiedImport project={project} persisted={persisted} busy={busy} dirty={dirty} action={action} prepare={prepareImport} onCommitted={onImported}/>
-          <StructureAnnotationLinker project={project} disabled={busy||dirty} action={action} onPreview={setPreview}/>
-          {preview&&<div><p>Reviewed annotation binding candidate; original source is retained.</p>
-            <button disabled={busy} onClick={()=>{change(mergeImportDraft(project,preview,{}));setPreview(undefined);}}>Confirm annotation binding into draft</button>
-            <button onClick={()=>setPreview(undefined)}>Discard annotation binding</button>
-          </div>}
-        <GenBankDesigns project={project} dirty={dirty} action={action}/>
-        <h3>Input objects</h3>
-        <table aria-label="Input objects"><thead><tr><th>Name</th><th>Type</th><th>Status</th></tr></thead><tbody>
-          {[...new Map([...project.files,...(scope?.evidence_files??[])].map(file=>[file.id,file])).values()].map(file=>{
-            const dataset=project.datasets.find(row=>row.file_id===file.id);
-            return <tr key={file.id}><td><button disabled={dirty} onClick={()=>onOpenResource(file.id)}>{file.name}</button></td><td>{String(dataset?.kind??'Evidence')}</td><td>{dataset?.has_unresolved_inputs?'Needs input review':'Imported'}</td></tr>;})}
-          {project.sequences.map(sequence=><tr key={sequence.id}><td><button onClick={()=>{setSelectedSequence(sequence.id);setSelectedConstruct('');}}>{sequence.id}</button></td><td>Protein · {sequence.role.replaceAll('_',' ')}</td><td>{sequence.sequence.length} aa · design input</td></tr>)}
-          {scope?.config.inputs.constructs.map(c=><tr key={'definition:'+c.id}><td><button onClick={()=>{setSelectedConstruct('definition:'+c.id);setSelectedSequence(undefined);}}>{c.id}</button></td><td>Construct</td><td>{c.m1_review?'Reviewed declaration':'Needs review'}</td></tr>)}
-          {scope?.config.inputs.construct_records.map(c=><tr key={'record:'+c.construct_id}><td><button onClick={()=>{setSelectedConstruct('record:'+c.construct_id);setSelectedSequence(undefined);}}>{c.construct_id}</button></td><td>Construct evidence</td><td>{c.review_status.replaceAll('_',' ')}</td></tr>)}
-        </tbody></table>
-        <ConstructObject project={project} selected={selectedConstruct} onChange={change}/>
-        {project.sequences.filter(sequence=>sequence.id===selectedSequence).map(sequence=><section key={sequence.id} aria-label="Selected sequence"><h3>{sequence.id} · {sequence.sequence.length} aa</h3><p className="sequence-text">{sequence.sequence}</p>
-          <label>Construct role<select aria-label={`M1 role for ${sequence.id}`} value={sequence.role} onChange={e=>change({...project,sequences:project.sequences.map(row=>row.id===sequence.id?{...row,role:e.target.value}:row)})}>
-            <option value={sequence.role} hidden>{sequence.role.replaceAll('_',' ')}</option>{['idr','enzyme_ligand_linker','scaffold_linker','rigid_linker','full_fusion'].map(role=><option key={role} value={role}>{role.replaceAll('_',' ')}</option>)}
-          </select></label></section>)}
-        {project.datasets.some(row=>row.kind==="wetlab")&&<h3>Measurements and M5</h3>}
-        {dirty && (
-          <p>
-            Save this draft before previewing the backend M5 binding, to
-            preserve unsaved changes.
-          </p>
-        )}
-        {project.datasets
-          .filter((row) => row.kind === "wetlab")
-          .map((row, i) => (
-            <article key={i}>
-              <p>
-                {String(row.name)} · Import / QC does not imply approval of
-                fitted parameters.
-              </p>
-              <LazyJson value={row} />
-              {scope && typeof row.file_id === "string" && (
+      <h2>Inputs</h2>
+      <UnifiedImport
+        project={project}
+        persisted={persisted}
+        busy={busy}
+        dirty={dirty}
+        action={action}
+        prepare={prepareImport}
+        onCommitted={onImported}
+      />
+      <table aria-label="Input objects">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {files.map((file) => {
+            const source = project.datasets.find(
+                (row) => row.file_id === file.id,
+              ),
+              kind = String(source?.kind ?? "EvidenceAttachment");
+            const count = Array.isArray(source?.records)
+              ? source.records.length
+              : undefined;
+            const molecule =
+              kind === "SequenceCollection" &&
+              count &&
+              object((source!.records as unknown[])[0])
+                ? String(
+                    (source!.records as Record<string, unknown>[])[0]
+                      .molecule_type,
+                  )
+                : undefined;
+            return (
+              <tr key={file.id} aria-selected={selected===file.id}>
+                <td>
+                  <button
+                    onClick={() => {
+                      setSelected(file.id);setDesign('');
+                      if (
+                        kind === "StructureRecord" ||
+                        (!source && /\.(pdb|cif|mmcif|bcif)$/i.test(file.name))
+                      )
+                        onOpenResource(file.id);
+                      else {
+                        setSelected(file.id);
+                        setDesign("");
+                        setPlanOpen(kind === "ProjectConfig");
+                      }
+                    }}
+                  >
+                    {file.name}
+                  </button>
+                </td>
+                <td>
+                  {kind === "SequenceCollection"
+                    ? molecule === "protein"
+                      ? "Protein FASTA"
+                      : molecule === "DNA"
+                        ? "DNA FASTA"
+                        : molecule === "RNA"
+                          ? "RNA FASTA"
+                          : "Sequences"
+                    : !source && /\.(pdb|cif|mmcif|bcif)$/i.test(file.name)
+                      ? "Coordinate file"
+                      : (typeLabels[kind] ?? "Data file")}
+                  {count && kind === "SequenceCollection"
+                    ? ` (${count} records)`
+                    : ""}
+                </td>
+                <td>
+                  {source?.has_unresolved_inputs ? "Needs review" : "Imported"}
+                </td>
+              </tr>
+            );
+          })}
+          {unfiled && (
+            <tr>
+              <td>
                 <button
-                  disabled={busy || dirty}
                   onClick={() => {
-                    const fileId = row.file_id;
-                    if (typeof fileId !== "string") return;
-                    const stamp = epoch.current;
-                    void action(async () => {
-                      const value = await client.bindMeasurement(
-                        project.id,
-                        project.revision,
-                        fileId,
-                      );
-                      if (mounted.current && stamp === epoch.current)
-                        change(value.project);
-                    });
+                    setSelected("unfiled");
+                    setPlanOpen(false);
                   }}
                 >
-                  Preview M5 measurement binding (save and review required)
+                  Project sequences
                 </button>
-              )}
-            </article>
-          ))}
-        <NewConstruct project={project} onChange={change}/>
-        </section>
-        <section aria-label="Analysis plan and configuration">
-        {project.datasets.some(row=>row.kind==='synthetic_ps_v3')&&<section>
-          <h3>Synthetic reference demonstration</h3>
-          <p>Original M3/competitive amount-model kernels recompute canonical inputs. E3 remains blocked; there is no fermentation or ER advantage claim.</p>
-          <button disabled={busy} onClick={()=>onPlanMethod?.('ps-v3-demo')}>Review synthetic demonstration workflow</button>
-        </section>}
-        <section id="input-conditions" className="input-section">
-          <h2>Analysis plan &amp; configuration</h2>
-          {!scope && (
-            <ScientificSetup
+              </td>
+              <td>Protein sequences ({project.sequences.length})</td>
+              <td>Design input</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {file && (
+        <section aria-label="Selected input object">
+          <h3>{file.name}</h3>
+          {dataset?.kind === "SequenceCollection" ||
+          (!dataset && /\.(fasta|faa|fa|fna)$/i.test(file.name)) ? (
+            <><SourceSequences
+              key={file.id}
               project={project}
+              fileId={file.id}
+              onChange={onChange}
+            /><button onClick={()=>void action(()=>downloadResource(`/files/${encodeURIComponent(file.id)}?project_id=${encodeURIComponent(project.id)}`,file.name))}>Export original FASTA</button></>
+          ) : dataset?.kind === "genbank_design" ? (
+            <GenBankDesigns
+              project={project}
+              fileId={file.id}
               dirty={dirty}
-              busy={busy}
-              onPreview={setScientific}
+              action={action}
             />
+          ) : (
+            dataset?.kind !== "ProjectConfig" && (
+              <button onClick={() => onOpenResource(file.id)}>Open file</button>
+            )
           )}
-          {scientific && (
-            <div>
-              <p>
-                Validated typed configuration, binding{" "}
-                {scientific.scientific_project.evidence_files.length} original
-                files; import does not approve evidence.
-              </p>
-              <p>M1 sequence screening · {scientific.scientific_project.sequence_index.count} protein records · real mode, no assumed inputs.</p>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  change({
-                    ...project,
-                    scientific_project: scientific.scientific_project,
-                  });
-                  setScientific(undefined);
-                }}
-              >
-                Confirm scientific inputs into draft
-              </button>
-            </div>
-          )}
-          {scope ? (
+        </section>
+      )}
+      {selected === "unfiled" && (
+        <section>
+          <h3>Project sequences</h3>
+          <table>
+            <tbody>
+              {project.sequences.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <button onClick={() => setManualSequence(row.id)}>
+                      {row.id}
+                    </button>
+                  </td>
+                  <td>{row.sequence.length} aa</td>
+                  <td>{row.role.replaceAll("_", " ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {project.sequences
+            .filter((row) => row.id === manualSequence)
+            .map((row) => (
+              <section key={row.id}>
+                <h4>{row.id}</h4>
+                <p className="sequence-text">{row.sequence}</p>
+                <label>
+                  Design role
+                  <input
+                    aria-label={`Design role for ${row.id}`}
+                    value={row.role}
+                    onChange={(event) =>
+                      onChange({
+                        ...project,
+                        sequences: project.sequences.map((value) =>
+                          value.id === row.id
+                            ? { ...value, role: event.target.value }
+                            : value,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+              </section>
+            ))}
+        </section>
+      )}
+      {scope && (
+        <section aria-label="Analysis plan and configuration">
+          <button onClick={() => setPlanOpen((value) => !value)}>
+            Analysis plan — {scope.config.inputs.constructs.length} protein
+            designs
+          </button>
+          {planOpen && (
             <>
               <p>
-                Execution mode: {scope.config.execution.mode} · Authoritative
-                conditions are below. Ordinary project notes do not enter
-                computation.
+                {scope.config.execution.mode === "demo"
+                  ? "Demonstration"
+                  : "Real-data plan"}
+                ; pathway {scope.config.stages.m4_reaction.network_variant}.
               </p>
-              <div className="field-grid">
-                {(["host", "strain", "assay_system"] as const).map((key) => (
-                  <label key={key}>
-                    {key}
-                    <input
-                      value={scope.config.experimental_context[key] ?? ""}
-                      onChange={(e) =>
-                        change({
-                          ...project,
-                          scientific_project: {
-                            ...scope,
-                            config: {
-                              ...scope.config,
-                              experimental_context: {
-                                ...scope.config.experimental_context,
-                                [key]: e.target.value || null,
-                              },
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </label>
+              {scope.config.inputs.constructs.map((value) => (
+                <button
+                  key={value.id}
+                  onClick={() => setDesign("definition:" + value.id)}
+                >
+                  {value.id}
+                </button>
+              ))}
+              {scope.config.inputs.construct_records
+                .filter(
+                  (record) =>
+                    !scope.config.inputs.constructs.some(
+                      (value) => value.id === record.construct_id,
+                    ),
+                )
+                .map((value) => (
+                  <button
+                    key={value.construct_id}
+                    onClick={() => setDesign("record:" + value.construct_id)}
+                  >
+                    {value.construct_id} — evidence declaration
+                  </button>
                 ))}
-                {(["temperature_c", "pH"] as const).map((key) => (
-                  <label key={key}>
-                    {key}
-                    <input
-                      aria-label={key}
-                      type="number"
-                      step="any"
-                      value={scope.config.experimental_context[key] ?? ""}
-                      onChange={(e) =>
-                        change({
-                          ...project,
-                          scientific_project: {
-                            ...scope,
-                            config: {
-                              ...scope.config,
-                              experimental_context: {
-                                ...scope.config.experimental_context,
-                                [key]:
-                                  e.target.value === ""
-                                    ? null
-                                    : Number(e.target.value),
-                              },
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
+              <ConstructObject
+                project={project}
+                selected={design}
+                onChange={onChange}
+              />
+              <NewConstruct project={project} onChange={onChange} />
               <p>
-                Network {scope.config.stages.m4_reaction.network_variant} · Unit{" "}
-                {scope.config.stages.m4_reaction.unit_mode} · Missing values
-                remain absent.
+                Sources retain their original values. Model inputs are edited in
+                Workflow; import a corrected source as a new version.
               </p>
-
-
             </>
-          ) : (
-            <p>
-              Full scientific pipeline not attached; standalone sequence
-              statistics are not a formal M1–M5 project.
-            </p>
           )}
         </section>
+      )}
+      {project.datasets.some((row) => row.kind === "synthetic_ps_v3") && (
+        <section>
+          <p>Synthetic demonstration, not experimental evidence.</p>
+          <button disabled={busy} onClick={() => onPlanMethod?.("ps-v3-demo")}>
+            Create demonstration plan
+          </button>
         </section>
-      </fieldset>
-      <PrecheckPanel
-        result={inputCheck}
-        stale={checkStale}
-        disabled={busy}
-        onCheck={onCheck}
-        onLocate={onLocate}
-      />
+      )}
     </section>
   );
 }

@@ -5,9 +5,10 @@ import {parsePublicAsync as parsePublic} from '../contracts/validation';
 import {PredictionTools} from './PredictionTools';
 import {PluginPanel} from './PluginPanel';
 import {SkillsPanel} from './SkillsPanel';
+import type {FileContext} from './FileDocument';
 
-export function ExtensionsPanel({workspace,project,busy,action,onPlan,onOpenResource,onMethod}:{workspace:string;project?:ProjectView;busy:boolean;
-  action:(job:()=>Promise<unknown>)=>Promise<void>;onPlan:(workflow:Workflow)=>void;onOpenResource:(id:string)=>void;
+export function ExtensionsPanel({workspace,project,busy,action,onPlan,onOpenResource,onMethod,persisted=false}:{workspace:string;project?:ProjectView;busy:boolean;persisted?:boolean;
+  action:(job:()=>Promise<unknown>)=>Promise<void>;onPlan:(workflow:Workflow)=>void;onOpenResource:(id:string,context?:Partial<FileContext>)=>void;
   onMethod:(method:'original-m1'|'original-m2'|'original-m3'|'original-m4')=>void}) {
   const preference=`fusionlab.extensions.${workspace}`;
   const [tab,setTab]=useState<'tools'|'plugins'|'skills'>(()=>{
@@ -18,10 +19,10 @@ export function ExtensionsPanel({workspace,project,busy,action,onPlan,onOpenReso
   useEffect(()=>{const controller=new AbortController();if(tab==='tools')void requestJson(`/tool-catalog?offset=${offset}`,undefined,controller.signal)
     .then(async raw=>{const value=await parsePublic('ToolCatalogPage',raw);if(!controller.signal.aborted)setPage(value);}).catch(reason=>{if(!controller.signal.aborted)setError(String(reason));});return()=>controller.abort();},[tab,offset]);
   return <section aria-label="Tools and extensions"><h2>Tools &amp; extensions</h2><p>Tool checks do not approve scientific evidence.</p>
-    <div role="tablist" aria-label="Extension pages">{(['tools','plugins','skills'] as const).map(value=><button role="tab" key={value} aria-selected={tab===value} onClick={()=>setTab(value)}>{value==='tools'?'Connected tools':value==='plugins'?'Plugins':'Skills'}</button>)}</div>
+    <div role="tablist" aria-label="Extension pages">{(['tools','plugins','skills'] as const).map(value=><button role="tab" key={value} aria-selected={tab===value} onClick={()=>setTab(value)}>{value==='tools'?'Tools':value==='plugins'?'Plugins':'Skills'}</button>)}</div>
     {tab==='tools'&&<>{error&&<p role="alert">{error}</p>}
-      {project?.revision?<PredictionTools catalog={page?.items??[]} project={project} busy={busy} onPlan={onPlan} onOpenResource={onOpenResource} onMethod={onMethod}/>:<p>Save a project to check its tools.</p>}
-      <nav aria-label="Tool pages"><button disabled={!offset} onClick={()=>setOffset(value=>Math.max(0,value-50))}>Previous tools</button><button disabled={!page?.has_more} onClick={()=>setOffset(value=>value+50)}>Next tools</button></nav>
+      <PredictionTools catalog={page?.items??[]} project={project} persisted={persisted} busy={busy} onPlan={onPlan} onOpenResource={onOpenResource} onMethod={onMethod}/>
+      {(offset>0||page?.has_more)&&<nav aria-label="Tool pages"><button disabled={!offset} onClick={()=>setOffset(value=>Math.max(0,value-50))}>Previous tools</button><button disabled={!page?.has_more} onClick={()=>setOffset(value=>value+50)}>Next tools</button></nav>}
     </>}
     {tab==='plugins'&&<PluginPanel busy={busy} action={action}/>}
     {tab==='skills'&&<SkillsPanel/>}

@@ -6,6 +6,8 @@ export type Kind = "node" | "tool" | "binding" | "dependency" | "permission";
 export type Target = string;
 export type Before = string | null;
 export type After = string | null;
+export type NodeId = string | null;
+export type InputName = string | null;
 export type Changes = ProposalChange[];
 export type MissingInputs = string[];
 export type Evidence = string[];
@@ -24,4 +26,6 @@ export interface ProposalChange {
   target: Target;
   before: Before;
   after: After;
+  node_id: NodeId;
+  input_name: InputName;
 }

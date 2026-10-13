@@ -60,6 +60,15 @@ export type Value = number;
 export type Unit = string;
 export type Source = string;
 export type OutputUnit = string;
+export type ScalarExpression = {
+  [k: string]: unknown;
+} | null;
+export type FormulaInputs = {
+  [k: string]: unknown;
+}[];
+export type WorkflowNumericInputs = {
+  [k: string]: unknown;
+}[];
 
 export interface ModuleMethodView {
   project_id: ProjectId;
@@ -72,6 +81,10 @@ export interface ModuleMethodView {
   parameter_requirements: ParameterRequirements;
   parameter_source_options: ParameterSourceOptions;
   scalar_method: MethodDraftView | null;
+  scalar_expression: ScalarExpression;
+  formula_inputs: FormulaInputs;
+  parameter_model_paths: ParameterModelPaths;
+  workflow_numeric_inputs: WorkflowNumericInputs;
 }
 export interface MethodDefinition {
   id: Id;
@@ -147,4 +160,7 @@ export interface FormulaVariable {
   value: Value;
   unit: Unit;
   source: Source;
+}
+export interface ParameterModelPaths {
+  [k: string]: (string | number)[][];
 }

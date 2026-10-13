@@ -12,12 +12,8 @@ export function AssistantSettings({onSaved}:{onSaved:()=>void}) {
   useEffect(()=>{let active=true;void client.assistantSettings().then(value=>{if(active)adopt(value);}).catch(reason=>{if(active)setError(String(reason));});return()=>{active=false;};},[]);
   async function save() {
     setBusy(true);setError('');setProbe(undefined);
-    try {adopt(await client.saveAssistantSettings({provider,model,endpoint:endpoint.trim()||undefined,secret:secret||undefined,clear_secret:clear,style_instructions:style}));onSaved();}
-    catch(reason){setError(String(reason));}finally{setSecret('');setBusy(false);}
-  }
-  async function test() {
-    setBusy(true);setError('');
-    try {setProbe(await client.testAssistantSettings());adopt(await client.assistantSettings());}
+    try {adopt(await client.saveAssistantSettings({provider,model,endpoint:endpoint.trim()||undefined,secret:secret||undefined,clear_secret:clear,style_instructions:style}));
+      onSaved();if(provider!=='none')setProbe(await client.testAssistantSettings());}
     catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
   return <section aria-label="Assistant model settings"><h2>Assistant Settings</h2>
@@ -36,9 +32,8 @@ export function AssistantSettings({onSaved}:{onSaved:()=>void}) {
         <label><input type="checkbox" checked={clear} onChange={event=>setClear(event.target.checked)}/>Clear saved secret</label></>}
       <label>Optional response style<textarea aria-label="Assistant response style" maxLength={4000} value={style} onChange={event=>setStyle(event.target.value)}/></label>
       <p>Style and Skills cannot override scientific contracts, provide missing evidence, grant permissions or approve parameters.</p>
-      <button onClick={()=>void save()}>Save Assistant profile</button>
-      <p>Connection tests send public test text only. An API provider may charge for three small requests. Save changes before testing.</p>
-      <button disabled={!view?.configured} onClick={()=>void test()}>Test saved model connection</button>
+      {provider!=='none'&&<p>Save and test sends three small public test requests; your provider may charge for them.</p>}
+      <button onClick={()=>void save()}>{provider==='none'?'Save':'Save and test'}</button>
     </fieldset>
     <p>Save scope: private workspace runtime. {view?.configured?'Configured; Hybrid planning remains unavailable until the actual JSON connection test passes.':'Model disabled or not configured.'}</p>
     <dl>{Object.entries(probe?.capabilities??view?.capabilities??{}).map(([name,state])=><div key={name}><dt>{name.replaceAll('_',' ')}</dt><dd>{state==='observed'?'Observed in actual public connection test':'Not verified'}</dd></div>)}</dl>

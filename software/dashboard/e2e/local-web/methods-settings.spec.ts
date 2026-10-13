@@ -1,3 +1,4 @@
+import {ready} from './helpers';
 import {test,expect} from '@playwright/test';
 
 test('actual original M1–M4 formulas render, custom version is unvalidated and settings/Skills persist',async({page,context},testInfo)=>{
@@ -5,7 +6,7 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   const loaded:string[]=[];
   page.on('response',response=>{if(response.url().includes('/assets/'))loaded.push(response.url().split('/').at(-1)!);});
   await page.goto('/');
-  await expect(page.getByRole('button',{name:'Rename project',exact:true})).toBeVisible();
+  await ready(page);
   const projects=await (await context.request.get('/api/platform/projects')).json();
   const project=projects.find((value:{name:string})=>value.name==='Dependency import recovery');
   expect(project,'Run the actual dependency-import browser task first').toBeTruthy();
@@ -25,10 +26,10 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   for(const stage of ['M1','M2','M3','M4']) {
     await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module '+stage,exact:true}).click();
     const panel=page.getByLabel('Module method',{exact:true});
-    await panel.getByRole('tab',{name:'Formulas',exact:true}).click();
+    await panel.getByRole('button',{name:'Method',exact:true}).click();
     const method=metadata.find((value:{id:string})=>value.id.startsWith(stage.toLowerCase()+'-'));
     await expect(panel.getByRole('heading',{name:method.title,exact:true})).toBeVisible();
-    await expect(panel.locator('.method-formula math')).toHaveCount(method.formulas.length);
+    await expect(panel.getByLabel('Method document').locator('.method-formula math')).toHaveCount(method.formulas.length);
     await expect(panel.getByRole('alert')).toHaveCount(0);
     rendered.push({module:stage,formulas:method.formulas.length});
   }
@@ -47,11 +48,10 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   await page.getByLabel('Open saved workflow').selectOption('method-display');
   await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M3',exact:true}).click();
-  await panel.getByRole('tab',{name:'Parameters',exact:true}).click();
-  await panel.getByRole('button',{name:'Edit phi',exact:true}).click();
+  await panel.getByRole('button',{name:'Edit phi',exact:true}).first().click();
   await panel.getByLabel('Value for phi',{exact:true}).fill('0.3');
   await panel.getByRole('button',{name:'Save parameter',exact:true}).click();
-  await expect(panel.getByRole('button',{name:'Edit phi',exact:true})).toHaveText('0.3');
+  await expect(panel.getByRole('button',{name:'Edit phi',exact:true}).first()).toHaveText('0.3');
   await expect(page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M3',exact:true})).toBeVisible();
   const afterEdit=await (await context.request.get(`/api/platform/projects/${project.id}`)).json();
   expect(afterEdit.scientific_project.config.parameters.find((p:{parameter_id:string})=>p.parameter_id==='browser-phi').value).toBe(.2);
@@ -60,17 +60,14 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
   await page.getByRole('tab',{name:'Workflow',exact:true}).click();
   await page.getByLabel('Open saved workflow').selectOption('method-display');
   await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M3',exact:true}).click();
-  await panel.getByRole('tab',{name:'Parameters',exact:true}).click();
-  await expect(panel.getByRole('button',{name:'Edit phi',exact:true})).toHaveText('0.3');
+  await expect(panel.getByRole('button',{name:'Edit phi',exact:true}).first()).toHaveText('0.3');
   await page.getByLabel('Workflow graph',{exact:true}).getByRole('button',{name:'Module M4',exact:true}).click();
-  await panel.getByRole('tab',{name:'Formulas',exact:true}).click();
-  await panel.locator('summary').filter({hasText:'Edit method · new exploratory version'}).click();
-  await panel.getByLabel('Formula base method').selectOption('m4-step0-step8');
-  await panel.getByLabel('Formula to revise').selectOption(metadata.find((value:{id:string})=>value.id==='m4-step0-step8').formulas[0].id);
+  await panel.getByRole('button',{name:'Method',exact:true}).click();
+  await panel.getByRole('button',{name:'Edit method: Conservative enzyme phase interface',exact:true}).click();
   await panel.getByLabel('Custom formula title').fill('Browser instruction draft');
   await panel.getByLabel('Custom formula source').fill('User-authored software test, not scientific evidence');
   await panel.getByLabel('Custom formula reason').fill('Document a proposed version only, no execution');
-  await expect(panel.getByRole('button',{name:'Save separate unvalidated version',exact:true})).toBeDisabled();
+  await expect(panel.getByRole('button',{name:'Save method version',exact:true})).toBeDisabled();
   await expect(panel.getByLabel('Proposed formula LaTeX')).toHaveCount(0);
   await panel.getByLabel('Custom formula title').fill('Browser executable scalar draft');
   await panel.getByLabel('Custom formula reason').fill('Independent synthetic scalar test, not an original M4 result');
@@ -82,24 +79,26 @@ test('actual original M1–M4 formulas render, custom version is unvalidated and
     await panel.getByLabel(`Formula input ${index} value`).fill(value);
     await panel.getByLabel(`Formula input ${index} unit`).fill(unit);
   }
-  await panel.getByRole('button',{name:'Save separate unvalidated version',exact:true}).click();
-  await expect(panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 1, unvalidated / exploratory execution available'})).toBeVisible();
-  await panel.locator('summary').filter({hasText:'Browser executable scalar draft — version 1,'}).click();
-  await panel.getByRole('button',{name:'Prepare exploratory workflow',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Accept proposal (does not start computation)',exact:true})).toBeVisible();
+  await panel.getByRole('button',{name:'Save method version',exact:true}).click();
+  await expect(page.getByLabel('Current proposal')).toContainText('Browser executable scalar draft');
+  await expect(page.getByRole('button',{name:'Accept changes',exact:true})).toBeVisible();
   expect(await (await context.request.get('/api/platform/runs')).json()).toEqual([]);
   await page.getByRole('navigation',{name:'Workbench menus'}).getByText('Tools',{exact:true}).click();
-  await page.getByRole('menuitem',{name:'Assistant Settings',exact:true}).click();
+  await page.getByRole('menuitem',{name:'Settings',exact:true}).click();
+  await page.getByRole('tab',{name:'Assistant',exact:true}).click();
   await expect(page.getByLabel('Assistant provider')).toHaveValue('none');
   await page.getByLabel('Assistant response style').fill('Use short explanations; never approve missing evidence.');
-  await page.getByRole('button',{name:'Save Assistant profile',exact:true}).click();
+  await page.getByRole('button',{name:'Save',exact:true}).click();
   await expect(page.getByText('Model disabled or not configured.',{exact:false})).toBeVisible();
   await page.getByRole('navigation',{name:'Workbench menus'}).getByText('Tools',{exact:true}).click();
   await page.getByRole('menuitem',{name:'Tools & extensions',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Check availability',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Tools & extensions',exact:true})).toBeVisible();
   await expect(page.getByRole('heading',{name:'All registered capabilities',exact:true})).toHaveCount(0);
   await page.getByRole('tab',{name:'Skills',exact:true}).click();
-  await page.getByLabel('Import SKILL.md').setInputFiles({name:'SKILL.md',mimeType:'text/markdown',buffer:Buffer.from('---\nname: Browser instruction\ndescription: Read-only explanation\ntrigger: Review missing input\nversion: "1"\nsource: User-authored software test\nlicense: Apache-2.0\n---\nDo not invent data or grant permissions.\n')});
+  await page.getByRole('button',{name:'Add Skill',exact:true}).click();
+  const chooser=page.waitForEvent('filechooser');
+  await page.getByRole('button',{name:'Import SKILL.md',exact:true}).click();
+  await (await chooser).setFiles({name:'SKILL.md',mimeType:'text/markdown',buffer:Buffer.from('---\nname: Browser instruction\ndescription: Read-only explanation\ntrigger: Review missing input\nversion: "1"\nsource: User-authored software test\nlicense: Apache-2.0\n---\nDo not invent data or grant permissions.\n')});
   await page.getByLabel('Enable instruction guidance').check();
   await page.getByRole('button',{name:'Save Skill revision',exact:true}).click();
   await expect(page.getByRole('button',{name:'Browser instruction — Enabled',exact:true})).toBeVisible();

@@ -1,8 +1,13 @@
-import type { ProposalView, RuntimeInfoView } from "../contracts/generated";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type {
+  AssistantPage,
+  ProposalDiff,
+  ProposalView,
+  RuntimeInfoView,
+} from "../contracts/generated";
 import type { Goal } from "../types";
-import { useEffect, useState, useRef } from 'react';
-import type { AssistantPage, ProposalDiff } from '../contracts/generated';
-import * as client from './client';
+import * as client from "./client";
+import {object} from '../contracts/validation';
 
 export function AgentPanel(props: {
   proposal?: ProposalView;
@@ -16,151 +21,174 @@ export function AgentPanel(props: {
   permission: boolean;
   busy: boolean;
   canPlan: boolean;
-  onGoal: (goal: Goal) => void;
+  onGoal: (value: Goal) => void;
   onObjective: (value: string) => void;
-  onMode: (mode: "template" | "hybrid") => void;
+  onMode: (value: "template" | "hybrid") => void;
   onPermission: (value: boolean) => void;
   onPropose: () => void;
-  onDecision: (action: "accept" | "reject") => void;
+  onDecision: (value: "accept" | "reject") => void;
   onRevise?: (prompt: string) => Promise<void>;
-  onOpenProposal?: (id:string) => Promise<void>;
+  onOpenProposal?: (id: string) => Promise<void>;
+  onSettings?: () => void;
+  inputCheck?: ReactNode;
+  intent?: "new" | "modify";
+  onIntent?: (value: "new" | "modify") => void;
 }) {
   const p = props.proposal;
-  const [history, setHistory] = useState<AssistantPage>();
-  const [diff, setDiff] = useState<ProposalDiff>();
-  const [prompt, setPrompt] = useState('');
-  const [error, setError] = useState('');
-  const epoch = useRef(0);
+  const [history, setHistory] = useState<AssistantPage>(),
+    [diff, setDiff] = useState<ProposalDiff>();
+  const changeGroups=new Map<string,ProposalDiff['changes']>();
+  for(const change of diff?.changes??[]){const id=change.node_id??'';changeGroups.set(id,[...(changeGroups.get(id)??[]),change]);}
+  const [localIntent, setLocalIntent] = useState<"new" | "modify">("new"),
+    [error, setError] = useState("");
+  const intent = props.intent ?? localIntent,
+    setIntent = props.onIntent ?? setLocalIntent;
+  const composer = useRef<HTMLTextAreaElement>(null),
+    epoch = useRef(0);
   useEffect(() => {
-    epoch.current++;
-    const controller = new AbortController();
-    setHistory(undefined); setDiff(undefined); setPrompt(''); setError('');
-    if (props.projectId && props.projectRevision) void client.assistantHistory(props.projectId, controller.signal)
-      .then(value => {if (!controller.signal.aborted) setHistory(value);})
-      .catch(reason => {if (!controller.signal.aborted) setError(String(reason));});
-    if (p && props.projectId) void client.proposalDiff(p.id, controller.signal)
-      .then(value => {if (!controller.signal.aborted) setDiff(value);})
-      .catch(reason => {if (!controller.signal.aborted) setError(String(reason));});
-    return () => controller.abort();
+    const stamp = ++epoch.current,
+      controller = new AbortController();
+    setError("");
+    if (props.projectId)
+      void client
+        .assistantHistory(props.projectId, controller.signal)
+        .then((value) => {
+          if (!controller.signal.aborted && stamp === epoch.current)
+            setHistory(value);
+        })
+        .catch((reason) => {
+          if (!controller.signal.aborted) setError(String(reason));
+        });
+    return () => {
+      ++epoch.current;
+      controller.abort();
+    };
   }, [props.projectId, props.projectRevision, p?.id, p?.status]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setDiff(undefined);
+    if (p && props.projectId)
+      void client
+        .proposalDiff(p.id, controller.signal)
+        .then((value) => {
+          if (!controller.signal.aborted) setDiff(value);
+        })
+        .catch((reason) => {
+          if (!controller.signal.aborted) setError(String(reason));
+        });
+    return () => controller.abort();
+  }, [props.projectId, p?.id]);
+  function send() {
+    if (intent === "modify" && p && props.onRevise)
+      void props.onRevise(props.objective.trim());
+    else props.onPropose();
+  }
   return (
-    <section aria-label="Agent Plan proposal">
-      <h2>Assistant</h2>
-      <p>{props.context ?? 'Project context'}</p>
+    <section aria-label="Assistant conversation">
+      <header className="panel-heading">
+        <span>
+          {props.mode === "template"
+            ? "Built-in planner · registered tasks only"
+            : props.info?.capabilities.hybrid_planning === "ready"
+              ? "Configured model"
+              : "Model not verified"}
+        </span>
+        {props.onSettings && (
+          <button aria-label="Assistant settings" onClick={props.onSettings}>
+            Settings
+          </button>
+        )}
+      </header>
+      <p>{props.context ?? "Project"}</p>
       {error && <p role="alert">{error}</p>}
-      {history && <section aria-label="Assistant conversation">
-        {history.messages.map(message => <div key={message.seq}><p><strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong> · project revision {message.project_revision}<br/>{message.text}</p>
-          {message.role === 'assistant' && props.onOpenProposal && message.proposal_id !== p?.id && <button disabled={props.busy}
-            onClick={() => void props.onOpenProposal!(message.proposal_id)}>Open recorded proposal</button>}</div>)}
-        {history.has_more && <button disabled={props.busy} onClick={() => {const stamp=epoch.current;
-          void client.assistantHistory(props.projectId!, undefined, history.messages[0]?.seq)
-          .then(value => {if(stamp===epoch.current) setHistory({...value, messages: [...value.messages, ...history.messages]});})
-          .catch(reason => {if(stamp===epoch.current) setError(String(reason));});}}>Load earlier conversation</button>}
-      </section>}
-      <label>
-        Research objective
-        <textarea
-          aria-label="Research objective"
-          value={props.objective}
-          onChange={(event) => props.onObjective(event.target.value)}
-          placeholder="Describe the goal or data changes; do not invent parameters"
-        />
-      </label>
-      {props.mode === "hybrid" && (
-        <label>
-          <input
-            type="checkbox"
-            checked={props.permission}
-            onChange={(e) => props.onPermission(e.target.checked)}
-          />
-          Allow this objective and public evidence summary to be sent to the
-          privately configured model
-        </label>
-      )}
-      <button disabled={props.busy || !props.canPlan} onClick={props.onPropose}>
-        Generate proposal
-      </button>
+      <div className="conversation-messages">
+        {history?.messages
+          .filter(
+            (message) =>
+              message.proposal_id !== p?.id || message.role === "user",
+          )
+          .map((message) => (
+            <article key={message.seq}>
+              <strong>{message.role === "user" ? "You" : "Assistant"}</strong>
+              <p>{message.text}</p>
+              {message.role === "assistant" && props.onOpenProposal && (
+                <button
+                  disabled={props.busy}
+                  onClick={() =>
+                    void props.onOpenProposal!(message.proposal_id)
+                  }
+                >
+                  Open recorded proposal
+                </button>
+              )}
+            </article>
+          ))}
+        {history?.has_more && (
+          <button
+            disabled={props.busy}
+            onClick={() => {
+              const stamp = epoch.current;
+              void client
+                .assistantHistory(
+                  props.projectId!,
+                  undefined,
+                  history.messages[0]?.seq,
+                )
+                .then((value) => {
+                  if (stamp === epoch.current)
+                    setHistory({
+                      ...value,
+                      messages: [...value.messages, ...history.messages],
+                    });
+                })
+                .catch((reason) => setError(String(reason)));
+            }}
+          >
+            Earlier messages
+          </button>
+        )}
+      </div>
       {p && (
-        <article className="proposal">
-          {diff && <section aria-label="Proposed changes">
-            <h3>Changes to review</h3>
-            {!diff.changes.length && <p>No graph or permission changes. This prompt did not edit scientific parameters.</p>}
-            {diff.changes.map((change, index) => <details key={index}><summary>{change.kind} · {change.target}</summary>
-              <p>Before: {change.before ?? 'Not present'}</p><p>After: {change.after ?? 'Removed'}</p></details>)}
-          </section>}
+        <article className="proposal" aria-label="Current proposal">
           <h3>
-            {p.source === "validated_template"
-              ? "Template proposal"
-              : p.source === "hybrid_semantic_compiler"
-                ? "Hybrid proposal"
-                : "User workflow proposal"}{" "}
-            · {p.status}
+            {p.status === "accepted"
+              ? "Approved plan"
+              : p.status === "blocked"
+                ? "Plan needs data"
+                : p.status==='rejected'?'Rejected plan':"Changes to review"}
           </h3>
           <p>{p.rationale}</p>
-          <p>
-            Change types:{" "}
-            {p.change_types.join(", ") ||
-              "Template / User DAG; no LLM semantic classification"}
-          </p>
-          <dl>
-            <dt>Requested stages</dt>
-            <dd>{p.requested_stages.join(" → ") || "No executable stages"}</dd>
-            <dt>Execution scope (including dependencies)</dt>
-            <dd>{p.execution_stages.join(" → ") || "Blocked"}</dd>
-            <dt>Verified reuse</dt>
-            <dd>
-              {p.reused_artifacts.join(", ") || "None; no automatic reuse"}
-            </dd>
-            <dt>Missing evidence</dt>
-            <dd>
-              {p.missing_inputs.join("; ") ||
-                "No proposal-reported omissions; scientific stage gates recheck"}
-            </dd>
-          </dl>
-          <p>{p.evidence.length} additional evidence references</p>
-          <ul>
-            {p.limitations.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-          <details>
-            <summary>Reviewed tools and versions</summary>
-            <ul>{p.reviewed_tool_labels.map(label => <li key={label}>{label}</li>)}</ul>
-            <p>Backend checks tool, input and environment identity again before execution.</p>
-          </details>
-          {p.observation && <section aria-label="Scientific observation and proposed actions">
-            <h4>Observed project state</h4>
-            <p>{p.observation.prepared_through ? `Prepared through ${p.observation.prepared_through.toUpperCase()}` : "Scientific inputs not prepared"} · {p.observation.gaps.length + p.observation.omitted_gap_count} declared gaps</p>
-            <ul>{p.observation.gaps.map((gap,i) => <li key={`${gap.stage}-${gap.code}-${i}`}>
-              {gap.stage.toUpperCase()} · {gap.construct_id || "Project"} · Required: {gap.code.replaceAll("_"," ")} · {gap.reasons.map(reason => reason.replaceAll("_"," ")).join("; ")}
-            </li>)}</ul>
-            {p.observation.omitted_gap_count > 0 && <p>{p.observation.omitted_gap_count} additional gaps omitted from this bounded summary; inspect the project precheck for details.</p>}
-            <h4>Recorded results</h4>
-            {p.observation.recorded_results.length ? <ul>{p.observation.recorded_results.map(result => <li key={`${result.run_id}-${result.node_id}`}>
-              {result.stage.toUpperCase()} · {result.node_status} · {result.current_project_revision ? "Current saved inputs" : "Historical inputs — not authorized for reuse"} · {result.numerically_solved_count ?? "Not recorded"} numerically solved / {result.evidence_ready_count ?? "Not recorded"} evidence-ready records
-            </li>)}</ul> : <p>No recorded stage results; nothing has been calculated by this proposal.</p>}
-            <h4>Recorded jobs</h4>
-            {p.observation.recorded_jobs.length ? <ul>{p.observation.recorded_jobs.map(job => <li key={`${job.run_id}-${job.node_id}`}>
-              {job.tool_id.replaceAll("."," ")} · {job.node_status}{job.remote_status ? ` · Remote: ${job.remote_status.replaceAll("_"," ")}` : ""}
-              {job.remote_status && <span> · Local cancellation does not confirm cancellation at the remote service.</span>}
-            </li>)}</ul> : <p>No recorded jobs.</p>}
-            <h4>Proposed actions — no execution yet</h4>
-            <ol>{p.scientific_actions.map((action,i) => <li key={`${action.kind}-${i}`}>
-              {action.kind.replaceAll("_"," ")} · {action.reason}
-              {action.kind === "propose_experiment" && <p>Hypothesis: {action.hypothesis}. Controls: {action.controls.join("; ")}. Observe: {action.observable}. Refute if: {action.refutation_criterion}. Human review required.</p>}
-            </li>)}</ol>
-          </section>}
-          {p.confirmation && (
-            <p className="subtle">
-              Proposal checked against saved inputs{" "}
-              {p.confirmation.project_revision}
-            </p>
+          {diff && (
+            <section aria-label="Proposed changes">
+              {diff.changes.length ? (
+                <ul>
+                  {[...changeGroups].map(([id,changes])=>{
+                    if(!id)return <li key="scope">Execution scope and tool permissions: {p.workflow?.nodes.find(node=>node.id===p.workflow?.execution_policy.target_node_id)?.label??'all modules'}.</li>;
+                    const node=p.workflow?.nodes.find(node=>node.id===id),spec=node?.tool_id==='workflow.custom_formula'&&node.inputs.spec?.kind==='literal'?node.inputs.spec.value:undefined;
+                    const inputs=object(spec)&&object(spec.variables)?Object.entries(spec.variables).map(([name,value])=>object(value)?`${name} = ${value.value} ${value.unit}`:name):[...new Set(changes.filter(change=>change.kind==='binding').map(change=>change.input_name).filter((name):name is string=>!!name))].map(name=>({project:'scientific input plan',upstream_result:'previous module result',sequence:'selected sequence',results:'module results',package_file_id:'selected demonstration package'}[name]??name.replaceAll('_',' ')));
+                    return <li key={id}>{node?.label??changes.find(change=>change.kind==='node')?.before??'Removed module'}{inputs.length?` — inputs: ${inputs.join('; ')}`:''}{changes.some(change=>change.kind==='tool')?' — calculation changed':''}{changes.some(change=>change.kind==='dependency')?' — dependencies updated':''}</li>;
+                  })}
+                </ul>
+              ) : (
+                <p>
+                  No graph or permission changes. This prompt did not edit
+                  scientific parameters.
+                </p>
+              )}
+            </section>
+          )}
+          {!!p.missing_inputs.length && (
+            <ul>
+              {[...new Set(p.missing_inputs)].map((value) => (
+                <li key={value}>{value.replaceAll("_", " ")}</li>
+              ))}
+            </ul>
           )}
           <button
             disabled={props.busy || p.status !== "proposed"}
             onClick={() => props.onDecision("accept")}
           >
-            Accept proposal (does not start computation)
+            Accept changes
           </button>
           <button
             disabled={
@@ -168,18 +196,63 @@ export function AgentPanel(props: {
             }
             onClick={() => props.onDecision("reject")}
           >
-            Reject proposal
+            Reject
           </button>
-          {props.onRevise && <><label>Additional revision request<textarea aria-label="Additional revision request" value={prompt}
-            maxLength={8000} disabled={props.busy} onChange={event => setPrompt(event.target.value)}/></label>
-            <p>Manual/template mode uses the actual edited workflow, not invented parameter changes. A new proposal must be accepted again.</p>
-            <button disabled={props.busy || !prompt.trim() || !['proposed','accepted','blocked'].includes(p.status)}
-              onClick={() => void props.onRevise!(prompt.trim())}>Revise proposal</button></>}
-          <p className="subtle">
-            Changing goal, policy or inputs invalidates this proposal.
-            Regenerate and accept; this is not scientific parameter approval.
-          </p>
+          {props.onRevise && (
+            <button
+              disabled={
+                props.busy ||
+                !["proposed", "accepted", "blocked"].includes(p.status)
+              }
+              onClick={() => {
+                setIntent("modify");
+                composer.current?.focus();
+              }}
+            >
+              Modify
+            </button>
+          )}
         </article>
+      )}
+      {props.inputCheck}
+      <label>
+        {intent === "modify" && p ? "Modify this proposal" : "New request"}
+        <textarea
+          ref={composer}
+          aria-label="Assistant message"
+          value={props.objective}
+          maxLength={8000}
+          onChange={(event) => props.onObjective(event.target.value)}
+          placeholder={
+            props.mode === "template"
+              ? "Request a registered task; this planner does not create arbitrary scientific models."
+              : "Describe the task or change."
+          }
+        />
+      </label>
+      {props.mode === "hybrid" && (
+        <label>
+          <input
+            type="checkbox"
+            checked={props.permission}
+            onChange={(event) => props.onPermission(event.target.checked)}
+          />
+          Allow this message and public evidence summary to be sent to the
+          configured model
+        </label>
+      )}
+      <button
+        disabled={
+          props.busy ||
+          !props.canPlan ||
+          (intent === "modify" && !props.objective.trim())
+        }
+        onClick={send}
+      >
+        Send
+      </button>
+      {intent === "modify" && (
+        <button onClick={() => setIntent("new")}>New request instead</button>
       )}
     </section>
   );

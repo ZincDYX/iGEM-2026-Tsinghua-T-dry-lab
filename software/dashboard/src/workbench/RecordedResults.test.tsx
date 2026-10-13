@@ -68,6 +68,8 @@ function record() {
 it("M5 preserves recorded zeros and censor bounds, residual nulls, and uncertainty without fitting", async () => {
   render(<M5View record={record()} />);
   await screen.findAllByTestId("plot");
+  expect(screen.queryByRole('table')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Residuals'}));
   const plots = mocks.plot.mock.calls.map(([props]) => props);
   const main = plots.find((p) => p.title.includes("observations"));
   expect(main.data[0].y).toEqual([0, 2, 4]);
@@ -80,7 +82,8 @@ it("M5 preserves recorded zeros and censor bounds, residual nulls, and uncertain
     2,
   ]);
   expect(main.yLabel).toContain("uM");
-  expect(screen.getByText(/not a prediction confidence band/)).toBeTruthy();
+  expect(screen.queryByRole('button',{name:'Fit interval'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Data'}));
   fireEvent.click(screen.getAllByRole("row")[3]);
   expect(screen.getAllByRole("row")[3].getAttribute("aria-selected")).toBe(
     "true",
@@ -156,6 +159,9 @@ function scan(): ScanPage {
 it("F3 shows exact zero/null, units, blocked row and point-table selection without ranking", async () => {
   mocks.request.mockResolvedValue(scan());
   render(<ScanViewer projectId="p" fileId="f" />);
+  await screen.findByText(/Complete original scan range/);
+  expect(screen.queryByRole('table')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Data'}));
   await screen.findByText("comparison_contract_differs");
   const plot = mocks.plot.mock.calls.at(-1)![0];
   expect(plot.data[0].y).toEqual([0, null]);
@@ -251,13 +257,15 @@ it("M5 plot covers all original points independently of the 100-row table", asyn
   });
   render(<M5View record={source} />);
   await screen.findAllByTestId("plot");
+  fireEvent.click(screen.getByRole('button',{name:'Residuals'}));
   const before = mocks.plot.mock.calls.at(-1)![0].dataIdentity;
-  expect(mocks.plot.mock.calls.at(-2)![0].data[0].x).toEqual(values);
+  expect(mocks.plot.mock.calls.filter(([props])=>props.title.includes('observations')).at(-1)![0].data[0].x).toEqual(values);
+  fireEvent.click(screen.getByRole('button',{name:'Data'}));
   fireEvent.click(
     screen.getByRole("button", { name: "Next comparison points" }),
   );
   expect(mocks.plot.mock.calls.at(-1)![0].dataIdentity).toBe(before);
-  expect(mocks.plot.mock.calls.at(-2)![0].data[0].x).toEqual(values);
+  expect(mocks.plot.mock.calls.filter(([props])=>props.title.includes('observations')).at(-1)![0].data[0].x).toEqual(values);
   expect(screen.getAllByRole("row")).toHaveLength(101);
 });
 
@@ -277,23 +285,25 @@ it("M5 later exact plot range preserves original indices, null and zero without 
   });
   render(<M5View record={source} />);
   await screen.findAllByTestId("plot");
+  fireEvent.click(screen.getByRole('button',{name:'Residuals'}));
   const firstIdentity = mocks.plot.mock.calls.at(-1)![0].dataIdentity;
   fireEvent.click(
     screen.getByRole("button", { name: "Next comparison plot range" }),
   );
-  const main = mocks.plot.mock.calls.at(-2)![0];
+  const main = mocks.plot.mock.calls.filter(([props])=>props.title.includes('observations')).at(-1)![0];
   expect(main.data[0].x).toEqual([100000, 100001]);
   expect(main.data[0].y).toEqual([0, 0]);
   expect(mocks.plot.mock.calls.at(-1)![0].data[0].y).toEqual([null, 0]);
   expect(main.data[0].customdata).toEqual([100000, 100001]);
   expect(main.dataIdentity).not.toBe(firstIdentity);
+  fireEvent.click(screen.getByRole('button',{name:'Data'}));
   fireEvent.click(screen.getAllByRole("row")[2]);
-  expect(mocks.plot.mock.calls.at(-2)![0].dataIdentity).toBe(main.dataIdentity);
+  expect(mocks.plot.mock.calls.filter(([props])=>props.title.includes('observations')).at(-1)![0].dataIdentity).toBe(main.dataIdentity);
   expect(screen.getAllByRole("row")).toHaveLength(3);
   fireEvent.click(
     screen.getByRole("button", { name: "Previous comparison plot range" }),
   );
-  expect(mocks.plot.mock.calls.at(-2)![0].data[0].x).toHaveLength(100000);
+  expect(mocks.plot.mock.calls.filter(([props])=>props.title.includes('observations')).at(-1)![0].data[0].x).toHaveLength(100000);
 });
 
 it("F3 refuses an authorized response with a different source identity", async () => {

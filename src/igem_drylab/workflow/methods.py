@@ -63,6 +63,10 @@ class ModuleMethodView(Contract):
     parameter_requirements: list[dict] = Field(default_factory=list)
     parameter_source_options: dict[str,list[str]] = Field(default_factory=dict)
     scalar_method: 'MethodDraftView | None' = None
+    scalar_expression: dict | None = None
+    formula_inputs: list[dict] = Field(default_factory=list)
+    parameter_model_paths: dict[str,list[list[str|int]]] = Field(default_factory=dict)
+    workflow_numeric_inputs: list[dict] = Field(default_factory=list)
 
 
 class ToolCatalogPage(Contract):
@@ -201,6 +205,7 @@ def module_method(project, definition):
     from igem_drylab.parameters.requirements import requirements_for_stage
     requirements=requirements_for_stage(science.config,definition.id.removeprefix('project.')) if science and definition.id in {'project.m3','project.m4'} else []
     er_ids=set()
+    model_paths={}
     if science and definition.id in {'project.m3','project.m4'}:
         from igem_drylab.compartments import scenario_for_construct
         from igem_drylab.pipeline.er_stages import quantities
@@ -212,6 +217,28 @@ def module_method(project, definition):
             if request is None: continue
             er_ids.update(quantity.parameter_id for quantity in quantities(request))
             er_ids.update(identifier for reaction in getattr(request,'reactions',[]) for identifier in reaction.parameter_ids)
+        from igem_drylab.compartments import ScientificQuantity
+        from pydantic import BaseModel
+        def paths(value,path):
+            if isinstance(value,ScientificQuantity):
+                model_paths.setdefault(value.parameter_id,[]).append(path)
+            elif isinstance(value,BaseModel):
+                for key in type(value).model_fields: paths(getattr(value,key),[*path,key])
+            elif isinstance(value,dict):
+                for key,child in value.items(): paths(child,[*path,key])
+            elif isinstance(value,(list,tuple)):
+                for index,child in enumerate(value): paths(child,[*path,index])
+        # Match the typed quantity's exact canonical record before offering an
+        # editor. Merely sharing an identifier is not an executable binding.
+        paths(config.stages,['stages'])
+        records={record.parameter_id:record for record in config.parameters}
+        for identifier,locations in list(model_paths.items()):
+            record=records.get(identifier)
+            for location in locations:
+                item=config.model_dump(mode='json')
+                for key in location: item=item[key]
+                if record is None or record.value!=item['value'] or record.unit!=item['unit']:
+                    model_paths.pop(identifier,None);break
         if constructs and len(er_constructs)==len(constructs):
             requirements=[]
             configured_mode='ER versioned '+('recruitment' if definition.id=='project.m3' else 'amount network')+' requests'
@@ -243,9 +270,51 @@ def module_method(project, definition):
             'The original method is shown for review. A differently configured historical/dynamic mode is not relabeled as this method.',
             'Custom scalar formulas use a separate unit-checked exploratory tool, not an original method or approved scientific evidence. LaTeX alone is not executable.'],
         parameter_source_options=source_options,
+        parameter_model_paths={identifier:locations for identifier,locations in model_paths.items() if identifier in er_ids},
+        formula_inputs=bound_formula_inputs(config,definition.id) if science else [],
         parameter_requirements=[requirement.model_dump(mode='json') for requirement in requirements],
-        parameter_records=[{**record.model_dump(mode='json'),**({'binding_read_only':True,'binding_reason':'Bound inside the versioned ER model. Import a revised model and matched evidence in Inputs; changing only this record would not change that model.'} if record.parameter_id in er_ids else {})}
+        parameter_records=[{**record.model_dump(mode='json'),**({'binding_read_only':True,'binding_reason':'This reaction binding has no supported value-edit mapping. Import a revised model and matched evidence in Inputs.'} if record.parameter_id in er_ids and record.parameter_id not in model_paths else {})}
             for record in science.config.parameters if record.name in names or record.parameter_id in er_ids] if science else [])
+
+
+def bound_formula_inputs(config,tool_id):
+    """Reviewed operation-to-Registry names, never inferred from TeX digits.
+
+    These are display trees, not a second evaluator. Missing/derived symbols
+    remain symbolic. Production kernels and their admission gates are unchanged.
+    Only the mode whose original equation is represented gets this mapping.
+    """
+    from .custom_formula import expression_view
+    equations=[]
+    if tool_id=='project.m3' and config.stages.m3_concentration.recruitment_mode=='finite_site':
+        equations=[
+            ('S4','Phi','(c_total_scaffold-c_sat_scaffold)/(c_dense_scaffold-c_sat_scaffold)'),
+            ('S5','B','kd_sh3/kd_pdz'),
+            ('E1','theta_SH3','x/(kd_sh3+x)'),('E1','theta_PDZ','y/(kd_pdz+y)'),
+            ('E2','c_OC_total','phi*(x+theta_SH3*n_SH3_eff*c_dense_scaffold)+(1-phi)*x/partition_oc'),
+            ('E3','c_DMT_total','phi*(y+theta_PDZ*n_PDZ_eff*c_dense_scaffold)+(1-phi)*y/partition_dmt'),
+            ('E5','f_OC','phi*theta_SH3*n_SH3_eff*c_dense_scaffold/oc_total'),
+            ('E5','f_DMT','phi*theta_PDZ*n_PDZ_eff*c_dense_scaffold/dmt_total'),
+        ]
+        method_id='m3-s1-e10'
+    elif tool_id=='project.m4' and config.stages.m4_reaction.network_mode=='markdown_steady_state' and config.stages.m4_reaction.unit_mode=='physical':
+        # Canonical R1--R10 matches the production full-network competition.
+        from igem_drylab.parameters.requirements import full_m4_kinetic_requirements
+        kinetics=full_m4_kinetic_requirements()
+        for reaction in [item for item in kinetics if item.parameter_type=='kcat']:
+            name=reaction.name.removeprefix('kcat_')
+            competitors=[item for item in kinetics if item.parameter_type=='km' and item.enzyme_id==reaction.enzyme_id]
+            denominator='1'+''.join(f'+C_{item.substrate_id}_p/{item.name}' for item in competitors)
+            equations.append(('rates',f'v_{name}_p',f'(kcat_{name}*C_{reaction.enzyme_id}_p*C_{reaction.substrate_id}_p/km_{name})/({denominator})'))
+        equations += [('secretion',f'V_sec_{species}',f'ksec_{species}*C_{species}_dilute') for species in range(8,16)]
+        method_id='m4-step0-step8'
+    else: return []
+    from igem_drylab.parameters.requirements import requirements_for_stage
+    names={item.name for item in requirements_for_stage(config,tool_id.removeprefix('project.'))}
+    import ast
+    return [dict(method_id=method_id,formula_id=formula_id,symbol=symbol,tree=expression_view(expression),
+                 input_names=sorted({node.id for node in ast.walk(ast.parse(expression,mode='eval')) if isinstance(node,ast.Name)}&names))
+            for formula_id,symbol,expression in equations]
 
 
 def formula(id, title, latex, function, *assumptions, status='implemented'):

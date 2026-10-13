@@ -23,9 +23,9 @@ export function M1MethodResult({output}: {output: Record<string, unknown>}) {
           <td>{show([...(Array.isArray(s.hard_reject_reasons)?s.hard_reject_reasons:Array.isArray(p.hard_reject_reasons)?p.hard_reject_reasons:[]), ...(Array.isArray(s.review_reasons)?s.review_reasons:[]), ...(row.verdict==='blocked'?['Needs missing evidence']:[])])}</td><td>{show(p.sequence_kind)} · {show(f.length)} aa</td></tr>;})}
     </tbody></table><h3>{current.candidate_id}</h3>
     {Array.isArray(gaps)&&gaps.length>0&&<p>Missing evidence: {show(gaps.map(value=>typeof value==='string'?value.replaceAll('_',' '):value))}</p>}
-    <table aria-label="Computed sequence features"><thead><tr><th>Feature</th><th>Value</th></tr></thead><tbody>
+    <details><summary>Features</summary><table aria-label="Computed sequence features"><thead><tr><th>Feature</th><th>Value</th></tr></thead><tbody>
       {Object.entries(featureLabels).filter(([key])=>typeof features[key]==='number').map(([key,label])=><tr key={key}><td>{label}</td><td>{show(features[key])}</td></tr>)}
-    </tbody></table>
+    </tbody></table></details>
     <details><summary>Calculation details</summary><p>Decision: {current.verdict}. {show(screen.hard_reject_reasons??precheck.hard_reject_reasons)}</p>{Array.isArray(screen.review_reasons)&&screen.review_reasons.length>0&&<p>Review reasons: {show(screen.review_reasons)}</p>}</details>
   </section>;
 }
