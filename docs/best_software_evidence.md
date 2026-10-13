@@ -67,8 +67,18 @@ updates after this freeze do not constitute a new binary/scientific validation.
   and same-job retrieval, ER independent mathematical tests and their limits.
 - [Tool deployment/terms](external_tool_deployment.md) and
   [plugin extension guide](plugin_development.md): optional tools use actual
-  installations or user-authorized services. SignalP/DeepTMHMM and TANGO/PASTA
-  authorizations are not available; no corresponding real-job completion claim.
+  installations or user-authorized services. SignalP/DeepTMHMM academic access
+  and genuine native jobs are now verified; TANGO/PASTA deployment remains
+  unverified. The dated [original-tool record](review_r27_original_tools_20261013.md)
+  retains version discrepancies and failed attempts without calling them successful.
+- [Complete inputs and second-round IDRs](review_r28_complete_inputs_and_IDRs_20261013.md):
+  272 sequence records, including 127 IDR records / 126 distinct sequences;
+  original IUPred/SEG/ProtParam observations, diagnostic PScore, 91 native full-fusion
+  signal/topology jobs per tool, and 40 paired actual ColabFold models. Actual
+  browser IDR pagination, tables/plot, exact export, model rotation and server
+  IUPred Review/Accept/Run passed. Formal M1/M2, risk/ranking rules and experimental
+  validation remain incomplete; neither the new input's reported simulation scores
+  nor native-tool smoke tests substitute for those requirements. No new EXE is claimed.
 
 ## Standards, usability, experiments and performance
 

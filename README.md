@@ -86,7 +86,9 @@ Use `fusionlab --json ...` for automation and `fusionlab --data-dir <workspace>
 existing scientific contracts; incomplete or unlicensed tools are not replaced
 with example outputs. Public GFP descriptors are not formal M1–M4 validation.
 See the [current parameter editing and review record](docs/review_r25_parameter_editing_20261012.md)
-and [earlier review ledger](docs/web_cli_review_20261011.md) for actual validation
+and [complete-input and IDR execution record](docs/review_r28_complete_inputs_and_IDRs_20261013.md)
+for the latest native-tool jobs, actual-model browser checks and unresolved scientific evidence.
+The [earlier review ledger](docs/web_cli_review_20261011.md) records historical validation
 and external blockers; an entry point is not full biological validation.
 
 File, folder and ZIP imports share one saved preview. Ambiguous FASTA asks for
