@@ -61,6 +61,25 @@ Formal output still requires the project's exact full-length constructs, recepto
 
 ## Commands
 
+The original DeepTMHMM academic package has its own Python 3.8 environment and
+author-pinned requirements. Do not install it into a ColabFold or SignalP
+environment. Its CLI rejects a pre-existing output directory, while the shared
+workflow adapter creates that directory. The thin wrapper below runs the
+unmodified original in a new `native` subdirectory, preserves that directory and
+publishes the documented small native outputs for the existing parser:
+
+```bash
+python -m igem_drylab.deeptmhmm_runner \
+  --python /absolute/private-deeptmhmm-environment/bin/python \
+  --program-dir /absolute/original-academic-package \
+  --fasta exact-project-input.fasta \
+  --output-dir prediction --device cpu
+```
+
+`cpu` selects execution hardware, not a different model or reduced ensemble.
+`auto` preserves the original program's hardware selection. No licensed package,
+weights or private installation settings are embedded in this wrapper.
+
 ```bash
 igem-freesasa --pdb model.pdb --output freesasa.json
 
