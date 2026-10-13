@@ -181,7 +181,8 @@ def test_streaming_zip_rejects_paths_and_cleans_only_owned_staging(tmp_path, nam
 def test_stream_budget_before_body_and_symlink_archive(tmp_path, monkeypatch):
     import asyncio
     request = StreamingRequest(b"must not read")
-    request.headers = {"content-length":"20000001"}
+    from igem_drylab.workflow.binary_import import MAX_BYTES
+    request.headers = {"content-length":str(MAX_BYTES+1)}
     with pytest.raises(WorkflowError, match="scientific_upload_budget_exceeded"):
         asyncio.run(receive_bundle(request, tmp_path / "imports", "project.yaml", lambda *_: None))
     target = BytesIO()
