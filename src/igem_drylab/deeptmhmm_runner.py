@@ -30,7 +30,9 @@ def main() -> None:
         environment["CUDA_VISIBLE_DEVICES"] = ""
     subprocess.run(
         [
-            str(args.python.resolve()),
+            # Resolving a venv executable's symlink selects the base Python and
+            # loses that environment's dependencies. Preserve its entry path.
+            str(args.python.absolute()),
             str(args.program_dir.resolve() / "predict.py"),
             "--fasta", str(args.fasta.resolve()),
             "--output-dir", str(native),

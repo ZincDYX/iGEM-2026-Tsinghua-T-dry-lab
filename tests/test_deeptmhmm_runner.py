@@ -9,7 +9,8 @@ import pytest
 from igem_drylab import deeptmhmm_runner
 
 
-def test_native_directory_contract_and_unmodified_output(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("interpreter_symlink", [False, True])
+def test_native_directory_contract_and_unmodified_output(tmp_path: Path, monkeypatch, interpreter_symlink) -> None:
     program = tmp_path / "original"
     program.mkdir()
     source = program / "predict.py"
@@ -18,11 +19,21 @@ def test_native_directory_contract_and_unmodified_output(tmp_path: Path, monkeyp
     fasta.write_text("software plumbing fixture; not a biological prediction\n")
     output = tmp_path / "workflow-output"
     output.mkdir()
-    monkeypatch.setattr(sys, "argv", ["runner", "--python", sys.executable,
+    python = Path(sys.executable)
+    if interpreter_symlink:
+        python = tmp_path / "venv/bin/python"
+        python.parent.mkdir(parents=True)
+        try:
+            python.symlink_to(sys.executable)
+        except OSError as error:
+            if getattr(error, "winerror", None) == 1314:
+                pytest.skip("Windows symlink privilege unavailable; POSIX CI exercises this case.")
+            raise
+    monkeypatch.setattr(sys, "argv", ["runner", "--python", str(python),
         "--program-dir", str(program), "--fasta", str(fasta), "--output-dir", str(output)])
 
     def original_cli_fixture(argv, *, cwd, env, check):
-        assert argv == [str(Path(sys.executable).resolve()), str(source.resolve()),
+        assert argv == [str(python.absolute()), str(source.resolve()),
             "--fasta", str(fasta.resolve()), "--output-dir", str(output / "native")]
         assert cwd == program.resolve() and check
         assert env["CUDA_VISIBLE_DEVICES"] == ""
