@@ -118,6 +118,55 @@ def calculation_kinds():
             "recruitment_ensemble": (RecruitmentEnsembleInput, calculate_recruitment_ensemble)}
 
 
+def enzyme_comparison_metrics(request: M2EnzymeComparisonInput, result: dict,
+                              candidate_id: str, output_dir: Path):
+    """Transfer computed Q1/Q2 observations; absent Q3/Q4 stay absent.
+
+    No template-domain burial, assembly integrity, volume or recruitment
+    efficiency is invented to make this partial comparison formally pass.
+    """
+    from importlib.metadata import version
+    from hashlib import sha256
+    import freesasa
+    from .scoring.m2_structure import M2StructureMetrics
+    output_dir.mkdir(parents=True,exist_ok=True)
+    geometry=output_dir/'comparison-input.json'
+    geometry.write_text(request.model_dump_json(indent=2))
+    parameters=freesasa.Parameters()
+    sasa=output_dir/'sasa-configuration.json'
+    sasa.write_text(json.dumps(dict(tool='FreeSASA',version=version('freesasa'),
+        algorithm=parameters.algorithm(),probe_radius=parameters.probeRadius(),
+        points=parameters.nPoints(),slices=parameters.nSlices(),threads=parameters.nThreads(),
+        selection='original atom_sasa nonhetero heavy atoms; default FreeSASA classifier'),indent=2))
+    digest=lambda path:sha256(path.read_bytes()).hexdigest()
+    if any(not isinstance(pair[1],int) for pair in [*request.core_mapping.residue_pairs,*request.pocket_mapping]):
+        raise ValueError('M2_metric_transfer_requires_complete_fusion_sequence_indices')
+    scores=result.get('region_mean_plddt',{})
+    ligand=result.get('ligand_accessibility') or {}
+    return M2StructureMetrics(candidate_id=candidate_id,source_tool='FusionLab original coordinate comparison',
+        source_tool_version=version('igem-drylab'),artifact_path=str(request.fusion.path),
+        artifact_sha256=digest(request.fusion.path),
+        prediction_input_sequence_sha256=sha256(request.fusion.expected_sequence.encode()).hexdigest()
+            if request.fusion.expected_sequence else None,
+        chain_sequence_sha256={request.core_mapping.mobile_chain:sha256(request.fusion.expected_sequence.encode()).hexdigest()}
+            if request.fusion.expected_sequence else {},
+        reference_structure_id=request.reference.source_reference,
+        reference_artifact_path=str(request.reference.path),reference_artifact_sha256=digest(request.reference.path),
+        geometry_input_path=str(geometry),geometry_input_sha256=digest(geometry),
+        sasa_configuration_path=str(sasa),sasa_configuration_hash=digest(sasa),
+        clash_rule_provenance=request.clash_rule_reference,
+        pocket_definition_source_ref=request.pocket_definition_reference,
+        residue_mapping_source_ref=request.core_mapping.reviewed_reference,
+        core_residue_ids=[pair[1] for pair in request.core_mapping.residue_pairs if isinstance(pair[1],int)],
+        pocket_residue_ids=[pair[1] for pair in request.pocket_mapping if isinstance(pair[1],int)],
+        core_ca_rmsd_angstrom=result['core_ca_rmsd_angstrom'],
+        pocket_rmsd_angstrom=result['pocket_ca_rmsd_angstrom'],sasa_retention=result['pocket_sasa_retention'],
+        core_mean_plddt=scores.get('core'),
+        pocket_mean_plddt=scores.get('pocket'),
+        tail_pocket_min_distance_angstrom=result.get('tail_pocket_min_distance_angstrom'),
+        ligand_sasa_retention=ligand.get('sasa_retention'),ligand_buried=ligand.get('buried'))
+
+
 def load_calculation_requests(path: Path):
     rows = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(rows, list):

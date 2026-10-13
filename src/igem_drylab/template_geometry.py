@@ -170,11 +170,14 @@ def selected_sasa(areas, name, selection):
                if obj == name and (chain, *residue_key(residue)) in keys)
 
 
-class AssemblyExpansionInput(ScientificAnalysisInput):
+class AssemblyPreparationInput(ScientificAnalysisInput):
     template: StructureInput
     actual_fusion: StructureInput
     target_chains: list[str] = Field(min_length=1)
     core_mapping: CAMapping
+
+
+class AssemblyExpansionInput(AssemblyPreparationInput):
     interface_residues: list[int | str] = Field(min_length=1)
     interface_contact_cutoff_angstrom: float = Field(gt=0)
     rule_reference: str = Field(min_length=1)
@@ -203,17 +206,13 @@ class AssemblyExpansionInput(ScientificAnalysisInput):
         return atoms, confidence
 
 
-def expand_actual_fusion(payload: AssemblyExpansionInput) -> dict:
+def _fit_actual_fusion(payload: AssemblyPreparationInput):
     template, _ = payload.template.read()
     mobile, confidence = payload.actual_fusion.read()
     if {a.chain for a in mobile} != {payload.core_mapping.mobile_chain}:
         raise ValueError("actual_fusion_expansion_requires_one_complete_chain")
     if len(set(payload.target_chains)) != len(payload.target_chains):
         raise ValueError("duplicate_assembly_target_chain")
-    # Core CAs must include every specified interface residue.
-    declared = {residue_key(a) for a, _ in payload.core_mapping.residue_pairs}
-    if not {residue_key(r) for r in payload.interface_residues} <= declared:
-        raise ValueError("assembly_core_mapping_must_cover_declared_interface")
     copies, transforms = {}, []
     gates = []
     for chain in payload.target_chains:
@@ -223,6 +222,24 @@ def expand_actual_fusion(payload: AssemblyExpansionInput) -> dict:
         gates.append(_gate(confidence, {(mapping.mobile_chain, *residue_key(r)) for _, r in mapping.residue_pairs}))
         transforms.append({"target_chain": chain, "rotation": rotation.tolist(), "translation_angstrom": translation.tolist(),
                            "core_CA_RMSD_angstrom": rmsd})
+    return template, mobile, copies, transforms, gates
+
+
+def prepare_actual_fusion_copies(payload: AssemblyPreparationInput) -> dict:
+    _, _, copies, transforms, gates = _fit_actual_fusion(payload)
+    return {"schema_version":"m2-actual-assembly-preparation-v1", "copies":_coordinates(copies),
+        "transforms":transforms,"confidence_gates":gates,"subunit_count":len(copies),
+        "interface_assessment":"not_evaluated_without_reviewed_interface_rules",
+        "assembly_applicability_confirmed":False,"source_hashes":_hashes(payload.template,payload.actual_fusion),
+        "scope":"complete_actual_fusion_template_coordinates_not_observed_assembly_or_membrane_feasibility"}
+
+
+def expand_actual_fusion(payload: AssemblyExpansionInput) -> dict:
+    template, mobile, copies, transforms, gates = _fit_actual_fusion(payload)
+    # Core CAs must include every specified interface residue.
+    declared = {residue_key(a) for a, _ in payload.core_mapping.residue_pairs}
+    if not {residue_key(r) for r in payload.interface_residues} <= declared:
+        raise ValueError("assembly_core_mapping_must_cover_declared_interface")
     interfaces = []
     template_keys = {(a.chain, a.residue, a.insertion, a.name): a for a in template if a.name == "CA"}
     mobile_keys = {(a.chain, a.residue, a.insertion, a.name): a for a in mobile if a.name == "CA"}

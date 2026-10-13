@@ -90,6 +90,9 @@ print(json.dumps({"colabfold_version":v,"devices":[{"platform":x.platform,"kind"
         if not matched['models']:raise SystemExit('No exact complete paired model after native execution.')
     final=inventory(selected_file,pack,roots)
     (out/'model_inventory_after.json').write_text(json.dumps(final,indent=2)+'\n')
+    plan.update(status='models_ready' if final['model_inputs_ready'] else 'model_pair_verification_incomplete',
+                missing_target_ids=[row['record_id'] for row in final['targets'] if not row['models']])
+    (out/'preparation_plan.json').write_text(json.dumps(plan,indent=2)+'\n')
     print(json.dumps({'model_inputs_ready':final['model_inputs_ready'],'generated_targets':[r['record_id'] for r in executions],
                       'full_M2_acceptance':False}))
     if not final['model_inputs_ready']:raise SystemExit(2)

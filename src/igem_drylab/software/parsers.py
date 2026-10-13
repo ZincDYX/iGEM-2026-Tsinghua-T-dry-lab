@@ -114,7 +114,8 @@ class ParserRegistry:
             records=[{'records':[r.model_dump(mode='json') for r in summaries],
                 'cds_proteins':[r.model_dump(mode='json') for r in bindings]}],
             supported_scope='Original annotated DNA and CDS translations; locations/strand/qualifiers preserved. Missing translation is not inferred.',
-            input_roles=['annotated_design'],patch={'sequences':[r.model_dump() for r in proteins]})
+            input_roles=['annotated_design'],patch={'sequences':[r.model_dump() for r in proteins]
+                if options.get('bind_sequences',True) else []})
 
     def structure(self,path,options):
         from Bio.Data.IUPACData import protein_letters_3to1

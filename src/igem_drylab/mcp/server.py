@@ -11,6 +11,8 @@ from igem_drylab.m4_workflow import M4ReportInput
 from igem_drylab.m3_workflow import M3EnsembleInput
 from igem_drylab.structural_workflow import M2EnzymeComparisonInput
 from igem_drylab.pocket_preparation import PocketPreparationInput
+from igem_drylab.dssp_context import DsspContextInput
+from igem_drylab.template_geometry import AssemblyPreparationInput
 from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeometryInput, RecruitmentEnsembleInput
 from igem_drylab.fusion_tool_import import FusionImportInput
 from igem_drylab.m1_prioritization import M1PrioritizationInput
@@ -82,6 +84,16 @@ def m2_compare_enzyme(payload: M2EnzymeComparisonInput) -> dict[str, Any]:
 @server.tool(name="igem.m2.prepare_pocket", title="Pocket contacts from a sourced ligand pose", structured_output=True)
 def m2_prepare_pocket(payload: PocketPreparationInput) -> dict[str, Any]:
     return _call_local("igem.m2.prepare_pocket", {"payload": payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m2.secondary_context", title="Native DSSP auxiliary fusion context", structured_output=True)
+def m2_secondary_context(payload: DsspContextInput) -> dict[str, Any]:
+    return _call_local("igem.m2.secondary_context", {"payload": payload.model_dump(mode="json")})
+
+
+@server.tool(name="igem.m2.prepare_assembly", title="Actual complete fusion template copies", structured_output=True)
+def m2_prepare_assembly(payload: AssemblyPreparationInput) -> dict[str, Any]:
+    return _call_local("igem.m2.prepare_assembly", {"payload": payload.model_dump(mode="json")})
 
 
 @server.tool(name="igem.m2.expand_fusion", title="Actual fusion core assembly template expansion", structured_output=True)

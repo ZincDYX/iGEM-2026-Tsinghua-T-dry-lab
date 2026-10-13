@@ -107,6 +107,35 @@ def test_missing_or_collinear_mapping_does_not_choose_arbitrary_rotation(tmp_pat
         mapping("A","B").fit(atoms,atoms)
 
 
+def test_preparation_reuses_same_complete_copy_fit_without_inventing_interface_rules(tmp_path):
+    from igem_drylab.template_geometry import AssemblyPreparationInput,prepare_actual_fusion_copies
+    template=write_structure(tmp_path/'template.pdb',[(chain,i,xyz) for chain,offset in (('A',0),('B',10))
+        for i,xyz in enumerate(points(offset),1)])
+    mobile=write_structure(tmp_path/'mobile.pdb',[('M',i,xyz) for i,xyz in enumerate(points(20),1)])
+    result=prepare_actual_fusion_copies(AssemblyPreparationInput(template=template,actual_fusion=mobile,
+        target_chains=['A','B'],core_mapping=mapping('A','M')))
+    assert result['subunit_count']==2 and not result['assembly_applicability_confirmed']
+    assert result['interface_assessment']=='not_evaluated_without_reviewed_interface_rules'
+    np.testing.assert_allclose([row['xyz_angstrom'] for row in result['copies']['B']],points(10),atol=1e-10)
+
+
+def test_native_comparison_transfers_exact_metrics_without_filling_Q3_Q4(tmp_path):
+    pytest.importorskip('freesasa')
+    from igem_drylab.structural_workflow import enzyme_comparison_metrics
+    structure=write_structure(tmp_path/'same.pdb',[('A',i,xyz) for i,xyz in enumerate(points(),1)])
+    request=M2EnzymeComparisonInput(candidate_id='fixture',reference=structure,fusion=structure,
+        core_mapping=mapping('A','A'),pocket_mapping=[(1,1),(2,2)],
+        pocket_definition_reference='synthetic selection, not a project pocket',
+        clash_cutoff_angstrom=2.5,clash_rule_reference='synthetic transport check')
+    observed=compare_fusion_to_reference(request)
+    row=enzyme_comparison_metrics(request,observed,'M1-fixture',tmp_path/'calculated')
+    assert row.core_ca_rmsd_angstrom==observed['core_ca_rmsd_angstrom']
+    assert row.sasa_retention==observed['pocket_sasa_retention']
+    assert row.pocket_mean_plddt is None  # experimental coordinates are not pLDDT
+    assert row.recruitment_domain_buried is None and row.scaffold_interface_disrupted is None
+    assert row.v_enzyme_nm3 is None and row.eta_bind_sh3 is None
+
+
 def test_real_stdio_calls_new_Q1_workflow_and_exports_matching_input_schema(tmp_path):
     pytest.importorskip("freesasa")
     import asyncio

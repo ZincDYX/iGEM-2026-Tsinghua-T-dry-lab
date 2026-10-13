@@ -248,6 +248,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     stage_dir = run_dir / "m2_structure_screen"
     observations = []
     calculation_reports = []
+    calculated_metrics = {}
     if config.stages.m2_fusion.calculation_requests_file:
         from igem_drylab.structural_workflow import load_calculation_requests
         from igem_drylab.template_geometry import StructureInput, AssemblyExpansionInput
@@ -274,6 +275,13 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             stage_dir.mkdir(parents=True, exist_ok=True)
             artifact = stage_dir / f"calculation-{index}.json"
             artifact.write_text(json.dumps(result), encoding="utf-8")
+            if kind=='enzyme_comparison':
+                from igem_drylab.structural_workflow import enzyme_comparison_metrics
+                identifier=known[candidate_id].candidate_id
+                if identifier in calculated_metrics:
+                    raise ValueError('M2_multiple_comparisons_require_explicit_conformer_assessment_not_last_row_selection')
+                calculated_metrics[identifier]=enzyme_comparison_metrics(request,result,identifier,
+                    stage_dir/f'calculation-{index}-inputs')
             calculation_reports.append({"candidate_id": candidate_id, "kind": kind, "artifact_path": str(artifact),
                 "artifact_sha256": sha256(artifact.read_bytes()).hexdigest(), "formal_verdict": result.get("formal_verdict", "blocked"),
                 "scope": result["scope"], "M1_eligibility": known[candidate_id].eligibility})
@@ -293,6 +301,13 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
         stage_dir.mkdir(parents=True, exist_ok=True)
         (stage_dir / "region_observations.json").write_text(json.dumps(observations, indent=2), encoding="utf-8")
     metrics = load_m2_structure_metrics(config.stages.m2_fusion.structure_metrics_file) if config.stages.m2_fusion.structure_metrics_file else {}
+    for identifier,computed in calculated_metrics.items():
+        if identifier in metrics:
+            raise ValueError('M2_calculated_and_imported_metrics_conflict_requires_explicit_choice')
+        metrics[identifier]=computed
+    if calculated_metrics:
+        (stage_dir/'calculated_structure_metrics.json').write_text(json.dumps(
+            [row.model_dump(mode='json') for row in calculated_metrics.values()],indent=2))
     assessments: list[M2FusionAssessment] = []
     for candidate in candidates:
         if not candidate.recommended_for_m2 or candidate.status != "valid" or candidate.retrospective_only:
