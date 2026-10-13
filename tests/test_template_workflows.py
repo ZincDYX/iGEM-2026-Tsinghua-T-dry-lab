@@ -179,9 +179,28 @@ def test_independent_conformations_preserve_observed_graph_uncertainty(tmp_path)
     output = calculate_recruitment_ensemble(RecruitmentEnsembleInput(scenarios=[first,second],
         independence_reference="synthetic_contract_only_not_independent_measured_models"))
     assert output["formal_verdict"] == "review" and not output["m3_ready"]
+    assert output['observed_geometry_intervals']['accessible_oc_site_count'] is not None
+    assert output['observed_geometry_intervals']['accessible_dmt_site_count'] is not None
     second.placements[0].species = "DMT"
     with pytest.raises(ValueError,match="same_construct"):
         calculate_recruitment_ensemble(RecruitmentEnsembleInput(scenarios=[first,second], independence_reference="fixture"))
+
+
+def test_geometry_report_bridge_keeps_unknown_nominal_sites_and_binding_efficiency_absent(tmp_path):
+    pytest.importorskip('freesasa')
+    import json
+    from igem_drylab.structural_workflow import attach_geometry_metrics
+    request=geometry_input(tmp_path)
+    observed=calculate_recruitment_geometry(request)
+    artifact=tmp_path/'native-calculation.json'; artifact.write_text(json.dumps(observed))
+    metrics=attach_geometry_metrics(None,kind='recruitment_geometry',request=request,result=observed,
+        candidate_id='fixture',artifact=artifact)
+    assert metrics.artifact_path==str(request.scaffold.path)
+    assert metrics.s_sh3 is None and metrics.s_pdz is None
+    assert metrics.joint_occupancy_independent is None
+    assert metrics.eta_bind_sh3 is None and metrics.v_scaffold_nm3 is None
+    assert metrics.m2_geometry_id
+    assert metrics.persistent_severe_clash is None and metrics.scaffold_interface_disrupted is None
 
 
 def test_calculation_file_runs_in_pipeline_without_promoting_blocked_M1(tmp_path):

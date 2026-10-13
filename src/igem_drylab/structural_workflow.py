@@ -194,3 +194,36 @@ def load_calculation_requests(path: Path):
         resolve(request)
         result.append((row["kind"], row["candidate_id"], request, handler))
     return result
+
+
+def attach_geometry_metrics(row, *, kind, request, result, candidate_id, artifact):
+    """Transfer defined observations only; no Q3 verdict/eta/volume invented.
+
+    Each conditional scenario remains a separate calculation report. Multiple
+    scenarios cannot silently select the last one or average their evidence.
+    """
+    from hashlib import sha256
+    from .scoring.m2_structure import M2StructureMetrics
+    from .template_geometry import AssemblyExpansionInput
+    actual = request.actual_fusion if kind == "assembly_expansion" else request.scaffold
+    if isinstance(actual, AssemblyExpansionInput): actual = actual.actual_fusion
+    digest = sha256(actual.path.read_bytes()).hexdigest()
+    if row is not None and row.artifact_sha256 != digest:
+        raise ValueError("M2_geometry_comparison_models_require_explicit_same_conformation")
+    row = row or M2StructureMetrics(candidate_id=candidate_id,
+        source_tool="FusionLab original template geometry", source_tool_version="Native M2 V2 (source checkout)",
+        artifact_path=str(actual.path), artifact_sha256=digest,
+        prediction_input_sequence_sha256=sha256(actual.expected_sequence.encode()).hexdigest()
+            if actual.expected_sequence else None)
+    values = row.model_dump()
+    if kind == "assembly_expansion":
+        values["interface_contact_count"] = len(result["interface_contacts"])
+    elif kind == "recruitment_geometry":
+        occupancy = result["cooccupancy"]
+        # Nominal counts require the original assembly applicability gate;
+        # accessibility/affinity remain distinct. No eta_bind is inferred.
+        values.update(s_sh3=occupancy["nominal_sh3_sites"], s_pdz=occupancy["nominal_pdz_sites"],
+            site_count_basis="complete_assembly" if result["conflict_graph"]["assembly_applicability_confirmed"] else None,
+            m2_geometry_id=sha256(artifact.read_bytes()).hexdigest(),
+            joint_occupancy_independent=result["joint_occupancy_independent"] if occupancy["m3_ready"] else None)
+    return M2StructureMetrics.model_validate(values)

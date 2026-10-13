@@ -420,8 +420,12 @@ def calculate_recruitment_ensemble(payload: RecruitmentEnsembleInput) -> dict:
     for row in rows[1:]:
         persistent_edges &= set(map(tuple, row["conflict_graph"]["conflict_edges"]))
     intervals = {}
-    for key in ("maximum_total_cooccupancy", "eta_acc_sh3", "eta_acc_pdz"):
-        values = [r["cooccupancy"].get(key) for r in rows]
+    for key in ("maximum_total_cooccupancy", "accessible_oc_site_count", "accessible_dmt_site_count"):
+        if key == "maximum_total_cooccupancy":
+            values = [r["cooccupancy"][key] for r in rows]
+        else:
+            species = "oc" if key == "accessible_oc_site_count" else "dmt"
+            values = [len(r["cooccupancy"]["accessible_"+species+"_sites"]) for r in rows]
         intervals[key] = {"minimum":min(values),"maximum":max(values)} if all(v is not None for v in values) else None
     return {"schema_version":"m2-recruitment-ensemble-v1","scaffold_id":first.scaffold_id,
         "scenarios":rows,"persistent_conflict_edges":sorted(persistent_edges),"observed_geometry_intervals":intervals,

@@ -249,6 +249,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
     observations = []
     calculation_reports = []
     calculated_metrics = {}
+    calculated_geometry = []
     if config.stages.m2_fusion.calculation_requests_file:
         from igem_drylab.structural_workflow import load_calculation_requests
         from igem_drylab.template_geometry import StructureInput, AssemblyExpansionInput
@@ -282,9 +283,19 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
                     raise ValueError('M2_multiple_comparisons_require_explicit_conformer_assessment_not_last_row_selection')
                 calculated_metrics[identifier]=enzyme_comparison_metrics(request,result,identifier,
                     stage_dir/f'calculation-{index}-inputs')
+            elif kind in {'assembly_expansion', 'recruitment_geometry'}:
+                calculated_geometry.append((known[candidate_id].candidate_id, kind, request, result, artifact))
             calculation_reports.append({"candidate_id": candidate_id, "kind": kind, "artifact_path": str(artifact),
                 "artifact_sha256": sha256(artifact.read_bytes()).hexdigest(), "formal_verdict": result.get("formal_verdict", "blocked"),
                 "scope": result["scope"], "M1_eligibility": known[candidate_id].eligibility})
+    from igem_drylab.structural_workflow import attach_geometry_metrics
+    seen_geometry = set()
+    for identifier, kind, request, result, artifact in calculated_geometry:
+        if (identifier, kind) in seen_geometry:
+            raise ValueError('M2_multiple_geometry_scenarios_require_explicit_conformer_assessment_not_last_row_selection')
+        seen_geometry.add((identifier, kind))
+        calculated_metrics[identifier] = attach_geometry_metrics(calculated_metrics.get(identifier),
+            kind=kind, request=request, result=result, candidate_id=identifier, artifact=artifact)
     if config.stages.m2_fusion.region_assessments_file:
         from igem_drylab.region_assessment import assess_regions, load_region_requests
         requests = load_region_requests(config.stages.m2_fusion.region_assessments_file)
