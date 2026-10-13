@@ -135,6 +135,7 @@ def enzyme_comparison_metrics(request: M2EnzymeComparisonInput, result: dict,
     parameters=freesasa.Parameters()
     sasa=output_dir/'sasa-configuration.json'
     sasa.write_text(json.dumps(dict(tool='FreeSASA',version=version('freesasa'),
+        calculator_implementation_sha256=sha256(Path(__file__).read_bytes()).hexdigest(),
         algorithm=parameters.algorithm(),probe_radius=parameters.probeRadius(),
         points=parameters.nPoints(),slices=parameters.nSlices(),threads=parameters.nThreads(),
         selection='original atom_sasa nonhetero heavy atoms; default FreeSASA classifier'),indent=2))
@@ -144,7 +145,7 @@ def enzyme_comparison_metrics(request: M2EnzymeComparisonInput, result: dict,
     scores=result.get('region_mean_plddt',{})
     ligand=result.get('ligand_accessibility') or {}
     return M2StructureMetrics(candidate_id=candidate_id,source_tool='FusionLab original coordinate comparison',
-        source_tool_version='source-sha256:'+digest(Path(__file__)),artifact_path=str(request.fusion.path),
+        source_tool_version='Native M2 V2 (source checkout)',artifact_path=str(request.fusion.path),
         artifact_sha256=digest(request.fusion.path),
         prediction_input_sequence_sha256=sha256(request.fusion.expected_sequence.encode()).hexdigest()
             if request.fusion.expected_sequence else None,
