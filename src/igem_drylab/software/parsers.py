@@ -108,6 +108,26 @@ class ParserRegistry:
             patch={'sequences':proteins if options.get('bind_sequences',True) else []})
 
     def genbank(self,path,options):
+        from Bio import SeqIO
+        original=list(SeqIO.parse(path,'genbank'))
+        if original and all(row.annotations.get('molecule_type','').lower()=='protein' for row in original):
+            metadata=options.get('sequence_metadata',{})
+            proteins=[SequenceRecord(id=row.id,sequence=str(row.seq),
+                role=metadata.get(row.id,{}).get('role',options.get('role','fusion_protein')),
+                localization_context=metadata.get(row.id,{}).get('localization_context',
+                    options.get('localization_context','cytosolic'))) for row in original]
+            if len({row.id for row in proteins})!=len(proteins):raise WorkflowError('duplicate_sequence_id')
+            if any(not set(row.sequence)<=set('ACDEFGHIKLMNPQRSTVWY') for row in proteins):
+                raise WorkflowError('unsupported_sequence_alphabet')
+            return ParsedInput(detected_format='GenBank',semantic_type='SequenceCollection',
+                records=[{'id':row.id,'sequence':str(row.seq),'length':len(row.seq),'molecule_type':'protein',
+                    'possible_molecule_types':['protein'],'role':proteins[index].role,
+                    'localization_context':proteins[index].localization_context,
+                    'annotated_features':[{'type':feature.type,'location':str(feature.location),
+                        'qualifiers':feature.qualifiers} for feature in row.features]} for index,row in enumerate(original)],
+                supported_scope='Original annotated protein sequence; not nucleotide DNA, CDS or inferred translation.',
+                input_roles=['protein_sequence'],
+                patch={'sequences':[row.model_dump() for row in proteins] if options.get('bind_sequences',True) else []})
         from igem_drylab.workflow.genbank_design import import_design
         summaries,bindings,proteins=import_design(path.read_text(encoding='utf-8-sig'))
         return ParsedInput(detected_format='GenBank',semantic_type='DesignRecord',

@@ -51,3 +51,15 @@ def test_same_sequence_with_changed_localization_requires_explicit_revision(tmp_
     with pytest.raises(WorkflowError,match='sequence_conflict'):
         app.imports.commit(project['id'],second.id,{'second.faa':'new_version'})
     assert app.store.project(project['id']).sequences[0].localization_context=='cytosolic'
+
+
+def test_protein_genbank_is_not_misclassified_as_DNA_or_inferred_CDS(tmp_path):
+    from Bio import SeqIO
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
+    record=SeqRecord(Seq('MAGSGS'),id='opaque',annotations={'molecule_type':'protein'})
+    path=tmp_path/'protein.gb';SeqIO.write(record,path,'genbank')
+    parsed=ParserRegistry().parse(path,{'role':'idr'})
+    assert parsed.semantic_type=='SequenceCollection'
+    assert parsed.records[0]['molecule_type']=='protein' and parsed.patch['sequences'][0]['role']=='idr'
+    assert not ParserRegistry().parse(path,{'bind_sequences':False}).patch['sequences']
