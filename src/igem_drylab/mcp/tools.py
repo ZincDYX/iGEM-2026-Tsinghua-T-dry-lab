@@ -211,7 +211,11 @@ def compute_check_tool(arguments: JsonObject) -> McpToolResult:
 
 def compute_audit_deployment(arguments: JsonObject) -> McpToolResult:
     config = load_config(Path(_require_str(arguments, "config_path")))
-    budget_bytes = _optional_int(arguments, "budget_bytes", DEPLOYMENT_BUDGET_BYTES, minimum=1)
+    budget_bytes = (
+        None
+        if "budget_bytes" in arguments and arguments["budget_bytes"] is None
+        else _optional_int(arguments, "budget_bytes", DEPLOYMENT_BUDGET_BYTES, minimum=1)
+    )
     paths = [path for tool in config.tools.values() for path in tool.deployment_paths]
     result = audit_deployment(paths, budget_bytes=budget_bytes)
     return McpToolResult.ok({"ok": result.within_budget, "deployment": result.model_dump(mode="json")})
@@ -988,11 +992,11 @@ COMPUTE_CHECK_TOOL = McpTool(
 COMPUTE_AUDIT_DEPLOYMENT_TOOL = McpTool(
     name="igem.compute.audit_deployment",
     title="Audit external-tool disk budget",
-    description="Measure unique configured deployment roots and enforce the default 15 GB (decimal) tool budget.",
+    description="Measure unique configured deployment roots. Default limit: 15 GB decimal; explicit null disables the limit for an authorized deployment.",
     input_schema=_schema(
         {
             "config_path": {"type": "string"},
-            "budget_bytes": {"type": "integer", "minimum": 1, "default": DEPLOYMENT_BUDGET_BYTES},
+            "budget_bytes": {"type": ["integer", "null"], "minimum": 1, "default": DEPLOYMENT_BUDGET_BYTES},
         },
         ["config_path"],
     ),

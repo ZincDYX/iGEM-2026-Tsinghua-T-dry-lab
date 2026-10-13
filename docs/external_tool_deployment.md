@@ -1,5 +1,26 @@
 # External-tool deployment contract
 
+## Current scope (2026-10-13)
+
+The user retains the **15 GB local deployment limit**, but explicitly removes
+that limit for the authorized scientific validation server. For that deployment,
+pass `budget_bytes: null` to `igem.compute.audit_deployment`. This still measures
+and reports every configured root; it does not hide model/database sizes. Omitting
+the argument still applies the 15,000,000,000-byte default. Old measurements below
+are historical, not a current combined local/server size claim.
+
+Original licensed distributions, model weights, databases, download links and
+registration details stay in private installation directories, outside the source
+repository, code bundle and desktop release. Downloading or compiling a tool is
+not proof that an exact-project prediction or a complete M1/M2 result succeeded.
+
+Installation-route labels such as `optional_local` do **not** waive steps retained
+by a selected scientific protocol. Missing required predictions or simulations
+must remain incomplete. Original catGRANULE, PScore and PSPredictor are distinct
+methods; newer variants or distilled surrogates must not silently replace them.
+
+## Historical deployment measurements
+
 Measured on `validation host` on 2026-10-03 after the MCP runtime was installed. Byte counts are the conservative logical-file totals returned by `igem.compute.audit_deployment`. **User update (2026-10-04): the current limit is 15 GB = 15,000,000,000 bytes.** The recorded deployment is below that new limit. It was not below the original 10 GB requirement: treating that requirement as 10 GiB was an error. This is a historical measurement, not a fresh combined audit. No server files were removed during this correction.
 
 ## Lean deployed environment
@@ -36,7 +57,7 @@ Formal output still requires the project's exact full-length constructs, recepto
 
 ## Optional and metadata routes
 
-`external_tools.py` is the authoritative catalog for M0 metadata APIs, optional LLPS predictors, structure viewers, molecular dynamics, and alternative structure predictors. Optional tools are not installed merely because the Markdown mentions them. FuzDrop and PSPredictor are marked `manual_artifact`, not API, because no supported programmatic endpoint was verified. ColabFold's local sequence database is deliberately excluded because its documented database footprint alone is far beyond this budget.
+`external_tools.py` catalogs installation routes for M0 metadata APIs, LLPS predictors, structure viewers, molecular dynamics, and alternative structure predictors. Scientific completeness follows the selected protocol, not an installation label. FuzDrop and PSPredictor are marked `manual_artifact`, not API, because no supported programmatic endpoint was verified; that does not complete or waive a required original step. A local ColabFold sequence database was excluded from the historical lean deployment, not prohibited on an explicitly unrestricted server.
 
 ## Commands
 

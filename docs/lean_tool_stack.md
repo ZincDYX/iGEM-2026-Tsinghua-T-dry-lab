@@ -4,8 +4,8 @@
 
 ```text
 M0: construct and evidence database
-  -> M1: FTH1 24-mer template expansion and geometric clash screen
-  -> M2: ColabFold AlphaFold2-Multimer, then FreeSASA and AutoDock Vina
+  -> M1: original sequence/IDR/linker checks and cytosolic-fusion predictor gates
+  -> M2: ColabFold, FTH1 24-mer geometry, FreeSASA and AutoDock Vina
   -> M3: finite-site binding / mass-conserving local-concentration model
   -> M4: full competitive two-phase glabridin network
   -> M5: wet-lab HPLC, protein-abundance, and imaging feedback
@@ -23,11 +23,15 @@ M0: construct and evidence database
 ## Deliberately not default dependencies
 
 - AlphaFold 3, ABCFold, Boltz, and Chai: optional cross-validation tools only. They require paid cloud compute, large local data/model deployments, or version-specific deployment work.
-- CALVADOS: optional final-candidate analysis. It is useful for a focused IDR question, but is not justified as a mandatory screen for every linker/scaffold candidate.
-- SignalP / DeepTMHMM: optional M0 checks when selecting the OC N-terminal truncation. The result must be checked against the enzyme literature and wet-lab activity; the default pipeline does not depend on an online service.
+- Mpipi / CALVADOS and LLPS propensity tools: execute the steps retained by the selected original plan; an installation label does not make a required step optional. These methods do not replace measured M3 concentration/partitioning inputs.
+- SignalP / DeepTMHMM / TANGO: required predictor evidence for the selected original cytosolic-fusion M1 checks. Academic local installation is preferred where legally available; missing native output keeps the check incomplete. No silent substitution or fabricated passing gate is permitted.
 - DiffDock-PP: not in the default route. It is protein-protein docking and cannot substitute for Vina in enzyme-small-molecule docking.
 
 ## Important operational limits
+
+The local deployment still defaults to 15 GB; the authorized scientific server
+has no user-imposed size limit. Original licensed tools and weights are private
+external installations, not repository, bundle or executable content.
 
 The ColabFold public service supplies MSAs; it is not a service-level-guaranteed high-throughput API. Submit serial, rate-limited requests, cache the returned MSAs, and run the actual model inference on the laboratory GPU. The pipeline must not bypass public-service limits.
 

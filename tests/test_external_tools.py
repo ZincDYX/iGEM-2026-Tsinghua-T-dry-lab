@@ -15,6 +15,10 @@ def test_catalog_keeps_formal_route_and_scientific_boundary_together() -> None:
     assert DEPLOYMENT_BUDGET_BYTES == 15_000_000_000
     assert tool_spec("colabfold").formal_stage == "M2"
     assert tool_spec("signalp").route == "licensed_local_or_api"
+    assert tool_spec("mpipi").route == "local"
+    assert tool_spec("calvados").route == "local"
+    assert tool_spec("catgranule").route == "manual_artifact"
+    assert "PSPredictor is distinct from PScore" in tool_spec("pspredictor").notes
     assert tool_spec("unknown") is None
 
 
@@ -35,6 +39,14 @@ def test_deployment_audit_deduplicates_nested_roots(tmp_path: Path) -> None:
     assert result.used_bytes == 10
     assert result.within_budget
     assert list(result.paths) == [str(root.resolve())]
+
+    # An explicitly unrestricted deployment still reports all bytes. The
+    # default/local limit is neither enlarged nor silently turned off.
+    limited = audit_deployment([root], budget_bytes=9)
+    assert limited.within_budget is False
+    unrestricted = audit_deployment([root, nested], budget_bytes=None)
+    assert unrestricted.used_bytes == 10 and unrestricted.budget_bytes is None
+    assert unrestricted.within_budget is True
 
 
 def test_disabled_tool_never_executes_even_with_valid_command(tmp_path: Path) -> None:
@@ -105,3 +117,9 @@ def test_mcp_deployment_audit_uses_unique_configured_paths(tmp_path: Path) -> No
 
     assert response.is_error is False
     assert response.structured_content["deployment"]["used_bytes"] == 5
+    unlimited = create_default_registry().call(
+        "igem.compute.audit_deployment", {"config_path": str(config_path), "budget_bytes": None}
+    )
+    assert not unlimited.is_error
+    assert unlimited.structured_content["deployment"]["budget_bytes"] is None
+    assert unlimited.structured_content["deployment"]["used_bytes"] == 5

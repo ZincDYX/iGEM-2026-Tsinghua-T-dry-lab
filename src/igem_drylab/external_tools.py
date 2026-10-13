@@ -110,7 +110,7 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             route="optional_local",
             formal_stage="M1",
             official_url="https://github.com/psipred/psipred",
-            notes="Alternative to JPred; its sequence-search database is not part of the lean deployment.",
+            notes="Original profile-based alternative to JPred; verify its database and sequence profile. Single-sequence prediction is not an equivalent substitute.",
         ),
         ExternalToolSpec(
             name="seg",
@@ -210,41 +210,41 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
         ),
         ExternalToolSpec(
             name="catgranule",
-            capability="optional LLPS propensity cross-check",
-            route="optional_local",
+            capability="Original catGRANULE LLPS propensity cross-check",
+            route="manual_artifact",
             official_url="https://service.tartaglialab.com/static_files/shared/tutorial_catGRANULES.html",
-            notes="Original catGRANULE (2016), not catGRANULE2. Preserve raw output; never substitutes for measured M3 inputs.",
+            notes="Original catGRANULE (2016), not catGRANULE2 or a distilled surrogate. Native exported evidence is still required when retained by the protocol; it never substitutes for measured M3 inputs.",
         ),
         ExternalToolSpec(
             name="calvados",
-            capability="optional coarse-grained phase-behaviour simulation",
-            route="optional_local",
+            capability="coarse-grained phase-behaviour simulation",
+            route="local",
             official_url="https://github.com/KULL-Centre/CALVADOS",
-            notes="Optional M1/M2 evidence only; not a formal M3 concentration input.",
+            notes="Execute when retained by the selected protocol; required conditions and original results must be present. Not a substitute for measured M3 concentration inputs.",
         ),
         ExternalToolSpec(
             name="mpipi",
-            capability="optional coarse-grained phase-behaviour simulation",
-            route="optional_local",
+            capability="Original Mpipi coarse-grained phase-behaviour simulation",
+            route="local",
             official_url="https://doi.org/10.1038/s43588-021-00155-3",
-            notes="Original Mpipi method; verify its code and conditions before enabling. Mpipi-Recharged is a distinct variant, not an automatic substitution. Optional M1/M2 evidence only.",
+            notes="Execute the original method when retained by the selected protocol, with explicitly defined simulation conditions. Mpipi-Recharged is not an automatic substitution; an author benchmark is not a project simulation.",
         ),
         ExternalToolSpec(
             name="fuzdrop",
-            capability="optional LLPS propensity cross-check",
+            capability="LLPS propensity cross-check",
             route="manual_artifact",
             official_url="https://fuzdrop.bio.unipd.it/",
-            notes="No undocumented web scraping; ingest a user-exported artifact if no supported API is available.",
+            notes="No undocumented web scraping; ingest native exported evidence if no supported API is available. A required original step remains incomplete without that evidence.",
         ),
         ExternalToolSpec(
             name="pspredictor",
-            capability="optional LLPS propensity cross-check",
+            capability="LLPS propensity cross-check",
             route="manual_artifact",
             official_url="http://www.pkumdl.cn:8000/PSPredictor/",
-            notes="Optional only; no formal route is claimed until a stable supported API is verified.",
+            notes="PSPredictor is distinct from PScore. No verified automatic route is claimed; a retained original step needs native evidence and cannot be waived by this installation status.",
         ),
         ExternalToolSpec(
-            name="pscore", capability="Original PScore LLPS propensity cross-check", route="optional_local",
+            name="pscore", capability="Original PScore LLPS propensity cross-check", route="local",
             formal_stage="M1", official_url="https://github.com/haocai1992/PScore-online",
             notes="Unmodified author implementation and lookup data; educational/research license. Cropped IDRs and artificial fusions are extrapolations, not validated probabilities.",
         ),
@@ -260,21 +260,21 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             capability="optional structure-prediction cross-validation",
             route="optional_local",
             official_url="https://github.com/jwohlwend/boltz",
-            notes="Optional cross-validation, not installed in the lean environment; current combined budget is 15 GB.",
+            notes="Optional cross-validation, not installed in the lean environment. Local deployments default to 15 GB; explicitly unrestricted servers have a separate budget scope.",
         ),
         ExternalToolSpec(
             name="chai",
             capability="optional structure-prediction cross-validation",
             route="optional_local",
             official_url="https://github.com/chaidiscovery/chai-lab",
-            notes="Optional cross-validation, not installed in the lean environment; current combined budget is 15 GB.",
+            notes="Optional cross-validation, not installed in the lean environment. Local deployments default to 15 GB; explicitly unrestricted servers have a separate budget scope.",
         ),
     )
 }
 
 
 class DeploymentUsage(BaseModel):
-    budget_bytes: int = Field(default=DEPLOYMENT_BUDGET_BYTES, gt=0)
+    budget_bytes: int | None = Field(default=DEPLOYMENT_BUDGET_BYTES, gt=0)
     used_bytes: int = Field(ge=0)
     within_budget: bool
     paths: dict[str, int]
@@ -284,8 +284,8 @@ def tool_spec(name: str) -> ExternalToolSpec | None:
     return TOOL_CATALOG.get(name)
 
 
-def audit_deployment(paths: list[Path], *, budget_bytes: int = DEPLOYMENT_BUDGET_BYTES) -> DeploymentUsage:
-    """Measure unique deployment roots without double-counting nested paths."""
+def audit_deployment(paths: list[Path], *, budget_bytes: int | None = DEPLOYMENT_BUDGET_BYTES) -> DeploymentUsage:
+    """Measure roots; explicit None disables a host's limit, not measurement."""
 
     missing = [str(path) for path in paths if not path.exists()]
     if missing:
@@ -296,7 +296,7 @@ def audit_deployment(paths: list[Path], *, budget_bytes: int = DEPLOYMENT_BUDGET
     return DeploymentUsage(
         budget_bytes=budget_bytes,
         used_bytes=used,
-        within_budget=used <= budget_bytes,
+        within_budget=budget_bytes is None or used <= budget_bytes,
         paths=measured,
     )
 
