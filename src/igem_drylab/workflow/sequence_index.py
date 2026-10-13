@@ -56,6 +56,7 @@ class SequenceChoice(Contract):
     label: str
     length: int = Field(ge=1)
     role: str
+    localization_context: Literal["cytosolic", "er_anchored"] = "cytosolic"
 
 
 class SequencePage(Contract):
@@ -80,12 +81,19 @@ def _role(config: dict, identifier: str) -> str:
     return "unspecified"
 
 
+def _localization_context(config: dict, identifier: str) -> str:
+    # Use the declared full construct, never a FASTA identifier heuristic.
+    matches = [item for item in config["inputs"].get("constructs", []) if item["id"] == identifier]
+    return (matches[0].get("localization_context") or "cytosolic") if matches else "cytosolic"
+
+
 def sequence_page(project, boundary, offset: int, limit: int) -> SequencePage:
     choices = []
     for item in project.sequences:
         choices.append(SequenceChoice(ref=SequenceRef(source="project", record_id=item.id,
             sequence_sha256=sha256(item.sequence.encode()).hexdigest(), construct_version=project.revision),
-            label=item.id, length=len(item.sequence), role=item.role))
+            label=item.id, length=len(item.sequence), role=item.role,
+            localization_context=item.localization_context))
     if project.scientific_project:
         from .scientific_project import ScientificProject
         science = ScientificProject.model_validate(project.scientific_project)
@@ -98,7 +106,8 @@ def sequence_page(project, boundary, offset: int, limit: int) -> SequencePage:
             for item in json.loads(row[0])["entries"]:
                 choices.append(SequenceChoice(ref=SequenceRef(source="scientific_fasta", file_id=asset["id"],
                     record_id=item["id"], sequence_sha256=item["sequence_sha256"], construct_version=project.revision),
-                    label=item["id"], length=item["length"], role=_role(config, item["id"])))
+                    label=item["id"], length=item["length"], role=_role(config, item["id"]),
+                    localization_context=_localization_context(config, item["id"])))
     return SequencePage(project_id=project.id, project_revision=project.revision, offset=offset,
         total=len(choices), items=choices[offset:offset + limit])
 
@@ -128,7 +137,8 @@ def resolve_sequence_ref(ref: SequenceRef, project: dict, store) -> dict:
         raw = source.read_bytes()
         if sha256(raw).hexdigest() != expected:
             raise WorkflowError("file_identity_changed", status_code=409)
-        matches = [dict(id=item.id, sequence=str(item.seq).upper(), role=_role(science["config"], item.id))
+        matches = [dict(id=item.id, sequence=str(item.seq).upper(), role=_role(science["config"], item.id),
+                        localization_context=_localization_context(science["config"], item.id))
                    for item in SeqIO.parse(StringIO(raw.decode("utf-8-sig")), "fasta") if item.id == ref.record_id]
     if len(matches) != 1 or sha256(matches[0]["sequence"].encode()).hexdigest() != ref.sequence_sha256:
         raise WorkflowError("sequence_reference_identity_mismatch", status_code=409)

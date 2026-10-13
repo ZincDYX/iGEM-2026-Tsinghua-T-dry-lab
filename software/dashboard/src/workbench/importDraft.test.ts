@@ -6,6 +6,7 @@ const sequence = (id: string, value: string) => ({
   id,
   sequence: value,
   role: "protein",
+  localization_context: "cytosolic" as const,
 });
 const project = () =>
   parsePublic("ProjectView", {
@@ -76,6 +77,18 @@ it("links identical IDs without duplicating and reserves a new separate identifi
     { conflict: "separate" },
   );
   expect(result.sequences.at(-1)?.id).toBe("conflict-import-3");
+});
+
+it('requires a choice when identical sequence bytes have different localization', () => {
+  const original = project();
+  const imported = preview([sequence('old', 'AAA')]);
+  const rows = imported.patch.sequences as {id:string;sequence:string;role:string;localization_context:string}[];
+  rows[0].localization_context = 'er_anchored';
+  expect(() => mergeImportDraft(original, imported)).toThrow('Choose how');
+  expect(mergeImportDraft(original, imported, {old:'keep'}).sequences[0].localization_context).toBe('cytosolic');
+  expect(mergeImportDraft(original, imported, {old:'replace'}).sequences[0].localization_context).toBe('er_anchored');
+  const separate = mergeImportDraft(original, imported, {old:'separate'});
+  expect(separate.sequences.find(row=>row.id==='old-import-2')?.localization_context).toBe('er_anchored');
 });
 
 it('preserves DNA source references while remapping or clearing conflicting protein links', () => {

@@ -93,8 +93,8 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             capability="per-residue intrinsic-disorder prediction",
             route="local",
             formal_stage="M1",
-            official_url="https://github.com/saezlab/iupred",
-            notes="Use the basic IUPred2 route; AIUPred weights are not required.",
+            official_url="https://github.com/doszilab/iupred2a",
+            notes="Use the author's installed native IUPred2A script via iupred_runner --native-script, or the packaged basic IUPred2 route; AIUPred weights are not required. Do not redistribute the academic predictor.",
         ),
         ExternalToolSpec(
             name="jpred",

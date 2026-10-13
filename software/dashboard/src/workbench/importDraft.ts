@@ -20,9 +20,14 @@ export function sequenceConflicts(project: ProjectView, incoming: Sequence[]) {
   return incoming.filter((item) =>
     project.sequences.some(
       (existing) =>
-        existing.id === item.id && existing.sequence !== item.sequence,
+        existing.id === item.id && !sameSequenceContext(existing, item),
     ),
   );
+}
+
+function sameSequenceContext(first: Sequence, second: Sequence): boolean {
+  return first.sequence === second.sequence &&
+    (first.localization_context ?? 'cytosolic') === (second.localization_context ?? 'cytosolic');
 }
 
 export function mergeImportDraft(
@@ -44,7 +49,7 @@ export function mergeImportDraft(
       sequences.push(item);
       continue;
     }
-    if (sequences[index].sequence === item.sequence) continue;
+    if (sameSequenceContext(sequences[index], item)) continue;
     const choice = choices[item.id];
     if (!choice) throw new Error(`Choose how to resolve sequence ${item.id}.`);
     if (choice === "replace") sequences[index] = item;

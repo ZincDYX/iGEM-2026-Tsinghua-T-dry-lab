@@ -13,6 +13,7 @@ export type ConstructVersion = number;
 export type Label = string;
 export type Length = number;
 export type Role = string;
+export type LocalizationContext = "cytosolic" | "er_anchored";
 export type Items = SequenceChoice[];
 
 export interface SequencePage {
@@ -27,6 +28,7 @@ export interface SequenceChoice {
   label: Label;
   length: Length;
   role: Role;
+  localization_context: LocalizationContext;
 }
 export interface SequenceRef {
   kind: Kind;

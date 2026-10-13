@@ -14,6 +14,8 @@ from igem_drylab.constructs.linker_features import (M1FeatureDefinitions, M1V3Ru
 from .models import Contract, SequenceRecord, Workflow, WorkflowNode, ProjectInput, NodeInput, MapSpec, LiteralInput
 from .tools import NodeContext, ToolDefinition
 from igem_drylab.resources import default_config_path
+from igem_drylab.m1_prioritization import (PrioritizationPolicy, PrioritizationCandidate,
+    M1PrioritizationInput, prioritize_m1)
 
 
 KINDS = {"idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "full_fusion"}
@@ -26,6 +28,7 @@ class M1PrecheckInput(Contract):
 
 
 class M1DecisionInput(M1PrecheckInput):
+    prioritization_policy: PrioritizationPolicy | None = None
     prechecks: list[dict] = Field(default_factory=list)
     disorder_results: list[dict] = Field(default_factory=list)
     seg_results: list[dict] = Field(default_factory=list)
@@ -40,13 +43,15 @@ def precheck(payload: M1PrecheckInput, context: NodeContext) -> dict:
     features = compute_sequence_features(payload.item.sequence, definitions=payload.feature_definitions,
                                          definitions_sha256=digest)
     result = dict(candidate_id=payload.item.id, input_sequence_sha256=features.sequence_sha256,
-                  sequence_kind=payload.item.role, features=features.model_dump(mode="json"),
+                  sequence_kind=payload.item.role, localization_context=payload.item.localization_context,
+                  features=features.model_dump(mode="json"),
                   eligible_for_tools=False, hard_reject_reasons=[], missing=[])
     if payload.item.role not in KINDS:
         result["missing"] = ["Explicit M1 role: idr / enzyme_ligand_linker / scaffold_linker / rigid_linker / full_fusion"]
         return result
     observed = screen_sequence_v3(features=features, sequence=payload.item.sequence,
-        sequence_kind=payload.item.role, rules=payload.rules, require_external_evidence=False)
+        sequence_kind=payload.item.role, rules=payload.rules,
+        localization_context=payload.item.localization_context, require_external_evidence=False)
     result["hard_reject_reasons"] = observed.hard_reject_reasons
     result["eligible_for_tools"] = not observed.hard_reject_reasons and payload.item.role != "full_fusion"
     return result
@@ -99,9 +104,15 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
         secondary_structure=SecondaryStructureEvidence.model_validate(secondary["parsed"]) if secondary.get("parsed") else None,
         protparam=compute_protparam_evidence(payload.item.sequence, input_sha256=features.sequence_sha256),
         fusion_evidence=fusion,full_fusion_sha256=features.sequence_sha256 if fusion else None,
-        require_external_evidence=True)
+        localization_context=payload.item.localization_context, require_external_evidence=True)
+    prioritization = None
+    if payload.prioritization_policy is not None:
+        prioritization = prioritize_m1(M1PrioritizationInput(policy=payload.prioritization_policy,
+            candidates=[PrioritizationCandidate(candidate_id=payload.item.id, screen=screen)]))
+    priority = prioritization['candidates'][0] if prioritization else None
     return dict(schema_version="m1-method-check-v1", candidate_id=payload.item.id,
         verdict=screen.verdict, precheck=observed, screen=screen.model_dump(mode="json"),
+        prioritization=prioritization,
         steps=[dict(step="1", name="Cheap sequence fields", status="reject" if observed["hard_reject_reasons"] else "completed"),
                dict(step="2", name="External fragment predictors", status="not_eligible" if not observed["eligible_for_tools"] else
                     "completed" if all(row.get("parse_status") == "succeeded" for row in (disorder, seg, secondary)) else "partial",
@@ -110,8 +121,13 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
                dict(step="3", name="Actual full fusion checks", status="completed" if payload.item.role=="full_fusion" and not screen.missing_required_evidence else "blocked",
                     missing=screen.missing_required_evidence if payload.item.role=="full_fusion" else
                         ["construct assembly binding", "SignalP", "DeepTMHMM", "TANGO/PASTA", "forbidden DNA sites"]),
-               dict(step="4", name="Soft risk classification", status="blocked", missing=["reviewed risk directions"]),
-               dict(step="5", name="Original-method ranking", status="blocked", missing=["raw LLPS predictions and reviewed normalization/rubric"])],
+               dict(step="4", name="Soft risk classification", status="completed" if priority and priority['risk'] is not None else "blocked",
+                    missing=[] if priority and priority['risk'] is not None else ["reviewed complete risk directions"]),
+               dict(step="5", name="Original-method ranking", status="not_applicable" if payload.item.role!='idr' else
+                    "completed" if priority and priority['rank_score'] is not None else "blocked",
+                    missing=(priority['missing'] if priority else ["raw LLPS predictions and reviewed normalization/rubric"])
+                    if payload.item.role=='idr' else [],
+                    note="Linkers use the original checklist/rubric, not an invented composite score." if payload.item.role!='idr' else None)],
         claim_scope="original_M1_available_hard_checks_not_full_candidate_acceptance")
 
 
@@ -123,7 +139,7 @@ def m1_check_tools():
                 "1", M1DecisionInput, decision, "scientific_project", implementation_files=implementation)]
 
 
-def m1_workflow() -> Workflow:
+def m1_workflow(policy: PrioritizationPolicy | None = None) -> Workflow:
     import yaml
     definitions, _ = M1FeatureDefinitions.from_yaml(default_config_path("m1_feature_definitions.yaml"))
     rules = M1V3Rules.model_validate(yaml.safe_load(default_config_path("m1_rules_v3.yaml").read_text()))
@@ -139,7 +155,8 @@ def m1_workflow() -> Workflow:
         nodes.append(WorkflowNode(id="m1_"+tool,label="M1 Step 3 — full-fusion "+tool,
             tool_id="prediction."+tool,map=batch))
     nodes.append(WorkflowNode(id="m1_decisions", label="M1 decisions and explicit unfinished steps", tool_id="method.m1.decision",
-        inputs={**inputs, "prechecks": checks, "disorder_results": NodeInput(node_id="m1_iupred2a", path=["items"]),
+        inputs={**inputs, "prioritization_policy": LiteralInput(value=policy.model_dump(mode='json') if policy else None),
+                "prechecks": checks, "disorder_results": NodeInput(node_id="m1_iupred2a", path=["items"]),
                 "seg_results": NodeInput(node_id="m1_seg", path=["items"]),
                 "secondary_results": NodeInput(node_id="m1_jpred", path=["items"]),
                 "signalp_results":NodeInput(node_id="m1_signalp",path=["items"]),

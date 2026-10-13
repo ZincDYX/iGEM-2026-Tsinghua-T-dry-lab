@@ -380,6 +380,17 @@ export function InputEditor({
                 <h4>{row.id}</h4>
                 <p className="sequence-text">{row.sequence}</p>
                 <label>
+                  Localization
+                  <select aria-label={`Localization for ${row.id}`}
+                    value={row.localization_context ?? "cytosolic"}
+                    onChange={(event) => onChange({...project, sequences: project.sequences.map(
+                      (value) => value.id === row.id ? {...value, localization_context:
+                        event.target.value as "cytosolic" | "er_anchored"} : value)})}>
+                    <option value="cytosolic">Cytosolic</option>
+                    <option value="er_anchored">ER anchored — topology needs evaluation</option>
+                  </select>
+                </label>
+                <label>
                   Design role
                   <input
                     aria-label={`Design role for ${row.id}`}

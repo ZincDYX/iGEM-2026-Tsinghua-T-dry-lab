@@ -7,6 +7,7 @@ export type Description = string;
 export type Id1 = string;
 export type Sequence = string;
 export type Role = string;
+export type LocalizationContext = "cytosolic" | "er_anchored";
 export type Sequences = SequenceRecord[];
 export type Id2 = string;
 export type Description1 = string;
@@ -67,7 +68,7 @@ export type Sequence2 = string | null;
 export type Parts = OrderedPartConfig[];
 export type DomainOrder = string[];
 export type FusionOrientation = string | null;
-export type LocalizationContext = ("cytosolic" | "er_anchored") | null;
+export type LocalizationContext1 = ("cytosolic" | "er_anchored") | null;
 export type LocalizationDesignEvidence = string | null;
 export type EvidenceId = string;
 export type ConstructId = string;
@@ -123,7 +124,7 @@ export type Idr = string | null;
 export type RecruitmentDomains = string[];
 export type LigandTags = string[];
 export type FusionOrientation1 = string | null;
-export type LocalizationContext1 = ("cytosolic" | "er_anchored") | null;
+export type LocalizationContext2 = ("cytosolic" | "er_anchored") | null;
 export type LocalizationDesignEvidence1 = string | null;
 export type M1Review1 = {
   [k: string]: unknown;
@@ -545,6 +546,7 @@ export interface SequenceRecord {
   id: Id1;
   sequence: Sequence;
   role: Role;
+  localization_context: LocalizationContext;
 }
 export interface AssemblyRecord {
   id: Id2;
@@ -642,7 +644,7 @@ export interface ConstructDefinition {
   parts: Parts;
   domain_order: DomainOrder;
   fusion_orientation: FusionOrientation;
-  localization_context: LocalizationContext;
+  localization_context: LocalizationContext1;
   localization_design_evidence: LocalizationDesignEvidence;
   membrane_topology: MembraneTopologyEvidence | null;
   m1_review: M1Review;
@@ -723,7 +725,7 @@ export interface ConstructRecord {
   recruitment_domains: RecruitmentDomains;
   ligand_tags: LigandTags;
   fusion_orientation: FusionOrientation1;
-  localization_context: LocalizationContext1;
+  localization_context: LocalizationContext2;
   localization_design_evidence: LocalizationDesignEvidence1;
   m1_review: M1Review1;
   domain_order: DomainOrder1;

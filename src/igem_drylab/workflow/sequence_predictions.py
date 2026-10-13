@@ -205,7 +205,8 @@ def sequence_prediction_tools():
         Path(__file__).parents[1] / "parsers/structure_prediction.py",
         Path(__file__).parents[1] / "pscore_runner.py", Path(__file__).parents[1] / "jpred_runner.py",
         Path(__file__).parents[1] / "fusion_tool_import.py",Path(__file__).parents[1]/"tango_runner.py",
-        Path(__file__).parents[1] / "deeptmhmm_runner.py")
+        Path(__file__).parents[1] / "deeptmhmm_runner.py",
+        Path(__file__).parents[1] / "iupred_runner.py")
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
         implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False,

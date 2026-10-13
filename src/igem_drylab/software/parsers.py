@@ -74,6 +74,9 @@ class ParserRegistry:
         if not raw or len(raw)>100_000: raise WorkflowError('empty_or_oversized_sequence_collection')
         if len({r.id for r in raw})!=len(raw): raise WorkflowError('duplicate_sequence_id')
         declared=options.get('molecule_type')
+        localization_context=options.get('localization_context','cytosolic')
+        if localization_context not in {'cytosolic','er_anchored'}:
+            raise WorkflowError('invalid_localization_context')
         if declared not in {None,'protein','DNA','RNA'}: raise WorkflowError('invalid_molecule_type')
         if declared is None and path.suffix.lower()=='.faa': declared='protein'
         records=[];issues=[];proteins=[]
@@ -81,6 +84,9 @@ class ParserRegistry:
         dna=set('ACGTRYSWKMBDHVN');rna=set('ACGURYSWKMBDHVN')
         for row in raw:
             sequence=str(row.seq).upper()
+            metadata=options.get('sequence_metadata',{}).get(row.id,{})
+            role=metadata.get('role',options.get('role','fusion_protein'))
+            context=metadata.get('localization_context',localization_context)
             alphabet=set(sequence)
             candidates=[kind for kind,letters in (('DNA',dna),('RNA',rna),('protein',protein)) if alphabet and alphabet<=letters]
             if path.suffix.lower()=='.fna': candidates=[c for c in candidates if c!='protein']
@@ -89,13 +95,17 @@ class ParserRegistry:
                 raise WorkflowError('molecule_alphabet_conflicts_with_declared_type')
             if not candidates: raise WorkflowError('unsupported_sequence_alphabet')
             records.append({'id':row.id,'description':row.description,'sequence':sequence,'length':len(sequence),
-                'molecule_type':kind,'possible_molecule_types':candidates,'role':options.get('role')})
-            if kind=='protein': proteins.append(SequenceRecord(id=row.id,sequence=sequence).model_dump())
+                'molecule_type':kind,'possible_molecule_types':candidates,'role':role,
+                'localization_context':context})
+            if kind=='protein':
+                proteins.append(SequenceRecord(id=row.id,sequence=sequence,role=role,
+                    localization_context=context).model_dump())
         if any(r['molecule_type'] is None for r in records):
             issues.append(issue('molecule_type_required','Confirm protein, DNA or RNA once for this file. No translation or protein screening is inferred.','confirmation','molecule_type'))
         return ParsedInput(detected_format='FASTA',semantic_type='SequenceCollection',records=records,issues=issues,
             supported_scope='Confirmed proteins can run sequence descriptors. Nucleic acids are retained without inferred translation.',
-            input_roles=['protein_sequence','DNA_design','RNA_sequence'],patch={'sequences':proteins})
+            input_roles=['protein_sequence','DNA_design','RNA_sequence'],
+            patch={'sequences':proteins if options.get('bind_sequences',True) else []})
 
     def genbank(self,path,options):
         from igem_drylab.workflow.genbank_design import import_design

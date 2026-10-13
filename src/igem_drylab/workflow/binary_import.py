@@ -9,8 +9,8 @@ from zipfile import ZipFile, BadZipFile
 
 from .models import WorkflowError
 
-MAX_BYTES = 20_000_000
-MAX_FILES = 256
+MAX_BYTES = 128_000_000
+MAX_FILES = 2048
 
 
 def validate_archive_members(infos):

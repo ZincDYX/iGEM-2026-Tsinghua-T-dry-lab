@@ -141,6 +141,7 @@ class SequenceRecord(Contract):
     id: str
     sequence: str = Field(min_length=1)
     role: str = "fusion_protein"
+    localization_context: Literal["cytosolic", "er_anchored"] = "cytosolic"
 
 
 class AssemblyRecord(Contract):

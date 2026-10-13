@@ -4,6 +4,7 @@ export interface Sequence {
   id: string;
   sequence: string;
   role: string;
+  localization_context?: "cytosolic" | "er_anchored";
 }
 export interface Assembly {
   id: string;

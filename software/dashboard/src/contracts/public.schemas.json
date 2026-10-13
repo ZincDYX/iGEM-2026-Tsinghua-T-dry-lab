@@ -8614,12 +8614,22 @@
             "default": "fusion_protein",
             "title": "Role",
             "type": "string"
+          },
+          "localization_context": {
+            "default": "cytosolic",
+            "enum": [
+              "cytosolic",
+              "er_anchored"
+            ],
+            "title": "Localization Context",
+            "type": "string"
           }
         },
         "required": [
           "id",
           "sequence",
-          "role"
+          "role",
+          "localization_context"
         ],
         "title": "SequenceRecord",
         "type": "object"
@@ -22249,12 +22259,22 @@
             "default": "fusion_protein",
             "title": "Role",
             "type": "string"
+          },
+          "localization_context": {
+            "default": "cytosolic",
+            "enum": [
+              "cytosolic",
+              "er_anchored"
+            ],
+            "title": "Localization Context",
+            "type": "string"
           }
         },
         "required": [
           "id",
           "sequence",
-          "role"
+          "role",
+          "localization_context"
         ],
         "title": "SequenceRecord",
         "type": "object"
@@ -27614,12 +27634,22 @@
             "default": "fusion_protein",
             "title": "Role",
             "type": "string"
+          },
+          "localization_context": {
+            "default": "cytosolic",
+            "enum": [
+              "cytosolic",
+              "er_anchored"
+            ],
+            "title": "Localization Context",
+            "type": "string"
           }
         },
         "required": [
           "id",
           "sequence",
-          "role"
+          "role",
+          "localization_context"
         ],
         "title": "SequenceRecord",
         "type": "object"
@@ -28579,13 +28609,23 @@
           "role": {
             "title": "Role",
             "type": "string"
+          },
+          "localization_context": {
+            "default": "cytosolic",
+            "enum": [
+              "cytosolic",
+              "er_anchored"
+            ],
+            "title": "Localization Context",
+            "type": "string"
           }
         },
         "required": [
           "ref",
           "label",
           "length",
-          "role"
+          "role",
+          "localization_context"
         ],
         "title": "SequenceChoice",
         "type": "object"

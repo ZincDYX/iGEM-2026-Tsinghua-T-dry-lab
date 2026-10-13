@@ -94,10 +94,14 @@ class ImportService:
     def preview(self,project_id,files,options=None):
         project=self.store.project(project_id)
         expanded=self._expand(files)
+        from .input_collection import collection_options
+        inferred=collection_options(expanded)
+        for name, explicit in (options or {}).items():
+            inferred[name]={**inferred.get(name,{}),**explicit}
         transaction_id=str(uuid4())
         root=self.application.data_dir/'imports'/transaction_id
         root.mkdir(parents=True)
-        entries=self._write_entries(project_id,root,expanded,options)
+        entries=self._write_entries(project_id,root,expanded,inferred)
         payload={'entries':entries}
         view=self._parse(transaction_id,project,root,payload)
         payload['view']=view.model_dump(mode='json')
@@ -303,7 +307,8 @@ class ImportService:
             project.files.append(private_file)
             for sequence in item.patch.get('sequences',[]):
                 old=next((r for r in project.sequences if r.id==sequence['id']),None)
-                if old and old.sequence!=sequence['sequence']: raise WorkflowError('sequence_conflict_requires_explicit_revision')
+                if old and (old.sequence!=sequence['sequence'] or old.localization_context!=sequence.get('localization_context','cytosolic')):
+                    raise WorkflowError('sequence_conflict_requires_explicit_revision')
                 if old is None:
                     from igem_drylab.workflow.models import SequenceRecord
                     project.sequences.append(SequenceRecord.model_validate(sequence))

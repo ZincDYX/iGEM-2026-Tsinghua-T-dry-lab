@@ -62,7 +62,7 @@ const project: ProjectView = {
   revision: 1,
   description: "",
   sequences: [
-    { id: "fixture", sequence: "ACDEFGHIK", role: "software_fixture" },
+    { id: "fixture", sequence: "ACDEFGHIK", role: "software_fixture", localization_context: "cytosolic" },
   ],
   assemblies: [],
   conditions: {},
