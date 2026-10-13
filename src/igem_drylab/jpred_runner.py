@@ -52,7 +52,14 @@ def main():
     state_file = args.state_file.resolve() if args.state_file else output / "remote-job.json"
     state_file.parent.mkdir(parents=True, exist_ok=True)
     def invoke(argv, log):
-        run = subprocess.run(argv, capture_output=True, text=True, timeout=60 if args.poll_once else 1800)
+        try:
+            run = subprocess.run(argv, capture_output=True, text=True, timeout=60 if args.poll_once else 1800)
+        except subprocess.TimeoutExpired as error:
+            # Preserve the acknowledgement/status bytes even when the client hangs.
+            def text(value):
+                return value.decode(errors="replace") if isinstance(value, bytes) else value or ""
+            (output / log).write_text(text(error.stdout) + "\n" + text(error.stderr))
+            raise
         (output / log).write_text(run.stdout + "\n" + run.stderr)
         run.check_returncode()
         return run.stdout
@@ -96,7 +103,13 @@ def main():
                "--rest=" + rest, "--jpred4=" + root]
     state["status"] = "retrieving"
     _save_state(state_file, state)
-    invoke(command, "retrieve.log")
+    try:
+        invoke(command, "retrieve.log")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        if not args.poll_once:
+            raise
+        # The known job's native files may already exist despite a stale or
+        # hung status client. Retrieval never sends another submission.
     directory = output / "results" / state["job_id"]
     raw = directory / (state["job_id"] + ".jnet")
     companion = directory / (state["job_id"] + ".seq")

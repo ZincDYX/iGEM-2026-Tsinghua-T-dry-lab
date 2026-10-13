@@ -43,3 +43,35 @@ def test_retry_fetches_saved_job_without_second_submission(tmp_path, monkeypatch
     evidence = json.loads((tmp_path / "attempt-2/secondary.json").read_text())
     assert evidence["states"] == "C" * 20 and evidence["ss_fraction"] == 0
     assert evidence["provenance"]["origin"] == "automated"
+
+
+@pytest.mark.integration
+def test_poll_once_timeout_reads_original_files_of_the_same_known_job(tmp_path, monkeypatch):
+    from io import BytesIO
+    sequence = "GSTSSGGGGGSGGSGGSGGS"
+    fasta = tmp_path / "input.fasta";fasta.write_text(">input\n" + sequence + "\n")
+    state = tmp_path / "remote-job.json"
+    state.write_text(json.dumps(dict(protocol="jpred-known-job-v2",job_id="jp_ProtocolOnly",
+        input_sha256=jpred_runner.sha256(sequence.encode()).hexdigest(),client_version="PROTOCOL_ONLY")))
+    calls=[];urls=[]
+    def protocol(argv, **kwargs):
+        calls.append(argv)
+        if argv[1]=="--version":return subprocess.CompletedProcess(argv,0,"PROTOCOL_ONLY\n","")
+        assert argv[1]=="get_results"
+        raise subprocess.TimeoutExpired(argv,60,output=b"Your job is 40% complete...",stderr=b"timeout fixture")
+    def download(url, **kwargs):
+        urls.append(url)
+        if url.endswith('.jnet'):return BytesIO(("jnetpred:"+",".join("-"*20)+",\n").encode())
+        return BytesIO((">jp_ProtocolOnly\n"+sequence+"\n").encode())
+    monkeypatch.setattr(jpred_runner.subprocess,"run",protocol)
+    monkeypatch.setattr(jpred_runner,"urlopen",download)
+    output=tmp_path/'retrieved'
+    monkeypatch.setattr(sys,"argv",['jpred_runner','--client','PROTOCOL_ONLY','--fasta',str(fasta),
+        '--record','input','--output-dir',str(output),'--state-file',str(state),'--poll-once'])
+    jpred_runner.main()
+    assert [call[1] for call in calls]==['--version','get_results']
+    assert all('/jp_ProtocolOnly/jp_ProtocolOnly.' in url for url in urls)
+    assert '40%' in (output/'retrieve.log').read_text()
+    evidence=json.loads((output/'secondary.json').read_text())
+    assert evidence['states']=='C'*20
+    assert json.loads(state.read_text())['status']=='validated_not_published'
