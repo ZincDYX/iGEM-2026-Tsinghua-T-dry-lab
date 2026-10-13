@@ -43,17 +43,24 @@ The deployment audit must include these roots in the project YAML `deployment_pa
 | Capability | Selected route | Current verification |
 |---|---|---|
 | Disorder | local IUPred2A | real FASTA invocation succeeded |
-| Secondary structure | official JPred REST API | service returned REST `v.1.5`; smoke job `jp_qO3dw1A` completed and its result archive was downloaded |
+| Secondary structure | official JPred REST API or original profile-based PSIPRED | JPred smoke completed; original PSIPRED source compiled on the server on 2026-10-13. Its required profile/database route is not yet verified; single-sequence output is not accepted as equivalent. |
 | Low complexity | local NCBI SEG | executable installed and help invocation succeeded |
 | Protein properties | local Biopython ProtParam | package and project calculation tests succeeded |
-| Signal peptide | SignalP 6 through official service/BioLib or academic/commercial portable route | BioLib client installed; an actual full prediction is not verified. Academic download and non-academic terms differ; do not assume every route needs a paid license/token. |
-| Transmembrane topology | official DeepTMHMM/BioLib route | Official service is free for academic/commercial users; commercial own-server deployment requires a license. Academic users do not need a commercial license. Full prediction remains unverified. |
+| Signal peptide | original SignalP academic portable package | Full `slow-sequential` ensemble succeeded on three exact project fusion sequences through real MCP and persistent software jobs, with user-confirmed `eukarya`. The download label is 6.0i but package/CLI report 6.0h; the discrepancy is unresolved and preserved. |
+| Transmembrane topology | original DeepTMHMM academic standalone package | Original five-model ensemble succeeded on the same three full fusions through real MCP and persistent software jobs. Author-pinned Python 3.8 dependencies are isolated. Earlier BioLib cloud jobs failed and are not counted as successful validation. |
 | Aggregation | TANGO academic/commercial distribution or PASTA 2 distribution | TANGO academic/non-profit research license is free. PASTA downloads require accepting the author's license; commercial/redistribution terms were not fully verified. No substitute score is generated. |
 | Structure | local ColabFold GPU inference with public MSA for small serial jobs | real A100 inference produced PDB and confidence JSON artifacts |
 | SASA | local FreeSASA Python API via `igem-freesasa` | real PDB calculation produced parser-compatible residue JSON |
 | Docking negative screen | local Vina Python API via `igem-vina`; inputs prepared with Meeko | official `1iep` tutorial inputs produced a pose and recorded seed/box/energies |
 
 Formal output still requires the project's exact full-length constructs, receptors, ligands, pocket residues, box definitions, and licensed predictor results. Smoke artifacts prove execution only and are not project evidence.
+
+The 2026-10-13 native SignalP/DeepTMHMM jobs are exact-sequence project evidence,
+not smoke examples. They complete only those two checks; they do not make the
+remaining aggregation, secondary-structure, LLPS or M2 geometry steps complete.
+See [the tool-alignment record](review_r27_original_tools_20261013.md) for
+the results, limitations and outstanding inputs. Private tool packages, job
+directories and connection settings are intentionally not distributed here.
 
 ## Optional and metadata routes
 
