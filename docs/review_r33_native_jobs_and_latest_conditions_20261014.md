@@ -11,7 +11,7 @@
 | 工作 | 实际输出 | 不能据此宣称的结论 |
 | --- | --- | --- |
 | 原 JPred 恢复和绑定 | 127 条 IDR 来源记录、126 条唯一序列有完整二级结构证据；同一批原作业取回剩余 16 项 | 二级结构覆盖齐全不代表全部 M1 工具或风险规则齐全 |
-| 原 FuzDrop | 44 条唯一序列、45 条来源记录有原概率和逐残基曲线 | 3 个提交响应不确定，80 条未提交；缺项不是零分 |
+| 原 FuzDrop | 44 条唯一序列、45 条来源记录有原概率和逐残基曲线 | r34 按实际序列账本修正为 2 个提交不确定、80 条未提交或提交前失败；此前“3 个不确定”混入了提交前失败；缺项不是零分 |
 | 新增完整融合的原 M1 工具 | 7 条精确完整融合 × IUPred、SEG、SignalP、DeepTMHMM = 28 次实际运行并解析成功；SignalP 使用已确认的 eukarya | 工具完成不等于正式 M1 通过 |
 | DMT 招募准备 | 3 个支架 × 5 个支架模型 × 5 个 DMT 模型 × 15 个原 2PDZ NMR 构象 = 1125 个姿态；首项真实 stdio MCP 与共享函数一致 | 单支架亚基的刚体准备，不是完整催化口袋、完整 cage 共占位、ER 膜约束或亲和力验证 |
 | 最新 OC 家族模板准备 | 下载 3FW7、3FW8、3FW9、3FWA；分别检查 8 个原 altloc；3886 行暂定序列映射和 3970 行最近 FAD 重原子距离 | 暂定映射与原模板距离不等于项目 GgOC1 的完整口袋或双共价 FAD 几何 |
@@ -74,7 +74,7 @@ DMT 姿态准备经 `igem.m2.prepare_recruitment_poses` 真正连接 stdio MCP�
 - [DeepTMHMM 官方服务](https://services.healthtech.dtu.dk/services/DeepTMHMM-1.0/)
 - [IUPred 官方渠道](https://iupred.elte.hu/)
 - [原 PSIPRED](https://github.com/psipred/psipred)，[官方 UniRef90 文件](https://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/uniref/uniref90/)
-- [原 CALVADOS3 提交](https://github.com/KULL-Centre/CALVADOS/tree/51564e0edd126c44d6a7299fbe4414c579394ef4)
+- [原 CALVADOS3 提交](https://github.com/KULL-Centre/_2024_Cao_CALVADOSCOM/commit/51564e0edd126c44d6a7299fbe4414c579394ef4)（r34 更正仓库链接；正在使用的六份原物理源码已逐字节核验一致，不是更换力场）
 - [原 Mpipi 数据与代码](https://doi.org/10.6084/m9.figshare.16772812)
 - [ColabFold 原项目](https://github.com/sokrypton/ColabFold)
 - [GROMACS 2025.0 原源码包](https://ftp.gromacs.org/gromacs/gromacs-2025.0.tar.gz)，[原回归说明](https://manual.gromacs.org/2025.0/dev-manual/regressiontests.html)
