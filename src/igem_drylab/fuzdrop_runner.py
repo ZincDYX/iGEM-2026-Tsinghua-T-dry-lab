@@ -14,6 +14,30 @@ import sys
 from .jpred_runner import _save_state
 
 
+def _previous_response(state_file, protocol, digest):
+    if not state_file.exists():
+        return None
+    state=json.loads(state_file.read_text())
+    if state['protocol']!=protocol or state['input_sha256']!=digest:
+        raise ValueError('FuzDrop_saved_submission_identity_mismatch')
+    if state['status']=='prepared' and not state.get('response_file'):
+        # This durable state precedes both the normal page visit and the POST
+        # intent. A failed page visit is not an unknown accepted submission.
+        return None
+    if not state.get('response_file') or not Path(state['response_file']).is_file():
+        raise ValueError('FuzDrop_submission_unknown_reconcile_do_not_resubmit')
+    if state.get('http_status')!=200:
+        raise ValueError('FuzDrop_official_form_failed_or_requires_human_verification')
+    return Path(state['response_file'])
+
+
+def _open_form(page):
+    # Deferred external resources can delay DOMContentLoaded while the actual
+    # official form is already interactive. Commit + visible input is required.
+    page.goto('https://fuzdrop.bio.unipd.it/',wait_until='commit',timeout=60000)
+    page.locator('#floatingTextarea2').wait_for(state='visible',timeout=180000)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fasta',type=Path,required=True)
@@ -31,13 +55,9 @@ def main():
     output=args.output_dir.resolve();output.mkdir(parents=True,exist_ok=True)
     state_file=args.state_file.resolve();state_file.parent.mkdir(parents=True,exist_ok=True)
     protocol='fuzdrop-original-official-form-v1'
-    if state_file.exists():
+    raw=_previous_response(state_file,protocol,digest)
+    if raw is not None:
         state=json.loads(state_file.read_text())
-        if state['protocol']!=protocol or state['input_sha256']!=digest:
-            raise ValueError('FuzDrop_saved_submission_identity_mismatch')
-        if not state.get('response_file') or not Path(state['response_file']).is_file():
-            raise ValueError('FuzDrop_submission_unknown_reconcile_do_not_resubmit')
-        raw=Path(state['response_file'])
     else:
         from playwright.sync_api import sync_playwright
         raw=output/'fuzdrop.json'
@@ -48,10 +68,10 @@ def main():
             page=None
             try:
                 page=browser.new_page()
-                page.goto('https://fuzdrop.bio.unipd.it/',wait_until='networkidle',timeout=60000)
+                _open_form(page)
                 page.locator('#floatingTextarea2').fill('>'+args.record+'\n'+sequence+'\n')
                 state['status']='submitting';_save_state(state_file,state)
-                with page.expect_response(lambda r: r.url=='https://fuzpred.bio.unipd.it/api/submit_protein',timeout=180000) as pending:
+                with page.expect_response(lambda r: r.url=='https://fuzpred.bio.unipd.it/api/submit_protein',timeout=600000) as pending:
                     page.get_by_role('button',name='Submit',exact=True).click()
                 response=pending.value
                 raw.write_bytes(response.body())  # Retain original bytes, including failures.
