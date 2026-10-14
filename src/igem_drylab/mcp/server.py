@@ -18,6 +18,7 @@ from igem_drylab.pocket_preparation import PocketPreparationInput
 from igem_drylab.dssp_context import DsspContextInput
 from igem_drylab.template_geometry import AssemblyPreparationInput
 from igem_drylab.template_geometry import AssemblyAccessibilityInput
+from igem_drylab.template_geometry import RecruitmentPosePreparationInput
 from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeometryInput, RecruitmentEnsembleInput
 from igem_drylab.fusion_tool_import import FusionImportInput
 from igem_drylab.m1_prioritization import M1PrioritizationInput
@@ -622,6 +623,12 @@ def m2_compare_core(payload: M2CoreComparisonInput) -> dict[str,Any]:
              description='Explicit radii/probe sphere unions with refinement; never hull-as-protein or automatic M3 volume.')
 def m2_structure_volume(payload: StructureVolumeInput) -> dict[str,Any]:
     return _call_local('igem.m2.structure_volume',{'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m2.prepare_recruitment_poses', structured_output=True,
+             description='Sourced rigid pose preparation; no anchors substituted for a complete catalytic pocket.')
+def m2_prepare_recruitment_poses(payload: RecruitmentPosePreparationInput) -> dict[str,Any]:
+    return _call_local('igem.m2.prepare_recruitment_poses', {'payload': payload.model_dump(mode='json')})
 
 
 def main() -> None:

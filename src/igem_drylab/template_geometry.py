@@ -362,13 +362,16 @@ def _hashes(*structures):
     return result
 
 
-class RecruitmentPlacement(ScientificAnalysisInput):
+class RecruitmentPosePlacement(ScientificAnalysisInput):
     site_id: str
     species: Literal["OC", "DMT"]
     template: StructureInput
     enzyme: StructureInput
     template_domain_to_scaffold: CAMapping  # reference = scaffold, mobile = template domain
     enzyme_ligand_to_template: CAMapping    # reference = template peptide, mobile = enzyme ligand
+
+
+class RecruitmentPlacement(RecruitmentPosePlacement):
     enzyme_pocket: ResidueSelection
     intentional_enzyme_scaffold_contacts: list[tuple[tuple[str, str, str], tuple[str, str, str]]] = Field(default_factory=list)
 
@@ -395,35 +398,67 @@ class RecruitmentGeometryInput(ScientificAnalysisInput):
         return self
 
 
+def _prepare_pose(placement, scaffold, scaffold_confidence):
+    template, template_confidence = placement.template.read()
+    enzyme, enzyme_confidence = placement.enzyme.read()
+    r_domain, t_domain, domain_rmsd = placement.template_domain_to_scaffold.fit(scaffold, template)
+    r_ligand, t_ligand, ligand_rmsd = placement.enzyme_ligand_to_template.fit(template, enzyme)
+    rotation = r_ligand@r_domain
+    translation = t_ligand@r_domain+t_domain
+    pose = transform_atoms(enzyme, rotation, translation)
+    domain_keys = {(placement.template_domain_to_scaffold.reference_chain, *residue_key(r))
+                   for r, _ in placement.template_domain_to_scaffold.residue_pairs}
+    ligand_keys = {(placement.enzyme_ligand_to_template.mobile_chain, *residue_key(r))
+                   for _, r in placement.enzyme_ligand_to_template.residue_pairs}
+    gates = [_gate(scaffold_confidence, domain_keys), _gate(enzyme_confidence, ligand_keys),
+             _gate(template_confidence, {(placement.template_domain_to_scaffold.mobile_chain, *residue_key(r))
+                for _, r in placement.template_domain_to_scaffold.residue_pairs}),
+             _gate(template_confidence, {(placement.enzyme_ligand_to_template.reference_chain, *residue_key(r))
+                for r, _ in placement.enzyme_ligand_to_template.residue_pairs})]
+    row = dict(site_id=placement.site_id, species=placement.species, domain_CA_RMSD_angstrom=domain_rmsd,
+               ligand_CA_RMSD_angstrom=ligand_rmsd, rotation=rotation.tolist(), translation_angstrom=translation.tolist(),
+               confidence_gates=gates, source_hashes=_hashes(placement.template, placement.enzyme))
+    return pose, enzyme_confidence, row
+
+
+class RecruitmentPosePreparationInput(ScientificAnalysisInput):
+    """Prepare sourced rigid poses without using catalytic anchors as a pocket."""
+    scaffold: StructureInput | AssemblyExpansionInput
+    scaffold_id: str
+    placements: list[RecruitmentPosePlacement] = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def unique_sites(self):
+        if len({p.site_id for p in self.placements}) != len(self.placements):
+            raise ValueError('placement_site_ids_must_be_unique')
+        return self
+
+
+def prepare_recruitment_poses(payload: RecruitmentPosePreparationInput) -> dict:
+    scaffold, confidence = payload.scaffold.read()
+    poses, rows = {}, []
+    for placement in payload.placements:
+        pose, _, row = _prepare_pose(placement, scaffold, confidence)
+        poses[placement.site_id] = pose
+        rows.append(row)
+    return dict(schema_version='m2-recruitment-pose-preparation-v1', scaffold_id=payload.scaffold_id,
+                placements=rows, placed_coordinates=_coordinates(poses), source_hashes=_hashes(payload.scaffold),
+                catalytic_pocket_assessment=None, formal_verdict='not_assessed', m3_ready=False,
+                scope='sourced_rigid_recruitment_hypotheses_not_binding_affinity_or_complete_M2')
+
+
 def calculate_recruitment_geometry(payload: RecruitmentGeometryInput) -> dict:
     scaffold, scaffold_confidence = payload.scaffold.read()
     poses, rows, selections = {}, [], {}
     for placement in payload.placements:
-        template, template_confidence = placement.template.read()
-        enzyme, enzyme_confidence = placement.enzyme.read()
-        r_domain, t_domain, domain_rmsd = placement.template_domain_to_scaffold.fit(scaffold, template)
-        r_ligand, t_ligand, ligand_rmsd = placement.enzyme_ligand_to_template.fit(template, enzyme)
-        rotation = r_ligand@r_domain
-        translation = t_ligand@r_domain+t_domain
-        pose = transform_atoms(enzyme, rotation, translation)
+        pose, enzyme_confidence, row = _prepare_pose(placement, scaffold, scaffold_confidence)
         selected_atoms(pose, placement.enzyme_pocket)
         poses[placement.site_id] = pose
         selections[placement.site_id] = placement.enzyme_pocket
-        domain_keys = {(placement.template_domain_to_scaffold.reference_chain, *residue_key(r))
-                       for r, _ in placement.template_domain_to_scaffold.residue_pairs}
-        ligand_keys = {(placement.enzyme_ligand_to_template.mobile_chain, *residue_key(r))
-                       for _, r in placement.enzyme_ligand_to_template.residue_pairs}
-        gates = [_gate(scaffold_confidence, domain_keys), _gate(enzyme_confidence, ligand_keys),
-                 _gate(enzyme_confidence, placement.enzyme_pocket.keys()),
-                 _gate(template_confidence, {(placement.template_domain_to_scaffold.mobile_chain, *residue_key(r))
-                    for _, r in placement.template_domain_to_scaffold.residue_pairs}),
-                 _gate(template_confidence, {(placement.enzyme_ligand_to_template.reference_chain, *residue_key(r))
-                    for r, _ in placement.enzyme_ligand_to_template.residue_pairs})]
+        row['confidence_gates'].insert(2, _gate(enzyme_confidence, placement.enzyme_pocket.keys()))
         collision = clashes(pose, scaffold, payload.clash_cutoff_angstrom, placement.intentional_enzyme_scaffold_contacts)
-        rows.append({"site_id": placement.site_id, "species": placement.species, "domain_CA_RMSD_angstrom": domain_rmsd,
-                     "ligand_CA_RMSD_angstrom": ligand_rmsd, "rotation": rotation.tolist(),
-                     "translation_angstrom": translation.tolist(), "confidence_gates": gates,
-                     "scaffold_clashes": collision, "source_hashes": _hashes(placement.template, placement.enzyme)})
+        row['scaffold_clashes'] = collision
+        rows.append(row)
     import freesasa
     parameters = freesasa.Parameters()
     baseline = {}

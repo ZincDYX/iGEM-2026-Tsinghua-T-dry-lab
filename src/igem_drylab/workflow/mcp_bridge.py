@@ -30,6 +30,7 @@ SCIENTIFIC_TOOLS = {
     "igem.m2.site_cooccupancy", "igem.m2.parse_structure_prediction", "igem.m2.compare_docking", "igem.m2.assess_regions",
     "igem.m2.compare_enzyme", "igem.m2.expand_fusion", "igem.m2.place_recruitment", "igem.m2.recruitment_ensemble",
     "igem.m2.prepare_assembly", "igem.m2.assembly_accessibility", "igem.m2.secondary_context", "igem.m2.prepare_pocket",
+    "igem.m2.prepare_recruitment_poses",
     "igem.m1.import_fusion_results", "igem.m1.import_llps_results", "igem.m1.prioritize", "igem.m1.parse_mpipi",
     "igem.m1.analyse_phase_profile",
     "igem.m1.nominal_descriptors",

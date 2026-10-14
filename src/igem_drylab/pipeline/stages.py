@@ -272,7 +272,7 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
                 if isinstance(actual, AssemblyExpansionInput):
                     actual = actual.actual_fusion
                 check_structure_identity(actual, {known[candidate_id].full_sequence_sha256})
-                if kind in {"recruitment_geometry","recruitment_ensemble"}:
+                if kind in {"recruitment_geometry","recruitment_ensemble","recruitment_pose_preparation"}:
                     for placement in scenario.placements:
                         check_structure_identity(placement.enzyme, known_hashes)
             result = handler(request)

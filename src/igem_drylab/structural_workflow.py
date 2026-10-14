@@ -136,11 +136,13 @@ def compare_fusion_to_reference(payload: M2EnzymeComparisonInput) -> dict:
 def calculation_kinds():
     from .template_geometry import (AssemblyExpansionInput, expand_actual_fusion,
         RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble,
-        AssemblyAccessibilityInput,calculate_assembly_accessibility)
+        AssemblyAccessibilityInput,calculate_assembly_accessibility,
+        RecruitmentPosePreparationInput,prepare_recruitment_poses)
     return {"enzyme_comparison": (M2EnzymeComparisonInput, compare_fusion_to_reference),
             'core_comparison':(M2CoreComparisonInput,compare_fusion_core),
             "assembly_expansion": (AssemblyExpansionInput, expand_actual_fusion),
             "recruitment_geometry": (RecruitmentGeometryInput, calculate_recruitment_geometry),
+            'recruitment_pose_preparation':(RecruitmentPosePreparationInput,prepare_recruitment_poses),
             "recruitment_ensemble": (RecruitmentEnsembleInput, calculate_recruitment_ensemble),
             'assembly_accessibility':(AssemblyAccessibilityInput,calculate_assembly_accessibility)}
 

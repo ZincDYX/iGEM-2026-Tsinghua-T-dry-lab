@@ -55,6 +55,42 @@ def test_two_template_transforms_place_entire_enzyme_not_only_peptide(tmp_path):
 
 
 @pytest.mark.scientific_algorithm
+def test_pose_preparation_reuses_transforms_without_requiring_or_inventing_pocket(tmp_path):
+    from igem_drylab.template_geometry import RecruitmentPosePreparationInput, prepare_recruitment_poses
+    complete = geometry_input(tmp_path)
+    placement = complete.placements[0].model_dump(exclude={'enzyme_pocket','intentional_enzyme_scaffold_contacts'})
+    request = RecruitmentPosePreparationInput(scaffold=complete.scaffold, scaffold_id=complete.scaffold_id,
+                                              placements=[placement])
+    result = prepare_recruitment_poses(request)
+    coords = result['placed_coordinates']['site1']
+    np.testing.assert_allclose([r['xyz_angstrom'] for r in coords[:3]], points(20), atol=1e-10, rtol=0)
+    np.testing.assert_allclose(coords[3]['xyz_angstrom'], [80,0,0], atol=1e-10, rtol=0)
+    assert result['catalytic_pocket_assessment'] is None and not result['m3_ready']
+    assert result['formal_verdict']=='not_assessed'
+
+
+@pytest.mark.integration
+def test_pose_preparation_report_enters_M2_without_promoting_unknown_pocket(tmp_path):
+    import json
+    from igem_drylab.template_geometry import RecruitmentPosePreparationInput
+    from igem_drylab.pipeline import load_config
+    from igem_drylab.pipeline.models import M1Candidate
+    from igem_drylab.pipeline.stages import run_m2
+    complete = geometry_input(tmp_path)
+    request = RecruitmentPosePreparationInput(scaffold=complete.scaffold, scaffold_id='fixture',
+        placements=[p.model_dump(exclude={'enzyme_pocket','intentional_enzyme_scaffold_contacts'}) for p in complete.placements])
+    requests = tmp_path/'poses.json'
+    requests.write_text(json.dumps([dict(kind='recruitment_pose_preparation',candidate_id='fixture',payload=request.model_dump(mode='json'))]))
+    config = load_config(Path(__file__).resolve().parents[1]/'configs/m1_m4_real_scoring_example.yaml')
+    config.stages.m2_fusion.calculation_requests_file = requests
+    config.stages.m2_fusion.structure_metrics_file = None
+    rows, _ = run_m2(config, tmp_path/'run', [M1Candidate(candidate_id='M1-fixture',construct_id='fixture',construct_definition={},status='insufficient_data')])
+    assert len(rows[0].calculation_reports)==1 and not rows[0].recommended_for_m3
+    observed = json.loads(Path(rows[0].calculation_reports[0]['artifact_path']).read_text())
+    assert observed['catalytic_pocket_assessment'] is None and observed['formal_verdict']=='not_assessed'
+
+
+@pytest.mark.scientific_algorithm
 def test_whole_assembly_accessibility_matches_independent_native_file_SASA(tmp_path):
     freesasa=pytest.importorskip('freesasa')
     mobile=write_structure(tmp_path/'mobile.pdb', [('A',i,xyz) for i,xyz in enumerate(points(),1)])

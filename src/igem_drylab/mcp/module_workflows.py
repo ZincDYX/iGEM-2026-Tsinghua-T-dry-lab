@@ -8,6 +8,7 @@ from igem_drylab.pocket_preparation import PocketPreparationInput, prepare_pocke
 from igem_drylab.dssp_context import DsspContextInput, assess_dssp_context
 from igem_drylab.template_geometry import AssemblyPreparationInput, prepare_actual_fusion_copies
 from igem_drylab.template_geometry import AssemblyAccessibilityInput,calculate_assembly_accessibility
+from igem_drylab.template_geometry import RecruitmentPosePreparationInput, prepare_recruitment_poses
 from igem_drylab.template_geometry import (AssemblyExpansionInput, expand_actual_fusion,
     RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble)
 from igem_drylab.fusion_tool_import import FusionImportInput, import_fusion_tools
@@ -40,6 +41,7 @@ def binding(name, title, contract, calculate):
 BINDINGS = [binding("igem.m4.report", "Run original M4 three scenarios and F2/F3 report", M4ReportInput, run_m4_report)]
 BINDINGS.append(binding("igem.m3.ensemble", "Propagate M3 measured expression and parameter ranges", M3EnsembleInput, solve_m3_ensemble))
 BINDINGS.extend([
+    binding('igem.m2.prepare_recruitment_poses','Prepare sourced rigid poses without an invented catalytic pocket',RecruitmentPosePreparationInput,prepare_recruitment_poses),
     binding("igem.m2.prepare_assembly", "Prepare exact fusion copies without invented interface thresholds", AssemblyPreparationInput, prepare_actual_fusion_copies),
     binding('igem.m2.assembly_accessibility','Calculate actual full-assembly region SASA',AssemblyAccessibilityInput,calculate_assembly_accessibility),
     binding("igem.m2.secondary_context", "Read native DSSP auxiliary full-fusion assignments", DsspContextInput, assess_dssp_context),
