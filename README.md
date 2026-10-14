@@ -356,6 +356,8 @@ preservation, not a redesigned-DNA writer, SBOL or SBML implementation.
   ten-reaction competition, reviewed inputs and existence gates.
 - [Implementation ledger](docs/r19_review_implementation.md): ER, recovery,
   Agent observations, real tools, tests and unfinished work.
+- [Latest M1/M2 actual results and remaining work](docs/review_r31_actual_M1_M2_20261014.md):
+  exact-sequence predictors, descriptive comparison, apo cores, native CG and applicability limits.
 - [Platform guide](docs/fusionlab_platform.md),
   [plugin development](docs/plugin_development.md),
   [tool deployment/terms](docs/external_tool_deployment.md), and

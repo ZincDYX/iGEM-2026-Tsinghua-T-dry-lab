@@ -7,3 +7,7 @@ external services remain subject to their own licenses and terms. This notice
 does not relicense those materials or grant access to restricted services.
 Bundled third-party notices are provided in software/dashboard/THIRD_PARTY_NOTICES.txt and in the
 release inventory. Original upstream attribution notices must be retained.
+
+Optional localCIDER sequence descriptors, native CALVADOS/Mpipi simulations,
+PSIPRED, and third-party web prediction services require separate deployment
+and their own upstream terms. They are not bundled or relicensed by this project.
