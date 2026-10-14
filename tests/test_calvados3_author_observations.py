@@ -21,7 +21,9 @@ def test_native_frame_export_uses_actual_masses_and_distinguishes_equilibration(
     # The second frame crosses the periodic boundary and must give the same result.
     chunk = SimpleNamespace(n_atoms=2, topology=SimpleNamespace(n_chains=1),
         xyz=np.array([[[1.,0.,0.],[3.,0.,0.]], [[9.,0.,0.],[1.,0.,0.]]]),
-        unitcell_vectors=np.array([np.eye(3)*10]*2))
+        # Actual MDTraj has nonzero float32 cos(90) terms in unitcell_vectors.
+        unitcell_lengths=np.array([[10.,10.,10.]]*2,dtype=np.float32),
+        unitcell_angles=np.array([[90.,90.,90.]]*2,dtype=np.float32))
     monkeypatch.setitem(sys.modules, 'mdtraj', SimpleNamespace(iterload=lambda *a,**kw: iter([chunk])))
     result = export_observations(tmp_path)
     with (tmp_path / 'observations.csv').open() as stream:
@@ -43,3 +45,17 @@ def test_incomplete_budget_is_not_exported_as_complete(tmp_path, monkeypatch):
     with pytest.raises(ValueError,match='completed_declared_budget'):
         export_observations(tmp_path)
     assert not (tmp_path / 'observations.csv').exists()
+
+
+@pytest.mark.data_contract
+@pytest.mark.parametrize('lengths,angles',[([10.,10.,10.],[90.,85.,90.]),([10.,float('nan'),10.],[90.,90.,90.])])
+def test_actual_nonrectangular_or_invalid_box_is_not_rounded_into_pass(tmp_path,monkeypatch,lengths,angles):
+    request=declared_request(equilibration_steps=0,production_steps=10,save_interval_steps=10)
+    (tmp_path/'request.json').write_text(json.dumps(asdict(request)))
+    (tmp_path/'execution.json').write_text(json.dumps(dict(status='completed',completed_steps=10)))
+    (tmp_path/'native-system.json').write_text(json.dumps(dict(native_masses_dalton=[1.,3.])))
+    chunk=SimpleNamespace(n_atoms=2,topology=SimpleNamespace(n_chains=1),xyz=np.array([[[1.,0.,0.],[3.,0.,0.]]]),
+        unitcell_lengths=np.array([lengths]),unitcell_angles=np.array([angles]))
+    monkeypatch.setitem(sys.modules,'mdtraj',SimpleNamespace(iterload=lambda *a,**kw:iter([chunk])))
+    with pytest.raises(ValueError,match='orthorhombic_native_box'):export_observations(tmp_path)
+    assert not (tmp_path/'observations.csv').exists()

@@ -17,6 +17,7 @@ from igem_drylab.llps_artifacts import LLPSImportInput, import_llps_results
 from igem_drylab.mpipi import MpipiAnalysisInput, parse_mpipi
 from igem_drylab.phase_profile_analysis import PhaseProfileAnalysisInput,analyse_phase_profile
 from igem_drylab.nominal_sequence_descriptors import NominalDescriptorsInput,compute_nominal_descriptors
+from igem_drylab.cg_sampling import SamplingInput,assess_sampling
 from igem_drylab.structure_volume import StructureVolumeInput,calculate_structure_volume
 from igem_drylab.membrane_geometry import MembraneGeometryInput, calculate_membrane_geometry
 from igem_drylab.m3_er import ERRecruitmentInput, solve_er_recruitment
@@ -60,6 +61,7 @@ BINDINGS.extend([
     binding("igem.m1.parse_mpipi", "Inspect original Mpipi raw observations without inventing an LLPS score", MpipiAnalysisInput, parse_mpipi),
     binding('igem.m1.analyse_phase_profile','Analyse explicitly reviewed CG space and time windows',PhaseProfileAnalysisInput,analyse_phase_profile),
     binding('igem.m1.nominal_descriptors','Original localCIDER kappa and explicit nominal SCD/FUS descriptors',NominalDescriptorsInput,compute_nominal_descriptors),
+    binding('igem.m1.assess_cg_sampling','Original trace autocorrelation and independent-seed diagnostics, not an LLPS pass',SamplingInput,assess_sampling),
     binding("igem.m2.membrane_geometry", "Evaluate sourced ER membrane and tether conformations", MembraneGeometryInput, calculate_membrane_geometry),
     binding("igem.m3.er_recruitment", "Solve proposed ER amount-conserving graph recruitment", ERRecruitmentInput, solve_er_recruitment),
     binding("igem.m4.compartment_amounts", "Solve explicit compartment amounts and exchange", CompartmentNetworkInput, solve_compartment_network),

@@ -188,7 +188,7 @@ def main():
     print(json.dumps(run(AuthorIDRRequest(**json.loads(args.request.read_text())))), flush=True)
 
 
-def export_observations(output_dir):
+def export_observations(output_dir, observation_dir=None):
     """Export every saved native frame; do not assert equilibration or LLPS."""
     import mdtraj as md
     import numpy as np
@@ -202,7 +202,9 @@ def export_observations(output_dir):
     masses = np.asarray(metadata['native_masses_dalton'], dtype=float)
     if len(masses) != len(request.sequence) or not np.all(np.isfinite(masses)) or np.any(masses <= 0):
         raise ValueError('author_CG_native_masses_do_not_match_full_sequence')
-    target = root / 'observations.csv'
+    observed = Path(observation_dir) if observation_dir is not None else root
+    observed.mkdir(parents=True, exist_ok=True)
+    target = observed / 'observations.csv'
     if target.exists():
         raise ValueError('author_CG_observations_already_exist_do_not_overwrite')
     temporary = target.with_suffix('.next')
@@ -213,9 +215,11 @@ def export_observations(output_dir):
         for chunk in md.iterload(str(root / 'trajectory.dcd'), top=str(root / 'top.pdb'), chunk=100):
             if chunk.n_atoms != len(masses) or chunk.topology.n_chains != 1:
                 raise ValueError('author_CG_native_trajectory_is_not_one_complete_IDR')
-            for xyz, box in zip(chunk.xyz, chunk.unitcell_vectors):
-                lengths = np.diag(box)
-                if np.any(lengths <= 0) or not np.allclose(box, np.diag(lengths), atol=1e-7):
+            # MDTraj reconstructs vectors using float32 cos(90 degrees), which
+            # creates off-diagonal roundoff even for a native rectangular box.
+            # Check stored angles and use stored lengths, not that reconstruction.
+            for xyz, lengths, angles in zip(chunk.xyz, chunk.unitcell_lengths, chunk.unitcell_angles):
+                if not np.all(np.isfinite(lengths)) or np.any(lengths <= 0) or not np.all(angles == 90):
                     raise ValueError('author_CG_observations_require_orthorhombic_native_box')
                 bonds = np.diff(xyz.astype(float), axis=0)
                 bonds -= np.rint(bonds / lengths) * lengths
@@ -239,7 +243,7 @@ def export_observations(output_dir):
         observations_file=str(target), coordinate_unit='nm', time_unit='ns',
         scope='native_isolated_chain_Rg_Re_not_LLPS_slab_or_internal_fusion',
         scientific_convergence=None, formal_M1_pass=False)
-    (root / 'observations.json').write_text(json.dumps(result, indent=2))
+    (observed / 'observations.json').write_text(json.dumps(result, indent=2))
     return result
 
 

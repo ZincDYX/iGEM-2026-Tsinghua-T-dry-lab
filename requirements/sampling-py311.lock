@@ -1,0 +1,6 @@
+# Optional dedicated scientific observation analysis, Python 3.11 on Linux.
+# Not the original Python 3.8 / OpenMM 7.6 force environment or a desktop dependency.
+numpy==2.4.6
+scipy==1.17.1
+numexpr==2.14.2
+pymbar==4.0.3

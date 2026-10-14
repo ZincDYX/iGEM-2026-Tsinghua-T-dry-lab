@@ -136,7 +136,7 @@ def export_mpipi_trajectory(payload: MpipiTrajectoryInput):
     edges=np.array(payload.z_bin_edges_angstrom);count=0;previous=-1
     with density_file.open('w',newline='') as density_stream,rg_file.open('w',newline='') as rg_stream:
         density=csv.writer(density_stream);density.writerow(('step','lower','upper','density'))
-        rg=csv.writer(rg_stream);rg.writerow(('step','chain_index','mass_weighted_Rg_angstrom'))
+        rg=csv.writer(rg_stream);rg.writerow(('step','chain_index','mass_weighted_Rg_angstrom','end_to_end_angstrom'))
         for step,box,rows in _mpipi_frames(root/'project.lammpstrj'):
             if step<=previous or len(rows)!=length*nmol or not np.array_equal(rows[:,2],expected_types) or not np.array_equal(rows[:,1],np.repeat(np.arange(1,nmol+1),length)):
                 raise ValueError('Mpipi_frame_must_cover_complete_ordered_project_chains_and_types')
@@ -151,7 +151,7 @@ def export_mpipi_trajectory(payload: MpipiTrajectoryInput):
                 xyz=whole[chain*length:(chain+1)*length];mass=masses[chain*length:(chain+1)*length]
                 center=np.average(xyz,axis=0,weights=mass)
                 radius=float(np.sqrt(np.average(np.sum((xyz-center)**2,axis=1),weights=mass)))
-                rg.writerow((step,chain,radius))
+                rg.writerow((step,chain,radius,float(np.linalg.norm(xyz[-1]-xyz[0]))))
             previous=step;count+=1
     if not count:raise ValueError('Mpipi_native_dump_empty')
     result=dict(method='original_Mpipi_native_dump_observations',frames=count,chains=nmol,density_unit='g/cm3',coordinate_unit='angstrom',

@@ -34,6 +34,7 @@ SCIENTIFIC_TOOLS = {
     "igem.m1.import_fusion_results", "igem.m1.import_llps_results", "igem.m1.prioritize", "igem.m1.parse_mpipi",
     "igem.m1.analyse_phase_profile",
     "igem.m1.nominal_descriptors",
+    "igem.m1.assess_cg_sampling",
     "igem.m2.compare_core",
     "igem.m2.structure_volume",
     "igem.m3.solve_equilibrium", "igem.m3.ensemble", "igem.m4.solve_steady_state", "igem.m4.analyze_steady_state", "igem.m4.report",

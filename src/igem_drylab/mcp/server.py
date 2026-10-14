@@ -12,6 +12,7 @@ from igem_drylab.m3_workflow import M3EnsembleInput
 from igem_drylab.structural_workflow import M2EnzymeComparisonInput
 from igem_drylab.structural_workflow import M2CoreComparisonInput
 from igem_drylab.nominal_sequence_descriptors import NominalDescriptorsInput
+from igem_drylab.cg_sampling import SamplingInput
 from igem_drylab.phase_profile_analysis import PhaseProfileAnalysisInput
 from igem_drylab.structure_volume import StructureVolumeInput
 from igem_drylab.pocket_preparation import PocketPreparationInput
@@ -611,6 +612,12 @@ def m1_analyse_phase_profile(payload: PhaseProfileAnalysisInput) -> dict[str,Any
              description='Native localCIDER 0.1.21 kappa plus explicit KR/DE SCD; FUS Tyr density is not effective recruitment valence.')
 def m1_nominal_descriptors(payload: NominalDescriptorsInput) -> dict[str,Any]:
     return _call_local('igem.m1.nominal_descriptors',{'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m1.assess_cg_sampling',structured_output=True,
+             description='Native-trace independent-seed autocorrelation/precision/drift diagnostics; never a formal LLPS or M1 pass.')
+def m1_cg_sampling(payload: SamplingInput) -> dict[str,Any]:
+    return _call_local('igem.m1.assess_cg_sampling',{'payload':payload.model_dump(mode='json')})
 
 
 @server.tool(name='igem.m2.compare_core', structured_output=True,
