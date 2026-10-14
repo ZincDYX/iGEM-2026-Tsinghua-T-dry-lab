@@ -2,12 +2,14 @@
 import argparse
 from hashlib import sha256
 import json
+from html.parser import HTMLParser
 import os
 from pathlib import Path
 import re
 import subprocess
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit, unquote
 
 
 def _save_state(path, state):
@@ -21,8 +23,30 @@ def _save_state(path, state):
 
 
 def _accepted_job(raw):
-    jobs = set(re.findall(r"jp_[A-Za-z0-9]+", raw))
-    if len(jobs) != 1 or "Accepted" not in raw:
+    class AcknowledgementLinks(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.jobs = set()
+        def handle_starttag(self, tag, attributes):
+            if tag != 'a':
+                return
+            href = dict(attributes).get('href')
+            if href is None:
+                return
+            address = urlsplit(href)
+            if address.netloc and address.netloc != 'www.compbio.dundee.ac.uk':
+                return
+            if address.path != '/jpred4/cgi-bin/chklog':
+                return
+            job = unquote(address.query)
+            if re.fullmatch(r'jp_[A-Za-z0-9_-]+', job):
+                self.jobs.add(job)
+    acknowledgement = AcknowledgementLinks()
+    acknowledgement.feed(raw)
+    # Legacy plain-text client diagnostics use the same chklog query. Never
+    # scan arbitrary filenames for jp_* or truncate a URL-safe job identifier.
+    jobs = acknowledgement.jobs or set(re.findall(r'chklog\?(jp_[A-Za-z0-9_-]+)(?=[\s<"\'&]|$)', raw))
+    if len(jobs) != 1 or not re.search(r'\bAccepted\b', raw):
         raise ValueError("JPred did not accept a unique real job; client exit zero is insufficient")
     return jobs.pop()
 
@@ -68,6 +92,20 @@ def main():
         state = json.loads(state_file.read_text())
         if state["input_sha256"] != digest or state["client_version"] != version:
             raise ValueError("JPred saved remote job differs from current input/client")
+        if state.get("job_id") and state.get("acknowledgement_log"):
+            acknowledgement = Path(state["acknowledgement_log"])
+            if acknowledgement.is_file():
+                accepted = _accepted_job(acknowledgement.read_text())
+                saved = state["job_id"]
+                if accepted != saved:
+                    # Earlier releases incorrectly stopped at '_' or '-'.
+                    # Only repair that precise defect from the original ack.
+                    if not re.fullmatch(r"jp_[A-Za-z0-9]+", saved) or not accepted.startswith((saved + "_", saved + "-")):
+                        raise ValueError("JPred saved job conflicts with its original acknowledgement")
+                    state["previous_truncated_job_id"] = saved
+                    state["job_id"] = accepted
+                    state["correction_source"] = "original_submission_acknowledgement"
+                    _save_state(state_file, state)
         if not state.get("job_id"):
             # A process may die after recording the response but before the ack.
             # Reconcile only its own original log; never send another POST.

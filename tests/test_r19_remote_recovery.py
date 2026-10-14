@@ -57,7 +57,7 @@ def test_original_ack_log_reconciles_crash_before_ack_commit_without_new_post(tm
         if argv[1] == "--version":return subprocess.CompletedProcess(argv,0,"PROTOCOL_ONLY","")
         if argv[1] == "submit":
             submits.append(argv)
-            return subprocess.CompletedProcess(argv,0,"Accepted jp_ProtocolOnly","")
+            return subprocess.CompletedProcess(argv,0,"Accepted chklog?jp_ProtocolOnly","")
         raise subprocess.CalledProcessError(1,argv)  # Retrieval interruption, not a prediction.
     monkeypatch.setattr(jpred_runner.subprocess,"run",protocol)
     with pytest.raises(KeyboardInterrupt):jpred_runner.main()
@@ -75,7 +75,7 @@ def test_one_poll_returns_waiting_with_original_identity_not_a_prediction(tmp_pa
     def protocol(argv,**kwargs):
         assert kwargs["timeout"] == 60
         if argv[1]=="--version":return subprocess.CompletedProcess(argv,0,"PROTOCOL_ONLY","")
-        if argv[1]=="submit":return subprocess.CompletedProcess(argv,0,"Accepted jp_ProtocolOnly","")
+        if argv[1]=="submit":return subprocess.CompletedProcess(argv,0,"Accepted chklog?jp_ProtocolOnly","")
         assert "--attempts=1" in argv
         return subprocess.CompletedProcess(argv,0,"still running","")
     from urllib.error import HTTPError
