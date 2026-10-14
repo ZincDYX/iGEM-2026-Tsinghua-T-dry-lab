@@ -66,7 +66,8 @@ def test_parse_calvados_summary_json():
     assert result.dense_phase_concentration == 12.0
     assert result.dilute_phase_concentration == 0.4
     assert result.enrichment_factor == 30.0
-    assert result.llps_score > 0
+    assert result.llps_score is None
+    assert result.concentration_unit is None
 
 
 def test_parse_calvados_density_csv_when_no_summary(tmp_path):
@@ -75,7 +76,8 @@ def test_parse_calvados_density_csv_when_no_summary(tmp_path):
 
     result = parse_calvados_output(tmp_path)
 
-    assert result.dense_phase_concentration is not None
-    assert result.dilute_phase_concentration is not None
-    assert result.enrichment_factor is not None
-    assert "estimated_from_density_profile_quantiles" in result.notes
+    assert result.dense_phase_concentration is None
+    assert result.dilute_phase_concentration is None
+    assert result.enrichment_factor is None and result.llps_score is None
+    assert len(result.raw_density_profile)==4
+    assert "no_quantile_phase_guess_or_invented_LLPS_score" in result.notes

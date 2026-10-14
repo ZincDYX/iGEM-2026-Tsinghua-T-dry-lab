@@ -56,7 +56,7 @@ def test_fuzdrop_original_response_keeps_explicit_global_not_profile_mean(tmp_pa
 def test_m1_workflow_sizes_call_budget_to_complete_actual_fanout():
     from igem_drylab.workflow.m1_checks import m1_workflow
     workflow = m1_workflow(sequence_count=272)
-    assert workflow.execution_policy.max_tool_calls == 272*10+1
+    assert workflow.execution_policy.max_tool_calls == 272*11+1
 
 
 def test_batch_rank_does_not_invent_policy_and_rejects_unregistered_decisions(tmp_path):
