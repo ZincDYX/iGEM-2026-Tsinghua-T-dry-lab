@@ -264,7 +264,11 @@ def run_m2(config: ProjectConfig, run_dir: Path, candidates: list[M1Candidate]) 
             # References and complex templates need their own exact sequence,
             # not the fusion sequence. Only actual project models bind to M1.
             for scenario in request.scenarios if kind == "recruitment_ensemble" else [request]:
-                actual = scenario.fusion if kind == "enzyme_comparison" else scenario.actual_fusion if kind == "assembly_expansion" else scenario.scaffold
+                actual = (
+                    scenario.fusion if kind in {"enzyme_comparison", "core_comparison"}
+                    else scenario.actual_fusion if kind in {"assembly_expansion", "assembly_accessibility"}
+                    else scenario.scaffold
+                )
                 if isinstance(actual, AssemblyExpansionInput):
                     actual = actual.actual_fusion
                 check_structure_identity(actual, {known[candidate_id].full_sequence_sha256})

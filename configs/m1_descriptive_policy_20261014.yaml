@@ -1,0 +1,27 @@
+# Adopted recommendation from the user-supplied 2026-10-14 methods document.
+# Not a calibrated probability, not the original four-tool weighted formula.
+policy_version: m1-descriptive-r-20261014
+source_reference: M1_M2_数据标准参数与来源_20261014.md sections 11-13 (R recommendations)
+reviewer: user-authorized adoption of usable document recommendations
+comparison_mode: descriptive_pareto
+comparison_group_reference: same FUS-LC candidate library; exact length and observed-tool groups; sequence aliases deduplicated
+fuzdrop_threshold: 0.60
+undefined_risk_features: [charge_blockiness]
+predictor_rules: []
+sort_keys: []
+risk_rules:
+  idr:
+    - {rule_id: polar_charged_outside_original_interval, feature: polar_plus_charged_fraction, transform: identity, operator: outside, lower: 0.50, upper: 0.80}
+    - {rule_id: elevated_hydrophobicity_below_hard_veto, feature: hydrophobic_fraction, transform: identity, operator: half_open_inside, lower: 0.20, upper: 0.35}
+    - {rule_id: high_absolute_nominal_charge, feature: net_charge_proxy, transform: absolute, operator: ge, lower: 0.10}
+    - {rule_id: proline_outside_original_interval, feature: pro_fraction, transform: identity, operator: outside, lower: 0.05, upper: 0.20}
+    - {rule_id: low_complexity_feature_not_pathological_aggregation, feature: shannon_entropy, transform: identity, operator: lt, lower: 2.5}
+    - {rule_id: enriched_top2_correlated_with_entropy, feature: top2_fraction, transform: identity, operator: ge, lower: 0.40}
+  enzyme_ligand_linker:
+    - {rule_id: GS_outside_original_interval_not_failure, feature: gs_fraction, transform: identity, operator: outside, lower: 0.40, upper: 0.80}
+    - {rule_id: possible_electrostatic_interaction_review, feature: net_charge_proxy, transform: absolute, operator: ge, lower: 0.10}
+    - {rule_id: composition_interval_deviation_not_failure, feature: shannon_entropy, transform: identity, operator: outside, lower: 1.5, upper: 3.0}
+  scaffold_linker:
+    - {rule_id: GS_outside_original_interval_not_failure, feature: gs_fraction, transform: identity, operator: outside, lower: 0.40, upper: 0.80}
+    - {rule_id: possible_electrostatic_interaction_review, feature: net_charge_proxy, transform: absolute, operator: ge, lower: 0.10}
+    - {rule_id: composition_interval_deviation_not_failure, feature: shannon_entropy, transform: identity, operator: outside, lower: 1.5, upper: 3.0}

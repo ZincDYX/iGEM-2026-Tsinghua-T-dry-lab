@@ -49,6 +49,18 @@ def reconcile_catgranule(node_directory):
     return True
 
 
+def reconcile_fuzdrop(node_directory):
+    path=node_directory/'remote-job.json'
+    if not path.is_file():return False
+    state=json.loads(path.read_text())
+    if state.get('protocol')!='fuzdrop-original-official-form-v1' or not state.get('response_file'):
+        return False
+    raw=Path(state['response_file'])
+    if not raw.is_file():return False
+    data=json.loads(raw.read_text())
+    return isinstance(data,dict) and 'sequence' in data and 'pLLPS' in data and sha256(data['sequence'].encode()).hexdigest()==state.get('input_sha256')
+
+
 def reconcile_jpred(node_directory):
     state_file = node_directory / "remote-job.json"
     if not state_file.is_file():
@@ -91,7 +103,7 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
     if fusion_tool and payload.item.role != "full_fusion":
         result.update(tool_status="not_eligible",blocker="Full-fusion predictors require the complete actual fusion sequence.")
         return result
-    if tool == "catgranule" and payload.item.role != "idr":
+    if tool in {"catgranule","fuzdrop"} and payload.item.role != "idr":
         result.update(tool_status="not_eligible", blocker="The original M1 LLPS ranking route applies to explicitly bound IDRs.")
         return result
     if payload.prechecks:
@@ -110,6 +122,9 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
     if tool == "jpred" and not 20 <= len(sequence) <= 800:
         result.update(tool_status="not_eligible", blocker="JPred requires 20–800 residues; the original sequence is not padded or cropped.")
         return result
+    if tool=='fuzdrop' and len(sequence)<45:
+        result.update(tool_status='not_eligible',blocker='Original FuzDrop requires at least 45 residues; no padding or repetition.')
+        return result
     source = context.work_dir / "input.fasta"
     # Keep arbitrary user labels out of external-tool argv and output paths.
     # The fixed IO identifier is explicitly mapped to the original candidate;
@@ -124,12 +139,16 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         adapter = create_tool_adapter(tool, config)
     if tool == "catgranule" and not uses_native_route(config, "catgranule_runner"):
         raise ToolFailure("catgranule_requires_recoverable_native_route", "Use the original web-form runner; unknown submissions must not be repeated.")
+    if tool=='fuzdrop' and not uses_native_route(config,'fuzdrop_runner'):
+        raise ToolFailure('fuzdrop_requires_native_official_form_route','Use the normal original form; no CAPTCHA bypass or undocumented token-free POST.')
     run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
         sequence=sequence,
         job_state=context.work_dir.parent / "remote-job.json",
         input_files={"sequence": source}, timeout_seconds=7200)
     result["tool_status"] = run.status
     if run.status != "succeeded":
+        if tool=='fuzdrop':
+            raise ToolFailure('fuzdrop_original_form_not_complete','Inspect the saved original response; human verification or submission reconciliation may be required.')
         if tool == "catgranule":
             if not reconcile_catgranule(context.work_dir.parent):
                 raise ToolFailure("remote_submission_reconciliation_required", "Original service acknowledgement unknown; do not resubmit.")
@@ -181,6 +200,11 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
             evidence.aggregation_tool="TANGO"
         parsed = evidence.model_dump(mode="json")
         result["outputs"] = {"raw_output":str(output),"execution_record":str(record_path)}
+        if tool=='tango':
+            from igem_drylab.fusion_tool_import import tango_native_details
+            detail_file=output_dir/'aggregation-details.json'
+            detail_file.write_text(json.dumps(tango_native_details(artifact,sequence),indent=2))
+            result['outputs']['native_hotspot_profile']=str(detail_file)
     elif tool == "colabfold":
         from Bio.PDB import PDBParser
         from Bio.SeqUtils import seq1
@@ -216,6 +240,13 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
             raw_score=parsed["raw_score"]).model_dump(mode="json")]
         result["outputs"] = {"raw_output": str(output), "sequence_companion": str(output_dir/"prot.fa"),
             "native_profile": str(output_dir/"profiles.txt")}
+    elif tool=='fuzdrop':
+        from igem_drylab.llps_artifacts import read_native_llps,automated_predictor_score
+        output=output_dir/'fuzdrop.json'
+        parsed=read_native_llps(output,format='fuzdrop_response_json',sequence=sequence)
+        parsed['predictor_scores']=[automated_predictor_score(output,tool='FuzDrop',sequence=sequence,
+            raw_score=parsed['raw_score']).model_dump(mode='json')]
+        result['outputs']={'raw_output':str(output)}
     else:
         output = output_dir / ("iupred2a.txt" if tool == "iupred2a" else "seg.fasta")
         if not output.is_file():
@@ -258,10 +289,11 @@ def sequence_prediction_tools():
         Path(__file__).parents[1] / "deeptmhmm_runner.py",
         Path(__file__).parents[1] / "iupred_runner.py")
     implementation += (Path(__file__).parents[1]/"llps_artifacts.py", Path(__file__).parents[1]/"catgranule_runner.py")
+    implementation += (Path(__file__).parents[1]/'fuzdrop_runner.py',)
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
         implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False,
-        reconcile=reconcile_jpred if name == "jpred" else reconcile_catgranule if name == "catgranule" else None)
+        reconcile=reconcile_jpred if name == "jpred" else reconcile_catgranule if name == "catgranule" else reconcile_fuzdrop if name=='fuzdrop' else None)
         for name, label in (("iupred2a", "IUPred2 disorder prediction"), ("seg", "SEG low-complexity prediction"),
                             ("colabfold", "ColabFold enzyme / fusion prediction"),
                             ("pscore", "Original PScore — diagnostic LLPS propensity"),
@@ -269,4 +301,5 @@ def sequence_prediction_tools():
                             ("signalp", "SignalP 6 — actual full-fusion signal peptide"),
                             ("deeptmhmm", "DeepTMHMM 1 — actual full-fusion topology"),
                             ("tango", "Licensed TANGO — actual full-fusion aggregation"),
-                            ("catgranule", "Original catGRANULE — IDR propensity and native profile"))]
+                            ("catgranule", "Original catGRANULE — IDR propensity and native profile"),
+                            ('fuzdrop','Original FuzDrop — complete native IDR profile and pLLPS'))]

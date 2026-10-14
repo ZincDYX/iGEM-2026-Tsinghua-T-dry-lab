@@ -8025,6 +8025,43 @@
             "title": "Risk Rules",
             "type": "object"
           },
+          "comparison_mode": {
+            "default": "original_weighted",
+            "enum": [
+              "original_weighted",
+              "descriptive_pareto"
+            ],
+            "title": "Comparison Mode",
+            "type": "string"
+          },
+          "undefined_risk_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Undefined Risk Features",
+            "type": "array"
+          },
+          "comparison_group_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comparison Group Reference"
+          },
+          "fuzdrop_threshold": {
+            "default": 0.6,
+            "enum": [
+              0.6,
+              0.61
+            ],
+            "title": "Fuzdrop Threshold",
+            "type": "number"
+          },
           "predictor_rules": {
             "items": {
               "$ref": "#/$defs/PredictorRule"
@@ -8062,6 +8099,10 @@
           "source_reference",
           "reviewer",
           "risk_rules",
+          "comparison_mode",
+          "undefined_risk_features",
+          "comparison_group_reference",
+          "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
           "ranking_formula_reference"
@@ -8344,7 +8385,8 @@
               "gt",
               "ge",
               "inside",
-              "outside"
+              "outside",
+              "half_open_inside"
             ],
             "title": "Operator",
             "type": "string"
@@ -16555,6 +16597,43 @@
             "title": "Risk Rules",
             "type": "object"
           },
+          "comparison_mode": {
+            "default": "original_weighted",
+            "enum": [
+              "original_weighted",
+              "descriptive_pareto"
+            ],
+            "title": "Comparison Mode",
+            "type": "string"
+          },
+          "undefined_risk_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Undefined Risk Features",
+            "type": "array"
+          },
+          "comparison_group_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comparison Group Reference"
+          },
+          "fuzdrop_threshold": {
+            "default": 0.6,
+            "enum": [
+              0.6,
+              0.61
+            ],
+            "title": "Fuzdrop Threshold",
+            "type": "number"
+          },
           "predictor_rules": {
             "items": {
               "$ref": "#/$defs/PredictorRule"
@@ -16592,6 +16671,10 @@
           "source_reference",
           "reviewer",
           "risk_rules",
+          "comparison_mode",
+          "undefined_risk_features",
+          "comparison_group_reference",
+          "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
           "ranking_formula_reference"
@@ -16874,7 +16957,8 @@
               "gt",
               "ge",
               "inside",
-              "outside"
+              "outside",
+              "half_open_inside"
             ],
             "title": "Operator",
             "type": "string"
@@ -21533,6 +21617,43 @@
             "title": "Risk Rules",
             "type": "object"
           },
+          "comparison_mode": {
+            "default": "original_weighted",
+            "enum": [
+              "original_weighted",
+              "descriptive_pareto"
+            ],
+            "title": "Comparison Mode",
+            "type": "string"
+          },
+          "undefined_risk_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Undefined Risk Features",
+            "type": "array"
+          },
+          "comparison_group_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comparison Group Reference"
+          },
+          "fuzdrop_threshold": {
+            "default": 0.6,
+            "enum": [
+              0.6,
+              0.61
+            ],
+            "title": "Fuzdrop Threshold",
+            "type": "number"
+          },
           "predictor_rules": {
             "items": {
               "$ref": "#/$defs/PredictorRule"
@@ -21570,6 +21691,10 @@
           "source_reference",
           "reviewer",
           "risk_rules",
+          "comparison_mode",
+          "undefined_risk_features",
+          "comparison_group_reference",
+          "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
           "ranking_formula_reference"
@@ -21989,7 +22114,8 @@
               "gt",
               "ge",
               "inside",
-              "outside"
+              "outside",
+              "half_open_inside"
             ],
             "title": "Operator",
             "type": "string"
@@ -26877,6 +27003,43 @@
             "title": "Risk Rules",
             "type": "object"
           },
+          "comparison_mode": {
+            "default": "original_weighted",
+            "enum": [
+              "original_weighted",
+              "descriptive_pareto"
+            ],
+            "title": "Comparison Mode",
+            "type": "string"
+          },
+          "undefined_risk_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Undefined Risk Features",
+            "type": "array"
+          },
+          "comparison_group_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comparison Group Reference"
+          },
+          "fuzdrop_threshold": {
+            "default": 0.6,
+            "enum": [
+              0.6,
+              0.61
+            ],
+            "title": "Fuzdrop Threshold",
+            "type": "number"
+          },
           "predictor_rules": {
             "items": {
               "$ref": "#/$defs/PredictorRule"
@@ -26914,6 +27077,10 @@
           "source_reference",
           "reviewer",
           "risk_rules",
+          "comparison_mode",
+          "undefined_risk_features",
+          "comparison_group_reference",
+          "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
           "ranking_formula_reference"
@@ -27364,7 +27531,8 @@
               "gt",
               "ge",
               "inside",
-              "outside"
+              "outside",
+              "half_open_inside"
             ],
             "title": "Operator",
             "type": "string"

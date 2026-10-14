@@ -18,7 +18,7 @@ def test_original_method_fanout_cheap_veto_and_persistent_missing_evidence(tmp_p
     engine = WorkflowEngine(store, builtin_tools(), tmp_path / "artifacts", max_workers=2)
     workflow = recommend(project, "m1_sequence_checks")
     decisions = next(node for node in workflow.nodes if node.id == "m1_decisions")
-    assert decisions.dependencies() == {"m1_fields", "m1_iupred2a", "m1_seg", "m1_jpred", "m1_signalp", "m1_deeptmhmm", "m1_tango", "m1_pscore", "m1_catgranule"}
+    assert decisions.dependencies() == {"m1_fields", "m1_iupred2a", "m1_seg", "m1_jpred", "m1_signalp", "m1_deeptmhmm", "m1_tango", "m1_pscore", "m1_catgranule",'m1_fuzdrop'}
     assert workflow.nodes[-1].dependencies() == {"m1_decisions"}
     run_id = engine.create(project, workflow)
     result = engine.run(run_id)

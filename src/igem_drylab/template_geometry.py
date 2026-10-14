@@ -15,6 +15,7 @@ import numpy as np
 from pydantic import Field, model_validator
 
 from .design_analysis import ScientificAnalysisInput
+from .region_assessment import Region
 from .structure_metrics import Atom, read_pdb_atoms, residue_key, kabsch_transform
 from .scoring.m2_site_geometry import M2SiteGeometryInput, analyse_site_cooccupancy
 
@@ -204,6 +205,64 @@ class AssemblyExpansionInput(AssemblyPreparationInput):
                 if confidence is not None:
                     confidence[(chain,residue,insertion)] = original_confidence[(self.core_mapping.mobile_chain,residue,insertion)]
         return atoms, confidence
+
+
+class AssemblyAccessibilityInput(ScientificAnalysisInput):
+    """Observe exact fusion regions in a declared full assembly, not prove assembly."""
+    candidate_id: str
+    assembly_file: Path
+    assembly_source_reference: str = Field(min_length=1)
+    actual_fusion: StructureInput
+    regions: list[Region] = Field(min_length=1)
+
+
+def calculate_assembly_accessibility(payload: AssemblyAccessibilityInput) -> dict:
+    from Bio.SeqUtils import seq1
+    import freesasa
+    from importlib.metadata import version
+    mobile,confidence=payload.actual_fusion.read()
+    if not payload.actual_fusion.expected_sequence:
+        raise ValueError('assembly_accessibility_requires_exact_complete_fusion_sequence')
+    if len({a.chain for a in mobile})!=1:
+        raise ValueError('assembly_accessibility_requires_one_full_fusion_model')
+    expected=payload.actual_fusion.expected_sequence
+    if len({r.name for r in payload.regions})!=len(payload.regions) or any(r.end>len(expected) for r in payload.regions):
+        raise ValueError('assembly_regions_require_unique_names_and_complete_sequence_bounds')
+    atoms=read_pdb_atoms(payload.assembly_file)
+    chains={chain:[a for a in atoms if a.chain==chain] for chain in sorted({a.chain for a in atoms})}
+    positions={}
+    for chain,rows in chains.items():
+        ca=[a for a in rows if a.name=='CA' and not a.is_hetero]
+        if ''.join(seq1(a.residue_name) for a in ca)!=expected:
+            raise ValueError('assembly_chain_is_not_complete_actual_fusion_sequence')
+        positions[chain]=[(a.residue,a.insertion) for a in ca]
+    mobile_ca=[a for a in mobile if a.name=='CA' and not a.is_hetero]
+    if ''.join(seq1(a.residue_name) for a in mobile_ca)!=expected:
+        raise ValueError('assembly_fusion_source_sequence_mismatch')
+    parameters=freesasa.Parameters()
+    areas=atom_sasa({'assembly':atoms},parameters)
+    observations=[]
+    for chain,rows in chains.items():
+        for region in payload.regions:
+            keys=set(positions[chain][region.start-1:region.end])
+            selection=ResidueSelection(chain=chain,residues=[str(n)+ins if ins else n for n,ins in keys])
+            selected=selected_atoms(rows,selection)
+            baseline=atom_sasa({'isolated':selected},parameters)
+            isolated=sum(baseline.values())
+            context=sum(areas[('assembly',*_identity(a))] for a in selected if not a.is_hetero)
+            scores=[confidence[(a.chain,a.residue,a.insertion)] for a in mobile_ca[region.start-1:region.end]] if confidence else []
+            observations.append(dict(chain=chain,name=region.name,role=region.role,start=region.start,end=region.end,
+                assembly_sasa_angstrom2=context,isolated_same_conformation_sasa_angstrom2=isolated,
+                sasa_retention=context/isolated if isolated>0 else None,mean_plddt=float(np.mean(scores)) if scores else None,
+                burial_verdict=None,confidence_scope='full_fusion_prediction_not_interface_placement_confidence'))
+    return dict(schema_version='m2-assembly-accessibility-v1',candidate_id=payload.candidate_id,
+        subunit_count=len(chains),observations=observations,formal_verdict='review',
+        sasa_configuration=dict(tool='FreeSASA',version=version('freesasa'),algorithm=parameters.algorithm(),
+            probe_radius_angstrom=parameters.probeRadius(),points=parameters.nPoints(),slices=parameters.nSlices(),
+            selection='same selected nonhetero heavy atoms; native default classifier'),
+        source_hashes=[dict(path=str(payload.assembly_file),sha256=sha256(payload.assembly_file.read_bytes()).hexdigest()),
+            *_hashes(payload.actual_fusion)],assembly_source_reference=payload.assembly_source_reference,
+        scope='conditional_static_full_fusion_assembly_accessibility_not_observed_assembly_or_ER_membrane_validation')
 
 
 def _fit_actual_fusion(payload: AssemblyPreparationInput):

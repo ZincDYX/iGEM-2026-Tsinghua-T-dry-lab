@@ -71,6 +71,12 @@ def parse_native_artifact(artifact: NativeFusionArtifact, sequence: str) -> dict
         if "B" in topology:
             raise ValueError("beta_barrel_topology_requires_explicit_membrane_rule_not_zero_helix_pass")
         return {"transmembrane_helix_count":len(re.findall("M+",topology))}
+    return {'continuous_high_aggregation_hotspots':len(tango_native_details(artifact,sequence)['hotspots'])}
+
+
+def tango_native_details(artifact,sequence):
+    """Original percentage profile and maximal runs, not overlapping windows."""
+    text=artifact.path.read_text()
     rows = []
     for line in text.splitlines():
         fields = next(csv.reader([line])) if "," in line else line.split()
@@ -84,7 +90,15 @@ def parse_native_artifact(artifact: NativeFusionArtifact, sequence: str) -> dict
         raise ValueError("TANGO_aggregation_percentage_out_of_range")
     runs = [m for m in re.finditer("1+","".join("1" if r[2] > artifact.aggregation_rule.high_score_percent else "0" for r in rows))
             if m.end()-m.start() >= artifact.aggregation_rule.minimum_run_length]
-    return {"continuous_high_aggregation_hotspots":len(runs)}
+    intervals=[dict(start=m.start()+1,end=m.end(),length=m.end()-m.start(),sequence=sequence[m.start():m.end()],
+        raw_scores_percent=[r[2] for r in rows[m.start():m.end()]]) for m in runs]
+    return dict(residue_profile=[dict(position=i,residue=aa,aggregation_percent=score) for i,aa,score in rows],
+        hotspots=intervals,maximum_hotspot_length=max((r['length'] for r in intervals),default=0),
+        hotspot_coverage_fraction=sum(r['length'] for r in intervals)/len(sequence),
+        at_least_six_residue_hotspots=[r for r in intervals if r['length']>=6],
+        multi_hotspot_review=len(intervals)>=2,
+        rule=artifact.aggregation_rule.model_dump(mode='json'),
+        scope='native_aggregation_propensity_not_observed_solid_aggregation; original_hard_rule_and_adopted_review_distinct')
 
 
 class FusionImportInput(ScientificAnalysisInput):
@@ -105,9 +119,11 @@ def import_fusion_tools(payload: FusionImportInput) -> dict:
     if len({a.format for a in payload.artifacts}) != len(payload.artifacts):
         raise ValueError("one_exact_native_result_per_fusion_tool")
     payload.output_dir.mkdir(parents=True,exist_ok=True)
+    native_details={}
     for artifact in payload.artifacts:
         name,prefix = names[artifact.format]
         observations = parse_native_artifact(artifact,sequence)
+        if artifact.format=='tango_residue_out':native_details['TANGO']=tango_native_details(artifact,sequence)
         record = {"origin":"manual_review","reviewer":payload.reviewer,"source_reference":payload.source_reference,
             "decision":"approved","tool_name":name,"tool_version":artifact.tool_version,"input_sha256":digest,
             "output_sha256":sha256(artifact.path.read_bytes()).hexdigest(),"reviewed_observations":observations,
@@ -125,4 +141,4 @@ def import_fusion_tools(payload: FusionImportInput) -> dict:
             setattr(evidence,key,value)
         evidence.native_formats[name] = artifact.format
         evidence.native_rules[name] = artifact.aggregation_rule.model_dump() if artifact.aggregation_rule else None
-    return {"fusion":evidence.model_dump(mode="json"),"scope":"native_raw_result_import_not_executed_job"}
+    return {"fusion":evidence.model_dump(mode="json"),'native_details':native_details,"scope":"native_raw_result_import_not_executed_job"}

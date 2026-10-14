@@ -29,6 +29,12 @@ SCIENTIFIC_TOOLS = {
     "igem.m2.pocket_sasa", "igem.m2.calculate_geometry", "igem.m2.screen_structure",
     "igem.m2.site_cooccupancy", "igem.m2.parse_structure_prediction", "igem.m2.compare_docking", "igem.m2.assess_regions",
     "igem.m2.compare_enzyme", "igem.m2.expand_fusion", "igem.m2.place_recruitment", "igem.m2.recruitment_ensemble",
+    "igem.m2.prepare_assembly", "igem.m2.assembly_accessibility", "igem.m2.secondary_context", "igem.m2.prepare_pocket",
+    "igem.m1.import_fusion_results", "igem.m1.import_llps_results", "igem.m1.prioritize", "igem.m1.parse_mpipi",
+    "igem.m1.analyse_phase_profile",
+    "igem.m1.nominal_descriptors",
+    "igem.m2.compare_core",
+    "igem.m2.structure_volume",
     "igem.m3.solve_equilibrium", "igem.m3.ensemble", "igem.m4.solve_steady_state", "igem.m4.analyze_steady_state", "igem.m4.report",
     "igem.m2.membrane_geometry", "igem.m3.er_recruitment", "igem.m4.compartment_amounts", "igem.m4.compare_compartments",
 }

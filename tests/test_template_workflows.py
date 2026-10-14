@@ -7,6 +7,8 @@ from igem_drylab.structure_metrics import read_pdb_atoms
 from igem_drylab.template_geometry import (StructureInput, CAMapping, RecruitmentGeometryInput,
     calculate_recruitment_geometry, AssemblyExpansionInput, expand_actual_fusion, atom_sasa)
 from igem_drylab.structural_workflow import M2EnzymeComparisonInput, compare_fusion_to_reference
+from igem_drylab.template_geometry import AssemblyAccessibilityInput,calculate_assembly_accessibility
+from igem_drylab.region_assessment import Region
 
 
 def write_structure(path, entries):
@@ -50,6 +52,23 @@ def test_two_template_transforms_place_entire_enzyme_not_only_peptide(tmp_path):
     np.testing.assert_allclose(coords[3]["xyz_angstrom"], [80,0,0], atol=1e-10, rtol=0)
     assert result["placements"][0]["scaffold_clashes"]["clash_count"] == 0
     assert not result["cooccupancy"]["m3_ready"]  # unconfirmed real assembly
+
+
+@pytest.mark.scientific_algorithm
+def test_whole_assembly_accessibility_matches_independent_native_file_SASA(tmp_path):
+    freesasa=pytest.importorskip('freesasa')
+    mobile=write_structure(tmp_path/'mobile.pdb', [('A',i,xyz) for i,xyz in enumerate(points(),1)])
+    assembly=write_structure(tmp_path/'assembly.pdb',[(c,i,xyz) for c,off in (('A',0),('B',2)) for i,xyz in enumerate(points(off),1)])
+    mobile=mobile.model_copy(update={'expected_sequence':'AAA'})
+    request=AssemblyAccessibilityInput(candidate_id='synthetic',assembly_file=assembly.path,
+        assembly_source_reference='synthetic complete chains, not measured assembly',actual_fusion=mobile,
+        regions=[Region(name='all',role='fixture',start=1,end=3)])
+    result=calculate_assembly_accessibility(request)
+    expected=freesasa.calc(freesasa.Structure(str(assembly.path))).totalArea()
+    assert sum(r['assembly_sasa_angstrom2'] for r in result['observations'])==pytest.approx(expected,abs=1e-8)
+    assert result['subunit_count']==2 and result['formal_verdict']=='review'
+    assert all(r['burial_verdict'] is None for r in result['observations'])
+    assert result['observations'][0]['sasa_retention']<1
 
 
 def test_actual_overlapping_enzymes_generate_species_specific_conflict_edge(tmp_path):

@@ -38,6 +38,7 @@ class M1DecisionInput(M1PrecheckInput):
     aggregation_results: list[dict] = Field(default_factory=list)
     pscore_results: list[dict] = Field(default_factory=list)
     catgranule_results: list[dict] = Field(default_factory=list)
+    fuzdrop_results: list[dict] = Field(default_factory=list)
     llps_import_results: list[dict] = Field(default_factory=list)
 
 
@@ -66,7 +67,7 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
     # not browser-supplied literal dictionaries pointing at arbitrary files.
     for rows in (payload.prechecks, payload.disorder_results, payload.seg_results, payload.secondary_results,
                  *[r for r in (payload.signalp_results,payload.topology_results,payload.aggregation_results,
-                    payload.pscore_results, payload.catgranule_results, payload.llps_import_results) if r]):
+                    payload.pscore_results, payload.catgranule_results, payload.fuzdrop_results,payload.llps_import_results) if r]):
         if not any(parent["output"].get("items") == rows for parent in context.upstream_results):
             raise ValueError("M1_requires_registered_upstream_observations")
     def selected(rows):
@@ -111,7 +112,7 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
         localization_context=payload.item.localization_context, require_external_evidence=True)
     prioritization = None
     predictors = []
-    for collection in (payload.pscore_results, payload.catgranule_results, payload.llps_import_results):
+    for collection in (payload.pscore_results, payload.catgranule_results,payload.fuzdrop_results,payload.llps_import_results):
         if collection:
             row = selected(collection)
             parsed = row.get("parsed") or row
@@ -135,10 +136,11 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
                dict(step="4", name="Soft risk classification", status="completed" if priority and priority['risk'] is not None else "blocked",
                     missing=[] if priority and priority['risk'] is not None else ["reviewed complete risk directions"]),
                dict(step="5", name="Original-method ranking", status="not_applicable" if payload.item.role!='idr' else
-                    "completed" if priority and priority['rank_score'] is not None else "blocked",
+                    "partial" if priority and priority.get('comparison_method') else "completed" if priority and priority['rank_score'] is not None else "blocked",
                     missing=(priority['missing'] if priority else ["raw LLPS predictions and reviewed normalization/rubric"])
                     if payload.item.role=='idr' else [],
-                    note="Linkers use the original checklist/rubric, not an invented composite score." if payload.item.role!='idr' else None)],
+                    note="Linkers use the original checklist/rubric, not an invented composite score." if payload.item.role!='idr' else
+                    "Adopted descriptive comparison; original weighted score remains undefined." if priority and priority.get('comparison_method') else None)],
         claim_scope="original_M1_available_hard_checks_not_full_candidate_acceptance")
 
 
@@ -191,7 +193,7 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
     for tool in ("signalp","deeptmhmm","tango"):
         nodes.append(WorkflowNode(id="m1_"+tool,label="M1 Step 3 — full-fusion "+tool,
             tool_id="prediction."+tool,map=batch))
-    for tool in ("pscore", "catgranule"):
+    for tool in ("pscore", "catgranule",'fuzdrop'):
         nodes.append(WorkflowNode(id="m1_"+tool, label="M1 original LLPS — "+tool,
             tool_id="prediction."+tool, inputs={"prechecks": checks}, map=batch))
     nodes.append(WorkflowNode(id="m1_decisions", label="M1 decisions and explicit unfinished steps", tool_id="method.m1.decision",
@@ -203,7 +205,8 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
                 "topology_results":NodeInput(node_id="m1_deeptmhmm",path=["items"]),
                 "aggregation_results":NodeInput(node_id="m1_tango",path=["items"]),
                 "pscore_results":NodeInput(node_id="m1_pscore",path=["items"]),
-                "catgranule_results":NodeInput(node_id="m1_catgranule",path=["items"])}, map=batch))
+                "catgranule_results":NodeInput(node_id="m1_catgranule",path=["items"]),
+                'fuzdrop_results':NodeInput(node_id='m1_fuzdrop',path=['items'])}, map=batch))
     nodes.append(WorkflowNode(id="m1_ranking", label="M1 reviewed batch ranking", tool_id="method.m1.rank",
         inputs={"decisions": NodeInput(node_id="m1_decisions",path=["items"]),
             "prioritization_policy": LiteralInput(value=policy.model_dump(mode="json") if policy else None)}))

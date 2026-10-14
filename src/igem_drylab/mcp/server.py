@@ -10,9 +10,14 @@ from .registry import create_default_registry
 from igem_drylab.m4_workflow import M4ReportInput
 from igem_drylab.m3_workflow import M3EnsembleInput
 from igem_drylab.structural_workflow import M2EnzymeComparisonInput
+from igem_drylab.structural_workflow import M2CoreComparisonInput
+from igem_drylab.nominal_sequence_descriptors import NominalDescriptorsInput
+from igem_drylab.phase_profile_analysis import PhaseProfileAnalysisInput
+from igem_drylab.structure_volume import StructureVolumeInput
 from igem_drylab.pocket_preparation import PocketPreparationInput
 from igem_drylab.dssp_context import DsspContextInput
 from igem_drylab.template_geometry import AssemblyPreparationInput
+from igem_drylab.template_geometry import AssemblyAccessibilityInput
 from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeometryInput, RecruitmentEnsembleInput
 from igem_drylab.fusion_tool_import import FusionImportInput
 from igem_drylab.m1_prioritization import M1PrioritizationInput
@@ -97,6 +102,11 @@ def m2_prepare_assembly(payload: AssemblyPreparationInput) -> dict[str, Any]:
     return _call_local("igem.m2.prepare_assembly", {"payload": payload.model_dump(mode="json")})
 
 
+@server.tool(name='igem.m2.assembly_accessibility',title='Actual full-assembly region accessibility',structured_output=True)
+def m2_assembly_accessibility(payload: AssemblyAccessibilityInput) -> dict[str,Any]:
+    return _call_local('igem.m2.assembly_accessibility',{'payload':payload.model_dump(mode='json')})
+
+
 @server.tool(name="igem.m2.expand_fusion", title="Actual fusion core assembly template expansion", structured_output=True)
 def m2_expand_fusion(payload: AssemblyExpansionInput) -> dict[str, Any]:
     return _call_local("igem.m2.expand_fusion", {"payload": payload.model_dump(mode="json")})
@@ -117,7 +127,7 @@ def m1_import_fusion_results(payload: FusionImportInput) -> dict[str,Any]:
     return _call_local("igem.m1.import_fusion_results",{"payload":payload.model_dump(mode="json")})
 
 
-@server.tool(name="igem.m1.prioritize",title="Apply reviewed M1 soft risk and original ranking",structured_output=True)
+@server.tool(name="igem.m1.prioritize",title="Reviewed M1 risk and original/descriptive comparison",structured_output=True)
 def m1_prioritize(payload: M1PrioritizationInput) -> dict[str,Any]:
     return _call_local("igem.m1.prioritize",{"payload":payload.model_dump(mode="json")})
 
@@ -588,6 +598,30 @@ def research_freeze_prediction(prediction_file: str, parameter_file: str, calibr
              description="Evaluate only held-out data against frozen predictions, without fitting or changing parameters.")
 def research_validate_holdout(snapshot: dict[str,Any], dataset_id: str, dataset_file: str) -> dict[str,Any]:
     return _call_local("igem.research.validate_holdout",{"snapshot":snapshot,"dataset_id":dataset_id,"dataset_file":dataset_file})
+
+
+@server.tool(name='igem.m1.analyse_phase_profile', structured_output=True,
+             description='Declared native bin edges, units and phase/time windows; no automatic phase guesses or LLPS score.')
+def m1_analyse_phase_profile(payload: PhaseProfileAnalysisInput) -> dict[str,Any]:
+    return _call_local('igem.m1.analyse_phase_profile',{'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m1.nominal_descriptors', structured_output=True,
+             description='Native localCIDER 0.1.21 kappa plus explicit KR/DE SCD; FUS Tyr density is not effective recruitment valence.')
+def m1_nominal_descriptors(payload: NominalDescriptorsInput) -> dict[str,Any]:
+    return _call_local('igem.m1.nominal_descriptors',{'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m2.compare_core', structured_output=True,
+             description='Compare explicitly frozen apo cores; no guessed pocket or formal Q1 pass.')
+def m2_compare_core(payload: M2CoreComparisonInput) -> dict[str,Any]:
+    return _call_local('igem.m2.compare_core',{'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m2.structure_volume',structured_output=True,
+             description='Explicit radii/probe sphere unions with refinement; never hull-as-protein or automatic M3 volume.')
+def m2_structure_volume(payload: StructureVolumeInput) -> dict[str,Any]:
+    return _call_local('igem.m2.structure_volume',{'payload':payload.model_dump(mode='json')})
 
 
 def main() -> None:

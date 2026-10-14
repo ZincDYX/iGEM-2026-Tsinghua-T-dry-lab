@@ -150,7 +150,7 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             route="licensed_local_or_api",
             formal_stage="M1",
             official_url="https://tango.crg.eu/",
-            notes="TANGO requires an academic/commercial license; no unlicensed binary is bundled.",
+            notes="Selected aggregation tool; requires an academic/commercial license. Preserve full native output; project conditions and hotspot policy must be reviewed. No unlicensed binary is bundled.",
         ),
         ExternalToolSpec(
             name="pasta2",
@@ -158,7 +158,7 @@ TOOL_CATALOG: dict[str, ExternalToolSpec] = {
             route="licensed_local_or_api",
             formal_stage="M1",
             official_url="https://biocomputingup.it/services/download/",
-            notes="Alternative to TANGO; current download form requests an institutional PI/senior applicant and its own accepted licence. Do not redistribute the academic binary.",
+            notes="Not selected for this project (user withdrew PASTA on 2026-10-14). Historical import support does not make it a missing requirement. Do not redistribute the academic binary.",
         ),
         ExternalToolSpec(
             name="colabfold",

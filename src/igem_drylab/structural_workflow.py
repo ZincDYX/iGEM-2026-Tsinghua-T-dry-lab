@@ -27,6 +27,30 @@ class M2EnzymeComparisonInput(ScientificAnalysisInput):
     burial_rule_reference: str | None = None
 
 
+class M2CoreComparisonInput(ScientificAnalysisInput):
+    """Apo folded-core observation; absent holo pocket cannot become Q1 pass."""
+    candidate_id: str
+    reference: StructureInput
+    fusion: StructureInput
+    core_mapping: CAMapping
+    core_definition_reference: str = Field(min_length=1)
+
+
+def compare_fusion_core(payload: M2CoreComparisonInput):
+    reference,ref_confidence=payload.reference.read();fusion,confidence=payload.fusion.read()
+    ref_selection=ResidueSelection(chain=payload.core_mapping.reference_chain,residues=[a for a,_ in payload.core_mapping.residue_pairs])
+    selection=ResidueSelection(chain=payload.core_mapping.mobile_chain,residues=[b for _,b in payload.core_mapping.residue_pairs])
+    selected_atoms(reference,ref_selection);selected_atoms(fusion,selection)
+    means=[float(np.mean([scores[k] for k in keys])) for scores,keys in ((ref_confidence,ref_selection.keys()),(confidence,selection.keys())) if scores is not None]
+    gate='high' if not means or min(means)>70 else 'medium' if min(means)>=50 else 'low'
+    rmsd=payload.core_mapping.fit(reference,fusion)[2] if gate!='low' else None
+    return dict(schema_version='m2-core-only-comparison-v1',candidate_id=payload.candidate_id,core_ca_rmsd_angstrom=rmsd,
+        core_residue_count=len(payload.core_mapping.residue_pairs),core_mean_confidence=means,confidence_gate=gate,
+        core_definition_reference=payload.core_definition_reference,source_hashes=_hashes(payload.reference,payload.fusion),
+        formal_verdict='blocked',missing=['complete sourced holo pocket and chemistry','full Q1-Q4/ER prerequisites'],
+        scope='apo_frozen_core_observation_not_complete_pocket_assessment_or_enzyme_activity')
+
+
 def compare_fusion_to_reference(payload: M2EnzymeComparisonInput) -> dict:
     reference, reference_confidence = payload.reference.read()
     fusion, confidence = payload.fusion.read()
@@ -111,11 +135,14 @@ def compare_fusion_to_reference(payload: M2EnzymeComparisonInput) -> dict:
 
 def calculation_kinds():
     from .template_geometry import (AssemblyExpansionInput, expand_actual_fusion,
-        RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble)
+        RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble,
+        AssemblyAccessibilityInput,calculate_assembly_accessibility)
     return {"enzyme_comparison": (M2EnzymeComparisonInput, compare_fusion_to_reference),
+            'core_comparison':(M2CoreComparisonInput,compare_fusion_core),
             "assembly_expansion": (AssemblyExpansionInput, expand_actual_fusion),
             "recruitment_geometry": (RecruitmentGeometryInput, calculate_recruitment_geometry),
-            "recruitment_ensemble": (RecruitmentEnsembleInput, calculate_recruitment_ensemble)}
+            "recruitment_ensemble": (RecruitmentEnsembleInput, calculate_recruitment_ensemble),
+            'assembly_accessibility':(AssemblyAccessibilityInput,calculate_assembly_accessibility)}
 
 
 def enzyme_comparison_metrics(request: M2EnzymeComparisonInput, result: dict,
