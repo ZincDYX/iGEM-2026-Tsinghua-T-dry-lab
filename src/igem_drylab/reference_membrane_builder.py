@@ -10,8 +10,10 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from collections import deque
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 
 @dataclass
@@ -66,6 +68,90 @@ def native_molecule(topology_text, species):
             fields=text.split();names.append(fields[4]);charge+=float(fields[6])
     if not names:raise ValueError('native_lipid_topology_has_no_atoms')
     return '[ moleculetype ]'+body,names,charge
+
+
+def native_lipid_graph(topology_text):
+    """Native bond indices and smallest rings, without guessing from distances.
+
+    A shortest alternative path for each bond identifies the small sterol and
+    inositol rings in the native lipid topologies. No bond or atom type is edited.
+    """
+    section='';bonds=[]
+    for line in topology_text.splitlines():
+        text=line.split(';',1)[0].strip()
+        if text.startswith('['):section=text.strip('[] ').strip()
+        elif section=='bonds' and text and not text.startswith('#'):
+            a,b=map(int,text.split()[:2]);bonds.append((a-1,b-1))
+    neighbors={}
+    for a,b in bonds:
+        neighbors.setdefault(a,set()).add(b);neighbors.setdefault(b,set()).add(a)
+    rings=set()
+    for start,end in bonds:
+        paths=deque([[start]]);visited={start}
+        while paths:
+            path=paths.popleft();last=path[-1]
+            if last==end:
+                rotations=[tuple(p[i:]+p[:i]) for p in (path,path[::-1]) for i in range(len(path))]
+                rings.add(min(rotations));break
+            for other in sorted(neighbors[last]):
+                if {last,other}=={start,end} or other in visited:continue
+                visited.add(other);paths.append(path+[other])
+    return bonds,sorted(rings)
+
+
+def ring_bond_intersections(xyz, bonds, rings, molecule_ids, box):
+    """Find intermolecular bond crossings of ordered ring triangle fans under PBC.
+
+    Coordinates and the orthorhombic box use the same units. This geometric
+    construction preflight is not a topology/MD stability proof. A finite
+    minimum atom distance or a converged EM alone cannot exclude penetration.
+    Ring polygons are unwrapped and triangulated about their own centroid.
+    """
+    xyz=np.asarray(xyz,dtype=float);box=np.asarray(box,dtype=float)
+    bonds=np.asarray(bonds,dtype=int).reshape(-1,2);ids=np.asarray(molecule_ids)
+    if box.shape!=(3,) or np.any(box<=0) or not np.all(np.isfinite(xyz)):
+        raise ValueError('ring_preflight_requires_finite_coordinates_and_orthorhombic_box')
+    if not len(bonds) or not len(rings):return []
+    start=xyz[bonds[:,0]];delta=xyz[bonds[:,1]]-start;delta-=box*np.round(delta/box)
+    midpoint=np.mod(start+delta/2,box)
+    tree=cKDTree(midpoint,boxsize=box)
+    half_length=float(np.linalg.norm(delta,axis=1).max()/2)
+    crossings=[]
+    for ring in rings:
+        ring=np.asarray(ring,dtype=int);points=xyz[ring]
+        points=points[0]+points-points[0]-box*np.round((points-points[0])/box)
+        center=points.mean(axis=0)
+        nearby=tree.query_ball_point(np.mod(center,box),float(np.linalg.norm(points-center,axis=1).max())+half_length)
+        nearby=np.asarray([i for i in nearby if ids[bonds[i,0]]!=ids[ring[0]] and ids[bonds[i,1]]!=ids[ring[0]]],dtype=int)
+        if not len(nearby):continue
+        origin=center+(start[nearby]-center)-box*np.round((start[nearby]-center)/box)
+        direction=delta[nearby];offset=origin-center;hits=set()
+        for j in range(len(ring)):
+            u=points[j]-center;v=points[(j+1)%len(ring)]-center
+            p=np.cross(direction,v);det=p@u;active=np.abs(det)>1e-12
+            alpha=np.divide(np.einsum('ij,ij->i',offset,p),det,out=np.zeros(len(det)),where=active)
+            q=np.cross(offset,u)
+            beta=np.divide(np.einsum('ij,ij->i',direction,q),det,out=np.zeros(len(det)),where=active)
+            t=np.divide(q@v,det,out=np.zeros(len(det)),where=active)
+            mask=active&(alpha>=0)&(beta>=0)&(alpha+beta<=1)&(t>1e-10)&(t<1-1e-10)
+            hits.update(nearby[mask].tolist())
+        crossings.extend(dict(ring_atoms=ring.tolist(),bond_atoms=bonds[i].tolist()) for i in sorted(hits))
+    return crossings
+
+
+def reference_ring_preflight(positions, topologies, box):
+    """Bind geometry to the native molecule order, including non-ERG lipid rings."""
+    xyz=[];bonds=[];rings=[];molecule_ids=[];offset=0;identity=0
+    for species,rows in positions.items():
+        local_bonds,local_rings=native_lipid_graph(topologies[species])
+        for coordinates in rows:
+            xyz.extend(coordinates);molecule_ids.extend([identity]*len(coordinates));identity+=1
+            bonds.extend((a+offset,b+offset) for a,b in local_bonds)
+            rings.extend([a+offset for a in ring] for ring in local_rings)
+            offset+=len(coordinates)
+    intersections=ring_bond_intersections(xyz,bonds,rings,molecule_ids,box)
+    return dict(ring_count=len(rings),intersection_count=len(intersections),intersections=intersections,
+        scope='intermolecular_ring_surface_crossing_preflight_not_MD_validation')
 
 
 def source_initial_geometry(path, lipids_per_leaflet):
@@ -251,6 +337,11 @@ def build_reference(request):
     (root/'request.json').write_text(json.dumps(asdict(request),indent=2))
     (root/'initial-library-conformer-choices.json').write_text(json.dumps(choices,indent=2))
     positions=pack_original_conformers(root,molecules,edge,planes,request)
+    preflight=reference_ring_preflight(positions,{s:(root/(s+'.itp')).read_text() for s in counts},
+        [edge,edge,request.initial_box_z_nm])
+    (root/'ring-penetration-preflight.json').write_text(json.dumps(preflight,indent=2))
+    if preflight['intersection_count']:
+        raise ValueError('native_packing_has_ring_penetration_rebuild_before_EM_or_MD')
     natoms=sum(counts[s]*len(definitions[s]) for s in counts)
     with (root/'initial.gro').open('w') as stream:
         stream.write(request.recipe_id+' bare reference initial condition\n'+str(natoms)+'\n');serial=0;residue=0

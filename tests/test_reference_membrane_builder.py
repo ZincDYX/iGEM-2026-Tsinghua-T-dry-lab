@@ -105,3 +105,28 @@ def test_native_restart_places_heads_not_atomic_centroids_on_declared_planes(tmp
     assert len({tuple(row) for row in heads})==4
     other=tmp_path/'repeated.pack';write_initial_packing_grid(other,molecules,box,planes,7)
     assert path.read_bytes()==other.read_bytes()
+
+
+@pytest.mark.scientific_algorithm
+def test_ring_crossing_detected_despite_no_overlapping_atoms_and_periodic_translation():
+    import numpy as np
+    from igem_drylab.reference_membrane_builder import ring_bond_intersections
+    # The passing bond is 1.4 units away from the closest ring atom: atom-only
+    # clash screening misses the crossing. The square also straddles PBC.
+    xyz=np.array([[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0],[0,0,-1],[0,0,1]],dtype=float)+5
+    bonds=[(4,5)];rings=[[0,1,2,3]];ids=[0,0,0,0,1,1];box=[10,10,10]
+    for shift in ([0,0,0],[5,0,0],[0,5,0],[0,0,5],[20,-10,30]):
+        result=ring_bond_intersections(np.mod(xyz+shift,box),bonds,rings,ids,box)
+        assert result==[dict(ring_atoms=[0,1,2,3],bond_atoms=[4,5])]
+    xyz[4:,0]+=3
+    assert not ring_bond_intersections(xyz,bonds,rings,ids,box)
+
+
+@pytest.mark.scientific_algorithm
+def test_native_ring_graph_uses_bonds_not_atom_distance_and_excludes_own_bonds():
+    from igem_drylab.reference_membrane_builder import native_lipid_graph,ring_bond_intersections
+    topology='[ bonds ]\n1 2 1\n2 3 1\n3 4 1\n4 1 1\n3 5 1\n5 6 1\n6 4 1\n'
+    bonds,rings=native_lipid_graph(topology)
+    assert rings==[(0,1,2,3),(2,3,5,4)]
+    xyz=[[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0],[0,0,-1],[0,0,1]]
+    assert not ring_bond_intersections(xyz,[(4,5)],[[0,1,2,3]],[0]*6,[10,10,10])
