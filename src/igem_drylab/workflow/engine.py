@@ -376,7 +376,7 @@ class WorkflowEngine:
             if not isinstance(result, dict):
                 raise ToolFailure("invalid_tool_output", "Tool output must be a JSON object")
             jsonschema.Draft202012Validator(definition.output_schema).validate(result)
-            public_result = self.disclosure.tree(result, project_id=snapshot["project"]["id"]) if definition.capability in {"scientific_project","synthetic_demonstration"} else result
+            public_result = self.disclosure.tree(result, project_id=snapshot["project"]["id"]) if definition.capability in {"scientific_project","scientific_mcp","synthetic_demonstration"} else result
             self.disclosure.check(public_result)
             if self.store.execution_state(run_id)["control"] == "cancel":
                 self.store.set_node(run_id,node_id,NodeStatus.interrupted,error={"code":"cancelled_before_publication","message":"已取消；结果未发布。"})
