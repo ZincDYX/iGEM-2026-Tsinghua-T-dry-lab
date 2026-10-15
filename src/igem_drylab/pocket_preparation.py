@@ -16,6 +16,47 @@ from .structure_metrics import read_pdb_atoms
 from .template_geometry import StructureInput, ResidueSelection, selected_atoms
 
 
+class PocketPredictionInput(ScientificAnalysisInput):
+    """Read native P2Rank candidates; no automatic catalytic-pocket approval."""
+    structure: StructureInput
+    predictions_file: Path
+    execution_record: Path
+
+
+def read_pocket_candidates(payload: PocketPredictionInput) -> dict:
+    import csv
+    import json
+    atoms,_=payload.structure.read()
+    record=json.loads(payload.execution_record.read_text())
+    if (record.get('tool_name')!='P2Rank' or record.get('returncode')!=0 or not record.get('command')
+            or not record.get('tool_version') or record.get('input_sha256')!=sha256(payload.structure.path.read_bytes()).hexdigest()
+            or record.get('output_sha256')!=sha256(payload.predictions_file.read_bytes()).hexdigest()):
+        raise ValueError('P2Rank_requires_matching_native_execution_and_output')
+    if payload.structure.source_kind=='prediction' and record.get('profile')!='alphafold':
+        raise ValueError('predicted_structure_requires_P2Rank_alphafold_profile_not_B_factor_features')
+    ca={(a.chain,str(a.residue)+a.insertion) for a in atoms if a.name=='CA' and not a.is_hetero}
+    candidates=[]
+    with payload.predictions_file.open(newline='',encoding='utf-8-sig') as stream:
+        for raw in csv.DictReader(stream):
+            row={k.strip():v.strip() for k,v in raw.items()}
+            residues=[]
+            for key in row['residue_ids'].split():
+                chain,residue=key.split('_',1)
+                if (chain,residue) not in ca:raise ValueError('P2Rank_residue_not_in_exact_input_model')
+                residues.append(dict(chain=chain,residue=residue))
+            values=[float(row[k]) for k in ('score','probability','center_x','center_y','center_z')]
+            if not np.isfinite(values).all() or not 0<=values[1]<=1:
+                raise ValueError('P2Rank_nonfinite_or_invalid_native_output')
+            candidates.append(dict(name=row['name'],rank=int(row['rank']),score=values[0],
+                native_ligand_site_probability=values[1],center_angstrom=values[2:],residues=residues,
+                catalytic_pocket_confirmed=False))
+    return dict(schema_version='m2-native-pocket-candidates-v1',tool='P2Rank',tool_version=record['tool_version'],
+        status='native_candidates_require_target_review',candidates=candidates,
+        input_structure_sha256=record['input_sha256'],predictions_file=str(payload.predictions_file),
+        chemical_topology_ready=False,production_ready=False,
+        scope='predicted_ligandable_neighborhoods_not_verified_target_catalysis_or_ligand_poses')
+
+
 class PocketPreparationInput(ScientificAnalysisInput):
     reference: StructureInput
     protein: ResidueSelection

@@ -16,6 +16,7 @@ from igem_drylab.cg_sampling import SamplingInput
 from igem_drylab.phase_profile_analysis import PhaseProfileAnalysisInput
 from igem_drylab.structure_volume import StructureVolumeInput
 from igem_drylab.pocket_preparation import PocketPreparationInput
+from igem_drylab.pocket_preparation import PocketPredictionInput
 from igem_drylab.dssp_context import DsspContextInput
 from igem_drylab.template_geometry import AssemblyPreparationInput
 from igem_drylab.template_geometry import AssemblyAccessibilityInput
@@ -92,6 +93,12 @@ def m2_compare_enzyme(payload: M2EnzymeComparisonInput) -> dict[str, Any]:
 @server.tool(name="igem.m2.prepare_pocket", title="Pocket contacts from a sourced ligand pose", structured_output=True)
 def m2_prepare_pocket(payload: PocketPreparationInput) -> dict[str, Any]:
     return _call_local("igem.m2.prepare_pocket", {"payload": payload.model_dump(mode="json")})
+
+
+@server.tool(name='igem.m2.read_pocket_candidates',structured_output=True,
+             description='Read bound original P2Rank predictions; never approve a catalytic pocket from its rank.')
+def m2_read_pocket_candidates(payload: PocketPredictionInput) -> dict[str,Any]:
+    return _call_local('igem.m2.read_pocket_candidates',{'payload':payload.model_dump(mode='json')})
 
 
 @server.tool(name="igem.m2.secondary_context", title="Native DSSP auxiliary fusion context", structured_output=True)
