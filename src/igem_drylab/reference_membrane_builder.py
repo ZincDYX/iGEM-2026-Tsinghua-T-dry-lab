@@ -39,6 +39,7 @@ class ReferenceMembraneInput:
     # Construction controls only; neither modifies the native force field.
     conformers_per_species_per_leaflet: int | None = None
     packing_timeout_seconds: int | None = None
+    align_head_tail_for_initial_packing: bool = False
 
 
 def read_crd(path):
@@ -81,6 +82,46 @@ def source_initial_geometry(path, lipids_per_leaflet):
     return float(box[0]*box[1]/lipids_per_leaflet),planes-float(np.mean(planes))
 
 
+def orient_initial_conformer(names, xyz, heads):
+    """Proper rigid rotation only; not a membrane thickness or insertion model.
+
+    Headgroup atoms define the origin. The head-to-carbon-centroid direction
+    defines the inward axis; two phosphates additionally define the head plane.
+    All original intramolecular distances are retained.
+    """
+    centered=xyz-xyz[heads].mean(axis=0)
+    tail=centered[[i for i,name in enumerate(names) if name.startswith('C')]].mean(axis=0)
+    if len(heads)==2:
+        x=centered[heads[1]]-centered[heads[0]];x/=np.linalg.norm(x)
+        tail=tail-np.dot(tail,x)*x
+    z=-tail/np.linalg.norm(tail)
+    if len(heads)!=2:
+        axis=np.eye(3)[np.argmin(np.abs(z))]
+        x=axis-np.dot(axis,z)*z;x/=np.linalg.norm(x)
+    y=np.cross(z,x)
+    return centered@np.column_stack([x,y,z])
+
+
+def write_initial_packing_grid(path, molecules, box, planes, seed):
+    """Seed a native PACKMOL restart, not fixed lipid sites during simulation.
+
+    PACKMOL subtracts each input molecule's arithmetic atomic centroid. Its
+    six-column restart therefore requires centroid translations, not head
+    positions. Leaflets use staggered grids in the unchanged reference box.
+    """
+    rng=np.random.default_rng(seed);positions={}
+    for leaflet in (0,1):
+        indices=[i for i,molecule in enumerate(molecules) if molecule[1]==leaflet]
+        side=int(np.ceil(np.sqrt(len(indices))))
+        slots=np.asarray([(i%side,i//side) for i in range(len(indices))],dtype=float)
+        rng.shuffle(slots)
+        for index,slot in zip(indices,slots):
+            xyz=molecules[index][3]*10
+            head=np.r_[(slot+(.25 if leaflet==0 else .75))*box[:2]/side,box[2]/2+planes[leaflet]*10]
+            positions[index]=head+xyz.mean(axis=0)-xyz[molecules[index][4]].mean(axis=0)
+    np.savetxt(path,np.asarray([np.r_[positions[i],0.,0.,0.] for i in range(len(molecules))]),fmt='%.10f')
+
+
 def pack_original_conformers(root, molecules, edge, planes, request):
     """Rigid original conformers; periodic packing is not a force-field change."""
     directory=root/'packing-inputs';directory.mkdir()
@@ -95,6 +136,9 @@ def pack_original_conformers(root, molecules, edge, planes, request):
         species,leaflet,names,xyz,heads=molecule
         groups.setdefault((species,leaflet,xyz.tobytes()),[]).append(molecule)
     ordered=[m for group in groups.values() for m in group]
+    if request.align_head_tail_for_initial_packing:
+        write_initial_packing_grid(root/'initial.pack',ordered,box,planes,request.seed)
+        lines += ['restart_from initial.pack']
     for index,group in enumerate(groups.values()):
         species,leaflet,names,xyz,heads=group[0]
         name=f'packing-inputs/molecule-{index}.xyz'
@@ -110,7 +154,12 @@ def pack_original_conformers(root, molecules, edge, planes, request):
         carbons=[i for i,atom in enumerate(names) if atom.startswith('C')]
         tail=max(carbons,key=lambda i:xyz[i,2]) if leaflet==0 else min(carbons,key=lambda i:xyz[i,2])
         side='above' if leaflet==0 else 'below'
-        lines += [f'structure {name}',f'number {len(group)}','atoms '+' '.join(str(i+1) for i in heads),
+        lines += [f'structure {name}',f'number {len(group)}']
+        if request.align_head_tail_for_initial_packing:
+            # PACKMOL documents a z-only rotation-constraint ambiguity. Fix all
+            # three axes for the already oriented native conformer, never MD.
+            lines += [f'constrain_rotation {axis} 0. 0.' for axis in ('x','y','z')]
+        lines += ['atoms '+' '.join(str(i+1) for i in heads),
             f'inside box 0. 0. {z-width} {box[0]} {box[1]} {z+width}','end atoms',
             f'atoms {tail+1}',f'{side} plane 0. 0. 1. {z}','end atoms','end structure']
     (root/'packmol.inp').write_text('\n'.join(lines)+'\n')
@@ -173,7 +222,7 @@ def build_reference(request):
         if len(files[species])!=2000:raise ValueError('original_lipid_library_requires_all_2000_conformers')
     if not np.isclose(charge,request.expected_lipid_charge_e,atol=1e-7):
         raise ValueError('native_reference_charge_differs_from_declared_recipe')
-    molecules=[];choices=[]
+    molecules=[];choices=[];azimuths={}
     for leaflet in range(2):
         pools={s:rng.choice(files[s],size=request.conformers_per_species_per_leaflet,replace=False).tolist()
             for s in counts} if request.conformers_per_species_per_leaflet is not None else files
@@ -186,10 +235,15 @@ def build_reference(request):
             xyz=xyz[[lookup[name] for name in definitions[species]]]
             heads=[i for i,n in enumerate(definitions[species]) if n in {'P','P1','P3'}] if species!='ERG' else [definitions[species].index('O3')]
             if not heads:raise ValueError('declared_library_headgroup_atoms_missing')
-            xyz-=xyz[heads].mean(axis=0)
+            xyz=orient_initial_conformer(definitions[species],xyz,heads) if request.align_head_tail_for_initial_packing else xyz-xyz[heads].mean(axis=0)
             # Original library phospholipid tails point toward negative z.
             if leaflet==0:xyz=xyz*np.array([1.,-1.,-1.])
-            angle=float(rng.uniform(0,2*np.pi)) if request.conformers_per_species_per_leaflet is None else 0.
+            if request.align_head_tail_for_initial_packing:
+                key=(species,leaflet,str(conformer))
+                if key not in azimuths:azimuths[key]=float(rng.uniform(0,2*np.pi))
+                angle=azimuths[key]
+            else:
+                angle=float(rng.uniform(0,2*np.pi)) if request.conformers_per_species_per_leaflet is None else 0.
             c,s=np.cos(angle),np.sin(angle)
             xyz=xyz@np.array([[c,s,0],[-s,c,0],[0,0,1.]])
             molecules.append((species,leaflet,definitions[species],xyz,heads))

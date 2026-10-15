@@ -56,7 +56,7 @@ def test_grouped_original_conformers_preserve_all_atoms_and_species_counts(tmp_p
     molecules=[('A',0,['P','C'],xyz,[0]),('B',1,['P','C'],xyz,[0]),('A',0,['P','C'],xyz,[0])]
     request=SimpleNamespace(initial_box_z_nm=8.,packing_tolerance_angstrom=2.,seed=1,
         initial_head_band_halfwidth_angstrom=2.,packmol_executable='synthetic-fixture-not-native-job',
-        packing_timeout_seconds=5,molecule_counts={'A':2,'B':1})
+        packing_timeout_seconds=5,molecule_counts={'A':2,'B':1},align_head_tail_for_initial_packing=True)
     def synthetic(command,**kwargs):
         assert kwargs['timeout']==5
         # Output order follows the grouped native input: A, A, B.
@@ -68,3 +68,40 @@ def test_grouped_original_conformers_preserve_all_atoms_and_species_counts(tmp_p
     assert result['B'][0][0].tolist()==[2.,0.,1.]
     text=(tmp_path/'packmol.inp').read_text()
     assert text.count('\nstructure ')==2 and '\nnumber 2\n' in text
+    assert 'restart_from initial.pack' in text
+    for axis in ('x','y','z'):assert text.count(f'constrain_rotation {axis} 0. 0.')==2
+
+
+@pytest.mark.scientific_algorithm
+@pytest.mark.parametrize('heads',[[0],[0,1]])
+def test_rigid_initial_orientation_preserves_geometry_and_chirality(heads):
+    import numpy as np
+    from igem_drylab.reference_membrane_builder import orient_initial_conformer
+    names=['P1','P3','C1','C2','O1']
+    xyz=np.array([[1.,2.,3.],[2.,2.,4.],[3.,1.,-1.],[1.,0.,-2.],[4.,3.,1.]])
+    oriented=orient_initial_conformer(names,xyz,heads)
+    assert np.allclose(np.linalg.norm(xyz[:,None]-xyz[None,:],axis=2),
+        np.linalg.norm(oriented[:,None]-oriented[None,:],axis=2))
+    assert np.allclose(oriented[heads].mean(axis=0),0.)
+    assert oriented[[2,3],2].mean()<0
+    if len(heads)==2:assert np.allclose(oriented[heads,2],0.)
+    # A reflection would preserve distances but invert this signed volume.
+    assert np.linalg.det(xyz[1:4]-xyz[0])==pytest.approx(np.linalg.det(oriented[1:4]-oriented[0]))
+
+
+@pytest.mark.scientific_algorithm
+def test_native_restart_places_heads_not_atomic_centroids_on_declared_planes(tmp_path):
+    import numpy as np
+    from igem_drylab.reference_membrane_builder import write_initial_packing_grid
+    xyz=np.array([[1.,2.,3.],[2.,1.,1.]])
+    molecules=[('A',leaflet,['P','C'],xyz,[0]) for leaflet in (0,0,1,1)]
+    path=tmp_path/'initial.pack';box=np.array([100.,100.,80.]);planes=np.array([-2.,2.])
+    write_initial_packing_grid(path,molecules,box,planes,7)
+    native=np.loadtxt(path)
+    assert native.shape==(4,6) and np.all(native[:,3:]==0)
+    heads=native[:,:3]-xyz.mean(axis=0)*10+xyz[0]*10
+    assert np.allclose(heads[:,2],[20.,20.,60.,60.])
+    assert np.all((heads[:,:2]>0)&(heads[:,:2]<100))
+    assert len({tuple(row) for row in heads})==4
+    other=tmp_path/'repeated.pack';write_initial_packing_grid(other,molecules,box,planes,7)
+    assert path.read_bytes()==other.read_bytes()
