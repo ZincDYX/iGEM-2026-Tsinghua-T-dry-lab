@@ -13,7 +13,50 @@ from scipy.spatial import cKDTree
 
 from .design_analysis import ScientificAnalysisInput
 from .structure_metrics import read_pdb_atoms
-from .template_geometry import StructureInput, ResidueSelection, selected_atoms
+from .template_geometry import (StructureInput, ResidueSelection, CAMapping, selected_atoms,
+    transform_atoms, _coordinates, _hashes, _identity, _gate)
+
+
+class CofactorTransferInput(ScientificAnalysisInput):
+    """Transfer observed cofactor coordinates, not bonds or force-field parameters."""
+    template: StructureInput
+    target: StructureInput
+    cofactor: ResidueSelection
+    template_to_target: CAMapping  # reference = target; mobile = experimental template
+    # (target atom, cofactor atom), each (chain, author residue including insertion, atom name).
+    contact_pairs: list[tuple[tuple[str, str, str], tuple[str, str, str]]] = Field(default_factory=list)
+
+
+def transfer_cofactor(payload: CofactorTransferInput) -> dict:
+    template, _ = payload.template.read()
+    target, confidence = payload.target.read()
+    if payload.template.source_kind != 'experimental':
+        raise ValueError('cofactor_transfer_requires_observed_experimental_template')
+    cofactor = selected_atoms(template, payload.cofactor)
+    if not all(atom.is_hetero for atom in cofactor):
+        raise ValueError('cofactor_selection_must_not_include_template_protein')
+    rotation, translation, rmsd = payload.template_to_target.fit(target, template)
+    moved = transform_atoms(cofactor, rotation, translation)
+    target_atoms = {_identity(a): a for a in target if a.element not in {'H', 'D'}}
+    cofactor_atoms = {_identity(a): a for a in moved}
+    contacts = []
+    for protein_key, cofactor_key in payload.contact_pairs:
+        if protein_key not in target_atoms or cofactor_key not in cofactor_atoms:
+            raise ValueError('declared_cofactor_contact_atom_missing_from_exact_structure')
+        contacts.append(dict(target_atom=list(protein_key), cofactor_atom=list(cofactor_key),
+            distance_angstrom=float(np.linalg.norm(target_atoms[protein_key].coordinate-cofactor_atoms[cofactor_key].coordinate))))
+    from .structure_metrics import residue_key
+    keys={(payload.template_to_target.reference_chain, *residue_key(a))
+          for a, _ in payload.template_to_target.residue_pairs}
+    return dict(schema_version='m2-observed-cofactor-transfer-v1', status='computed_pose_requires_chemical_review',
+        coordinates=_coordinates({'cofactor': moved})['cofactor'],
+        transform=dict(rotation=rotation.tolist(), translation_angstrom=translation.tolist(),
+            mapped_CA_count=len(payload.template_to_target.residue_pairs), mapped_CA_rmsd_angstrom=rmsd),
+        mapping=payload.template_to_target.model_dump(mode='json'),
+        mapped_target_confidence=_gate(confidence, keys), candidate_contact_distances=contacts,
+        source_hashes=_hashes(payload.template, payload.target),
+        chemical_topology_ready=False, production_ready=False,
+        scope='observed_template_pose_transfer_not_new_covalent_bonds_metal_coordination_or_validated_parameters')
 
 
 class PocketPredictionInput(ScientificAnalysisInput):

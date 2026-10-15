@@ -6,6 +6,7 @@ from igem_drylab.structural_workflow import M2EnzymeComparisonInput, compare_fus
 from igem_drylab.structural_workflow import M2CoreComparisonInput,compare_fusion_core
 from igem_drylab.pocket_preparation import PocketPreparationInput, prepare_pocket
 from igem_drylab.pocket_preparation import PocketPredictionInput,read_pocket_candidates
+from igem_drylab.pocket_preparation import CofactorTransferInput, transfer_cofactor
 from igem_drylab.dssp_context import DsspContextInput, assess_dssp_context
 from igem_drylab.template_geometry import AssemblyPreparationInput, prepare_actual_fusion_copies
 from igem_drylab.template_geometry import AssemblyAccessibilityInput,calculate_assembly_accessibility
@@ -49,6 +50,7 @@ BINDINGS.extend([
     binding("igem.m2.secondary_context", "Read native DSSP auxiliary full-fusion assignments", DsspContextInput, assess_dssp_context),
     binding("igem.m2.prepare_pocket", "Derive pocket contacts from a sourced reference-frame ligand pose", PocketPreparationInput, prepare_pocket),
     binding('igem.m2.read_pocket_candidates','Read actual P2Rank candidates without claiming catalytic confirmation',PocketPredictionInput,read_pocket_candidates),
+    binding('igem.m2.transfer_cofactor','Transfer experimentally observed cofactor coordinates without inventing chemistry',CofactorTransferInput,transfer_cofactor),
     binding("igem.m2.compare_enzyme", "Calculate original M2 Q1/Q2 reference comparisons", M2EnzymeComparisonInput, compare_fusion_to_reference),
     binding('igem.m2.compare_core','Apo frozen-core comparison without inventing a holo pocket',M2CoreComparisonInput,compare_fusion_core),
     binding('igem.m2.structure_volume','Declared-radius material and probe-excluded sphere unions',StructureVolumeInput,calculate_structure_volume),
