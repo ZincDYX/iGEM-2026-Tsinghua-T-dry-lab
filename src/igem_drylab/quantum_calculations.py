@@ -110,6 +110,23 @@ def prepare_model_compound(payload: ModelCompoundInput) -> dict:
         scope='explicit_model_compound_initial_chemical_graph_not_QM_or_force_field_validation')
 
 
+class CoordinateConstraint(ScientificAnalysisInput):
+    """One explicit geomeTRIC PES coordinate: Angstrom or degrees, never a bias."""
+    kind: Literal['distance','angle','dihedral']
+    atoms_1based: list[int]
+    target: float
+
+    @model_validator(mode='after')
+    def coordinate(self):
+        count={'distance':2,'angle':3,'dihedral':4}[self.kind]
+        if len(self.atoms_1based)!=count or len(set(self.atoms_1based))!=count:
+            raise ValueError('QM_constraint_requires_distinct_ordered_coordinate_atoms')
+        if not np.isfinite(self.target) or (self.kind=='distance' and self.target<=0) or (
+                self.kind=='angle' and not 0<self.target<180):
+            raise ValueError('invalid_QM_coordinate_constraint_target')
+        return self
+
+
 class QuantumCalculationInput(ScientificAnalysisInput):
     atoms: list[QuantumAtom] = Field(min_length=2)
     formal_charge: int
@@ -124,6 +141,7 @@ class QuantumCalculationInput(ScientificAnalysisInput):
     density_fitting: bool = False
     calculate_hessian: bool = True
     frozen_atoms_1based: list[int] = Field(default_factory=list)
+    coordinate_constraints: list[CoordinateConstraint] = Field(default_factory=list)
     threads: int = Field(default=8,ge=1)
     memory_MB: int = Field(default=16000,ge=1)
     max_geometry_steps: int = Field(default=200,ge=1)
@@ -139,6 +157,13 @@ class QuantumCalculationInput(ScientificAnalysisInput):
         if len(set(self.frozen_atoms_1based))!=len(self.frozen_atoms_1based) or any(
                 i<1 or i>len(self.atoms) for i in self.frozen_atoms_1based):
             raise ValueError('invalid_QM_frozen_atom_indices')
+        keys=[]
+        for constraint in self.coordinate_constraints:
+            if any(i<1 or i>len(self.atoms) for i in constraint.atoms_1based):
+                raise ValueError('QM_coordinate_constraint_atom_outside_model')
+            atoms=tuple(constraint.atoms_1based)
+            keys.append((constraint.kind,min(atoms,atoms[::-1])))
+        if len(set(keys))!=len(keys):raise ValueError('duplicate_QM_coordinate_constraint')
         return self
 
 
@@ -171,9 +196,13 @@ def run_quantum_calculation(payload: QuantumCalculationInput) -> dict:
     optimizer.max_cycle=payload.max_geometry_steps
     parameters=dict(convergence_energy=1e-6,
         convergence_grms=3e-4,convergence_gmax=4.5e-4,convergence_drms=1.2e-3,convergence_dmax=1.8e-3)
-    if payload.frozen_atoms_1based:
+    if payload.frozen_atoms_1based or payload.coordinate_constraints:
         constraints=root/'constraints.txt'
-        constraints.write_text('$freeze\n'+'\n'.join(f'xyz {i}' for i in payload.frozen_atoms_1based)+'\n$end\n')
+        lines=[]
+        if payload.frozen_atoms_1based:lines=['$freeze',*[f'xyz {i}' for i in payload.frozen_atoms_1based]]
+        if payload.coordinate_constraints:
+            lines+=['$set',*[c.kind+' '+' '.join(map(str,c.atoms_1based))+' '+str(c.target) for c in payload.coordinate_constraints]]
+        constraints.write_text('\n'.join([*lines,'$end'])+'\n')
         parameters['constraints']=str(constraints)
     optimized=optimizer.kernel(params=parameters)
     if not optimizer.converged:
@@ -195,7 +224,7 @@ def run_quantum_calculation(payload: QuantumCalculationInput) -> dict:
         hessian=mean_field.Hessian().kernel()
         if payload.backend=='cuda':hessian=cupy.asnumpy(hessian)
         np.save(root/'cartesian-hessian-hartree-per-bohr2.npy',hessian)
-        if not payload.frozen_atoms_1based:
+        if not payload.frozen_atoms_1based and not payload.coordinate_constraints:
             # Signed negative wavenumbers retain imaginary modes, without an
             # invented tolerance that would classify a saddle as validated.
             frequencies=thermo.harmonic_analysis(optimized,hessian,imaginary_freq=False)['freq_wavenumber'].tolist()
@@ -207,6 +236,7 @@ def run_quantum_calculation(payload: QuantumCalculationInput) -> dict:
         frequencies_wavenumber_cm_inverse=frequencies,frozen_atoms_1based=payload.frozen_atoms_1based,
         frozen_atom_displacement_angstrom={payload.atoms[i-1].source_atom_id:float(np.linalg.norm(
             coordinates[i-1]-np.asarray(payload.atoms[i-1].xyz_angstrom))) for i in payload.frozen_atoms_1based},
+        coordinate_constraints=[c.model_dump(mode='json') for c in payload.coordinate_constraints],
         Hessian_calculated=payload.calculate_hessian,geometry_convergence=parameters,
         production_MD_ready=False,CHARMM_partial_charges_fitted=False,bonded_parameters_fitted=False,
         scope='QM_reference_targets_only_not_CHARMM_parameter_validation_or_MD_approval')

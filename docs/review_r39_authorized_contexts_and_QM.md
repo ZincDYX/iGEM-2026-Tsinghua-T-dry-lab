@@ -93,6 +93,14 @@ integration remain necessary before holo MD. Organic
 provide an Fe/2OG metal center. See the
 [CHARMM fitting guidance](https://mackerell.umaryland.edu/cgenff_lsfit.php).
 
+The same native QM runner accepts explicit 1-based distance, angle and dihedral
+constraints for separate relaxed PES points. Values follow the original
+[geomeTRIC constraint units](https://geometric.readthedocs.io/en/latest/constraints.html):
+angstrom for distance and degrees for angles. Targets and optimized coordinates
+are retained; a constrained Hessian is not reported as free-molecule frequencies.
+Coordinate-driving targets do not themselves constitute fitted bond constants,
+complete torsional profiles or independent CHARMM validation.
+
 ## Isolated installation and tests
 
 No model weights, licensed tools, private sequences, credentials or deployment
