@@ -25,7 +25,10 @@ def _number(value):
     return number
 
 
-def read_native_llps(path, *, format, sequence, sequence_file=None, record_id="sequence_input", profile_file=None):
+def read_native_llps(path, *, format, sequence, sequence_file=None, record_id="sequence_input", profile_file=None,
+                     dpr_definition=None):
+    if dpr_definition is not None and (dpr_definition!='2022_gkac386' or not format.startswith('fuzdrop_')):
+        raise ValueError('DPR_reference_definition_requires_FuzDrop_profile_and_explicit_2022_paper')
     if format == "pscore_native":
         from .pscore_runner import parse_pscore_output
         native = parse_pscore_output(Path(path), sequence=sequence)
@@ -88,9 +91,23 @@ def read_native_llps(path, *, format, sequence, sequence_file=None, record_id="s
         row["pDP"], row["Sbind"] = _number(row["pDP"]), _number(row["Sbind"])
         if not 0 <= row["pDP"] <= 1:
             raise ValueError("FuzDrop_pDP_outside_native_probability_range")
-    return {"tool": "FuzDrop", "raw_score": score, "residue_profile": rows,
+    result={"tool": "FuzDrop", "raw_score": score, "residue_profile": rows,
             "missing": [] if score is not None else ["native_global_pLLPS_not_in_TSV"],
             "interpretation": "Original predictor output; local pDP is not global pLLPS or experimental validation."}
+    if dpr_definition is not None:
+        # Explicit paper-defined descriptive reanalysis, not a declaration of
+        # the unversioned website's binary version or a project acceptance gate.
+        spans=[];start=None
+        for index in range(len(rows)+1):
+            above=index<len(rows) and rows[index]['pDP']>=.60
+            if above and start is None:start=index
+            if not above and start is not None:
+                if index-start>=10:spans.append(dict(start_1based=start+1,end_1based=index,length=index-start))
+                start=None
+        result['DPR_reference_reanalysis']=dict(definition=dpr_definition,source='https://doi.org/10.1093/nar/gkac386',
+            residue_pDP_minimum=.60,minimum_consecutive_residues=10,regions=spans,
+            scope='paper_defined_profile_description_not_server_version_or_M1_pass')
+    return result
 
 
 class NativeLLPSArtifact(ScientificAnalysisInput):
@@ -100,6 +117,7 @@ class NativeLLPSArtifact(ScientificAnalysisInput):
     sequence_file: Path | None = None
     profile_file: Path | None = None
     record_id: str = "sequence_input"
+    dpr_definition: Literal['2022_gkac386'] | None = None
 
 
 class LLPSImportInput(ScientificAnalysisInput):
@@ -116,7 +134,8 @@ def import_llps_results(payload: LLPSImportInput):
     digest = sha256(payload.sequence.encode()).hexdigest()
     for artifact in payload.artifacts:
         observations = read_native_llps(artifact.path, format=artifact.format, sequence=payload.sequence,
-            sequence_file=artifact.sequence_file, record_id=artifact.record_id, profile_file=artifact.profile_file)
+            sequence_file=artifact.sequence_file, record_id=artifact.record_id, profile_file=artifact.profile_file,
+            dpr_definition=artifact.dpr_definition)
         profiles.append({"format": artifact.format, **observations})
         if observations["raw_score"] is None:
             continue

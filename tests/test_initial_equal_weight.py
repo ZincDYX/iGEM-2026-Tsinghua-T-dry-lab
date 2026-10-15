@@ -94,3 +94,15 @@ def test_website_protocol_identifier_is_not_a_known_server_binary_version(tmp_pa
     result=prioritize_m1(M1PrioritizationInput(candidates=[row],policy=policy()))['candidates'][0]
     assert result['rank_score'] is None and result['unknown_native_versions']==['FuzDrop']
     assert 'known_predictor_versions' in result['missing']
+
+
+@pytest.mark.scientific_algorithm
+def test_explicit_2022_DPR_definition_is_10_not_25_and_is_not_a_global_score(tmp_path):
+    from igem_drylab.llps_artifacts import read_native_llps
+    sequence='G'*45;path=tmp_path/'synthetic.json'
+    # 9 residues do not qualify, 10 exactly at .60 do qualify, 25 is not required.
+    path.write_text(json.dumps(dict(sequence=sequence,pLLPS=.3,result=[dict(position=i,aa='G',pDP=.6 if i<9 or 10<=i<20 else .59,Shae=0.) for i in range(45)])))
+    result=read_native_llps(path,format='fuzdrop_response_json',sequence=sequence,dpr_definition='2022_gkac386')
+    assert result['DPR_reference_reanalysis']['regions']==[dict(start_1based=11,end_1based=20,length=10)]
+    assert result['raw_score']==.3
+    assert 'DPR_reference_reanalysis' not in read_native_llps(path,format='fuzdrop_response_json',sequence=sequence)

@@ -141,6 +141,8 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         raise ToolFailure("catgranule_requires_recoverable_native_route", "Use the original web-form runner; unknown submissions must not be repeated.")
     if tool=='fuzdrop' and not uses_native_route(config,'fuzdrop_runner'):
         raise ToolFailure('fuzdrop_requires_native_official_form_route','Use the normal original form; no CAPTCHA bypass or undocumented token-free POST.')
+    if tool=='psipred' and not uses_native_route(config,'psipred_runner'):
+        raise ToolFailure('psipred_requires_native_profile_route','Use the original full-sequence profile runner and separately installed database; no single-sequence fallback.')
     run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
         sequence=sequence,
         job_state=context.work_dir.parent / "remote-job.json",
@@ -223,6 +225,17 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
         parsed = parse_secondary_structure_output(output, tool_name="JPred", tool_version=evidence["tool_version"],
             input_sha256=digest, sequence_file=Path(evidence["sequence_file"])).model_dump(mode="json")
         result["outputs"] = {"raw_output": str(output), "sequence_companion": evidence["sequence_file"]}
+    elif tool=='psipred':
+        evidence=json.loads((output_dir/'secondary.json').read_text())
+        output=Path(evidence['source_file'])
+        parsed=parse_secondary_structure_output(output,tool_name='PSIPRED',tool_version=evidence['tool_version'],
+            input_sha256=digest).model_dump(mode='json')
+        state=json.loads((output_dir/'native-state.json').read_text())
+        if state.get('status')!='validated' or state.get('identity',{}).get('input_sha256')!=digest:
+            raise ValueError('PSIPRED_requires_validated_exact_native_profile_state')
+        result['method_applicability']=state['method_applicability']
+        result['reported_homolog_count']=state['reported_homolog_count']
+        result['outputs']={'raw_output':str(output),'native_profile_state':str(output_dir/'native-state.json')}
     elif tool == "pscore":
         from igem_drylab.pscore_runner import parse_pscore_output
         output = output_dir / "pscore.txt"
@@ -289,7 +302,7 @@ def sequence_prediction_tools():
         Path(__file__).parents[1] / "deeptmhmm_runner.py",
         Path(__file__).parents[1] / "iupred_runner.py")
     implementation += (Path(__file__).parents[1]/"llps_artifacts.py", Path(__file__).parents[1]/"catgranule_runner.py")
-    implementation += (Path(__file__).parents[1]/'fuzdrop_runner.py',)
+    implementation += (Path(__file__).parents[1]/'fuzdrop_runner.py',Path(__file__).parents[1]/'psipred_runner.py')
     return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
         implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False,
@@ -298,6 +311,7 @@ def sequence_prediction_tools():
                             ("colabfold", "ColabFold enzyme / fusion prediction"),
                             ("pscore", "Original PScore — diagnostic LLPS propensity"),
                             ("jpred", "JPred — exact-sequence secondary structure"),
+                            ('psipred','PSIPRED — full exact-sequence original profile route'),
                             ("signalp", "SignalP 6 — actual full-fusion signal peptide"),
                             ("deeptmhmm", "DeepTMHMM 1 — actual full-fusion topology"),
                             ("tango", "Licensed TANGO — actual full-fusion aggregation"),

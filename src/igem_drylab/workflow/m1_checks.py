@@ -5,6 +5,7 @@ risk directions and ranking evidence are never synthesized by this path.
 """
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 
@@ -103,11 +104,14 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
     if observed["missing"]:
         return dict(schema_version="m1-method-check-v1", candidate_id=payload.item.id,
                     verdict="blocked", precheck=observed, missing=observed["missing"], screen=None)
+    secondary_evidence=secondary.get('parsed')
+    if secondary.get('method_applicability')=='no_reported_homologs_not_a_calibrated_hard_veto':
+        secondary_evidence=None  # Raw prediction stays in its native parent result.
     screen = screen_sequence_v3(features=features, sequence=payload.item.sequence,
         sequence_kind=payload.item.role, rules=payload.rules,
         disorder=DisorderEvidence.model_validate(disorder["parsed"]) if disorder.get("parsed") else None,
         seg=SegEvidence.model_validate(seg["parsed"]) if seg.get("parsed") else None,
-        secondary_structure=SecondaryStructureEvidence.model_validate(secondary["parsed"]) if secondary.get("parsed") else None,
+        secondary_structure=SecondaryStructureEvidence.model_validate(secondary_evidence) if secondary_evidence else None,
         protparam=compute_protparam_evidence(payload.item.sequence, input_sha256=features.sequence_sha256),
         fusion_evidence=fusion,full_fusion_sha256=features.sequence_sha256 if fusion else None,
         localization_context=payload.item.localization_context, require_external_evidence=True)
@@ -184,7 +188,8 @@ def m1_check_tools():
 
 
 def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: int | None = None,
-                comparison_contexts: dict[str,ComparisonContext] | None = None) -> Workflow:
+                comparison_contexts: dict[str,ComparisonContext] | None = None,
+                secondary_tool: Literal['jpred','psipred'] = 'jpred') -> Workflow:
     import yaml
     definitions, _ = M1FeatureDefinitions.from_yaml(default_config_path("m1_feature_definitions.yaml"))
     rules = M1V3Rules.model_validate(yaml.safe_load(default_config_path("m1_rules_v3.yaml").read_text()))
@@ -193,7 +198,7 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
     batch = MapSpec(items=ProjectInput(path=["sequences"]))
     checks = NodeInput(node_id="m1_fields", path=["items"])
     nodes = [WorkflowNode(id="m1_fields", label="M1 Step 1 — cheap sequence veto", tool_id="method.m1.precheck", inputs=inputs, map=batch)]
-    for tool in ("iupred2a", "seg", "jpred"):
+    for tool in ("iupred2a", "seg", secondary_tool):
         nodes.append(WorkflowNode(id="m1_"+tool, label="M1 Step 2 — real "+tool,
             tool_id="prediction."+tool, inputs={"prechecks": checks}, map=batch))
     for tool in ("signalp","deeptmhmm","tango"):
@@ -207,7 +212,7 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
                 "comparison_contexts": LiteralInput(value={key:value.model_dump(mode='json') for key,value in (comparison_contexts or {}).items()}),
                 "prechecks": checks, "disorder_results": NodeInput(node_id="m1_iupred2a", path=["items"]),
                 "seg_results": NodeInput(node_id="m1_seg", path=["items"]),
-                "secondary_results": NodeInput(node_id="m1_jpred", path=["items"]),
+                "secondary_results": NodeInput(node_id="m1_"+secondary_tool, path=["items"]),
                 "signalp_results":NodeInput(node_id="m1_signalp",path=["items"]),
                 "topology_results":NodeInput(node_id="m1_deeptmhmm",path=["items"]),
                 "aggregation_results":NodeInput(node_id="m1_tango",path=["items"]),
