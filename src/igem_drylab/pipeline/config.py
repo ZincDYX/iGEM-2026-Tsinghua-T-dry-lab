@@ -128,6 +128,12 @@ class ConstructDefinition(BaseModel):
     provenance: dict[str, Any] = Field(default_factory=dict)
     oc_truncation_mapping: TruncationMapping | None = None
 
+    def ordered_part_ids(self) -> list[str]:
+        if self.parts:
+            return [part.id for part in self.parts]
+        return [self.linker_ids[0] if token.lower()=='linker' and len(self.linker_ids)==1 else token
+                for token in (self.domain_order or self.components)]
+
     @model_validator(mode="after")
     def _parts_contract(self) -> "ConstructDefinition":
         if not self.parts and not self.components:

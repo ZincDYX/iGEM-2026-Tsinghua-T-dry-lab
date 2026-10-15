@@ -17,6 +17,9 @@ from .tools import NodeContext, ToolDefinition
 from igem_drylab.resources import default_config_path
 from igem_drylab.m1_prioritization import (PrioritizationPolicy, PrioritizationCandidate,
     M1PrioritizationInput, PredictorScore, ComparisonContext, prioritize_m1)
+from igem_drylab.pipeline.config import ConstructDefinition
+from igem_drylab.constructs.sequence_qc import assemble_and_validate_construct
+from igem_drylab.constructs.linker_features import normalize_amino_acid_sequence
 
 
 KINDS = {"idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "full_fusion"}
@@ -42,6 +45,111 @@ class M1DecisionInput(M1PrecheckInput):
     catgranule_results: list[dict] = Field(default_factory=list)
     fuzdrop_results: list[dict] = Field(default_factory=list)
     llps_import_results: list[dict] = Field(default_factory=list)
+    construct_context_results: list[dict] = Field(default_factory=list)
+
+
+class M1ConstructContextInput(Contract):
+    """Bind sourced ordered constructs to exact native full-fusion observations."""
+    constructs: list[ConstructDefinition]
+    sequences: list[SequenceRecord]
+    feature_definitions: M1FeatureDefinitions
+    rules: M1V3Rules
+    signalp_results: list[dict] = Field(default_factory=list)
+    topology_results: list[dict] = Field(default_factory=list)
+    aggregation_results: list[dict] = Field(default_factory=list)
+
+
+def _fusion_observations(item, collections):
+    digest=sha256(item.sequence.encode()).hexdigest()
+    merged=dict(input_sha256=digest,provenance={},native_formats={},native_rules={})
+    for rows in collections:
+        found=[row for row in rows if row.get('candidate_id')==item.id]
+        if len(found)>1:raise ValueError('M1_duplicate_full_fusion_tool_result')
+        if not found:continue
+        if found[0].get('input_sequence_sha256')!=digest:
+            raise ValueError('M1_predecessor_sequence_identity_mismatch')
+        for key,value in (found[0].get('parsed') or {}).items():
+            if key in {'provenance','native_formats','native_rules'}:merged[key].update(value)
+            elif value is not None and value!=[]:
+                if key in merged and merged[key]!=value:
+                    raise ValueError('M1_conflicting_full_fusion_tool_observations')
+                merged[key]=value
+    return FusionToolEvidence.model_validate(merged)
+
+
+def bind_construct_contexts(payload: M1ConstructContextInput) -> dict:
+    """Use declared part boundaries, never substring matching or new designs.
+
+    DNA/cloning QC remains independent of protein-tool negative screens. Missing
+    CDS, cloning route or native evidence is retained, not inferred from an alias.
+    """
+    sequences={item.id:item for item in payload.sequences}
+    if len(sequences)!=len(payload.sequences) or len({c.id for c in payload.constructs})!=len(payload.constructs):
+        raise ValueError('M1_context_requires_distinct_input_identities')
+    digest=sha256(payload.feature_definitions.model_dump_json().encode()).hexdigest()
+    results=[]
+    for construct in payload.constructs:
+        parts={key:item.sequence for key,item in sequences.items()}
+        for key,value in {**construct.sequences,**{p.id:p.sequence for p in construct.parts if p.sequence is not None}}.items():
+            if key in parts and normalize_amino_acid_sequence(parts[key])!=normalize_amino_acid_sequence(value):
+                raise ValueError('M1_declared_part_sequence_conflicts_with_project:'+key)
+            parts[key]=value
+        qc=assemble_and_validate_construct(construct_id=construct.id,ordered_part_ids=construct.ordered_part_ids(),
+            part_sequences=parts,coding_dna=construct.coding_dna,
+            forbidden_restriction_sites=construct.forbidden_restriction_sites,require_sequence_evidence=True)
+        row=dict(construct_id=construct.id,source_reference=construct.sequence_source_ref,
+            localization_context=construct.localization_context,sequence_qc=qc.model_dump(mode='json'),
+            part_bindings=[],fusion_evidence=None,fusion_screen=None,missing=[])
+        full=sequences.get(construct.id)
+        if full is None:row['missing'].append('registered_complete_construct_sequence')
+        elif full.role!='full_fusion' or qc.protein_sha256!=sha256(full.sequence.encode()).hexdigest():
+            row['missing'].append('declared_parts_do_not_match_registered_complete_construct')
+        if not construct.sequence_source_ref:row['missing'].append('construct_sequence_source_reference')
+        if construct.localization_context is None:row['missing'].append('declared_construct_localization_context')
+        elif full and construct.localization_context!=full.localization_context:
+            row['missing'].append('construct_localization_context_mismatch')
+        kinds={p.id:p.kind for p in construct.parts}
+        kinds.update({key:'idr' for key in construct.idr_ids})
+        for boundary in qc.part_boundaries:
+            row['part_bindings'].append({**boundary.model_dump(),
+                'sequence_sha256':sha256(normalize_amino_acid_sequence(parts[boundary.part_id]).encode()).hexdigest(),
+                'kind':kinds.get(boundary.part_id)})
+        if not row['missing'] and full is not None:
+            fusion=_fusion_observations(full,(payload.signalp_results,payload.topology_results,payload.aggregation_results))
+            features=compute_sequence_features(full.sequence,definitions=payload.feature_definitions,definitions_sha256=digest)
+            screen=screen_sequence_v3(sequence=full.sequence,features=features,sequence_kind='full_fusion',
+                rules=payload.rules,fusion_evidence=fusion,full_fusion_sha256=qc.protein_sha256,
+                localization_context=full.localization_context)
+            row.update(fusion_evidence=fusion.model_dump(mode='json'),fusion_screen=screen.model_dump(mode='json'))
+        row['claim_scope']='construct_binding_and_full_fusion_screen_not_complete_M1_approval'
+        results.append(row)
+    return dict(items=results,count=len(results),scope='sourced_construct_context_not_automatic_M1_approval')
+
+
+def _context_tool(payload: M1ConstructContextInput, context: NodeContext) -> dict:
+    for rows in (payload.signalp_results,payload.topology_results,payload.aggregation_results):
+        if rows and not any(parent['output'].get('items')==rows for parent in context.upstream_results):
+            raise ValueError('M1_requires_registered_upstream_observations')
+    return bind_construct_contexts(payload)
+
+
+def screen_part_contexts(screen, sequence, rules, contexts):
+    """Apply the same original screen separately to every declared context."""
+    results=[]
+    for bound in contexts:
+        matched=[p for p in bound['part_bindings'] if p['kind']==screen.sequence_kind and p['sequence_sha256']==screen.features.sequence_sha256]
+        if not matched or bound['missing'] or bound['localization_context']!=screen.localization_context:continue
+        qc=bound['sequence_qc'];fusion_data=bound.get('fusion_evidence')
+        if not fusion_data:continue
+        contextual=screen_sequence_v3(features=screen.features,sequence=sequence,sequence_kind=screen.sequence_kind,
+            rules=rules,disorder=screen.disorder,seg=screen.seg,secondary_structure=screen.secondary_structure,
+            protparam=screen.protparam,fusion_evidence=FusionToolEvidence.model_validate(fusion_data),
+            full_fusion_sha256=qc['protein_sha256'],full_fusion_sequence=qc['full_protein_sequence'],
+            localization_context=screen.localization_context)
+        results.append(dict(construct_id=bound['construct_id'],part_occurrences=matched,
+            screen=contextual.model_dump(mode='json'),sequence_qc=qc,
+            claim_scope='part_screen_in_declared_construct_not_complete_M1_approval'))
+    return results
 
 
 def precheck(payload: M1PrecheckInput, context: NodeContext) -> dict:
@@ -69,7 +177,8 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
     # not browser-supplied literal dictionaries pointing at arbitrary files.
     for rows in (payload.prechecks, payload.disorder_results, payload.seg_results, payload.secondary_results,
                  *[r for r in (payload.signalp_results,payload.topology_results,payload.aggregation_results,
-                    payload.pscore_results, payload.catgranule_results, payload.fuzdrop_results,payload.llps_import_results) if r]):
+                    payload.pscore_results, payload.catgranule_results, payload.fuzdrop_results,payload.llps_import_results,
+                    payload.construct_context_results) if r]):
         if not any(parent["output"].get("items") == rows for parent in context.upstream_results):
             raise ValueError("M1_requires_registered_upstream_observations")
     def selected(rows):
@@ -89,18 +198,7 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
     secondary = selected(payload.secondary_results)
     fusion = None
     if payload.item.role == "full_fusion":
-        merged = {"input_sha256":observed["input_sequence_sha256"],"provenance":{},"native_formats":{},"native_rules":{}}
-        for collection in (payload.signalp_results,payload.topology_results,payload.aggregation_results):
-            if not collection:
-                continue
-            raw = selected(collection).get("parsed")
-            if raw:
-                for key,value in raw.items():
-                    if key in {"provenance","native_formats","native_rules"}:
-                        merged[key].update(value)
-                    elif value is not None and value != []:
-                        merged[key]=value
-        fusion = FusionToolEvidence.model_validate(merged)
+        fusion=_fusion_observations(payload.item,(payload.signalp_results,payload.topology_results,payload.aggregation_results))
     if observed["missing"]:
         return dict(schema_version="m1-method-check-v1", candidate_id=payload.item.id,
                     verdict="blocked", precheck=observed, missing=observed["missing"], screen=None)
@@ -115,6 +213,17 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
         protparam=compute_protparam_evidence(payload.item.sequence, input_sha256=features.sequence_sha256),
         fusion_evidence=fusion,full_fusion_sha256=features.sequence_sha256 if fusion else None,
         localization_context=payload.item.localization_context, require_external_evidence=True)
+    context_screens=screen_part_contexts(screen,payload.item.sequence,payload.rules,payload.construct_context_results)
+    if payload.item.role=='full_fusion':
+        fusion_missing=screen.missing_required_evidence
+        fusion_status='blocked' if fusion_missing else 'completed'
+    elif context_screens:
+        fusion_missing=sorted({missing for row in context_screens for missing in
+            [*row['screen']['missing_required_evidence'],*row['sequence_qc']['missing_inputs'],*row['sequence_qc']['errors']]})
+        fusion_status='partial' if fusion_missing else 'completed'
+    else:
+        fusion_status='blocked'
+        fusion_missing=['declared_construct_context_with_native_full_fusion_evidence']
     prioritization = None
     predictors = []
     for collection in (payload.pscore_results, payload.catgranule_results,payload.fuzdrop_results,payload.llps_import_results):
@@ -132,15 +241,14 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
         prioritization=prioritization,
         predictor_scores=[score.model_dump(mode="json") for score in predictors],
         comparison_context=payload.comparison_contexts[payload.item.id].model_dump(mode='json') if payload.item.id in payload.comparison_contexts else None,
+        construct_context_screens=context_screens,
         steps=[dict(step="1", name="Cheap sequence fields", status="reject" if observed["hard_reject_reasons"] else "completed"),
                dict(step="2", name="External fragment predictors", status="not_eligible" if not observed["eligible_for_tools"] else
                     "completed" if all(row.get("parse_status") == "succeeded" for row in (disorder, seg, secondary)) else "partial",
                     missing=[label for row, label in ((disorder, "IUPred"), (seg, "SEG"), (secondary, "exact-sequence PSIPRED/JPred secondary structure"))
                              if row.get("parse_status") != "succeeded"]),
-               dict(step="3", name="Actual full fusion checks", status="completed" if payload.item.role=="full_fusion" and not screen.missing_required_evidence else "blocked",
-                    missing=screen.missing_required_evidence if payload.item.role=="full_fusion" else
-                        ["construct assembly binding", "SignalP", "DeepTMHMM", "forbidden DNA sites"]+
-                        ([] if payload.rules.aggregation_exclusion_reference else ["TANGO/PASTA"]),
+               dict(step="3", name="Actual full fusion checks", status=fusion_status,
+                    missing=fusion_missing,construct_count=len(context_screens),
                     excluded_checks=screen.excluded_checks),
                dict(step="4", name="Soft risk review", status="completed" if priority and (priority['risk'] is not None or 'soft_review_flags' in priority) else "blocked",
                     missing=[] if priority and (priority['risk'] is not None or 'soft_review_flags' in priority) else ["reviewed complete risk directions"]),
@@ -186,13 +294,19 @@ def m1_check_tools():
             ToolDefinition("method.m1.decision", "M1 evidence and missing-step decision", "Consume exact real IUPred/SEG outputs; missing evidence is not a pass.",
                 "1", M1DecisionInput, decision, "scientific_project", implementation_files=implementation),
             ToolDefinition("method.m1.rank", "M1 batch ranking", "Original reviewed formula applied to all registered candidates; never assign default policy.",
-                "1", M1BatchRankInput, batch_rank, "scientific_project", implementation_files=implementation)]
+                "1", M1BatchRankInput, batch_rank, "scientific_project", implementation_files=implementation),
+            ToolDefinition('method.m1.construct_contexts','Bind declared full-fusion contexts',
+                'Reuse exact native full-fusion results and original ordered-part/DNA QC, not substring guesses.',
+                '1',M1ConstructContextInput,_context_tool,'scientific_project',
+                implementation_files=(*implementation,Path(__file__).parents[1]/'constructs/sequence_qc.py',
+                    Path(__file__).parents[1]/'pipeline/config.py'))]
 
 
 def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: int | None = None,
                 comparison_contexts: dict[str,ComparisonContext] | None = None,
                 secondary_tool: Literal['jpred','psipred'] = 'jpred',
-                aggregation_exclusion_reference: str | None = None) -> Workflow:
+                aggregation_exclusion_reference: str | None = None,
+                constructs: list[ConstructDefinition] | None = None) -> Workflow:
     import yaml
     definitions, _ = M1FeatureDefinitions.from_yaml(default_config_path("m1_feature_definitions.yaml"))
     rules = M1V3Rules.model_validate({**yaml.safe_load(default_config_path("m1_rules_v3.yaml").read_text()),
@@ -211,9 +325,18 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
     for tool in ("pscore", "catgranule",'fuzdrop'):
         nodes.append(WorkflowNode(id="m1_"+tool, label="M1 original LLPS — "+tool,
             tool_id="prediction."+tool, inputs={"prechecks": checks}, map=batch))
+    if constructs:
+        nodes.append(WorkflowNode(id='m1_construct_contexts',label='Bind sourced construct contexts and DNA QC',
+            tool_id='method.m1.construct_contexts',inputs={**inputs,
+                'constructs':LiteralInput(value=[c.model_dump(mode='json') for c in constructs]),
+                'sequences':ProjectInput(path=['sequences']),
+                'signalp_results':NodeInput(node_id='m1_signalp',path=['items']),
+                'topology_results':NodeInput(node_id='m1_deeptmhmm',path=['items']),
+                'aggregation_results':LiteralInput(value=[]) if rules.aggregation_exclusion_reference else NodeInput(node_id='m1_tango',path=['items'])}))
     nodes.append(WorkflowNode(id="m1_decisions", label="M1 decisions and explicit unfinished steps", tool_id="method.m1.decision",
         inputs={**inputs, "prioritization_policy": LiteralInput(value=policy.model_dump(mode='json') if policy else None),
                 "comparison_contexts": LiteralInput(value={key:value.model_dump(mode='json') for key,value in (comparison_contexts or {}).items()}),
+                'construct_context_results':NodeInput(node_id='m1_construct_contexts',path=['items']) if constructs else LiteralInput(value=[]),
                 "prechecks": checks, "disorder_results": NodeInput(node_id="m1_iupred2a", path=["items"]),
                 "seg_results": NodeInput(node_id="m1_seg", path=["items"]),
                 "secondary_results": NodeInput(node_id="m1_"+secondary_tool, path=["items"]),

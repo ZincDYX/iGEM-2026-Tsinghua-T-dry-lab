@@ -25,6 +25,7 @@ from igem_drylab.template_geometry import RecruitmentPosePreparationInput
 from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeometryInput, RecruitmentEnsembleInput
 from igem_drylab.fusion_tool_import import FusionImportInput
 from igem_drylab.m1_prioritization import M1PrioritizationInput
+from igem_drylab.workflow.m1_checks import M1ConstructContextInput
 from igem_drylab.llps_artifacts import LLPSImportInput
 from igem_drylab.mpipi import MpipiAnalysisInput
 from igem_drylab.membrane_geometry import MembraneGeometryInput
@@ -41,6 +42,11 @@ server = MCPServer(
         "be returned as blocked or insufficient_data and must never be replaced by guessed values."
     ),
 )
+
+
+@server.tool(name='igem.m1.bind_construct_contexts',title='Bind sourced full-fusion contexts',structured_output=True)
+def m1_bind_construct_contexts(payload: M1ConstructContextInput) -> dict[str,Any]:
+    return _call_local('igem.m1.bind_construct_contexts',{'payload':payload.model_dump(mode='json')})
 
 
 @server.tool(name="igem.m1.parse_mpipi", title="Original Mpipi raw simulation observations", structured_output=True)

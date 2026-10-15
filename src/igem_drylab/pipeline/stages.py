@@ -212,16 +212,7 @@ def _load_m1_predictor_evidence(path: Path | None) -> dict[str, dict[str, object
 
 
 def _ordered_construct_parts(definition: ConstructDefinition) -> list[str]:
-    if definition.parts:
-        return [part.id for part in definition.parts]
-    tokens = definition.domain_order or definition.components
-    ordered: list[str] = []
-    for token in tokens:
-        if token.lower() == "linker" and len(definition.linker_ids) == 1:
-            ordered.append(definition.linker_ids[0])
-        else:
-            ordered.append(token)
-    return ordered
+    return definition.ordered_part_ids()
 
 
 def _read_fasta_sequences(path: Path) -> dict[str, str]:

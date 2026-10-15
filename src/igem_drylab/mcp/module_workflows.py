@@ -15,6 +15,7 @@ from igem_drylab.template_geometry import (AssemblyExpansionInput, expand_actual
     RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble)
 from igem_drylab.fusion_tool_import import FusionImportInput, import_fusion_tools
 from igem_drylab.m1_prioritization import M1PrioritizationInput, prioritize_m1
+from igem_drylab.workflow.m1_checks import M1ConstructContextInput,bind_construct_contexts
 from igem_drylab.llps_artifacts import LLPSImportInput, import_llps_results
 from igem_drylab.mpipi import MpipiAnalysisInput, parse_mpipi
 from igem_drylab.phase_profile_analysis import PhaseProfileAnalysisInput,analyse_phase_profile
@@ -59,6 +60,7 @@ BINDINGS.extend([
     binding("igem.m2.recruitment_ensemble", "Retain independent conformation uncertainty", RecruitmentEnsembleInput, calculate_recruitment_ensemble),
 ])
 BINDINGS.extend([
+    binding('igem.m1.bind_construct_contexts','Bind sourced constructs to actual full-fusion evidence',M1ConstructContextInput,bind_construct_contexts),
     binding("igem.m1.import_fusion_results","Import actual native full-fusion results",FusionImportInput,import_fusion_tools),
     binding("igem.m1.import_llps_results", "Read original LLPS global scores and profiles", LLPSImportInput, import_llps_results),
     binding("igem.m1.prioritize","Apply reviewed risk and selected original/descriptive comparison",M1PrioritizationInput,prioritize_m1),
