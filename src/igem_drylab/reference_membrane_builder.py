@@ -36,6 +36,9 @@ class ReferenceMembraneInput:
     packmol_executable: str
     packing_tolerance_angstrom: float
     initial_head_band_halfwidth_angstrom: float
+    # Construction controls only; neither modifies the native force field.
+    conformers_per_species_per_leaflet: int | None = None
+    packing_timeout_seconds: int | None = None
 
 
 def read_crd(path):
@@ -84,7 +87,16 @@ def pack_original_conformers(root, molecules, edge, planes, request):
     box=np.array([edge,edge,request.initial_box_z_nm])*10
     lines=[f'tolerance {request.packing_tolerance_angstrom}', 'filetype xyz',
         'output packed.xyz',f'seed {request.seed}',f'pbc {box[0]} {box[1]} {box[2]}']
-    for index,(species,leaflet,names,xyz,heads) in enumerate(molecules):
+    # PACKMOL optimizes molecule *types*. A unique type per individual lipid
+    # made the previous native construction impractically slow. Repeated
+    # original conformers can share a type without changing counts or atoms.
+    groups={}
+    for molecule in molecules:
+        species,leaflet,names,xyz,heads=molecule
+        groups.setdefault((species,leaflet,xyz.tobytes()),[]).append(molecule)
+    ordered=[m for group in groups.values() for m in group]
+    for index,group in enumerate(groups.values()):
+        species,leaflet,names,xyz,heads=group[0]
         name=f'packing-inputs/molecule-{index}.xyz'
         with (root/name).open('w') as stream:
             stream.write(str(len(names))+'\noriginal native atom order\n')
@@ -98,23 +110,24 @@ def pack_original_conformers(root, molecules, edge, planes, request):
         carbons=[i for i,atom in enumerate(names) if atom.startswith('C')]
         tail=max(carbons,key=lambda i:xyz[i,2]) if leaflet==0 else min(carbons,key=lambda i:xyz[i,2])
         side='above' if leaflet==0 else 'below'
-        lines += [f'structure {name}','number 1','atoms '+' '.join(str(i+1) for i in heads),
+        lines += [f'structure {name}',f'number {len(group)}','atoms '+' '.join(str(i+1) for i in heads),
             f'inside box 0. 0. {z-width} {box[0]} {box[1]} {z+width}','end atoms',
             f'atoms {tail+1}',f'{side} plane 0. 0. 1. {z}','end atoms','end structure']
     (root/'packmol.inp').write_text('\n'.join(lines)+'\n')
     with (root/'packmol.inp').open() as input_stream,(root/'00-native-PACKMOL.log').open('w') as log:
-        subprocess.run([request.packmol_executable],cwd=root,stdin=input_stream,stdout=log,stderr=subprocess.STDOUT,check=True)
+        subprocess.run([request.packmol_executable],cwd=root,stdin=input_stream,stdout=log,stderr=subprocess.STDOUT,check=True,
+            timeout=request.packing_timeout_seconds)
     if 'Success!' not in (root/'00-native-PACKMOL.log').read_text():
         raise ValueError('native_periodic_packing_not_converged_no_EM_or_MD')
     packed=(root/'packed.xyz').read_text().splitlines()
     if int(packed[0])!=sum(len(m[2]) for m in molecules) or len(packed[2:])!=int(packed[0]):
         raise ValueError('native_packing_did_not_preserve_complete_atom_count')
     coordinates=np.array([[float(v)/10 for v in line.split()[1:4]] for line in packed[2:]])
-    expected=[atom[0] for m in molecules for atom in m[2]]
+    expected=[atom[0] for m in ordered for atom in m[2]]
     if [line.split()[0] for line in packed[2:]]!=expected or not np.all(np.isfinite(coordinates)):
         raise ValueError('native_packing_changed_original_atom_order_or_identity')
     positions={species:[] for species in request.molecule_counts};offset=0
-    for species,leaflet,names,xyz,heads in molecules:
+    for species,leaflet,names,xyz,heads in ordered:
         positions[species].append(coordinates[offset:offset+len(names)]);offset+=len(names)
     return positions
 
@@ -125,7 +138,7 @@ def em_diagnostic(log, resolved_mdp):
     value=float(force[1]) if force else None;threshold=float(target[1]) if target else None
     finite=value is not None and np.isfinite(value)
     return dict(max_force_kJ_mol_nm=value if finite else None,EM_target_kJ_mol_nm=threshold,
-        EM_max_force_finite=bool(finite),native_EM_target_met=bool(finite and threshold is not None and value<=threshold))
+        EM_max_force_finite=bool(finite),native_EM_target_met=bool(finite and threshold is not None and value<threshold))
 
 
 def build_reference(request):
@@ -136,6 +149,10 @@ def build_reference(request):
         raise ValueError('reference_water_box_and_salt_must_be_explicit')
     if request.packing_tolerance_angstrom<=0 or request.initial_head_band_halfwidth_angstrom<=0:
         raise ValueError('initial_packing_geometry_must_be_explicit')
+    if request.conformers_per_species_per_leaflet is not None and not 1<=request.conformers_per_species_per_leaflet<=2000:
+        raise ValueError('declared_conformer_pool_size_outside_original_library')
+    if request.packing_timeout_seconds is not None and request.packing_timeout_seconds<=0:
+        raise ValueError('packing_timeout_must_be_positive')
     root=Path(request.output_directory);root.mkdir(parents=True,exist_ok=True)
     if any(root.iterdir()):raise ValueError('reference_membrane_build_requires_new_directory')
     templates=Path(request.native_template_root);ff=templates/'charmm36-jul2022.ff'
@@ -158,10 +175,12 @@ def build_reference(request):
         raise ValueError('native_reference_charge_differs_from_declared_recipe')
     molecules=[];choices=[]
     for leaflet in range(2):
+        pools={s:rng.choice(files[s],size=request.conformers_per_species_per_leaflet,replace=False).tolist()
+            for s in counts} if request.conformers_per_species_per_leaflet is not None else files
         species_order=[species for species,count in counts.items() for _ in range(count//2)]
         rng.shuffle(species_order)
         for species in species_order:
-            conformer=files[species][int(rng.integers(len(files[species])))];names,xyz=read_crd(conformer)
+            conformer=Path(pools[species][int(rng.integers(len(pools[species])))]);names,xyz=read_crd(conformer)
             lookup={name:i for i,name in enumerate(names)}
             if set(names)!=set(definitions[species]):raise ValueError('original_conformer_atoms_differ_from_native_C36_topology')
             xyz=xyz[[lookup[name] for name in definitions[species]]]
@@ -170,7 +189,8 @@ def build_reference(request):
             xyz-=xyz[heads].mean(axis=0)
             # Original library phospholipid tails point toward negative z.
             if leaflet==0:xyz=xyz*np.array([1.,-1.,-1.])
-            angle=float(rng.uniform(0,2*np.pi));c,s=np.cos(angle),np.sin(angle)
+            angle=float(rng.uniform(0,2*np.pi)) if request.conformers_per_species_per_leaflet is None else 0.
+            c,s=np.cos(angle),np.sin(angle)
             xyz=xyz@np.array([[c,s,0],[-s,c,0],[0,0,1.]])
             molecules.append((species,leaflet,definitions[species],xyz,heads))
             choices.append(dict(species=species,leaflet=leaflet,conformer=str(conformer),initial_rotation_radian=angle))

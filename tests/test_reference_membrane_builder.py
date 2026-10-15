@@ -44,3 +44,27 @@ def test_native_successful_exit_is_not_a_minimization_pass(force):
 def test_finite_native_EM_target_is_checked():
     result=em_diagnostic('Maximum force = 999.0 on atom 1','emtol = 1000\n')
     assert result['native_EM_target_met'] and result['max_force_kJ_mol_nm']==999
+    assert not em_diagnostic('Maximum force = 1000','emtol = 1000\n')['native_EM_target_met']
+
+
+@pytest.mark.data_contract
+def test_grouped_original_conformers_preserve_all_atoms_and_species_counts(tmp_path,monkeypatch):
+    import numpy as np
+    from types import SimpleNamespace
+    from igem_drylab.reference_membrane_builder import pack_original_conformers
+    xyz=np.array([[0.,0.,0.],[0.,0.,1.]])
+    molecules=[('A',0,['P','C'],xyz,[0]),('B',1,['P','C'],xyz,[0]),('A',0,['P','C'],xyz,[0])]
+    request=SimpleNamespace(initial_box_z_nm=8.,packing_tolerance_angstrom=2.,seed=1,
+        initial_head_band_halfwidth_angstrom=2.,packmol_executable='synthetic-fixture-not-native-job',
+        packing_timeout_seconds=5,molecule_counts={'A':2,'B':1})
+    def synthetic(command,**kwargs):
+        assert kwargs['timeout']==5
+        # Output order follows the grouped native input: A, A, B.
+        (tmp_path/'packed.xyz').write_text('6\nsynthetic-format-fixture\nP 0 0 10\nC 0 0 20\nP 10 0 10\nC 10 0 20\nP 20 0 10\nC 20 0 20\n')
+        kwargs['stdout'].write('Success!\n');kwargs['stdout'].flush()
+    monkeypatch.setattr('igem_drylab.reference_membrane_builder.subprocess.run',synthetic)
+    result=pack_original_conformers(tmp_path,molecules,10.,np.array([-2.,2.]),request)
+    assert len(result['A'])==2 and len(result['B'])==1
+    assert result['B'][0][0].tolist()==[2.,0.,1.]
+    text=(tmp_path/'packmol.inp').read_text()
+    assert text.count('\nstructure ')==2 and '\nnumber 2\n' in text
