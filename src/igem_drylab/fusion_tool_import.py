@@ -109,6 +109,52 @@ class FusionImportInput(ScientificAnalysisInput):
     output_dir: Path
 
 
+class FusionBatchObservationInput(ScientificAnalysisInput):
+    """Native batch observations without guessing construct or localization."""
+    fasta: Path
+    native_output: Path
+    native_format: Literal['signalp6_summary','deeptmhmm1_3line']
+    tool_version: str = Field(min_length=1)
+    execution_binding: Path
+
+
+def read_native_fusion_batch(payload: FusionBatchObservationInput) -> dict:
+    from Bio import SeqIO
+    name,tool=('SignalP','signalp') if payload.native_format=='signalp6_summary' else ('DeepTMHMM','deeptmhmm')
+    binding=json.loads(payload.execution_binding.read_text())
+    fasta_hash=sha256(payload.fasta.read_bytes()).hexdigest()
+    output_hash=sha256(payload.native_output.read_bytes()).hexdigest()
+    if (binding['origin']!='automated_batch' or binding['returncode']!=0 or binding['tool_name']!=name
+            or binding['tool_version']!=payload.tool_version or binding['input_fasta_sha256']!=fasta_hash
+            or binding['output_sha256']!=output_hash):
+        raise ValueError('native_batch_input_output_or_execution_binding_mismatch')
+    native_file=Path(binding['native_execution_record'])
+    if sha256(native_file.read_bytes()).hexdigest()!=binding['native_execution_sha256']:
+        raise ValueError('native_batch_execution_record_changed')
+    native=json.loads(native_file.read_text())
+    if (native['tool']!=tool or native['mode']!='external' or native['status']!='succeeded' or native['return_code']!=0
+            or native['input_sha256'].get(str(payload.fasta.resolve()))!=fasta_hash
+            or not payload.native_output.resolve().is_relative_to(Path(native['output_dir']).resolve())):
+        raise ValueError('native_batch_job_does_not_bind_this_input_and_output_directory')
+    records=list(SeqIO.parse(payload.fasta,'fasta'))
+    if not records or len({r.id for r in records})!=len(records):
+        raise ValueError('native_batch_requires_unique_nonempty_source_records')
+    rows=[]
+    for record in records:
+        sequence=normalize_amino_acid_sequence(str(record.seq))
+        row=dict(source_record_id=record.id,sequence_sha256=sha256(sequence.encode()).hexdigest(),length=len(sequence),
+            parse_status='succeeded',observations=None,formal_M1_pass=False)
+        try:
+            row['observations']=parse_native_artifact(NativeFusionArtifact(path=payload.native_output,
+                tool_version=payload.tool_version,format=payload.native_format,record_id=record.id),sequence)
+        except ValueError as error:
+            row.update(parse_status='blocked',error=str(error))
+        rows.append(row)
+    return dict(schema_version='native-fusion-batch-observations-v1',tool=name,tool_version=payload.tool_version,
+        input_fasta_sha256=fasta_hash,output_sha256=output_hash,items=rows,
+        scope='actual_automated_batch_observations_not_construct_localization_or_formal_M1_approval')
+
+
 def import_fusion_tools(payload: FusionImportInput) -> dict:
     """Import actual raw results; review binds their job to the submitted input."""
     sequence = normalize_amino_acid_sequence(payload.sequence)

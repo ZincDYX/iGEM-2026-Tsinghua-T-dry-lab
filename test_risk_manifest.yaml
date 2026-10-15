@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: NATIVE_BATCH_SOURCE_CONTEXT_SEPARATION
+    group: data_contract
+    test_nodeids: ["tests/test_m1_completion.py::test_native_batch_preserves_original_ids_and_does_not_invent_localization_or_pass", "tests/test_m1_completion.py::test_native_batch_missing_record_is_a_gap_not_a_zero_topology", "tests/test_m1_completion.py::test_native_batch_reader_uses_actual_stdio_shared_implementation"]
+    requirement_or_formula_source: complete source FASTA coverage without invented construct definitions or localization
+    oracle_type: independent synthetic native rows and original IDs; input/execution byte binding; real stdio replay
+    fixture_scope: synthetic format and transport, not actual predictor execution or biological validity
+    formula_version: native-fusion-batch-observations-v1
+    units: amino-acid identity; native categorical observations
+    tolerance_basis: exact record IDs and sequences; missing row is null/blocked, never a zero count or pass
+    expected_faults: [lost_source_records, fabricated_cytosolic_context, missing_record_as_zero, changed_native_execution, raw_prediction_as_formal_M1_pass]
   - risk_id: AUTHORIZED_SOURCE_PRESERVING_IDR_DESIGNS
     group: data_contract
     test_nodeids: ["tests/test_m1_method_workflow.py::test_authorized_IDR_substitution_preserves_both_backbones_and_drops_inapplicable_evidence"]

@@ -16,6 +16,7 @@ from igem_drylab.template_geometry import RecruitmentPosePreparationInput, prepa
 from igem_drylab.template_geometry import (AssemblyExpansionInput, expand_actual_fusion,
     RecruitmentGeometryInput, calculate_recruitment_geometry, RecruitmentEnsembleInput, calculate_recruitment_ensemble)
 from igem_drylab.fusion_tool_import import FusionImportInput, import_fusion_tools
+from igem_drylab.fusion_tool_import import FusionBatchObservationInput, read_native_fusion_batch
 from igem_drylab.m1_prioritization import M1PrioritizationInput, prioritize_m1
 from igem_drylab.workflow.m1_checks import M1ConstructContextInput,bind_construct_contexts
 from igem_drylab.workflow.m1_checks import IDRSubstitutionInput,substitute_declared_idrs
@@ -68,6 +69,7 @@ BINDINGS.extend([
 BINDINGS.extend([
     binding('igem.m1.bind_construct_contexts','Bind sourced constructs to actual full-fusion evidence',M1ConstructContextInput,bind_construct_contexts),
     binding("igem.m1.import_fusion_results","Import actual native full-fusion results",FusionImportInput,import_fusion_tools),
+    binding('igem.m1.read_native_fusion_batch','Read actual full-sequence batch predictions without inventing construct context',FusionBatchObservationInput,read_native_fusion_batch),
     binding("igem.m1.import_llps_results", "Read original LLPS global scores and profiles", LLPSImportInput, import_llps_results),
     binding("igem.m1.prioritize","Apply reviewed risk and selected original/descriptive comparison",M1PrioritizationInput,prioritize_m1),
     binding("igem.m1.parse_mpipi", "Inspect original Mpipi raw observations without inventing an LLPS score", MpipiAnalysisInput, parse_mpipi),

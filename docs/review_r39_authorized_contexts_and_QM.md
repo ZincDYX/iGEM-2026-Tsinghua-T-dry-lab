@@ -40,6 +40,20 @@ records still required exact full-fusion models when this replay was made. New
 model jobs and their current states belong to the private execution ledger, not
 to static claims of completion in this document.
 
+## Source FASTA batches are not backbone substitutions
+
+An exact complete-sequence audit of the separate 120-record direct-fusion FASTA
+found only five previously covered records. The 236 authorized computational
+designs do not silently replace those original inputs. Remaining source sequences
+can be run as native batches without inventing their localization or parts.
+
+`igem.m1.read_native_fusion_batch` reuses the existing SignalP/DeepTMHMM native
+parsers, validates the original batch execution/input/output binding and retains
+every original record ID. Missing or ambiguous native records remain gaps, not
+zero counts. It reports observations only: no default cytosolic context, manual
+reviewer signature or formal M1 pass is manufactured. Complete construct/source
+annotation is still needed before context-dependent M1/M2 assessment.
+
 ## QM targets before CHARMM fitting
 
 `igem.m2.prepare_qm_compound` rebuilds an explicitly declared model-compound

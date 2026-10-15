@@ -10,6 +10,67 @@ from igem_drylab.constructs.linker_features import (FusionToolEvidence,M1Feature
 from igem_drylab.m1_prioritization import (PrioritizationPolicy,M1PrioritizationInput,PrioritizationCandidate,prioritize_m1)
 
 
+def batch_fixture(tmp_path,format):
+    from igem_drylab.fusion_tool_import import FusionBatchObservationInput
+    fasta=tmp_path/'source.fasta';fasta.write_text('>first\nGGGSS\n>second\nSSGGS\n')
+    output=tmp_path/'native.txt'
+    tool='signalp' if format=='signalp6_summary' else 'deeptmhmm'
+    if tool=='signalp':output.write_text('# SignalP-6.0\n# ID\tPrediction\tOTHER\tSP(Sec/SPI)\tCS Position\nfirst\tOTHER\t1\t0\t\nsecond\tOTHER\t1\t0\t\n')
+    else:output.write_text('>first | GLOB\nGGGSS\nIIIII\n>second | GLOB\nSSGGS\nIIIII\n')
+    native=tmp_path/'synthetic-native-job.json'
+    native.write_text(json.dumps(dict(tool=tool,mode='external',status='succeeded',return_code=0,
+        input_sha256={str(fasta.resolve()):sha256(fasta.read_bytes()).hexdigest()},output_dir=str(tmp_path))))
+    binding=tmp_path/'binding.json'
+    binding.write_text(json.dumps(dict(origin='automated_batch',returncode=0,tool_name='SignalP' if tool=='signalp' else 'DeepTMHMM',
+        tool_version='synthetic fixture, not a real executed tool',input_fasta_sha256=sha256(fasta.read_bytes()).hexdigest(),
+        output_sha256=sha256(output.read_bytes()).hexdigest(),native_execution_record=str(native),
+        native_execution_sha256=sha256(native.read_bytes()).hexdigest())))
+    return FusionBatchObservationInput(fasta=fasta,native_output=output,native_format=format,
+        tool_version='synthetic fixture, not a real executed tool',execution_binding=binding)
+
+
+@pytest.mark.data_contract
+@pytest.mark.parametrize('format',['signalp6_summary','deeptmhmm1_3line'])
+def test_native_batch_preserves_original_ids_and_does_not_invent_localization_or_pass(tmp_path,format):
+    from igem_drylab.fusion_tool_import import read_native_fusion_batch
+    payload=batch_fixture(tmp_path,format);result=read_native_fusion_batch(payload)
+    assert [r['source_record_id'] for r in result['items']]==['first','second']
+    assert all(r['parse_status']=='succeeded' and not r['formal_M1_pass'] for r in result['items'])
+    assert all('localization_context' not in r for r in result['items'])
+    payload.fasta.write_text('>first\nAGGSS\n>second\nSSGGS\n')
+    with pytest.raises(ValueError,match='binding_mismatch'):read_native_fusion_batch(payload)
+
+
+@pytest.mark.data_contract
+def test_native_batch_missing_record_is_a_gap_not_a_zero_topology(tmp_path):
+    from igem_drylab.fusion_tool_import import read_native_fusion_batch
+    payload=batch_fixture(tmp_path,'deeptmhmm1_3line')
+    payload.native_output.write_text('>first | GLOB\nGGGSS\nIIIII\n')
+    binding=json.loads(payload.execution_binding.read_text());binding['output_sha256']=sha256(payload.native_output.read_bytes()).hexdigest()
+    payload.execution_binding.write_text(json.dumps(binding))
+    result=read_native_fusion_batch(payload)
+    assert result['items'][0]['parse_status']=='succeeded'
+    assert result['items'][1]['parse_status']=='blocked' and result['items'][1]['observations'] is None
+    native=Path(binding['native_execution_record']);native.write_text(native.read_text()+'\n')
+    with pytest.raises(ValueError,match='execution_record_changed'):read_native_fusion_batch(payload)
+
+
+@pytest.mark.integration
+def test_native_batch_reader_uses_actual_stdio_shared_implementation(tmp_path):
+    """Synthetic native-format fixture, real transport; not a native predictor run."""
+    import asyncio,sys
+    from mcp import Client
+    from mcp.client.stdio import StdioServerParameters
+    from igem_drylab.fusion_tool_import import read_native_fusion_batch
+    payload=batch_fixture(tmp_path,'signalp6_summary');root=Path(__file__).resolve().parents[1]
+    async def verify():
+        async with Client(StdioServerParameters(command=sys.executable,args=['-B','-m','igem_drylab.mcp.server'],cwd=root,
+            env={'PYTHONPATH':str(root/'src'),'OMP_NUM_THREADS':'1','OPENBLAS_NUM_THREADS':'1'}),read_timeout_seconds=30) as client:
+            result=await client.call_tool('igem.m1.read_native_fusion_batch',{'payload':payload.model_dump(mode='json')})
+            assert not result.is_error and result.structured_content['result']==read_native_fusion_batch(payload)
+    asyncio.run(verify())
+
+
 def native_files(tmp_path):
     sp=tmp_path/"prediction_results.txt"
     sp.write_text("# SignalP-6.0\n# ID\tPrediction\tOTHER\tSP(Sec/SPI)\tCS Position\nfixture\tOTHER\t0.99\t0.01\t\n")
