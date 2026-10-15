@@ -139,7 +139,9 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
                              if row.get("parse_status") != "succeeded"]),
                dict(step="3", name="Actual full fusion checks", status="completed" if payload.item.role=="full_fusion" and not screen.missing_required_evidence else "blocked",
                     missing=screen.missing_required_evidence if payload.item.role=="full_fusion" else
-                        ["construct assembly binding", "SignalP", "DeepTMHMM", "TANGO/PASTA", "forbidden DNA sites"]),
+                        ["construct assembly binding", "SignalP", "DeepTMHMM", "forbidden DNA sites"]+
+                        ([] if payload.rules.aggregation_exclusion_reference else ["TANGO/PASTA"]),
+                    excluded_checks=screen.excluded_checks),
                dict(step="4", name="Soft risk review", status="completed" if priority and (priority['risk'] is not None or 'soft_review_flags' in priority) else "blocked",
                     missing=[] if priority and (priority['risk'] is not None or 'soft_review_flags' in priority) else ["reviewed complete risk directions"]),
                dict(step="5", name="Original-method ranking", status="not_applicable" if payload.item.role!='idr' else
@@ -189,10 +191,12 @@ def m1_check_tools():
 
 def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: int | None = None,
                 comparison_contexts: dict[str,ComparisonContext] | None = None,
-                secondary_tool: Literal['jpred','psipred'] = 'jpred') -> Workflow:
+                secondary_tool: Literal['jpred','psipred'] = 'jpred',
+                aggregation_exclusion_reference: str | None = None) -> Workflow:
     import yaml
     definitions, _ = M1FeatureDefinitions.from_yaml(default_config_path("m1_feature_definitions.yaml"))
-    rules = M1V3Rules.model_validate(yaml.safe_load(default_config_path("m1_rules_v3.yaml").read_text()))
+    rules = M1V3Rules.model_validate({**yaml.safe_load(default_config_path("m1_rules_v3.yaml").read_text()),
+        "aggregation_exclusion_reference":aggregation_exclusion_reference})
     inputs = dict(feature_definitions=LiteralInput(value=definitions.model_dump(mode="json")),
                   rules=LiteralInput(value=rules.model_dump(mode="json")))
     batch = MapSpec(items=ProjectInput(path=["sequences"]))
@@ -201,7 +205,7 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
     for tool in ("iupred2a", "seg", secondary_tool):
         nodes.append(WorkflowNode(id="m1_"+tool, label="M1 Step 2 — real "+tool,
             tool_id="prediction."+tool, inputs={"prechecks": checks}, map=batch))
-    for tool in ("signalp","deeptmhmm","tango"):
+    for tool in ("signalp","deeptmhmm")+(() if rules.aggregation_exclusion_reference else ("tango",)):
         nodes.append(WorkflowNode(id="m1_"+tool,label="M1 Step 3 — full-fusion "+tool,
             tool_id="prediction."+tool,map=batch))
     for tool in ("pscore", "catgranule",'fuzdrop'):
@@ -215,7 +219,7 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
                 "secondary_results": NodeInput(node_id="m1_"+secondary_tool, path=["items"]),
                 "signalp_results":NodeInput(node_id="m1_signalp",path=["items"]),
                 "topology_results":NodeInput(node_id="m1_deeptmhmm",path=["items"]),
-                "aggregation_results":NodeInput(node_id="m1_tango",path=["items"]),
+                "aggregation_results":LiteralInput(value=[]) if rules.aggregation_exclusion_reference else NodeInput(node_id="m1_tango",path=["items"]),
                 "pscore_results":NodeInput(node_id="m1_pscore",path=["items"]),
                 "catgranule_results":NodeInput(node_id="m1_catgranule",path=["items"]),
                 'fuzdrop_results':NodeInput(node_id='m1_fuzdrop',path=['items'])}, map=batch))

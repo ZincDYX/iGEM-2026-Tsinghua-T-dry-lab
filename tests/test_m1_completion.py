@@ -53,6 +53,47 @@ def test_native_sequence_and_undefined_aggregation_rules_do_not_pass(tmp_path):
         parse_native_artifact(sp,"GGGSSGGGSS")
 
 
+def test_explicit_aggregation_exclusion_is_not_a_fabricated_negative_result(tmp_path):
+    sequence='GGGSSGGGSS'
+    imports=import_fusion_tools(FusionImportInput(sequence=sequence,artifacts=native_files(tmp_path)[:2],
+        reviewer='fixture',source_reference='synthetic_format_contract_not_actual_job',output_dir=tmp_path/'review'))
+    fusion=FusionToolEvidence.model_validate(imports['fusion'])
+    root=Path(__file__).resolve().parents[1]
+    definitions,digest=M1FeatureDefinitions.from_yaml(root/'configs/m1_feature_definitions.yaml')
+    features=compute_sequence_features(sequence,definitions=definitions,definitions_sha256=digest)
+    values=dict(features=features,sequence=sequence,sequence_kind='full_fusion',fusion_evidence=fusion,
+        full_fusion_sha256=features.sequence_sha256)
+    original=screen_sequence_v3(**values,rules=M1V3Rules(rule_version='original-fixture'))
+    assert original.verdict=='blocked' and 'TANGO_or_PASTA2_full_fusion_output' in original.missing_required_evidence
+    amended=screen_sequence_v3(**values,rules=M1V3Rules(rule_version='explicitly-amended-fixture',
+        aggregation_exclusion_reference='User excludes aggregation prediction from this protocol'))
+    assert amended.verdict=='pass' and not amended.missing_required_evidence
+    assert amended.excluded_checks=={'full_fusion_aggregation':'User excludes aggregation prediction from this protocol'}
+    assert amended.fusion_evidence.continuous_high_aggregation_hotspots is None
+    assert original.excluded_checks=={}  # A skipped check never becomes a zero-hotspot observation.
+
+
+def test_aggregation_exclusion_keeps_other_full_construct_checks_required(tmp_path):
+    root=Path(__file__).resolve().parents[1]
+    definitions,digest=M1FeatureDefinitions.from_yaml(root/'configs/m1_feature_definitions.yaml')
+    features=compute_sequence_features('GGGSSGGGSS',definitions=definitions,definitions_sha256=digest)
+    screen=screen_sequence_v3(features=features,sequence='GGGSSGGGSS',sequence_kind='full_fusion',
+        rules=M1V3Rules(rule_version='amended',aggregation_exclusion_reference='Explicit fixture exclusion'))
+    assert screen.verdict=='blocked'
+    assert set(screen.missing_required_evidence)=={'SignalP_full_fusion_output','DeepTMHMM_full_fusion_output'}
+
+
+def test_explicit_aggregation_exclusion_removes_only_the_native_aggregation_DAG_node():
+    from igem_drylab.workflow.m1_checks import m1_workflow
+    original=m1_workflow();amended=m1_workflow(aggregation_exclusion_reference='User cancelled TANGO/PASTA')
+    assert 'm1_tango' in {node.id for node in original.nodes}
+    assert 'm1_tango' not in {node.id for node in amended.nodes}
+    assert {node.id for node in original.nodes}-{node.id for node in amended.nodes}=={'m1_tango'}
+    decision=next(node for node in amended.nodes if node.id=='m1_decisions')
+    assert decision.inputs['aggregation_results'].value==[]
+    assert decision.inputs['rules'].value['aggregation_exclusion_reference']=='User cancelled TANGO/PASTA'
+
+
 def test_soft_risk_count_and_undefined_feature_without_linker_composite(tmp_path):
     root=Path(__file__).resolve().parents[1]
     definitions,digest=M1FeatureDefinitions.from_yaml(root/"configs/m1_feature_definitions.yaml")

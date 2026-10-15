@@ -80,6 +80,7 @@ class M1V3Rules(BaseModel):
     idr_max_longest_folded_run: int = 10
     max_secondary_structure_fraction: float = 0.10
     disorder_boundary: float = 0.5
+    aggregation_exclusion_reference: str | None = Field(default=None, min_length=1)
 
 
 class SequenceFeatures(BaseModel):
@@ -219,6 +220,7 @@ class M1ScreenResult(BaseModel):
     hard_reject_reasons: list[str] = Field(default_factory=list)
     review_reasons: list[str] = Field(default_factory=list)
     missing_required_evidence: list[str] = Field(default_factory=list)
+    excluded_checks: dict[str, str] = Field(default_factory=dict)
     rank_score: None = None
     rank_score_reason: str = "unavailable_without_reviewed_normalization_and_weight_sources"
 
@@ -498,9 +500,10 @@ def screen_sequence_v3(
     reject: list[str] = []
     review: list[str] = []
     missing: list[str] = []
+    aggregation_required = rules.aggregation_exclusion_reference is None
     if require_external_evidence:
         _verify_sequence_evidence(features, sequence, disorder, secondary_structure, seg, protparam, fusion_evidence,
-                                  full_fusion_sha256, missing, full_fusion_sequence)
+                                  full_fusion_sha256, missing, full_fusion_sequence, aggregation_required=aggregation_required)
 
     is_linker = sequence_kind not in {"idr", "full_fusion"}
     if is_linker and (features.length < rules.linker_min_length or features.length > rules.linker_max_length):
@@ -553,9 +556,9 @@ def screen_sequence_v3(
             [
                 "SignalP_full_fusion_output",
                 "DeepTMHMM_full_fusion_output",
-                "TANGO_or_PASTA2_full_fusion_output",
             ]
         )
+        if aggregation_required:missing.append("TANGO_or_PASTA2_full_fusion_output")
     else:
         if full_fusion_sha256 is None:
             missing.append("assembled_full_fusion_sequence_hash")
@@ -575,9 +578,9 @@ def screen_sequence_v3(
             reject.append("cytosolic_construct_has_transmembrane_helix")
         elif fusion_evidence.transmembrane_helix_count >= 1:
             review.append("er_anchored_construct_transmembrane_segment_requires_scenario_specific_review")
-        if fusion_evidence.continuous_high_aggregation_hotspots is None:
+        if aggregation_required and fusion_evidence.continuous_high_aggregation_hotspots is None:
             missing.append("TANGO_or_PASTA2_full_fusion_output")
-        elif fusion_evidence.continuous_high_aggregation_hotspots >= 2:
+        elif aggregation_required and fusion_evidence.continuous_high_aggregation_hotspots >= 2:
             reject.append("multiple_continuous_high_aggregation_hotspots")
         if fusion_evidence.forbidden_dna_sites:
             reject.append("wetlab_forbidden_DNA_site_present")
@@ -606,10 +609,11 @@ def screen_sequence_v3(
         hard_reject_reasons=reject,
         review_reasons=review,
         missing_required_evidence=missing,
+        excluded_checks={"full_fusion_aggregation": rules.aggregation_exclusion_reference} if not aggregation_required else {},
     )
 
 
-def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, protparam, fusion, fusion_hash, missing, full_sequence=None):
+def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, protparam, fusion, fusion_hash, missing, full_sequence=None, *, aggregation_required=True):
     """Reparse actual bytes before any declared summary can qualify a design."""
     normalized = normalize_amino_acid_sequence(sequence) if sequence is not None else None
     if normalized is not None and sha256(normalized.encode()).hexdigest() != features.sequence_sha256:
@@ -666,9 +670,10 @@ def _verify_sequence_evidence(features, sequence, disorder, secondary, seg, prot
              {"signal_peptide_with_clear_cleavage": fusion.signal_peptide_with_clear_cleavage}),
             ("DeepTMHMM", fusion.deeptmhmm_source_file, fusion.deeptmhmm_tool_version,
              {"transmembrane_helix_count": fusion.transmembrane_helix_count}),
-            (fusion.aggregation_tool or "TANGO_or_PASTA2", fusion.aggregation_source_file, fusion.aggregation_tool_version,
-             {"continuous_high_aggregation_hotspots": fusion.continuous_high_aggregation_hotspots}),
         )
+        if aggregation_required:
+            entries += ((fusion.aggregation_tool or "TANGO_or_PASTA2", fusion.aggregation_source_file, fusion.aggregation_tool_version,
+                {"continuous_high_aggregation_hotspots": fusion.continuous_high_aggregation_hotspots}),)
         for name, path, version, observations in entries:
             provenance = fusion.provenance.get(name)
             # No arbitrary universal parser/aggregation threshold is invented.
