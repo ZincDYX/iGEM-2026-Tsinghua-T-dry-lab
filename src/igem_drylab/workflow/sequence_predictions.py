@@ -15,6 +15,8 @@ from igem_drylab.pipeline.adapters import create_tool_adapter
 from igem_drylab.pipeline.config import ToolConfig
 from .models import Contract, SequenceRecord
 from .tools import NodeContext, ToolDefinition, ToolDeferred, ToolFailure
+from igem_drylab.template_geometry import StructureInput
+from igem_drylab.pocket_preparation import PocketPredictionInput,read_pocket_candidates
 
 
 def uses_native_jpred_route(config):
@@ -87,6 +89,43 @@ def reconcile_jpred(node_directory):
 class SequencePredictionInput(Contract):
     item: SequenceRecord
     prechecks: list[dict] = Field(default_factory=list)
+
+
+class StructurePocketPredictionInput(Contract):
+    candidate_id: str
+    structure: StructureInput
+
+
+def predict_structure_pockets(payload: StructurePocketPredictionInput,context: NodeContext) -> dict:
+    """Run a maintainer-configured native tool, then use the shared MCP parser."""
+    payload.structure.read()  # Exact complete sequence and paired model first.
+    config=ToolConfig.model_validate(context.runtime_tools.get('p2rank',{}))
+    adapter=create_tool_adapter('p2rank',config)
+    result=dict(candidate_id=payload.candidate_id,tool='P2Rank',tool_status='not_configured',
+        parse_status='not_run',parsed=None,scientific_status='candidate_pockets_not_catalytic_confirmation')
+    if not adapter.is_available():return result
+    if not config.verified_version:
+        result['blocker']='Record the verified installed native P2Rank version.';return result
+    profile='alphafold' if payload.structure.source_kind=='prediction' else 'default'
+    directory=context.work_dir/'pocket-prediction'
+    command=adapter.build_command(output_dir=directory,structure=payload.structure.path,profile=profile)
+    if not any(command.argv[i:i+2]==['-c',profile] for i in range(len(command.argv)-1)):
+        raise ValueError('P2Rank_native_command_requires_explicit_matching_profile')
+    digest=sha256(payload.structure.path.read_bytes()).hexdigest()
+    native=adapter.run(output_dir=directory,structure=payload.structure.path,profile=profile,
+        input_files={'structure':payload.structure.path},timeout_seconds=7200)
+    result['tool_status']=native.status
+    if native.status!='succeeded':return result
+    if sha256(payload.structure.path.read_bytes()).hexdigest()!=digest:
+        raise ValueError('P2Rank_input_structure_changed_during_execution')
+    output=directory/(payload.structure.path.name+'_predictions.csv')
+    record=output.with_suffix('.run.json')
+    record.write_text(json.dumps(dict(tool_name='P2Rank',tool_version=config.verified_version,command=native.argv,
+        returncode=native.return_code,profile=profile,input_sha256=digest,output_sha256=sha256(output.read_bytes()).hexdigest()),indent=2))
+    result.update(parse_status='succeeded',parsed=read_pocket_candidates(PocketPredictionInput(
+        structure=payload.structure,predictions_file=output,execution_record=record)),
+        outputs={'raw_output':str(output),'execution_record':str(record)})
+    return result
 
 
 def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeContext) -> dict:
@@ -303,7 +342,7 @@ def sequence_prediction_tools():
         Path(__file__).parents[1] / "iupred_runner.py")
     implementation += (Path(__file__).parents[1]/"llps_artifacts.py", Path(__file__).parents[1]/"catgranule_runner.py")
     implementation += (Path(__file__).parents[1]/'fuzdrop_runner.py',Path(__file__).parents[1]/'psipred_runner.py')
-    return [ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
+    tools=[ToolDefinition(f"prediction.{name}", label, "Real diagnostic sequence prediction using a private configured route; no scientific approval.",
         "1", SequencePredictionInput, handler(name), "scientific_project",
         implementation_files=implementation, resource="gpu" if name == "colabfold" else "cpu", idempotent=False,
         reconcile=reconcile_jpred if name == "jpred" else reconcile_catgranule if name == "catgranule" else reconcile_fuzdrop if name=='fuzdrop' else None)
@@ -317,3 +356,8 @@ def sequence_prediction_tools():
                             ("tango", "Licensed TANGO — actual full-fusion aggregation"),
                             ("catgranule", "Original catGRANULE — IDR propensity and native profile"),
                             ('fuzdrop','Original FuzDrop — complete native IDR profile and pLLPS'))]
+    tools.append(ToolDefinition('prediction.p2rank','P2Rank — actual structural pocket candidates',
+        'Run the privately configured native profile on the exact paired model; do not approve catalytic chemistry.',
+        '1',StructurePocketPredictionInput,predict_structure_pockets,'scientific_project',
+        implementation_files=implementation+(Path(__file__).parents[1]/'pocket_preparation.py',),resource='cpu',idempotent=False))
+    return tools

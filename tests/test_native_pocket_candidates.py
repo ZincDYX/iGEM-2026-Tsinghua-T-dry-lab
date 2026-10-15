@@ -54,3 +54,18 @@ def test_real_stdio_pocket_parser_is_the_same_contract(tmp_path):
             assert not response.is_error
             assert response.structured_content['result']==read_pocket_candidates(request)
     asyncio.run(exercise())
+
+
+@pytest.mark.data_contract
+def test_native_execution_stage_reports_missing_tool_without_synthetic_pockets(tmp_path):
+    from igem_drylab.workflow.builtins import builtin_tools
+    from igem_drylab.workflow.engine import WorkflowEngine
+    from igem_drylab.workflow.store import WorkflowStore
+    from igem_drylab.workflow.models import Project,Workflow,WorkflowNode,LiteralInput
+    request,_=fixture(tmp_path)
+    engine=WorkflowEngine(WorkflowStore(tmp_path/'ledger.sqlite'),builtin_tools(),tmp_path/'artifacts')
+    task=Workflow(id='native-pockets',name='missing-tool-fixture',nodes=[WorkflowNode(id='pocket',label='Native P2Rank',tool_id='prediction.p2rank',
+        inputs={'candidate_id':LiteralInput(value='synthetic-fixture'),'structure':LiteralInput(value=request.structure.model_dump(mode='json'))})])
+    result=engine.run(engine.create(Project(id='p',name='synthetic-fixture'),task))
+    output=result['nodes'][0]['output']
+    assert output['tool_status']=='not_configured' and output['parsed'] is None and output['parse_status']=='not_run'
