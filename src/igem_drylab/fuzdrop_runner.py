@@ -97,6 +97,7 @@ def main():
     record=dict(tool_name='FuzDrop',tool_version=protocol,origin='automated',returncode=0,
         command=[sys.executable,*sys.argv],input_sha256=digest,output_sha256=sha256(target.read_bytes()).hexdigest(),
         native_format='fuzdrop_response_json',source_reference='https://fuzdrop.bio.unipd.it/',
+        native_binary_version=None,service_protocol_version=protocol,
         version_scope='Observed original website protocol; server binary version not exposed.')
     target.with_suffix('.run.json').write_text(json.dumps(record,indent=2))
     state['status']='native_response_saved_not_scientific_acceptance';_save_state(state_file,state)

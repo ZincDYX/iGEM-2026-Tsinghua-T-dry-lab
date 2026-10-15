@@ -186,7 +186,7 @@ export type Transform = "identity" | "absolute";
 export type Operator = "lt" | "le" | "gt" | "ge" | "inside" | "outside" | "half_open_inside";
 export type Lower1 = number;
 export type Upper1 = number | null;
-export type ComparisonMode = "original_weighted" | "descriptive_pareto";
+export type ComparisonMode = "original_weighted" | "descriptive_pareto" | "initial_equal_weight";
 export type UndefinedRiskFeatures = string[];
 export type ComparisonGroupReference = string | null;
 export type FuzdropThreshold = 0.6 | 0.61;
@@ -199,6 +199,7 @@ export type Weight = number;
 export type PredictorRules = PredictorRule[];
 export type SortKeys = ("risk" | "consensus" | "rank_score")[];
 export type RankingFormulaReference = string | null;
+export type ReferenceId = string | null;
 export type FormulaVersion = "m2-er-membrane-v1-2026-10-10";
 export type ConstructId3 = string;
 export type ConditionId3 = string;
@@ -789,6 +790,7 @@ export interface PrioritizationPolicy {
   predictor_rules: PredictorRules;
   sort_keys: SortKeys;
   ranking_formula_reference: RankingFormulaReference;
+  reference_id: ReferenceId;
 }
 export interface RiskRules {
   [k: string]: RiskPredicate[];

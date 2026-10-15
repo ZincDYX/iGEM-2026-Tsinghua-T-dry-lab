@@ -213,7 +213,7 @@ def _initial_equal_weight(payload, rows):
         row['missing']=[m for m in row['missing'] if not m.startswith('undefined_risk_direction:')]
         if candidate.screen.sequence_kind!='idr':
             row['ranking_status']='not_applicable_to_non_IDR';continue
-        versions={}; native=True
+        versions={}; native=True; unknown_native_versions=[]
         for observation in candidate.predictors:
             if observation.tool not in axes:continue
             if observation.tool in row['raw_scores']:raise ValueError('duplicate_predictor_score')
@@ -223,6 +223,8 @@ def _initial_equal_weight(payload, rows):
             # exports remain usable; their bytes are reparsed above.
             native &= observation.provenance.origin=='automated' or bool(record.get('native_format'))
             versions[observation.tool]=observation.tool_version
+            if record.get('version_scope') and not record.get('native_binary_version'):
+                unknown_native_versions.append(observation.tool)
             row['raw_scores'][observation.tool]=observation.raw_score
         if 'FuzDrop' in row['raw_scores'] and not 0<=row['raw_scores']['FuzDrop']<=1:
             raise ValueError('FuzDrop_whole_sequence_pLLPS_requires_probability_range')
@@ -232,8 +234,9 @@ def _initial_equal_weight(payload, rows):
             if axis not in row['raw_scores']:row['missing'].append('original_predictor_output:'+axis)
         context=candidate.comparison_context
         if context is None:row['missing'].append('predeclared_cohort_conditions_and_prediction_scope')
-        known=all(v.strip().lower() not in {'unknown','not_recorded','unspecified'} for v in versions.values())
+        known=not unknown_native_versions and all(v.strip() and v.strip().lower() not in {'unknown','not_recorded','unspecified'} for v in versions.values())
         if not known:row['missing'].append('known_predictor_versions')
+        row['unknown_native_versions']=unknown_native_versions
         if not native:row['missing'].append('verified_native_predictor_exports')
         if candidate.screen.verdict=='reject':row['ranking_status']='excluded_by_existing_hard_rule'
         elif candidate.screen.verdict!='pass':row['missing'].append('completed_required_hard_checks')

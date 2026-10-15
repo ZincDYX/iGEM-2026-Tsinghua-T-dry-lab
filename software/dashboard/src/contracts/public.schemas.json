@@ -8029,7 +8029,8 @@
             "default": "original_weighted",
             "enum": [
               "original_weighted",
-              "descriptive_pareto"
+              "descriptive_pareto",
+              "initial_equal_weight"
             ],
             "title": "Comparison Mode",
             "type": "string"
@@ -8092,6 +8093,18 @@
             ],
             "default": null,
             "title": "Ranking Formula Reference"
+          },
+          "reference_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Id"
           }
         },
         "required": [
@@ -8105,7 +8118,8 @@
           "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
-          "ranking_formula_reference"
+          "ranking_formula_reference",
+          "reference_id"
         ],
         "title": "PrioritizationPolicy",
         "type": "object"
@@ -16601,7 +16615,8 @@
             "default": "original_weighted",
             "enum": [
               "original_weighted",
-              "descriptive_pareto"
+              "descriptive_pareto",
+              "initial_equal_weight"
             ],
             "title": "Comparison Mode",
             "type": "string"
@@ -16664,6 +16679,18 @@
             ],
             "default": null,
             "title": "Ranking Formula Reference"
+          },
+          "reference_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Id"
           }
         },
         "required": [
@@ -16677,7 +16704,8 @@
           "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
-          "ranking_formula_reference"
+          "ranking_formula_reference",
+          "reference_id"
         ],
         "title": "PrioritizationPolicy",
         "type": "object"
@@ -21621,7 +21649,8 @@
             "default": "original_weighted",
             "enum": [
               "original_weighted",
-              "descriptive_pareto"
+              "descriptive_pareto",
+              "initial_equal_weight"
             ],
             "title": "Comparison Mode",
             "type": "string"
@@ -21684,6 +21713,18 @@
             ],
             "default": null,
             "title": "Ranking Formula Reference"
+          },
+          "reference_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Id"
           }
         },
         "required": [
@@ -21697,7 +21738,8 @@
           "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
-          "ranking_formula_reference"
+          "ranking_formula_reference",
+          "reference_id"
         ],
         "title": "PrioritizationPolicy",
         "type": "object"
@@ -27007,7 +27049,8 @@
             "default": "original_weighted",
             "enum": [
               "original_weighted",
-              "descriptive_pareto"
+              "descriptive_pareto",
+              "initial_equal_weight"
             ],
             "title": "Comparison Mode",
             "type": "string"
@@ -27070,6 +27113,18 @@
             ],
             "default": null,
             "title": "Ranking Formula Reference"
+          },
+          "reference_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Id"
           }
         },
         "required": [
@@ -27083,7 +27138,8 @@
           "fuzdrop_threshold",
           "predictor_rules",
           "sort_keys",
-          "ranking_formula_reference"
+          "ranking_formula_reference",
+          "reference_id"
         ],
         "title": "PrioritizationPolicy",
         "type": "object"

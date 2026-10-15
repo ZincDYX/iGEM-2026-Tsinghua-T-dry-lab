@@ -81,3 +81,16 @@ def test_unknown_version_and_typed_scalar_are_not_native_evidence(tmp_path):
     result=prioritize_m1(M1PrioritizationInput(candidates=[row],policy=policy()))
     assert result['candidates'][0]['rank_score'] is None
     assert 'verified_native_predictor_exports' in result['candidates'][0]['missing']
+
+
+@pytest.mark.data_contract
+def test_website_protocol_identifier_is_not_a_known_server_binary_version(tmp_path):
+    row=native_fixture(tmp_path,'protocol-only','GSGS'*50,dict(FuzDrop=.8,catGRANULE_2016=2.,PScore=2.))
+    provenance=row.predictors[0].provenance
+    record=json.loads(provenance.record_file.read_text())
+    record.update(version_scope='Observed website protocol; server binary not exposed',native_binary_version=None)
+    provenance.record_file.write_text(json.dumps(record))
+    provenance.record_sha256=sha256(provenance.record_file.read_bytes()).hexdigest()
+    result=prioritize_m1(M1PrioritizationInput(candidates=[row],policy=policy()))['candidates'][0]
+    assert result['rank_score'] is None and result['unknown_native_versions']==['FuzDrop']
+    assert 'known_predictor_versions' in result['missing']
