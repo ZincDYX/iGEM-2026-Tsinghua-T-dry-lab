@@ -94,7 +94,7 @@ def test_native_qm_optimization_gradient_hessian_and_no_MD_promotion(tmp_path,ba
     dict(kind='distance',atoms_1based=[1,1],target=.9),
     dict(kind='distance',atoms_1based=[1,3],target=.9),
     dict(kind='distance',atoms_1based=[1,2],target=-.9),
-    dict(kind='angle',atoms_1based=[1,2,3],target=180),
+    dict(kind='angle',atoms_1based=[1,2,3],target=181),
     dict(kind='distance',atoms_1based=[1,2],target=float('nan')),
 ])
 def test_PES_coordinate_constraints_reject_ambiguous_or_nonphysical_inputs(tmp_path,constraint):
@@ -106,6 +106,15 @@ def test_PES_coordinate_constraints_reject_ambiguous_or_nonphysical_inputs(tmp_p
 def test_reversed_duplicate_coordinate_does_not_manufacture_independent_constraints(tmp_path):
     data=hydrogen_request(tmp_path);data['coordinate_constraints']=[dict(kind='distance',atoms_1based=indices,target=.9) for indices in [[1,2],[2,1]]]
     with pytest.raises(ValueError,match='duplicate_QM_coordinate_constraint'):QuantumCalculationInput.model_validate(data)
+
+
+@pytest.mark.data_contract
+@pytest.mark.parametrize('target',[0.,180.])
+def test_linear_angle_targets_are_not_rejected_as_nonphysical(tmp_path,target):
+    data=hydrogen_request(tmp_path)
+    data['atoms'].append(dict(source_atom_id='c',element='O',xyz_angstrom=[1,0,1]))
+    data['coordinate_constraints']=[dict(kind='angle',atoms_1based=[1,2,3],target=target)]
+    assert QuantumCalculationInput.model_validate(data).coordinate_constraints[0].target==target
 
 
 @pytest.mark.scientific_algorithm

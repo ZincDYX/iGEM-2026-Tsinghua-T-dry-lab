@@ -122,7 +122,7 @@ class CoordinateConstraint(ScientificAnalysisInput):
         if len(self.atoms_1based)!=count or len(set(self.atoms_1based))!=count:
             raise ValueError('QM_constraint_requires_distinct_ordered_coordinate_atoms')
         if not np.isfinite(self.target) or (self.kind=='distance' and self.target<=0) or (
-                self.kind=='angle' and not 0<self.target<180):
+                self.kind=='angle' and not 0<=self.target<=180):
             raise ValueError('invalid_QM_coordinate_constraint_target')
         return self
 
