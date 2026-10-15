@@ -1,0 +1,29 @@
+# Optional Linux CUDA 12 QM environment; never installed in the desktop runtime.
+# Verified on Python 3.11 with an explicitly assigned NVIDIA GPU.
+annotated-types==0.8.0
+biopython==1.85
+cupy-cuda12x==13.4.1
+cutensor-cu12==2.2.0
+fastrlock==0.8.3
+geometric==1.1.1
+gpu4pyscf-cuda12x==1.8.1
+gpu4pyscf-libxc-cuda12x==0.8.1
+h5py==3.16.0
+iniconfig==2.3.1
+networkx==3.6.1
+numpy==2.2.6
+packaging==26.3
+pillow==12.3.0
+pluggy==1.7.0
+pydantic==2.12.5
+pydantic_core==2.41.5
+Pygments==2.21.0
+pyscf==2.14.0
+pyscf-dispersion==1.5.0
+pytest==8.4.2
+PyYAML==6.0.3
+rdkit==2025.9.3
+scipy==1.17.1
+six==1.17.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0

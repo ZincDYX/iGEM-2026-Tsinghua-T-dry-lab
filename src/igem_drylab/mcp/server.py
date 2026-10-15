@@ -20,6 +20,7 @@ from igem_drylab.pocket_preparation import PocketPredictionInput
 from igem_drylab.pocket_preparation import CofactorTransferInput
 from igem_drylab.dssp_context import DsspContextInput
 from igem_drylab.dssp_context import LinkerContextReviewInput
+from igem_drylab.quantum_calculations import ModelCompoundInput
 from igem_drylab.template_geometry import AssemblyPreparationInput
 from igem_drylab.template_geometry import AssemblyAccessibilityInput
 from igem_drylab.template_geometry import RecruitmentPosePreparationInput
@@ -122,6 +123,11 @@ def m2_read_pocket_candidates(payload: PocketPredictionInput) -> dict[str,Any]:
 @server.tool(name='igem.m2.transfer_cofactor', title='Observed cofactor pose transfer', structured_output=True)
 def m2_transfer_cofactor(payload: CofactorTransferInput) -> dict[str,Any]:
     return _call_local('igem.m2.transfer_cofactor', {'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m2.prepare_qm_compound',title='Explicit model-compound chemical graph',structured_output=True)
+def m2_prepare_qm_compound(payload: ModelCompoundInput) -> dict[str,Any]:
+    return _call_local('igem.m2.prepare_qm_compound',{'payload':payload.model_dump(mode='json')})
 
 
 @server.tool(name="igem.m2.secondary_context", title="Native DSSP auxiliary fusion context", structured_output=True)

@@ -1,6 +1,46 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: AUTHORIZED_SOURCE_PRESERVING_IDR_DESIGNS
+    group: data_contract
+    test_nodeids: ["tests/test_m1_method_workflow.py::test_authorized_IDR_substitution_preserves_both_backbones_and_drops_inapplicable_evidence"]
+    requirement_or_formula_source: explicit owner authorization for both fixed-backbone computational IDR substitutions
+    oracle_type: exact unchanged flanks and terminal sequence, no inherited DNA or wet-lab pass
+    fixture_scope: synthetic sequence contract, not predictor or wet-lab validation
+    formula_version: explicit ordered-part substitution v1
+    units: amino-acid identity and order
+    tolerance_basis: exact equality; ambiguous IDR boundary rejected
+    expected_faults: [changed_backbone, changed_C_terminal_tag, inherited_experimental_identity, ambiguous_IDR_boundary]
+  - risk_id: APPROVED_LINKER_CONTEXT_PRESERVES_STRICT_GAPS
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_region_assessment.py::test_approved_linker_context_preserves_strict_gap_and_low_confidence"]
+    requirement_or_formula_source: approved full-fusion DSSP plus geometry branch, isolated-predictor version preserved
+    oracle_type: independent synthetic CA distance, real FreeSASA and PAE, explicitly synthetic DSSP parser fixture
+    fixture_scope: synthetic coordinates and assignments, not actual predictor quality or biological suitability
+    formula_version: linker-context-review-v1
+    units: angstrom; dimensionless SASA ratio; pLDDT
+    tolerance_basis: exact identity and role; CA separation 3.8 angstrom; low confidence never promotes acceptance or veto
+    expected_faults: [wrong_full_sequence, role_confusion, isolated_gap_removed, low_confidence_hard_veto, automatic_M1_pass]
+  - risk_id: QM_GRAPH_AND_NATIVE_ENGINE_BOUNDARY
+    group: data_contract
+    test_nodeids: ["tests/test_quantum_calculations.py::test_qm_atom_map_and_boundaries_are_explicit", "tests/test_quantum_calculations.py::test_model_compound_requires_explicit_cap_and_rebuilds_the_chemical_graph", "tests/test_quantum_calculations.py::test_CCD_uppercase_metal_identity_is_not_an_oxidation_state_assignment"]
+    requirement_or_formula_source: authorized explicit chemical state, atom mapping, caps and electron count before parameter fitting
+    oracle_type: declared synthetic graph and separate formal charge override, finite coordinate and unique identity checks
+    fixture_scope: synthetic chemistry input contract, not an experimentally validated cofactor microstate
+    formula_version: QM-model-compound-targets-v1
+    units: angstrom; elementary charge; atom count
+    tolerance_basis: exact graph counts, rejected missing caps and unmapped edits
+    expected_faults: [implicit_cap, guessed_oxidation_state, unbound_chemical_edit, duplicate_atom_map, invalid_frozen_boundary]
+  - risk_id: QM_NATIVE_OPTIMIZATION_AND_HESSIAN
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_quantum_calculations.py::test_native_qm_optimization_gradient_hessian_and_no_MD_promotion"]
+    requirement_or_formula_source: PySCF geomeTRIC native optimization and Hessian; fitting must precede production MD
+    oracle_type: independent CPU RHF energy call, variational decrease, Hessian symmetry and positive diatomic stretch
+    fixture_scope: H2 numerical oracle; not project cofactor parameter validation; GPU requires explicit assigned device
+    formula_version: native HF STO-3G numerical test, not project parametrization method
+    units: hartree; hartree/bohr; inverse cm
+    tolerance_basis: independent same-geometry CPU energy within 1e-8 hartree; Hessian symmetry within 1e-8; native gradient threshold
+    expected_faults: [unconverged_geometry, incorrect_GPU_energy, incorrect_Hessian, QM_result_promoted_to_MD, overwritten_original_attempt]
   - risk_id: CUSTOM_FORMULA_EXPLORATORY_EXECUTION
     group: scientific_algorithm
     test_nodeids:

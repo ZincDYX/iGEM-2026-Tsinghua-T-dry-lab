@@ -356,7 +356,9 @@ preservation, not a redesigned-DNA writer, SBOL or SBML implementation.
   ten-reaction competition, reviewed inputs and existence gates.
 - [Implementation ledger](docs/r19_review_implementation.md): ER, recovery,
   Agent observations, real tools, tests and unfinished work.
-- [Latest M1/M2 actual results and remaining work](docs/review_r31_actual_M1_M2_20261014.md):
+- [Authorized M1 design/context branches and isolated QM preparation](docs/review_r39_authorized_contexts_and_QM.md):
+  Explicit fixed-backbone substitutions, preserved short-linker gaps and QM targets before CHARMM validation.
+- [M1/M2 actual results and remaining work, r31 snapshot](docs/review_r31_actual_M1_M2_20261014.md):
   exact-sequence predictors, descriptive comparison, apo cores, native CG and applicability limits.
 - [Platform guide](docs/fusionlab_platform.md),
   [plugin development](docs/plugin_development.md),
