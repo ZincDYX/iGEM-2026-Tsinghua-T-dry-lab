@@ -59,6 +59,55 @@ class M1ConstructContextInput(Contract):
     aggregation_results: list[dict] = Field(default_factory=list)
 
 
+class IDRSubstitutionInput(Contract):
+    """Explicitly authorized computational substitutions, not wet-lab records."""
+    templates: list[ConstructDefinition] = Field(min_length=1)
+    replacements: list[SequenceRecord] = Field(min_length=1)
+    approval_reference: str = Field(min_length=1)
+
+
+def substitute_declared_idrs(payload: IDRSubstitutionInput) -> dict:
+    if len({s.id for s in payload.replacements})!=len(payload.replacements):
+        raise ValueError('distinct_IDR_source_identities_required')
+    constructs=[];sequences=[]
+    for template in payload.templates:
+        positions=[i for i,p in enumerate(template.parts) if p.kind=='idr']
+        if len(positions)!=1 or template.localization_context is None:
+            raise ValueError('substitution_requires_one_explicit_IDR_part_and_localization')
+        position=positions[0]
+        for replacement in payload.replacements:
+            if replacement.role!='idr':raise ValueError('replacement_requires_explicit_IDR_role')
+            amino_acids=normalize_amino_acid_sequence(replacement.sequence)
+            if replacement.id in {p.id for i,p in enumerate(template.parts) if i!=position}:
+                raise ValueError('replacement_identity_conflicts_with_an_unchanged_part')
+            parts=[p.model_copy(deep=True) for p in template.parts]
+            parts[position]=parts[position].model_copy(update={'id':replacement.id,'sequence':amino_acids})
+            identifier=template.id+'__IDR_'+replacement.id
+            part_ids={p.id for p in parts}
+            provenance={**template.provenance,'computational_IDR_substitution':dict(
+                approval_reference=payload.approval_reference,template_construct_id=template.id,
+                replaced_part_id=template.parts[position].id,input_IDR_id=replacement.id,
+                input_IDR_sequence_sha256=sha256(amino_acids.encode()).hexdigest(),
+                modified_ordered_part_index=position,source_type='computational_design_not_wetlab_sequence')}
+            data={**template.model_dump(mode='json'),'id':identifier,'parts':[p.model_dump() for p in parts],
+                'idr_ids':[replacement.id],'coding_dna':None,'experimental_baseline':False,
+                'm1_review':None,'membrane_topology':None,'provenance':provenance,
+                'sequences':{**{k:v for k,v in template.sequences.items() if k in part_ids},replacement.id:amino_acids},
+                'sequence_source_ref':'Computational substitution; '+payload.approval_reference+
+                    '; template='+template.id+'; original IDR input='+replacement.id}
+            construct=ConstructDefinition.model_validate(data)
+            part_sequences={**construct.sequences,**{p.id:p.sequence for p in parts if p.sequence is not None}}
+            qc=assemble_and_validate_construct(construct_id=identifier,ordered_part_ids=construct.ordered_part_ids(),
+                part_sequences=part_sequences,coding_dna=None,forbidden_restriction_sites=None,require_sequence_evidence=False)
+            if qc.errors:raise ValueError('computational_substitution_cannot_assemble:'+identifier)
+            constructs.append(construct.model_dump(mode='json'))
+            sequences.append(SequenceRecord(id=identifier,sequence=qc.full_protein_sequence,role='full_fusion',
+                localization_context=construct.localization_context).model_dump(mode='json'))
+    if len({c['id'] for c in constructs})!=len(constructs):raise ValueError('distinct_substitution_targets_required')
+    return dict(constructs=constructs,sequences=sequences,count=len(constructs),
+        scope='authorized_fixed_backbone_IDR_substitutions_not_experimental_baselines')
+
+
 def _fusion_observations(item, collections):
     digest=sha256(item.sequence.encode()).hexdigest()
     merged=dict(input_sha256=digest,provenance={},native_formats={},native_rules={})

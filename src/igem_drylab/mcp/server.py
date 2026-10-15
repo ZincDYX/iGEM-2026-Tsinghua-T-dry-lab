@@ -19,13 +19,14 @@ from igem_drylab.pocket_preparation import PocketPreparationInput
 from igem_drylab.pocket_preparation import PocketPredictionInput
 from igem_drylab.pocket_preparation import CofactorTransferInput
 from igem_drylab.dssp_context import DsspContextInput
+from igem_drylab.dssp_context import LinkerContextReviewInput
 from igem_drylab.template_geometry import AssemblyPreparationInput
 from igem_drylab.template_geometry import AssemblyAccessibilityInput
 from igem_drylab.template_geometry import RecruitmentPosePreparationInput
 from igem_drylab.template_geometry import AssemblyExpansionInput, RecruitmentGeometryInput, RecruitmentEnsembleInput
 from igem_drylab.fusion_tool_import import FusionImportInput
 from igem_drylab.m1_prioritization import M1PrioritizationInput
-from igem_drylab.workflow.m1_checks import M1ConstructContextInput
+from igem_drylab.workflow.m1_checks import M1ConstructContextInput,IDRSubstitutionInput
 from igem_drylab.llps_artifacts import LLPSImportInput
 from igem_drylab.mpipi import MpipiAnalysisInput
 from igem_drylab.membrane_geometry import MembraneGeometryInput
@@ -47,6 +48,16 @@ server = MCPServer(
 @server.tool(name='igem.m1.bind_construct_contexts',title='Bind sourced full-fusion contexts',structured_output=True)
 def m1_bind_construct_contexts(payload: M1ConstructContextInput) -> dict[str,Any]:
     return _call_local('igem.m1.bind_construct_contexts',{'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m1.substitute_idrs',title='Authorized fixed-backbone IDR designs',structured_output=True)
+def m1_substitute_idrs(payload: IDRSubstitutionInput) -> dict[str,Any]:
+    return _call_local('igem.m1.substitute_idrs',{'payload':payload.model_dump(mode='json')})
+
+
+@server.tool(name='igem.m1.review_linker_context',title='Approved full-fusion linker context review',structured_output=True)
+def m1_review_linker_context(payload: LinkerContextReviewInput) -> dict[str,Any]:
+    return _call_local('igem.m1.review_linker_context',{'payload':payload.model_dump(mode='json')})
 
 
 @server.tool(name="igem.m1.parse_mpipi", title="Original Mpipi raw simulation observations", structured_output=True)

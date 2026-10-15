@@ -8,6 +8,7 @@ from igem_drylab.pocket_preparation import PocketPreparationInput, prepare_pocke
 from igem_drylab.pocket_preparation import PocketPredictionInput,read_pocket_candidates
 from igem_drylab.pocket_preparation import CofactorTransferInput, transfer_cofactor
 from igem_drylab.dssp_context import DsspContextInput, assess_dssp_context
+from igem_drylab.dssp_context import LinkerContextReviewInput, review_linker_context
 from igem_drylab.template_geometry import AssemblyPreparationInput, prepare_actual_fusion_copies
 from igem_drylab.template_geometry import AssemblyAccessibilityInput,calculate_assembly_accessibility
 from igem_drylab.template_geometry import RecruitmentPosePreparationInput, prepare_recruitment_poses
@@ -16,6 +17,7 @@ from igem_drylab.template_geometry import (AssemblyExpansionInput, expand_actual
 from igem_drylab.fusion_tool_import import FusionImportInput, import_fusion_tools
 from igem_drylab.m1_prioritization import M1PrioritizationInput, prioritize_m1
 from igem_drylab.workflow.m1_checks import M1ConstructContextInput,bind_construct_contexts
+from igem_drylab.workflow.m1_checks import IDRSubstitutionInput,substitute_declared_idrs
 from igem_drylab.llps_artifacts import LLPSImportInput, import_llps_results
 from igem_drylab.mpipi import MpipiAnalysisInput, parse_mpipi
 from igem_drylab.phase_profile_analysis import PhaseProfileAnalysisInput,analyse_phase_profile
@@ -43,6 +45,8 @@ def binding(name, title, contract, calculate):
 
 
 BINDINGS = [binding("igem.m4.report", "Run original M4 three scenarios and F2/F3 report", M4ReportInput, run_m4_report)]
+BINDINGS.append(binding('igem.m1.substitute_idrs','Generate explicitly authorized fixed-backbone IDR designs',IDRSubstitutionInput,substitute_declared_idrs))
+BINDINGS.append(binding('igem.m1.review_linker_context','Approved complete-fusion linker review, preserving isolated-predictor gaps',LinkerContextReviewInput,review_linker_context))
 BINDINGS.append(binding("igem.m3.ensemble", "Propagate M3 measured expression and parameter ranges", M3EnsembleInput, solve_m3_ensemble))
 BINDINGS.extend([
     binding('igem.m2.prepare_recruitment_poses','Prepare sourced rigid poses without an invented catalytic pocket',RecruitmentPosePreparationInput,prepare_recruitment_poses),

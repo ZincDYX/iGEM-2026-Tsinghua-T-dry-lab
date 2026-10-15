@@ -71,6 +71,44 @@ def test_real_FreeSASA_isolated_selected_atoms(tmp_path):
     assert result["regions"][1]["burial_verdict"] is None
 
 
+@pytest.mark.scientific_algorithm
+def test_approved_linker_context_preserves_strict_gap_and_low_confidence(tmp_path, monkeypatch):
+    """Synthetic DSSP parser fixture; real paired coordinates, PAE and FreeSASA."""
+    pytest.importorskip('freesasa')
+    from hashlib import sha256
+    from igem_drylab.dssp_context import LinkerContextReviewInput, review_linker_context
+    import igem_drylab.dssp_context as context
+    request=prediction(tmp_path)
+    model=request.confidence_file.with_name(request.confidence_file.name.replace('scores','unrelaxed').replace('.json','.pdb'))
+    native=tmp_path/'synthetic.dssp';native.write_text('explicit synthetic parser fixture')
+    native.with_suffix('.run.json').write_text(json.dumps(dict(returncode=0,tool_version='synthetic fixture',
+        model_sha256=sha256(model.read_bytes()).hexdigest(),output_sha256=sha256(native.read_bytes()).hexdigest())))
+    monkeypatch.setattr(context,'make_dssp_dict',lambda path: ({('A',(' ',i,' ')):('A','H') for i in range(1,5)},[]))
+    payload=LinkerContextReviewInput(construct_definition=dict(id='fixture',parts=[dict(id='n',kind='protein',sequence='A'),
+        dict(id='short',kind='enzyme_ligand_linker',sequence='AA'),dict(id='c',kind='tag',sequence='A')],
+        localization_context='cytosolic',sequence_source_ref='synthetic'),
+        linker=dict(id='source-short',role='enzyme_ligand_linker',sequence='AA'),source_part_id='short',
+        model=dict(path=model,source_kind='prediction',source_reference='synthetic',
+            expected_sequence='AAAA',confidence_file=request.confidence_file),native_output=native,
+        confidence_minimum=70,confidence_rule_reference='synthetic rule',protocol_approval_reference='explicit fixture authorization')
+    result=review_linker_context(payload)
+    assert result['original_protocol']['status']=='missing_evidence' and result['original_protocol']['preserved']
+    assert result['approved_context_protocol']['status']=='observed_with_uncertainty'
+    assert not result['approved_context_protocol']['formal_M1_veto_allowed']
+    assert not result['approved_context_protocol']['formal_M1_pass']
+    assert result['geometry']['CA_end_to_end']==pytest.approx(3.8)
+    assert result['geometry']['preceding_peptide_CA_distance']==pytest.approx(3.8)
+    assert result['DSSP']['regions'][0]['high_confidence_residues']==1
+    assert result['region_observations'][1]['sasa_retention'] is not None
+    assert len(result['interdomain_pae'])==3
+    payload.linker.sequence='AG'
+    with pytest.raises(ValueError,match='linker_identity'):review_linker_context(payload)
+    payload.linker.sequence='AA';payload.linker.role='scaffold_linker'
+    with pytest.raises(ValueError,match='linker_role'):review_linker_context(payload)
+    payload.linker.role='enzyme_ligand_linker';payload.model.expected_sequence='AAAG'
+    with pytest.raises(ValueError,match='exact_declared'):review_linker_context(payload)
+
+
 @pytest.mark.data_contract
 def test_relative_bound_confidence_path(tmp_path):
     request = prediction(tmp_path)

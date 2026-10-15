@@ -7,6 +7,28 @@ from igem_drylab.workflow.models import Project, SequenceRecord
 from igem_drylab.workflow.store import WorkflowStore
 
 
+@pytest.mark.data_contract
+def test_authorized_IDR_substitution_preserves_both_backbones_and_drops_inapplicable_evidence():
+    from igem_drylab.workflow.m1_checks import IDRSubstitutionInput,substitute_declared_idrs
+    templates=[dict(id=kind,parts=[dict(id='anchor',kind='protein',sequence='MA'),
+        dict(id='original',kind='idr',sequence='GS'),dict(id='terminal',kind='tag',sequence='GVKESLV')],
+        localization_context=kind,experimental_baseline=True,coding_dna='ATG',m1_review={'approved':True},
+        sequence_source_ref='explicit synthetic fixture') for kind in ('cytosolic','er_anchored')]
+    request=IDRSubstitutionInput(templates=templates,replacements=[dict(id='new',role='idr',sequence='SGGST')],
+        approval_reference='explicit synthetic authorization')
+    result=substitute_declared_idrs(request)
+    assert result['count']==2
+    assert [s['localization_context'] for s in result['sequences']]==['cytosolic','er_anchored']
+    assert all(s['sequence']=='MASGGSTGVKESLV' for s in result['sequences'])
+    for derived in result['constructs']:
+        assert not derived['experimental_baseline'] and derived['coding_dna'] is None and derived['m1_review'] is None
+        assert derived['parts'][0]==templates[0]['parts'][0] and derived['parts'][-1]==templates[0]['parts'][-1]
+        assert derived['provenance']['computational_IDR_substitution']['input_IDR_id']=='new'
+    assert request.templates[0].coding_dna=='ATG' and request.templates[0].parts[1].sequence=='GS'
+    request.templates[0].parts.append(request.templates[0].parts[1])
+    with pytest.raises(ValueError,match='one_explicit_IDR'):substitute_declared_idrs(request)
+
+
 @pytest.mark.integration
 def test_original_method_fanout_cheap_veto_and_persistent_missing_evidence(tmp_path):
     project = Project(id="p", name="Explicit software fixture", sequences=[
