@@ -101,6 +101,12 @@ def test_approved_linker_context_preserves_strict_gap_and_low_confidence(tmp_pat
     assert result['DSSP']['regions'][0]['high_confidence_residues']==1
     assert result['region_observations'][1]['sasa_retention'] is not None
     assert len(result['interdomain_pae'])==3
+    payload.construct_definition.parts[0].sequence=' a\n'
+    payload.construct_definition.parts[1].sequence='a a'
+    payload.linker.sequence='a\na'
+    normalized=review_linker_context(payload)
+    assert normalized['linker_region']==result['linker_region']
+    assert normalized['geometry']==result['geometry']
     payload.linker.sequence='AG'
     with pytest.raises(ValueError,match='linker_identity'):review_linker_context(payload)
     payload.linker.sequence='AA';payload.linker.role='scaffold_linker'

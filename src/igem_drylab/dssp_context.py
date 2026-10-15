@@ -14,6 +14,7 @@ from .region_assessment import Region, RegionAssessmentInput, assess_regions
 from .template_geometry import StructureInput
 from .pipeline.config import ConstructDefinition
 from .constructs.sequence_qc import assemble_and_validate_construct
+from .constructs.linker_features import normalize_amino_acid_sequence
 from .workflow.models import SequenceRecord
 
 
@@ -93,19 +94,20 @@ def review_linker_context(payload: LinkerContextReviewInput) -> dict:
         raise ValueError('context_model_must_match_the_exact_declared_complete_construct')
     if payload.model.source_kind != 'prediction':
         raise ValueError('linker_context_requires_paired_complete_prediction')
-    regions=[]; matching=[]; start=1
-    for index, part in enumerate(construct.parts):
+    linker_sequence=normalize_amino_acid_sequence(payload.linker.sequence)
+    regions=[]; matching=[]
+    for index, (part,boundary) in enumerate(zip(construct.parts,qc.part_boundaries,strict=True)):
         fragment=part.sequence or construct.sequences.get(part.id)
         if not fragment:
             raise ValueError('context_review_requires_every_declared_part_sequence')
-        regions.append(Region(name=f'{part.id}#{index+1}',role=part.kind,start=start,end=start+len(fragment)-1))
+        fragment=normalize_amino_acid_sequence(fragment)
+        regions.append(Region(name=f'{part.id}#{index+1}',role=part.kind,start=boundary.start_aa,end=boundary.end_aa))
         if part.id == payload.source_part_id:
-            if part.kind not in linker_roles or fragment != payload.linker.sequence:
+            if part.kind not in linker_roles or fragment != linker_sequence:
                 raise ValueError('context_linker_identity_does_not_match_declared_part')
             if payload.linker.role != 'linker' and part.kind != payload.linker.role:
                 raise ValueError('context_linker_role_does_not_match_declared_part')
             matching.append(index)
-        start+=len(fragment)
     if payload.occurrence>len(matching):
         raise ValueError('requested_linker_occurrence_not_present_in_construct')
     index=matching[payload.occurrence-1]; region=regions[index]
@@ -121,8 +123,8 @@ def review_linker_context(payload: LinkerContextReviewInput) -> dict:
     def distance(first,second):
         return float(np.linalg.norm(ca[first-1].coordinate-ca[second-1].coordinate))
     assignments=dssp['regions'][0]
-    complete=assignments['mapped_residues']==len(payload.linker.sequence)
-    credible=assignments['high_confidence_residues']==len(payload.linker.sequence)
+    complete=assignments['mapped_residues']==len(linker_sequence)
+    credible=assignments['high_confidence_residues']==len(linker_sequence)
     return dict(schema_version='m1-linker-context-review-v1',candidate_id=payload.linker.id,
         construct_id=construct.id,localization_context=construct.localization_context,
         source_part_id=payload.source_part_id,source_fragment_role=payload.linker.role,
