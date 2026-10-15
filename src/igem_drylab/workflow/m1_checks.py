@@ -15,7 +15,7 @@ from .models import Contract, SequenceRecord, Workflow, WorkflowNode, ProjectInp
 from .tools import NodeContext, ToolDefinition
 from igem_drylab.resources import default_config_path
 from igem_drylab.m1_prioritization import (PrioritizationPolicy, PrioritizationCandidate,
-    M1PrioritizationInput, PredictorScore, prioritize_m1)
+    M1PrioritizationInput, PredictorScore, ComparisonContext, prioritize_m1)
 
 
 KINDS = {"idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "full_fusion"}
@@ -29,6 +29,7 @@ class M1PrecheckInput(Contract):
 
 class M1DecisionInput(M1PrecheckInput):
     prioritization_policy: PrioritizationPolicy | None = None
+    comparison_contexts: dict[str,ComparisonContext] = Field(default_factory=dict)
     prechecks: list[dict] = Field(default_factory=list)
     disorder_results: list[dict] = Field(default_factory=list)
     seg_results: list[dict] = Field(default_factory=list)
@@ -119,12 +120,14 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
             predictors.extend(PredictorScore.model_validate(value) for value in parsed.get("predictor_scores", []))
     if payload.prioritization_policy is not None:
         prioritization = prioritize_m1(M1PrioritizationInput(policy=payload.prioritization_policy,
-            candidates=[PrioritizationCandidate(candidate_id=payload.item.id, screen=screen, predictors=predictors)]))
+            candidates=[PrioritizationCandidate(candidate_id=payload.item.id, screen=screen, predictors=predictors,
+                comparison_context=payload.comparison_contexts.get(payload.item.id))]))
     priority = prioritization['candidates'][0] if prioritization else None
     return dict(schema_version="m1-method-check-v1", candidate_id=payload.item.id,
         verdict=screen.verdict, precheck=observed, screen=screen.model_dump(mode="json"),
         prioritization=prioritization,
         predictor_scores=[score.model_dump(mode="json") for score in predictors],
+        comparison_context=payload.comparison_contexts[payload.item.id].model_dump(mode='json') if payload.item.id in payload.comparison_contexts else None,
         steps=[dict(step="1", name="Cheap sequence fields", status="reject" if observed["hard_reject_reasons"] else "completed"),
                dict(step="2", name="External fragment predictors", status="not_eligible" if not observed["eligible_for_tools"] else
                     "completed" if all(row.get("parse_status") == "succeeded" for row in (disorder, seg, secondary)) else "partial",
@@ -133,13 +136,14 @@ def decision(payload: M1DecisionInput, context: NodeContext) -> dict:
                dict(step="3", name="Actual full fusion checks", status="completed" if payload.item.role=="full_fusion" and not screen.missing_required_evidence else "blocked",
                     missing=screen.missing_required_evidence if payload.item.role=="full_fusion" else
                         ["construct assembly binding", "SignalP", "DeepTMHMM", "TANGO/PASTA", "forbidden DNA sites"]),
-               dict(step="4", name="Soft risk classification", status="completed" if priority and priority['risk'] is not None else "blocked",
-                    missing=[] if priority and priority['risk'] is not None else ["reviewed complete risk directions"]),
+               dict(step="4", name="Soft risk review", status="completed" if priority and (priority['risk'] is not None or 'soft_review_flags' in priority) else "blocked",
+                    missing=[] if priority and (priority['risk'] is not None or 'soft_review_flags' in priority) else ["reviewed complete risk directions"]),
                dict(step="5", name="Original-method ranking", status="not_applicable" if payload.item.role!='idr' else
-                    "partial" if priority and priority.get('comparison_method') else "completed" if priority and priority['rank_score'] is not None else "blocked",
+                    "completed" if priority and priority['rank_score'] is not None else "partial" if priority and priority.get('comparison_method') else "blocked",
                     missing=(priority['missing'] if priority else ["raw LLPS predictions and reviewed normalization/rubric"])
                     if payload.item.role=='idr' else [],
                     note="Linkers use the original checklist/rubric, not an invented composite score." if payload.item.role!='idr' else
+                    "Three-predictor equal-weight initial score; batch comparison requires a frozen complete cohort." if priority and priority.get('comparison_method')=='initial_equal_weight_midrank_v2' else
                     "Adopted descriptive comparison; original weighted score remains undefined." if priority and priority.get('comparison_method') else None)],
         claim_scope="original_M1_available_hard_checks_not_full_candidate_acceptance")
 
@@ -158,6 +162,7 @@ def batch_rank(payload: M1BatchRankInput, context: NodeContext) -> dict:
     from igem_drylab.constructs.linker_features import M1ScreenResult
     candidates = [PrioritizationCandidate(candidate_id=row["candidate_id"],
         screen=M1ScreenResult.model_validate(row["screen"]),
+        comparison_context=row.get('comparison_context'),
         predictors=[PredictorScore.model_validate(value) for value in row.get("predictor_scores", [])])
         for row in payload.decisions if row.get("screen")]
     if not candidates:
@@ -178,7 +183,8 @@ def m1_check_tools():
                 "1", M1BatchRankInput, batch_rank, "scientific_project", implementation_files=implementation)]
 
 
-def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: int | None = None) -> Workflow:
+def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: int | None = None,
+                comparison_contexts: dict[str,ComparisonContext] | None = None) -> Workflow:
     import yaml
     definitions, _ = M1FeatureDefinitions.from_yaml(default_config_path("m1_feature_definitions.yaml"))
     rules = M1V3Rules.model_validate(yaml.safe_load(default_config_path("m1_rules_v3.yaml").read_text()))
@@ -198,6 +204,7 @@ def m1_workflow(policy: PrioritizationPolicy | None = None, *, sequence_count: i
             tool_id="prediction."+tool, inputs={"prechecks": checks}, map=batch))
     nodes.append(WorkflowNode(id="m1_decisions", label="M1 decisions and explicit unfinished steps", tool_id="method.m1.decision",
         inputs={**inputs, "prioritization_policy": LiteralInput(value=policy.model_dump(mode='json') if policy else None),
+                "comparison_contexts": LiteralInput(value={key:value.model_dump(mode='json') for key,value in (comparison_contexts or {}).items()}),
                 "prechecks": checks, "disorder_results": NodeInput(node_id="m1_iupred2a", path=["items"]),
                 "seg_results": NodeInput(node_id="m1_seg", path=["items"]),
                 "secondary_results": NodeInput(node_id="m1_jpred", path=["items"]),
