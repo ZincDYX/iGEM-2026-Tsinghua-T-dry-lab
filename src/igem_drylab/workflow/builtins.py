@@ -98,7 +98,8 @@ def recommend(project: Project, goal: Goal) -> Workflow:
         if not project.sequences:
             raise ValueError("upload_and_confirm_sequences_first")
         from .m1_checks import m1_workflow
-        return m1_workflow(sequence_count=len(project.sequences))
+        return m1_workflow(sequence_count=len(project.sequences),
+            aggregation_exclusion_reference=project.conditions.get('m1_aggregation_exclusion_reference'))
     if goal == "scientific_pipeline":
         from .scientific_project import ScientificProject
         if project.scientific_project is None:

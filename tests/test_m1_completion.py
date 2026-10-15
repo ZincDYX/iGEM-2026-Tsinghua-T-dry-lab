@@ -94,6 +94,18 @@ def test_explicit_aggregation_exclusion_removes_only_the_native_aggregation_DAG_
     assert decision.inputs['rules'].value['aggregation_exclusion_reference']=='User cancelled TANGO/PASTA'
 
 
+def test_project_protocol_amendment_reaches_the_recommended_software_workflow():
+    from igem_drylab.workflow.builtins import recommend
+    from igem_drylab.workflow.models import Project,SequenceRecord
+    project=Project(id='p',name='Synthetic software fixture',sequences=[SequenceRecord(id='x',sequence='GSGSGS')])
+    assert 'm1_tango' in {n.id for n in recommend(project,'m1_sequence_checks').nodes}
+    project.conditions['m1_aggregation_exclusion_reference']='Explicit project-owner cancellation, synthetic fixture'
+    workflow=recommend(project,'m1_sequence_checks')
+    assert 'm1_tango' not in {n.id for n in workflow.nodes}
+    decision=next(n for n in workflow.nodes if n.id=='m1_decisions')
+    assert decision.inputs['rules'].value['aggregation_exclusion_reference']==project.conditions['m1_aggregation_exclusion_reference']
+
+
 def test_soft_risk_count_and_undefined_feature_without_linker_composite(tmp_path):
     root=Path(__file__).resolve().parents[1]
     definitions,digest=M1FeatureDefinitions.from_yaml(root/"configs/m1_feature_definitions.yaml")
