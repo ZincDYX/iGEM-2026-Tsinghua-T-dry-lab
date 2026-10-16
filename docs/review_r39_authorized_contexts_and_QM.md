@@ -67,8 +67,11 @@ RDKit hydrogen coordinates are starting coordinates, not QM observations.
 PySCF/geomeTRIC optimization, SCF checks, gradients and optional Cartesian
 Hessians. Atom mappings, the full request, checkpoint, native logs and results
 are retained in a new attempt directory. CPU and CUDA are explicit backends;
-failure does not trigger an undisclosed method or hardware substitution. Signed
-harmonic wavenumbers retain imaginary modes. Constrained clusters retain the
+failure does not trigger an undisclosed method or hardware substitution.
+The final SCF explicitly reuses the same attempt's geometry-optimization
+checkpoint as its initial guess, retaining the original method, spin, charge
+and convergence tolerance rather than restarting from atomic densities.
+Signed harmonic wavenumbers retain imaginary modes. Constrained clusters retain the
 raw Hessian without presenting unconstrained frequencies as validated modes.
 
 Project starting models include oxidized lumiflavin, two His protonation

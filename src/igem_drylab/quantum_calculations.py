@@ -208,6 +208,9 @@ def run_quantum_calculation(payload: QuantumCalculationInput) -> dict:
     if not optimizer.converged:
         raise RuntimeError('QM_geometry_did_not_converge_native_outputs_preserved')
     mean_field=mean_field.reset(optimized)
+    # Reuse this attempt's optimized wavefunction instead of restarting from
+    # atomic densities, particularly important for open-shell metal centers.
+    mean_field.init_guess='chkfile'
     energy=float(mean_field.kernel())
     if not mean_field.converged:raise RuntimeError('final_QM_SCF_did_not_converge')
     coordinates=optimized.atom_coords(unit='Angstrom')
@@ -233,6 +236,7 @@ def run_quantum_calculation(payload: QuantumCalculationInput) -> dict:
         formal_charge=payload.formal_charge,spin_2s=payload.spin_2s,multiplicity=payload.spin_2s+1,
         electrons=optimized.nelectron,atom_count=optimized.natm,geometry_converged=True,SCF_converged=True,
         energy_hartree=energy,maximum_absolute_gradient_hartree_per_bohr=float(np.abs(gradient).max()),
+        final_SCF_initial_guess='same_attempt_geometry_optimization_checkpoint',
         frequencies_wavenumber_cm_inverse=frequencies,frozen_atoms_1based=payload.frozen_atoms_1based,
         frozen_atom_displacement_angstrom={payload.atoms[i-1].source_atom_id:float(np.linalg.norm(
             coordinates[i-1]-np.asarray(payload.atoms[i-1].xyz_angstrom))) for i in payload.frozen_atoms_1based},

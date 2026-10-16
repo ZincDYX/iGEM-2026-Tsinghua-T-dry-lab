@@ -74,6 +74,7 @@ def test_native_qm_optimization_gradient_hessian_and_no_MD_promotion(tmp_path,ba
     reference=scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1',unit='Angstrom',basis='sto-3g',verbose=0)).kernel()
     result=run_quantum_calculation(request)
     assert result['engine_version']==pyscf.__version__
+    assert result['final_SCF_initial_guess']=='same_attempt_geometry_optimization_checkpoint'
     assert result['energy_hartree']<reference
     mapping=json.loads((request.output_dir/'optimized-atom-mapping.json').read_text())
     direct=scf.RHF(gto.M(atom=[(a['element'],a['xyz_angstrom']) for a in mapping],unit='Angstrom',basis='sto-3g',verbose=0)).kernel()
