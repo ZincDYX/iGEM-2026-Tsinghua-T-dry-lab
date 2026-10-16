@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: QM_LOCAL_PES_REFERENCE_IS_NOT_A_CHARMM_PARAMETER
+    group: scientific_algorithm
+    test_nodeids: ["tests/test_quantum_calculations.py::test_local_PES_independent_quadratic_and_holdout_units_not_force_constants", "tests/test_quantum_calculations.py::test_local_PES_rejects_reused_or_incomparable_reference_points"]
+    requirement_or_formula_source: explicit distance-QM reference curve with held-out native points before parameter fitting
+    oracle_type: independent analytical quadratic coefficient and factor-two curvature; Angstrom-to-nm and hartree-to-kJ conversion
+    fixture_scope: synthetic native-format mathematical fixture, not genuine PySCF execution or cofactor validation
+    formula_version: local quadratic E-E0=a*(r-r0)^2+b*(r-r0)+c
+    units: hartree; Angstrom; kJ/mol/nm2
+    tolerance_basis: coefficient and minimum within 1e-12; synthetic holdout error below 1e-9 kJ/mol; no invented production acceptance threshold
+    expected_faults: [factor_two_error, wrong_length_conversion, holdout_reused_for_fit, mixed_chemical_state, unconverged_native_target, relaxed_curvature_used_as_CHARMM_bond_constant]
   - risk_id: NATIVE_PREDICTION_FAILURE_IS_NOT_JOB_SUCCESS
     group: data_contract
     test_nodeids: ["tests/test_sequence_prediction_workflow.py::test_actual_native_failure_is_not_a_successful_workflow_node", "tests/test_native_pocket_candidates.py::test_native_pocket_process_failure_is_failed_not_completed"]

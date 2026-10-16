@@ -129,3 +129,54 @@ def test_native_constrained_PES_point_is_not_a_free_minimum_or_a_force_field(tmp
     assert result['coordinate_constraints']==data['coordinate_constraints']
     assert result['maximum_absolute_gradient_hartree_per_bohr']>4.5e-4
     assert not result['production_MD_ready'] and not result['bonded_parameters_fitted']
+
+
+def synthetic_PES_reference(tmp_path):
+    """Explicit analytical native-format fixture, not an actual PySCF job."""
+    from igem_drylab.quantum_calculations import RelaxedPESReferenceInput
+    folders=[]
+    for index,distance in enumerate([.9,1.,1.1,.95,1.05]):
+        folder=tmp_path/('point'+str(index));folder.mkdir();folders.append(folder)
+        data=hydrogen_request(folder);data['coordinate_constraints']=[dict(kind='distance',atoms_1based=[1,2],target=distance)]
+        data['method_reference']='SYNTHETIC analytical curve, not native execution'
+        request=QuantumCalculationInput.model_validate(data);(folder/'request.json').write_text(request.model_dump_json())
+        native={key:getattr(request,key) for key in ('formal_charge','spin_2s','method','basis','density_fitting','backend')}
+        native.update(geometry_converged=True,SCF_converged=True,engine='SYNTHETIC-NOT-PySCF',engine_version='fixture',
+            energy_hartree=-1+3*(distance-1)**2)
+        (folder/'result.json').write_text(json.dumps(native))
+        mapping=[a.model_dump(mode='json') for a in request.atoms];mapping[1]['xyz_angstrom']=[0,0,distance]
+        (folder/'optimized-atom-mapping.json').write_text(json.dumps(mapping))
+    return RelaxedPESReferenceInput(training_directories=folders[:3],validation_directories=folders[3:],
+        source_reference='Independent analytic E=-1+3*(r-1)^2 fixture; not biological validation')
+
+
+@pytest.mark.scientific_algorithm
+def test_local_PES_independent_quadratic_and_holdout_units_not_force_constants(tmp_path):
+    from scipy.constants import physical_constants,Avogadro
+    from igem_drylab.quantum_calculations import fit_relaxed_PES_reference
+    result=fit_relaxed_PES_reference(synthetic_PES_reference(tmp_path))
+    assert result['local_fitted_minimum_angstrom']==pytest.approx(1.,abs=1e-12)
+    assert result['coefficients']['a_hartree_per_angstrom2']==pytest.approx(3.,abs=1e-12)
+    expected=6*physical_constants['Hartree energy'][0]*Avogadro/1000*100
+    assert result['relaxed_QM_curvature_kJ_mol_nm2']==pytest.approx(expected,rel=1e-12)
+    assert result['holdout_errors']['maximum_absolute_error_kJ_mol']<1e-9
+    assert len(result['training_points'])==3 and len(result['holdout_points'])==2
+    assert not result['bonded_parameters_fitted'] and not result['production_MD_ready']
+
+
+@pytest.mark.data_contract
+@pytest.mark.parametrize('fault',['reused_holdout','changed_spin','changed_atom','unconverged','native_theory'])
+def test_local_PES_rejects_reused_or_incomparable_reference_points(tmp_path,fault):
+    from igem_drylab.quantum_calculations import fit_relaxed_PES_reference
+    request=synthetic_PES_reference(tmp_path);folder=request.validation_directories[0]
+    if fault=='reused_holdout':request.validation_directories=[request.training_directories[0]]
+    elif fault=='changed_spin':
+        path=folder/'request.json';data=json.loads(path.read_text());data['spin_2s']=2;path.write_text(json.dumps(data))
+    elif fault=='changed_atom':
+        path=folder/'optimized-atom-mapping.json';data=json.loads(path.read_text());data[0]['source_atom_id']='other';path.write_text(json.dumps(data))
+    else:
+        path=folder/'result.json';data=json.loads(path.read_text())
+        if fault=='unconverged':data['SCF_converged']=False
+        if fault=='native_theory':data['basis']='other'
+        path.write_text(json.dumps(data))
+    with pytest.raises(ValueError):fit_relaxed_PES_reference(request)

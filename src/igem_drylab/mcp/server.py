@@ -21,6 +21,7 @@ from igem_drylab.pocket_preparation import CofactorTransferInput
 from igem_drylab.dssp_context import DsspContextInput
 from igem_drylab.dssp_context import LinkerContextReviewInput
 from igem_drylab.quantum_calculations import ModelCompoundInput
+from igem_drylab.quantum_calculations import RelaxedPESReferenceInput
 from igem_drylab.template_geometry import AssemblyPreparationInput
 from igem_drylab.template_geometry import AssemblyAccessibilityInput
 from igem_drylab.template_geometry import RecruitmentPosePreparationInput
@@ -45,6 +46,11 @@ server = MCPServer(
         "be returned as blocked or insufficient_data and must never be replaced by guessed values."
     ),
 )
+
+
+@server.tool(name='igem.m2.fit_relaxed_PES_reference',title='Local native QM PES reference with held-out points',structured_output=True)
+def m2_fit_relaxed_PES_reference(payload: RelaxedPESReferenceInput) -> dict[str,Any]:
+    return _call_local('igem.m2.fit_relaxed_PES_reference',{'payload':payload.model_dump(mode='json')})
 
 
 @server.tool(name='igem.m1.read_native_fusion_batch',title='Native source-FASTA batch observations',structured_output=True)

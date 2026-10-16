@@ -101,6 +101,18 @@ are retained; a constrained Hessian is not reported as free-molecule frequencies
 Coordinate-driving targets do not themselves constitute fitted bond constants,
 complete torsional profiles or independent CHARMM validation.
 
+The shared CLI/backend and real stdio MCP tool
+`igem.m2.fit_relaxed_PES_reference` fit a local quadratic reference to completed
+native relaxed distance scans. Separate, unfitted native points report held-out
+energy errors. The fit uses actual optimized distances and reports constraint
+residuals, chemical state, theory and atom identities. Its curvature includes
+relaxation and other QM energy terms: it is **not** a CHARMM bond constant.
+No acceptance threshold or completed-force-field status is inferred from the
+fit. Conversion uses the Hartree energy and Avogadro constant from SciPy;
+the second derivative includes the factor of two and angstrom-to-nanometre
+conversion. Analytical unit tests are explicitly synthetic, not biological
+or native-tool validation.
+
 ## Isolated installation and tests
 
 No model weights, licensed tools, private sequences, credentials or deployment

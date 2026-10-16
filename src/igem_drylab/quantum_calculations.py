@@ -245,6 +245,74 @@ def run_quantum_calculation(payload: QuantumCalculationInput) -> dict:
     (root/'result.json').write_text(json.dumps(result,indent=2));return result
 
 
+class RelaxedPESReferenceInput(ScientificAnalysisInput):
+    """Local QM reference interpolation and independent holdout errors, not CHARMM parameters."""
+    training_directories: list[Path] = Field(min_length=3)
+    validation_directories: list[Path] = Field(min_length=1)
+    source_reference: str = Field(min_length=1)
+
+
+def fit_relaxed_PES_reference(payload: RelaxedPESReferenceInput) -> dict:
+    from scipy.constants import physical_constants, Avogadro
+    directories=payload.training_directories+payload.validation_directories
+    if len({p.resolve() for p in directories})!=len(directories):
+        raise ValueError('PES_validation_requires_distinct_unfitted_native_points')
+    points=[];signature=None
+    for folder in directories:
+        request=QuantumCalculationInput.model_validate_json((folder/'request.json').read_text())
+        native=json.loads((folder/'result.json').read_text())
+        mapping=json.loads((folder/'optimized-atom-mapping.json').read_text())
+        if not native['geometry_converged'] or not native['SCF_converged']:
+            raise ValueError('PES_point_requires_completed_native_geometry_and_SCF')
+        if len(request.coordinate_constraints)!=1 or request.coordinate_constraints[0].kind!='distance':
+            raise ValueError('local_distance_PES_requires_one_explicit_distance_constraint')
+        constraint=request.coordinate_constraints[0]
+        identities=[(a.source_atom_id,a.element) for a in request.atoms]
+        if identities!=[(a['source_atom_id'],a['element']) for a in mapping]:
+            raise ValueError('PES_optimized_atom_mapping_changed')
+        theory={k:getattr(request,k) for k in ('formal_charge','spin_2s','method','basis','density_fitting','backend','frozen_atoms_1based','scf_energy_tolerance_hartree')}
+        state=(identities,theory,sorted(constraint.atoms_1based),request.chemical_state_reference,
+            request.model_boundary_description,native['engine'],native['engine_version'])
+        if signature is not None and state!=signature:
+            raise ValueError('PES_points_must_share_chemical_state_method_mapping_and_boundaries')
+        signature=state
+        for key in ('formal_charge','spin_2s','method','basis','density_fitting','backend'):
+            if native[key]!=theory[key]:raise ValueError('PES_native_theory_does_not_match_request')
+        xyz=np.asarray([a['xyz_angstrom'] for a in mapping]);i,j=constraint.atoms_1based
+        distance=float(np.linalg.norm(xyz[i-1]-xyz[j-1]));energy=float(native['energy_hartree'])
+        if not np.isfinite(xyz).all() or not np.isfinite(energy):raise ValueError('PES_native_point_must_be_finite')
+        points.append(dict(directory=str(folder),distance_angstrom=distance,energy_hartree=energy,
+            requested_distance_angstrom=constraint.target,constraint_residual_angstrom=distance-constraint.target))
+    count=len(payload.training_directories);training=points[:count];validation=points[count:]
+    x=np.asarray([p['distance_angstrom'] for p in training]);origin=float(np.mean(x))
+    energy_origin=min(p['energy_hartree'] for p in training)
+    design=np.column_stack(((x-origin)**2,x-origin,np.ones(len(x))))
+    coefficients,_,rank,_=np.linalg.lstsq(design,np.asarray([p['energy_hartree']-energy_origin for p in training]),rcond=None)
+    if rank!=3:raise ValueError('local_PES_fit_requires_three_distinct_actual_distances')
+    quadratic,linear,constant=map(float,coefficients)
+    conversion=physical_constants['Hartree energy'][0]*Avogadro/1000
+    def errors(rows):
+        errors=[]
+        for point in rows:
+            delta=point['distance_angstrom']-origin
+            predicted_relative=quadratic*delta**2+linear*delta+constant
+            residual=(predicted_relative-(point['energy_hartree']-energy_origin))*conversion
+            point.update(predicted_relative_energy_hartree=predicted_relative,energy_residual_kJ_mol=residual)
+            errors.append(residual)
+        return dict(RMSE_kJ_mol=float(np.sqrt(np.mean(np.square(errors)))),maximum_absolute_error_kJ_mol=float(np.max(np.abs(errors))))
+    return dict(schema_version='QM-local-relaxed-distance-reference-v1',source_reference=payload.source_reference,
+        polynomial_definition='E-E_origin = a*(r-r_origin)^2 + b*(r-r_origin) + c; r in Angstrom',
+        distance_origin_angstrom=origin,energy_origin_hartree=energy_origin,
+        coefficients=dict(a_hartree_per_angstrom2=quadratic,b_hartree_per_angstrom=linear,c_hartree=constant),
+        relaxed_QM_curvature_kJ_mol_nm2=2*quadratic*conversion*100,
+        local_fitted_minimum_angstrom=origin-linear/(2*quadratic) if quadratic>0 else None,
+        training_domain_angstrom=[float(x.min()),float(x.max())],
+        training_errors=errors(training),holdout_errors=errors(validation),training_points=training,holdout_points=validation,
+        theoretical_settings=theory,source_atom_pair=[identities[i-1][0],identities[j-1][0]],
+        fitting_acceptance_threshold_not_invented=True,CHARMM_partial_charges_fitted=False,bonded_parameters_fitted=False,
+        production_MD_ready=False,scope='relaxed_QM_reference_curve_includes_other_terms_and_relaxation_not_a_CHARMM_bond_constant_or_complete_force_field')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--request',type=Path,required=True)
