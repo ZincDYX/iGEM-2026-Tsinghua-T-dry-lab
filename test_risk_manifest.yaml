@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: REFACTORED_PLANNER_PRESERVES_DEPENDENCY_AND_REVIEW_BOUNDARIES
+    group: platform
+    test_nodeids: ["tests/test_workbench_planning.py::test_hybrid_dependency_and_missing_input_contracts"]
+    requirement_or_formula_source: unchanged production proposal semantics during responsibility extraction
+    oracle_type: explicit expected stage closure, missing-input codes, policy and persisted transcript
+    fixture_scope: software-only semantic fixture; no model API, scientific calculator or biological evidence
+    formula_version: not_applicable
+    units: not_applicable
+    tolerance_basis: exact equality of stage order, codes, permissions and messages
+    expected_faults: [implicit_dependency_reuse, silent_permission_expansion, missing_evidence_default_pass, proposal_starts_jobs]
   - risk_id: QM_LOCAL_PES_REFERENCE_IS_NOT_A_CHARMM_PARAMETER
     group: scientific_algorithm
     test_nodeids: ["tests/test_quantum_calculations.py::test_local_PES_independent_quadratic_and_holdout_units_not_force_constants", "tests/test_quantum_calculations.py::test_local_PES_rejects_reused_or_incomparable_reference_points"]

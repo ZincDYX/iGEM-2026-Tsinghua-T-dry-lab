@@ -4,10 +4,103 @@ import type {
   ProposalDiff,
   ProposalView,
   RuntimeInfoView,
+  Workflow,
 } from "../contracts/generated";
-import type { Goal } from "../types";
 import * as client from "./client";
-import {object} from '../contracts/validation';
+import { object } from "../contracts/validation";
+
+const inputLabels: Record<string, string> = {
+  project: "scientific input plan",
+  upstream_result: "previous module result",
+  sequence: "selected sequence",
+  results: "module results",
+  package_file_id: "selected demonstration package",
+};
+
+function changedInputLabels(
+  node: Workflow["nodes"][number] | undefined,
+  changes: ProposalDiff["changes"],
+) {
+  const spec =
+    node?.tool_id === "workflow.custom_formula" &&
+    node.inputs.spec?.kind === "literal"
+      ? node.inputs.spec.value
+      : undefined;
+  if (object(spec) && object(spec.variables)) {
+    return Object.entries(spec.variables).map(([name, value]) =>
+      object(value) ? `${name} = ${value.value} ${value.unit}` : name,
+    );
+  }
+  const names = changes
+    .filter((change) => change.kind === "binding")
+    .map((change) => change.input_name)
+    .filter((name): name is string => !!name);
+  return [...new Set(names)].map(
+    (name) => inputLabels[name] ?? name.replaceAll("_", " "),
+  );
+}
+
+function ProposalChanges({
+  proposal,
+  diff,
+}: {
+  proposal: ProposalView;
+  diff: ProposalDiff;
+}) {
+  if (!diff.changes.length) {
+    return (
+      <section aria-label="Proposed changes">
+        <p>
+          No graph or permission changes. This prompt did not edit scientific
+          parameters.
+        </p>
+      </section>
+    );
+  }
+  const groups = new Map<string, ProposalDiff["changes"]>();
+  for (const change of diff.changes) {
+    const nodeId = change.node_id ?? "";
+    groups.set(nodeId, [...(groups.get(nodeId) ?? []), change]);
+  }
+  const workflow = proposal.workflow;
+  return (
+    <section aria-label="Proposed changes">
+      <ul>
+        {[...groups].map(([nodeId, changes]) => {
+          if (!nodeId) {
+            const target = workflow?.nodes.find(
+              (node) => node.id === workflow.execution_policy.target_node_id,
+            );
+            return (
+              <li key="scope">
+                Execution scope and tool permissions:{" "}
+                {target?.label ?? "all modules"}.
+              </li>
+            );
+          }
+          const node = workflow?.nodes.find((value) => value.id === nodeId);
+          const inputs = changedInputLabels(node, changes);
+          const label =
+            node?.label ??
+            changes.find((change) => change.kind === "node")?.before ??
+            "Removed module";
+          return (
+            <li key={nodeId}>
+              {label}
+              {inputs.length ? ` — inputs: ${inputs.join("; ")}` : ""}
+              {changes.some((change) => change.kind === "tool")
+                ? " — calculation changed"
+                : ""}
+              {changes.some((change) => change.kind === "dependency")
+                ? " — dependencies updated"
+                : ""}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 export function AgentPanel(props: {
   proposal?: ProposalView;
@@ -15,15 +108,12 @@ export function AgentPanel(props: {
   projectRevision?: number;
   context?: string;
   info?: RuntimeInfoView;
-  goal: Goal;
   objective: string;
   mode: "template" | "hybrid";
   permission: boolean;
   busy: boolean;
   canPlan: boolean;
-  onGoal: (value: Goal) => void;
   onObjective: (value: string) => void;
-  onMode: (value: "template" | "hybrid") => void;
   onPermission: (value: boolean) => void;
   onPropose: () => void;
   onDecision: (value: "accept" | "reject") => void;
@@ -37,8 +127,6 @@ export function AgentPanel(props: {
   const p = props.proposal;
   const [history, setHistory] = useState<AssistantPage>(),
     [diff, setDiff] = useState<ProposalDiff>();
-  const changeGroups=new Map<string,ProposalDiff['changes']>();
-  for(const change of diff?.changes??[]){const id=change.node_id??'';changeGroups.set(id,[...(changeGroups.get(id)??[]),change]);}
   const [localIntent, setLocalIntent] = useState<"new" | "modify">("new"),
     [error, setError] = useState("");
   const intent = props.intent ?? localIntent,
@@ -155,28 +243,12 @@ export function AgentPanel(props: {
               ? "Approved plan"
               : p.status === "blocked"
                 ? "Plan needs data"
-                : p.status==='rejected'?'Rejected plan':"Changes to review"}
+                : p.status === "rejected"
+                  ? "Rejected plan"
+                  : "Changes to review"}
           </h3>
           <p>{p.rationale}</p>
-          {diff && (
-            <section aria-label="Proposed changes">
-              {diff.changes.length ? (
-                <ul>
-                  {[...changeGroups].map(([id,changes])=>{
-                    if(!id)return <li key="scope">Execution scope and tool permissions: {p.workflow?.nodes.find(node=>node.id===p.workflow?.execution_policy.target_node_id)?.label??'all modules'}.</li>;
-                    const node=p.workflow?.nodes.find(node=>node.id===id),spec=node?.tool_id==='workflow.custom_formula'&&node.inputs.spec?.kind==='literal'?node.inputs.spec.value:undefined;
-                    const inputs=object(spec)&&object(spec.variables)?Object.entries(spec.variables).map(([name,value])=>object(value)?`${name} = ${value.value} ${value.unit}`:name):[...new Set(changes.filter(change=>change.kind==='binding').map(change=>change.input_name).filter((name):name is string=>!!name))].map(name=>({project:'scientific input plan',upstream_result:'previous module result',sequence:'selected sequence',results:'module results',package_file_id:'selected demonstration package'}[name]??name.replaceAll('_',' ')));
-                    return <li key={id}>{node?.label??changes.find(change=>change.kind==='node')?.before??'Removed module'}{inputs.length?` — inputs: ${inputs.join('; ')}`:''}{changes.some(change=>change.kind==='tool')?' — calculation changed':''}{changes.some(change=>change.kind==='dependency')?' — dependencies updated':''}</li>;
-                  })}
-                </ul>
-              ) : (
-                <p>
-                  No graph or permission changes. This prompt did not edit
-                  scientific parameters.
-                </p>
-              )}
-            </section>
-          )}
+          {diff && <ProposalChanges proposal={p} diff={diff} />}
           {!!p.missing_inputs.length && (
             <ul>
               {[...new Set(p.missing_inputs)].map((value) => (

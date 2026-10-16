@@ -7,14 +7,19 @@ import { defaultLayout } from "./layout";
 afterEach(cleanup);
 
 it("keeps analysis scope in Workflow, not appearance settings", () => {
-  const onGoal = vi.fn();
   render(
-    <LocalSettings layout={defaultLayout()} onLayout={vi.fn()} onRefresh={vi.fn()}
-      goal="fusion_screen" mode="template" onGoal={onGoal} onMode={vi.fn()} section="appearance" onSection={vi.fn()}
+    <LocalSettings
+      layout={defaultLayout()}
+      onLayout={vi.fn()}
+      onRefresh={vi.fn()}
+      mode="template"
+      onMode={vi.fn()}
+      section="appearance"
+      onSection={vi.fn()}
     />,
   );
   expect(screen.queryByLabelText("Analysis entry point")).toBeNull();
-  expect(onGoal).not.toHaveBeenCalled();
+  expect(screen.getAllByRole("combobox")).toHaveLength(2);
 });
 
 it("shows original missing evidence without displaying internal identities", () => {

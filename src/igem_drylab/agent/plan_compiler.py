@@ -66,7 +66,3 @@ class DeterministicPlanCompiler:
         if "sh3:pdz" in text and "oc:dmt" in text and any(word in text for word in ("treat", "equate", "measured")): return "Capacity ratio is not measured enzyme abundance."
         if inputs.get("robustness_summary_available"): return "Sensitivity prioritizes measurement; it does not establish causality or optimality."
         return None
-
-
-def _is_timecourse(task: AgentTask) -> bool:
-    return bool(task.inputs.get("wetlab_time_course_available")) or "time-course" in task.objective.lower()

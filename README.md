@@ -23,6 +23,9 @@ not part of the official source history.
 The single [evidence index](docs/best_software_evidence.md) records submission,
 build, real-case and validation status. Eligibility and independent non-expert
 usability are not yet verified.
+The [architecture decision](docs/architecture_decision_local_modular_runtime.md)
+describes the single execution engine, current Assistant boundaries and tested
+refactoring scope.
 
 ## Local browser and CLI (no Rust required)
 

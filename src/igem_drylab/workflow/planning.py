@@ -2,6 +2,7 @@
 
 This module proposes; it never executes, approves parameters or reads credentials.
 """
+
 from __future__ import annotations
 
 from typing import Literal
@@ -9,17 +10,33 @@ from pydantic import Field
 from uuid import uuid4
 
 from .builtins import Goal, recommend
-from .models import Contract, ExecutionPolicy, PlanBinding, Workflow, WorkflowError
+from .models import (
+    Contract,
+    ExecutionPolicy,
+    PlanBinding,
+    Project,
+    Workflow,
+    WorkflowError,
+)
 from .store import now, plan_binding
-from igem_drylab.agent.scientific_environment import ScientificEnvironment,ScientificObservation
-from igem_drylab.agent.decision import ScientificAction,InspectProjectAction,PrepareNodeAction,WaitAction,SemanticDecision
+from igem_drylab.agent.scientific_environment import (
+    ScientificEnvironment,
+    ScientificObservation,
+)
+from igem_drylab.agent.decision import (
+    ScientificAction,
+    InspectProjectAction,
+    PrepareNodeAction,
+    WaitAction,
+    SemanticDecision,
+)
 
 
 class ProposalRequest(Contract):
     project_id: str
     goal: Goal
     objective: str = ""
-    mode: Literal["template","hybrid"] = "template"
+    mode: Literal["template", "hybrid"] = "template"
     external_planning_approved: bool = False
     policy: ExecutionPolicy = Field(default_factory=ExecutionPolicy)
 
@@ -32,7 +49,7 @@ class ProposalView(Contract):
     task_id: str
     project_id: str
     source: str
-    status: Literal["proposed","accepted","rejected","blocked","stale"]
+    status: Literal["proposed", "accepted", "rejected", "blocked", "stale"]
     objective: str
     rationale: str
     change_types: list[str] = Field(default_factory=list)
@@ -50,7 +67,7 @@ class ProposalView(Contract):
 
 
 class ProposalDecision(Contract):
-    action: Literal["accept","reject"]
+    action: Literal["accept", "reject"]
 
 
 class ProposalRevision(Contract):
@@ -92,8 +109,10 @@ class ProposalDiff(Contract):
 
 
 class PlanningService:
-    def __init__(self,store,boundary,backend=None,engine=None,workflow_validator=None):
-        self.store,self.boundary,self.backend = store,boundary,backend
+    def __init__(
+        self, store, boundary, backend=None, engine=None, workflow_validator=None
+    ):
+        self.store, self.boundary, self.backend = store, boundary, backend
         self.engine = engine
         self.workflow_validator = workflow_validator
         with store.connection() as db:
@@ -108,162 +127,339 @@ class PlanningService:
                 CREATE INDEX IF NOT EXISTS assistant_project_seq ON assistant_messages(project_id,seq);
             """)
 
-    def propose(self,request: ProposalRequest) -> ProposalView:
+    def propose(self, request: ProposalRequest) -> ProposalView:
         project = self.store.project(request.project_id)
-        self.boundary.check({"objective":request.objective})
+        self.boundary.check({"objective": request.objective})
         identity = str(uuid4())
-        result = ProposalView(id=identity,task_id=identity,project_id=project.id,source="validated_template",status="proposed",
-            objective=request.objective,rationale="Template planner; no language model was called.",evidence=[],requested_stages=[],execution_stages=[],
-            reused_artifacts=[],missing_inputs=[],limitations=["Accepting a proposal does not approve parameters or start execution.","Cross-run dependency reuse is not verified; original scientific outputs are not automatically reused."],workflow=None,confirmation=None,created_at=now())
-        workflow = None
-        environment = ScientificEnvironment(self.store,self.engine.tools) if self.engine else None
+        result = ProposalView(
+            id=identity,
+            task_id=identity,
+            project_id=project.id,
+            source="validated_template",
+            status="proposed",
+            objective=request.objective,
+            rationale="Template planner; no language model was called.",
+            evidence=[],
+            requested_stages=[],
+            execution_stages=[],
+            reused_artifacts=[],
+            missing_inputs=[],
+            limitations=[
+                "Accepting a proposal does not approve parameters or start execution.",
+                "Cross-run dependency reuse is not verified; original scientific outputs are not automatically reused.",
+            ],
+            workflow=None,
+            confirmation=None,
+            created_at=now(),
+        )
+        environment = (
+            ScientificEnvironment(self.store, self.engine.tools)
+            if self.engine
+            else None
+        )
         if environment:
-            result.observation = environment.observe(project,request.policy)
+            result.observation = environment.observe(project, request.policy)
             self.boundary.check(result.observation.model_dump(mode="json"))
-            result.scientific_actions = [InspectProjectAction(kind="inspect_project",reason="Read actual declared gaps, registry applicability, capabilities and recorded stage outcomes.")]
+            result.scientific_actions = [
+                InspectProjectAction(
+                    kind="inspect_project",
+                    reason="Read actual declared gaps, registry applicability, capabilities and recorded stage outcomes.",
+                )
+            ]
         if request.mode == "hybrid":
-            result.source = "hybrid_semantic_compiler"
-            if self.backend is None or not request.external_planning_approved:
-                result.status = "blocked"
-                result.rationale = "Private planner unavailable or external disclosure consent not granted."
-                result.missing_inputs = ["private_planning_provider_or_explicit_data_permission"]
-            else:
-                from igem_drylab.agent.models import AgentTask
-                from igem_drylab.agent.context import ContextBundle
-                task = AgentTask(task_id=identity,objective=request.objective,artifacts_dir="logical-agent-workspace",
-                    inputs={"project_revision":project.revision,"scientific_project_available":project.scientific_project is not None},
-                    constraints=["do_not_invent_parameters","human_approval_before_execution"])
-                context = ContextBundle(task=task,constraints=task.constraints,
-                    scientific_observation=result.observation,
-                    artifact_summaries=[{"file_id":item["file_id"],"sha256":item["sha256"],"name":item["name"]} for item in self.boundary.project(project)["files"]])
-                # Call the existing semantic interpreter + deterministic compiler,
-                # not AgentRuntime or a second executor.
-                compiled = self.backend.create_plan(task,context,{"igem.pipeline.plan_stage"})
-                semantic = compiled.diagnostics.get("semantic_decision",{})
-                if semantic.get("scientific_actions") and environment:
-                    typed = SemanticDecision.model_validate(semantic).scientific_actions
-                    try:
-                        result.scientific_actions += environment.validate_actions(typed,result.observation)
-                    except WorkflowError as error:
-                        result.status = "blocked"
-                        result.missing_inputs = [error.code]
-                result.rationale = semantic.get("rationale") or "The deterministic compiler requires additional inputs or evidence."
-                result.change_types = list(semantic.get("change_types",[]))
-                result.missing_inputs.extend(semantic.get("missing_inputs",[]))
-                result.evidence = [item["sha256"] for item in context.artifact_summaries]
-                requested = [step.arguments["stage"] for step in compiled.steps if step.action_type == "dispatch_stage"]
-                result.requested_stages = requested
-                if not requested or any(step.status == "blocked" for step in compiled.steps):
-                    result.status = "blocked"
-                    result.limitations.extend(step.rationale for step in compiled.steps)
-                elif not project.scientific_project:
-                    result.status = "blocked"
-                    result.missing_inputs.append("typed_scientific_project")
-                else:
-                    workflow = recommend(project,"scientific_pipeline")
-                    target = max(requested,key=lambda item:["m1","m2","m3","m4","m5"].index(item))
-                    selected = {target}
-                    definitions = {node.id:node for node in workflow.nodes}
-                    if target not in definitions:
-                        result.status = "blocked"
-                        result.missing_inputs.append("stage_configuration_not_prepared:"+target)
-                        workflow = None
-                        selected = set()
-                    while True:
-                        if workflow is None: break
-                        expanded = selected | set().union(*(definitions[key].dependencies() for key in selected))
-                        if expanded == selected: break
-                        selected = expanded
-                    if workflow is not None:
-                        workflow.nodes = [node for node in workflow.nodes if node.id in selected]
-                        workflow.execution_policy.allowed_tools = sorted({node.tool_id for node in workflow.nodes})
-                    expanded_stages = [node.id for node in workflow.nodes if node.id not in requested] if workflow else []
-                    if expanded_stages:
-                        result.limitations.append("No verified reusable predecessor artifacts; dependencies explicitly added: "+", ".join(expanded_stages))
-                        constraints = semantic.get("scientific_constraints",[])
-                        if "do_not_rerun_unaffected_structural_stages" in constraints:
-                            result.status = "blocked"
-                            result.missing_inputs.append("verified_reusable_prerequisites")
-                            workflow = None
+            workflow = self._hybrid_workflow(project, request, result, environment)
         else:
-            workflow = recommend(project,request.goal)
+            workflow = recommend(project, request.goal)
             result.requested_stages = [node.id for node in workflow.nodes]
-        if workflow is not None:
-            if result.status == "blocked":
-                workflow = None
-        if workflow is not None:
-            workflow.execution_policy = request.policy.model_copy(deep=True)
-            workflow = Workflow.model_validate(workflow.model_dump(mode="json"))
-            result.execution_stages = [node.id for node in workflow.nodes]
-            result.workflow = workflow
-            result.confirmation = plan_binding(project,workflow)
-            result.review_identity = self.engine.review_identity(project,workflow) if self.engine else None
-            result.reviewed_tool_labels = self._tool_labels(result.review_identity)
-            if environment:
-                first = workflow.nodes[0]
-                actions=[PrepareNodeAction(kind="prepare_node",tool_id=first.tool_id,input_refs=["project:"+project.id],reason="Prepare the reviewed execution entry point; no tool runs or approvals are performed by proposing.")]
-                if result.observation.gaps:
-                    actions.append(WaitAction(kind="wait",pending_refs=sorted({gap.code for gap in result.observation.gaps}),reason="Later quantitative work still requires the recorded sources or approvals; already prepared stages remain usable."))
-                # An unconfigured external route is recorded as a gap, not a fabricated capability.
-                try:
-                    result.scientific_actions += environment.validate_actions(actions,result.observation)
-                except WorkflowError as error:
-                    result.limitations.append(error.code)
-        self.boundary.check(result.model_dump(mode="json"))
-        with self.store.connection() as db:
-            db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project.id,result.model_dump_json()))
-            db.execute("INSERT INTO proposal_requests VALUES(?,?,NULL)",(identity,request.model_dump_json()))
-            self._conversation(db,result,project.revision)
-            self._action(db,result,"proposed","planner")
+
+        if workflow is not None and result.status != "blocked":
+            self._attach_workflow(
+                project, request.policy, workflow, result, environment
+            )
+        self._save_proposal(result, project.revision, actor="planner", request=request)
         return result
 
-    def custom(self,project_id:str,workflow:Workflow,objective:str,*,source="user_reviewed_workflow",previous_review_identity=None):
-        if self.workflow_validator: self.workflow_validator(workflow)
-        project=self.store.project(project_id)
-        identity=str(uuid4())
-        result=ProposalView(id=identity,task_id=identity,project_id=project_id,source=source,status="proposed",
-            objective=objective,rationale="User DAG validated for graph, tools and formal predecessor bindings; not accepted or executed.",evidence=[],requested_stages=[node.id for node in workflow.nodes],
-            execution_stages=[node.id for node in workflow.nodes],reused_artifacts=[],missing_inputs=[],limitations=["User DAGs do not approve scientific parameters; the durable executor verifies provenance and approvals."],
-            workflow=workflow,confirmation=plan_binding(project,workflow),created_at=now(),
-            review_identity=self.engine.review_identity(project,workflow) if self.engine else None,previous_review_identity=previous_review_identity)
+    def _hybrid_workflow(
+        self,
+        project: Project,
+        request: ProposalRequest,
+        result: ProposalView,
+        environment: ScientificEnvironment | None,
+    ) -> Workflow | None:
+        """Interpret intent; the deterministic compiler still owns stage selection."""
+        result.source = "hybrid_semantic_compiler"
+        if self.backend is None or not request.external_planning_approved:
+            result.status = "blocked"
+            result.rationale = "Private planner unavailable or external disclosure consent not granted."
+            result.missing_inputs = [
+                "private_planning_provider_or_explicit_data_permission"
+            ]
+            return None
+
+        from igem_drylab.agent.models import AgentTask
+        from igem_drylab.agent.context import ContextBundle
+
+        task = AgentTask(
+            task_id=result.id,
+            objective=request.objective,
+            artifacts_dir="logical-agent-workspace",
+            inputs={
+                "project_revision": project.revision,
+                "scientific_project_available": project.scientific_project is not None,
+            },
+            constraints=["do_not_invent_parameters", "human_approval_before_execution"],
+        )
+        context = ContextBundle(
+            task=task,
+            constraints=task.constraints,
+            scientific_observation=result.observation,
+            artifact_summaries=[
+                {
+                    "file_id": item["file_id"],
+                    "sha256": item["sha256"],
+                    "name": item["name"],
+                }
+                for item in self.boundary.project(project)["files"]
+            ],
+        )
+        compiled = self.backend.create_plan(task, context, {"igem.pipeline.plan_stage"})
+        semantic = compiled.diagnostics.get("semantic_decision", {})
+        if semantic.get("scientific_actions") and environment:
+            typed = SemanticDecision.model_validate(semantic).scientific_actions
+            try:
+                result.scientific_actions += environment.validate_actions(
+                    typed, result.observation
+                )
+            except WorkflowError as error:
+                result.status = "blocked"
+                result.missing_inputs = [error.code]
+        result.rationale = (
+            semantic.get("rationale")
+            or "The deterministic compiler requires additional inputs or evidence."
+        )
+        result.change_types = list(semantic.get("change_types", []))
+        result.missing_inputs.extend(semantic.get("missing_inputs", []))
+        result.evidence = [item["sha256"] for item in context.artifact_summaries]
+        result.requested_stages = [
+            step.arguments["stage"]
+            for step in compiled.steps
+            if step.action_type == "dispatch_stage"
+        ]
+        if not result.requested_stages or any(
+            step.status == "blocked" for step in compiled.steps
+        ):
+            result.status = "blocked"
+            result.limitations.extend(step.rationale for step in compiled.steps)
+            return None
+        if not project.scientific_project:
+            result.status = "blocked"
+            result.missing_inputs.append("typed_scientific_project")
+            return None
+        return self._requested_workflow(
+            project, result, semantic.get("scientific_constraints", [])
+        )
+
+    @staticmethod
+    def _requested_workflow(
+        project: Project, result: ProposalView, constraints: list[str]
+    ) -> Workflow | None:
+        """Include actual prerequisites; never imply verified cross-run reuse."""
+        workflow = recommend(project, "scientific_pipeline")
+        target = max(result.requested_stages, key=("m1", "m2", "m3", "m4", "m5").index)
+        definitions = {node.id: node for node in workflow.nodes}
+        if target not in definitions:
+            result.status = "blocked"
+            result.missing_inputs.append("stage_configuration_not_prepared:" + target)
+            return None
+
+        selected = {target}
+        while True:
+            expanded = selected | set().union(
+                *(definitions[key].dependencies() for key in selected)
+            )
+            if expanded == selected:
+                break
+            selected = expanded
+        workflow.nodes = [node for node in workflow.nodes if node.id in selected]
+        workflow.execution_policy.allowed_tools = sorted(
+            {node.tool_id for node in workflow.nodes}
+        )
+        expanded_stages = [
+            node.id for node in workflow.nodes if node.id not in result.requested_stages
+        ]
+        if expanded_stages:
+            result.limitations.append(
+                "No verified reusable predecessor artifacts; dependencies explicitly added: "
+                + ", ".join(expanded_stages)
+            )
+            if "do_not_rerun_unaffected_structural_stages" in constraints:
+                result.status = "blocked"
+                result.missing_inputs.append("verified_reusable_prerequisites")
+                return None
+        return workflow
+
+    def _attach_workflow(
+        self,
+        project: Project,
+        policy: ExecutionPolicy,
+        workflow: Workflow,
+        result: ProposalView,
+        environment: ScientificEnvironment | None,
+    ) -> None:
+        workflow.execution_policy = policy.model_copy(deep=True)
+        workflow = Workflow.model_validate(workflow.model_dump(mode="json"))
+        result.execution_stages = [node.id for node in workflow.nodes]
+        result.workflow = workflow
+        result.confirmation = plan_binding(project, workflow)
+        result.review_identity = (
+            self.engine.review_identity(project, workflow) if self.engine else None
+        )
         result.reviewed_tool_labels = self._tool_labels(result.review_identity)
+        if environment is None:
+            return
+        first = workflow.nodes[0]
+        actions = [
+            PrepareNodeAction(
+                kind="prepare_node",
+                tool_id=first.tool_id,
+                input_refs=["project:" + project.id],
+                reason="Prepare the reviewed execution entry point; no tool runs or approvals are performed by proposing.",
+            )
+        ]
+        if result.observation.gaps:
+            actions.append(
+                WaitAction(
+                    kind="wait",
+                    pending_refs=sorted({gap.code for gap in result.observation.gaps}),
+                    reason="Later quantitative work still requires the recorded sources or approvals; already prepared stages remain usable.",
+                )
+            )
+        # An unconfigured external route is a gap, not a fabricated capability.
+        try:
+            result.scientific_actions += environment.validate_actions(
+                actions, result.observation
+            )
+        except WorkflowError as error:
+            result.limitations.append(error.code)
+
+    def _save_proposal(
+        self,
+        result: ProposalView,
+        revision: int,
+        *,
+        actor: Literal["planner", "user"],
+        request: ProposalRequest | None = None,
+    ) -> None:
+        """Keep proposal, optional request and transcript in one transaction."""
         self.boundary.check(result.model_dump(mode="json"))
         with self.store.connection() as db:
-            db.execute("INSERT INTO proposals VALUES(?,?,?)",(identity,project_id,result.model_dump_json()))
-            self._conversation(db,result,project.revision)
-            self._action(db,result,"proposed","user")
+            db.execute(
+                "INSERT INTO proposals VALUES(?,?,?)",
+                (result.id, result.project_id, result.model_dump_json()),
+            )
+            if request is not None:
+                db.execute(
+                    "INSERT INTO proposal_requests VALUES(?,?,NULL)",
+                    (result.id, request.model_dump_json()),
+                )
+            self._conversation(db, result, revision)
+            self._action(db, result, "proposed", actor)
+
+    def custom(
+        self,
+        project_id: str,
+        workflow: Workflow,
+        objective: str,
+        *,
+        source="user_reviewed_workflow",
+        previous_review_identity=None,
+    ):
+        if self.workflow_validator:
+            self.workflow_validator(workflow)
+        project = self.store.project(project_id)
+        identity = str(uuid4())
+        result = ProposalView(
+            id=identity,
+            task_id=identity,
+            project_id=project_id,
+            source=source,
+            status="proposed",
+            objective=objective,
+            rationale="User DAG validated for graph, tools and formal predecessor bindings; not accepted or executed.",
+            evidence=[],
+            requested_stages=[node.id for node in workflow.nodes],
+            execution_stages=[node.id for node in workflow.nodes],
+            reused_artifacts=[],
+            missing_inputs=[],
+            limitations=[
+                "User DAGs do not approve scientific parameters; the durable executor verifies provenance and approvals."
+            ],
+            workflow=workflow,
+            confirmation=plan_binding(project, workflow),
+            created_at=now(),
+            review_identity=self.engine.review_identity(project, workflow)
+            if self.engine
+            else None,
+            previous_review_identity=previous_review_identity,
+        )
+        result.reviewed_tool_labels = self._tool_labels(result.review_identity)
+        self._save_proposal(result, project.revision, actor="user")
         return result
 
     @staticmethod
     def _conversation(db, proposal, revision):
-        for role, text in (("user", proposal.objective), ("assistant", proposal.rationale)):
-            db.execute("INSERT INTO assistant_messages(project_id,role,text,proposal_id,project_revision,timestamp) VALUES(?,?,?,?,?,?)",
-                (proposal.project_id,role,text,proposal.id,revision,now()))
+        for role, text in (
+            ("user", proposal.objective),
+            ("assistant", proposal.rationale),
+        ):
+            db.execute(
+                "INSERT INTO assistant_messages(project_id,role,text,proposal_id,project_revision,timestamp) VALUES(?,?,?,?,?,?)",
+                (proposal.project_id, role, text, proposal.id, revision, now()),
+            )
 
     def conversation(self, project_id, *, before=None, limit=40):
         self.store.project(project_id)
-        limit = min(max(limit,1),100)
+        limit = min(max(limit, 1), 100)
         with self.store.connection() as db:
-            rows = db.execute("SELECT seq,role,text,proposal_id,project_revision,timestamp FROM assistant_messages WHERE project_id=? AND seq<? ORDER BY seq DESC LIMIT ?",
-                (project_id,before if before is not None else 2**63-1,limit+1)).fetchall()
-        return AssistantPage(project_id=project_id,messages=[AssistantMessage(**dict(row)) for row in reversed(rows[:limit])],has_more=len(rows)>limit)
+            rows = db.execute(
+                "SELECT seq,role,text,proposal_id,project_revision,timestamp FROM assistant_messages WHERE project_id=? AND seq<? ORDER BY seq DESC LIMIT ?",
+                (project_id, before if before is not None else 2**63 - 1, limit + 1),
+            ).fetchall()
+        return AssistantPage(
+            project_id=project_id,
+            messages=[AssistantMessage(**dict(row)) for row in reversed(rows[:limit])],
+            has_more=len(rows) > limit,
+        )
 
     def revise(self, proposal_id, revision: ProposalRevision):
         original = self.get(proposal_id)
-        if original.status not in {"proposed","accepted","blocked"}:
-            raise WorkflowError("proposal_not_actionable",status_code=409)
+        if original.status not in {"proposed", "accepted", "blocked"}:
+            raise WorkflowError("proposal_not_actionable", status_code=409)
         self.boundary.check(revision.model_dump(mode="json"))
         with self.store.connection() as db:
-            saved = db.execute("SELECT payload FROM proposal_requests WHERE id=?",(proposal_id,)).fetchone()
+            saved = db.execute(
+                "SELECT payload FROM proposal_requests WHERE id=?", (proposal_id,)
+            ).fetchone()
         objective = original.objective + "\nRevision request: " + revision.prompt
         if revision.workflow is not None:
-            result = self.custom(original.project_id,revision.workflow,objective,previous_review_identity=original.review_identity)
+            result = self.custom(
+                original.project_id,
+                revision.workflow,
+                objective,
+                previous_review_identity=original.review_identity,
+            )
         elif saved and saved[0] != "null":
             request = ProposalRequest.model_validate_json(saved[0])
-            result = self.propose(request.model_copy(update={"objective":objective}))
-            if result.workflow and self.workflow_validator: self.workflow_validator(result.workflow)
+            result = self.propose(request.model_copy(update={"objective": objective}))
+            if result.workflow and self.workflow_validator:
+                self.workflow_validator(result.workflow)
         elif original.workflow:
-            result = self.custom(original.project_id,original.workflow,objective,previous_review_identity=original.review_identity)
+            result = self.custom(
+                original.project_id,
+                original.workflow,
+                objective,
+                previous_review_identity=original.review_identity,
+            )
         else:
             raise WorkflowError("workflow_required_for_revision")
         # A prompt is not a scientific patch. Template/manual revisions keep
@@ -271,113 +467,244 @@ class PlanningService:
         # configured semantic compiler actually produces them.
         with self.store.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT payload FROM proposals WHERE id=?",(proposal_id,)).fetchone()
+            row = db.execute(
+                "SELECT payload FROM proposals WHERE id=?", (proposal_id,)
+            ).fetchone()
             current = ProposalView.model_validate_json(row[0])
-            if current.status not in {"proposed","accepted","blocked"}:
-                raise WorkflowError("proposal_not_actionable",status_code=409)
+            if current.status not in {"proposed", "accepted", "blocked"}:
+                raise WorkflowError("proposal_not_actionable", status_code=409)
             current.status = "rejected"
-            db.execute("UPDATE proposals SET payload=? WHERE id=?",(current.model_dump_json(),proposal_id))
-            db.execute("INSERT INTO proposal_requests(id,payload,previous_id) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET previous_id=excluded.previous_id",
-                (result.id,"null",proposal_id))
-            self._action(db,current,"revise","user")
+            db.execute(
+                "UPDATE proposals SET payload=? WHERE id=?",
+                (current.model_dump_json(), proposal_id),
+            )
+            db.execute(
+                "INSERT INTO proposal_requests(id,payload,previous_id) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET previous_id=excluded.previous_id",
+                (result.id, "null", proposal_id),
+            )
+            self._action(db, current, "revise", "user")
         return result
 
     def diff(self, proposal_id):
         proposal = self.get(proposal_id)
         with self.store.connection() as db:
-            row = db.execute("SELECT previous_id FROM proposal_requests WHERE id=?",(proposal_id,)).fetchone()
+            row = db.execute(
+                "SELECT previous_id FROM proposal_requests WHERE id=?", (proposal_id,)
+            ).fetchone()
         previous_id = row[0] if row else None
         previous = self.get(previous_id) if previous_id else None
-        old = {n.id:n for n in previous.workflow.nodes} if previous and previous.workflow else {}
-        new = {n.id:n for n in proposal.workflow.nodes} if proposal.workflow else {}
+        old = (
+            {n.id: n for n in previous.workflow.nodes}
+            if previous and previous.workflow
+            else {}
+        )
+        new = {n.id: n for n in proposal.workflow.nodes} if proposal.workflow else {}
         changes = []
-        def add(kind,target,before,after,node_id=None,input_name=None):
+
+        def add(kind, target, before, after, node_id=None, input_name=None):
             if before != after:
-                changes.append(ProposalChange(kind=kind,target=target,before=before,after=after,node_id=node_id,input_name=input_name))
+                changes.append(
+                    ProposalChange(
+                        kind=kind,
+                        target=target,
+                        before=before,
+                        after=after,
+                        node_id=node_id,
+                        input_name=input_name,
+                    )
+                )
+
         def text(value):
             from .store import canonical
+
             return canonical(value) if value is not None else None
-        for key in sorted(old.keys()|new.keys()):
-            a,b = old.get(key),new.get(key)
-            add("node",key,a.label if a else None,b.label if b else None,key)
-            add("tool",key,a.tool_id if a else None,b.tool_id if b else None,key)
-            names = (a.inputs.keys() if a else set()) | (b.inputs.keys() if b else set())
+
+        for key in sorted(old.keys() | new.keys()):
+            a, b = old.get(key), new.get(key)
+            add("node", key, a.label if a else None, b.label if b else None, key)
+            add("tool", key, a.tool_id if a else None, b.tool_id if b else None, key)
+            names = (a.inputs.keys() if a else set()) | (
+                b.inputs.keys() if b else set()
+            )
             for name in sorted(names):
-                before = a.inputs[name].model_dump(mode="json") if a and name in a.inputs else None
-                after = b.inputs[name].model_dump(mode="json") if b and name in b.inputs else None
-                add("binding",key+"."+name,text(before),text(after),key,name)
-            add("dependency",key,text(sorted(a.dependencies())) if a else None,text(sorted(b.dependencies())) if b else None,key)
-        add("permission","Execution scope and permissions",text(previous.workflow.execution_policy.model_dump(mode="json")) if previous and previous.workflow else None,
-            text(proposal.workflow.execution_policy.model_dump(mode="json")) if proposal.workflow else None)
-        result = ProposalDiff(proposal_id=proposal_id,previous_proposal_id=previous_id,changes=changes,
-            missing_inputs=proposal.missing_inputs,evidence=proposal.evidence,limitations=proposal.limitations)
+                before = (
+                    a.inputs[name].model_dump(mode="json")
+                    if a and name in a.inputs
+                    else None
+                )
+                after = (
+                    b.inputs[name].model_dump(mode="json")
+                    if b and name in b.inputs
+                    else None
+                )
+                add("binding", key + "." + name, text(before), text(after), key, name)
+            add(
+                "dependency",
+                key,
+                text(sorted(a.dependencies())) if a else None,
+                text(sorted(b.dependencies())) if b else None,
+                key,
+            )
+        add(
+            "permission",
+            "Execution scope and permissions",
+            text(previous.workflow.execution_policy.model_dump(mode="json"))
+            if previous and previous.workflow
+            else None,
+            text(proposal.workflow.execution_policy.model_dump(mode="json"))
+            if proposal.workflow
+            else None,
+        )
+        result = ProposalDiff(
+            proposal_id=proposal_id,
+            previous_proposal_id=previous_id,
+            changes=changes,
+            missing_inputs=proposal.missing_inputs,
+            evidence=proposal.evidence,
+            limitations=proposal.limitations,
+        )
         self.boundary.check(result.model_dump(mode="json"))
         return result
 
-    def get(self,proposal_id: str):
+    def get(self, proposal_id: str):
         with self.store.connection() as db:
-            row = db.execute("SELECT payload FROM proposals WHERE id=?",(proposal_id,)).fetchone()
-        if row is None: raise KeyError(proposal_id)
+            row = db.execute(
+                "SELECT payload FROM proposals WHERE id=?", (proposal_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(proposal_id)
         return ProposalView.model_validate_json(row[0])
 
-    def decide(self,proposal_id: str,action: str):
+    def decide(self, proposal_id: str, action: str):
         prepared = self.get(proposal_id)
-        current = self.engine.review_identity(self.store.project(prepared.project_id),prepared.workflow) if self.engine and prepared.workflow else None
+        current = (
+            self.engine.review_identity(
+                self.store.project(prepared.project_id), prepared.workflow
+            )
+            if self.engine and prepared.workflow
+            else None
+        )
         with self.store.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT payload FROM proposals WHERE id=?",(proposal_id,)).fetchone()
-            if row is None: raise KeyError(proposal_id)
+            row = db.execute(
+                "SELECT payload FROM proposals WHERE id=?", (proposal_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(proposal_id)
             result = ProposalView.model_validate_json(row[0])
-            if result.status not in {"proposed","accepted"}: raise WorkflowError("proposal_not_actionable",status_code=409)
-            project = db.execute("SELECT payload FROM projects WHERE id=?",(result.project_id,)).fetchone()
+            if result.status not in {"proposed", "accepted"}:
+                raise WorkflowError("proposal_not_actionable", status_code=409)
+            project = db.execute(
+                "SELECT payload FROM projects WHERE id=?", (result.project_id,)
+            ).fetchone()
             from .models import Project
-            if not project or result.workflow is None or result.confirmation != plan_binding(Project.model_validate_json(project[0]),result.workflow):
-                raise WorkflowError("proposal_stale_regenerate",status_code=409)
+
+            if (
+                not project
+                or result.workflow is None
+                or result.confirmation
+                != plan_binding(
+                    Project.model_validate_json(project[0]), result.workflow
+                )
+            ):
+                raise WorkflowError("proposal_stale_regenerate", status_code=409)
             if action == "accept" and result.review_identity != current:
-                raise WorkflowError("reviewed_tool_or_profile_changed",status_code=409)
+                raise WorkflowError("reviewed_tool_or_profile_changed", status_code=409)
             result.status = "accepted" if action == "accept" else "rejected"
-            db.execute("UPDATE proposals SET payload=? WHERE id=?",(result.model_dump_json(),proposal_id))
-            self._action(db,result,action,"user")
+            db.execute(
+                "UPDATE proposals SET payload=? WHERE id=?",
+                (result.model_dump_json(), proposal_id),
+            )
+            self._action(db, result, action, "user")
             if action == "accept" and result.source == "manual_compatibility":
-                self._action(db,result,"manual_plan_confirmed","user")
+                self._action(db, result, "manual_plan_confirmed", "user")
         return result
 
-    def authorize_run(self,proposal_id: str,confirmation: PlanBinding,workflow: Workflow,*,db=None,snapshot=None,manual=False):
-        if db is None: proposal = self.get(proposal_id)
+    def authorize_run(
+        self,
+        proposal_id: str,
+        confirmation: PlanBinding,
+        workflow: Workflow,
+        *,
+        db=None,
+        snapshot=None,
+        manual=False,
+    ):
+        if db is None:
+            proposal = self.get(proposal_id)
         else:
-            row = db.execute("SELECT payload FROM proposals WHERE id=?",(proposal_id,)).fetchone()
-            if row is None: raise KeyError(proposal_id)
+            row = db.execute(
+                "SELECT payload FROM proposals WHERE id=?", (proposal_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(proposal_id)
             proposal = ProposalView.model_validate_json(row[0])
-        if proposal.status != "accepted" or proposal.confirmation != confirmation or proposal.workflow != workflow:
-            raise WorkflowError("accepted_proposal_binding_required",status_code=409)
+        if (
+            proposal.status != "accepted"
+            or proposal.confirmation != confirmation
+            or proposal.workflow != workflow
+        ):
+            raise WorkflowError("accepted_proposal_binding_required", status_code=409)
         if manual != (proposal.source == "manual_compatibility"):
-            raise WorkflowError("explicit_review_execution_type_required",status_code=409)
-        actual = self.engine.snapshot_review_identity(snapshot) if snapshot is not None else self.engine.review_identity(self.store.project(proposal.project_id),workflow)
+            raise WorkflowError(
+                "explicit_review_execution_type_required", status_code=409
+            )
+        actual = (
+            self.engine.snapshot_review_identity(snapshot)
+            if snapshot is not None
+            else self.engine.review_identity(
+                self.store.project(proposal.project_id), workflow
+            )
+        )
         if proposal.review_identity is None or proposal.review_identity != actual:
-            raise WorkflowError("reviewed_tool_or_profile_changed",status_code=409)
+            raise WorkflowError("reviewed_tool_or_profile_changed", status_code=409)
         if db is not None and snapshot.get("runtime_profile"):
-            profile=snapshot["runtime_profile"]
-            row=db.execute("SELECT revision,hash FROM runtime_profiles WHERE id=?",(profile["id"],)).fetchone()
-            if row is None or (row["revision"],row["hash"]) != (profile["revision"],profile["hash"]):
-                raise WorkflowError("reviewed_tool_or_profile_changed",status_code=409)
+            profile = snapshot["runtime_profile"]
+            row = db.execute(
+                "SELECT revision,hash FROM runtime_profiles WHERE id=?",
+                (profile["id"],),
+            ).fetchone()
+            if row is None or (row["revision"], row["hash"]) != (
+                profile["revision"],
+                profile["hash"],
+            ):
+                raise WorkflowError("reviewed_tool_or_profile_changed", status_code=409)
 
-    def actions(self,project_id: str,after: int,limit: int):
+    def actions(self, project_id: str, after: int, limit: int):
         with self.store.connection() as db:
-            rows = db.execute("SELECT seq,proposal_id,run_id,action,actor,timestamp FROM plan_actions WHERE project_id=? AND seq>? ORDER BY seq LIMIT ?",(project_id,after,limit))
+            rows = db.execute(
+                "SELECT seq,proposal_id,run_id,action,actor,timestamp FROM plan_actions WHERE project_id=? AND seq>? ORDER BY seq LIMIT ?",
+                (project_id, after, limit),
+            )
             return [dict(row) for row in rows]
 
     @staticmethod
     def _tool_labels(identity):
-        return [tool+" · "+str(values["version"])+" · "+str(values["runtime"])
-            for tool,values in (identity or {}).get("tools",{}).items()]
+        return [
+            tool + " · " + str(values["version"]) + " · " + str(values["runtime"])
+            for tool, values in (identity or {}).get("tools", {}).items()
+        ]
 
     @staticmethod
-    def _action(db,proposal,action,actor,run_id=None):
-        db.execute("INSERT INTO plan_actions(project_id,proposal_id,run_id,action,actor,timestamp) VALUES(?,?,?,?,?,?)",(proposal.project_id,proposal.id,run_id,action,actor,now()))
+    def _action(db, proposal, action, actor, run_id=None):
+        db.execute(
+            "INSERT INTO plan_actions(project_id,proposal_id,run_id,action,actor,timestamp) VALUES(?,?,?,?,?,?)",
+            (proposal.project_id, proposal.id, run_id, action, actor, now()),
+        )
 
-    def started(self,proposal_id,run_id):
+    def started(self, proposal_id, run_id):
         with self.store.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            if db.execute("SELECT 1 FROM plan_actions WHERE proposal_id=? AND run_id=? AND action='execution_requested'",(proposal_id,run_id)).fetchone(): return
-            self._action(db,self.get(proposal_id),"execution_requested","user",run_id)
-        self.store.event(run_id,"agent_plan_execution_requested",{"proposal_id":proposal_id,"actor":"user"})
+            if db.execute(
+                "SELECT 1 FROM plan_actions WHERE proposal_id=? AND run_id=? AND action='execution_requested'",
+                (proposal_id, run_id),
+            ).fetchone():
+                return
+            self._action(
+                db, self.get(proposal_id), "execution_requested", "user", run_id
+            )
+        self.store.event(
+            run_id,
+            "agent_plan_execution_requested",
+            {"proposal_id": proposal_id, "actor": "user"},
+        )

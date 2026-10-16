@@ -100,14 +100,23 @@ export function WorkspaceShell() {
   const chatIntent = chatIntents[current?.id ?? "new"] ?? "new";
   const setChatIntent = (value: "new" | "modify") =>
     setChatIntents((values) => ({ ...values, [current?.id ?? "new"]: value }));
-  const chatDraftKey=info&&current?`fusionlab.chat-draft.${info.workspace_id}.${current.id}`:undefined;
-  const setObjective = (value: string) =>{
+  const chatDraftKey =
+    info && current
+      ? `fusionlab.chat-draft.${info.workspace_id}.${current.id}`
+      : undefined;
+  const setObjective = (value: string) => {
     setChatDrafts((drafts) => ({ ...drafts, [current?.id ?? "new"]: value }));
-    if(chatDraftKey)sessionStorage.setItem(chatDraftKey,value);
+    if (chatDraftKey) sessionStorage.setItem(chatDraftKey, value);
   };
-  useEffect(()=>{if(!chatDraftKey||!current)return;const text=sessionStorage.getItem(chatDraftKey)??'';
-    setChatDrafts(values=>Object.hasOwn(values,current.id)?values:{...values,[current.id]:text});
-  },[chatDraftKey]);
+  useEffect(() => {
+    if (!chatDraftKey || !current) return;
+    const text = sessionStorage.getItem(chatDraftKey) ?? "";
+    setChatDrafts((values) =>
+      Object.hasOwn(values, current.id)
+        ? values
+        : { ...values, [current.id]: text },
+    );
+  }, [chatDraftKey]);
   const [inputCheck, setInputCheck] = useState<ScientificPrecheckView>(),
     [inputTarget, setInputTarget] = useState<InputIssue>();
   const [files, setFiles] = useState<Record<string, FileContext>>({}),
@@ -286,48 +295,32 @@ export function WorkspaceShell() {
         nodeId: value.workflow.nodes[0].id,
       });
   }
-  async function propose() {
+  async function requestPlan(
+    request: (saved: ProjectView) => Promise<ProposalView>,
+    publish: (value: ProposalView) => void = showProposal,
+  ) {
     await action(() =>
-      plans.guarded(
-        project.generation,
-        project.save,
-        (saved) =>
-          client.propose(
-            (saved as ProjectView).id,
-            goal,
-            objective,
-            mode,
-            policy,
-            permission,
-          ),
-        (value) => {
-          showProposal(value);
-          setObjective("");
-        },
-      ),
+      plans.guarded(project.generation, project.save, request, publish),
+    );
+  }
+  async function propose() {
+    await requestPlan(
+      (saved) =>
+        client.propose(saved.id, goal, objective, mode, policy, permission),
+      (value) => {
+        showProposal(value);
+        setObjective("");
+      },
     );
   }
   async function proposeMethod(
     method: Parameters<typeof client.planMethod>[1],
   ) {
-    await action(() =>
-      plans.guarded(
-        project.generation,
-        project.save,
-        (saved) => client.planMethod((saved as ProjectView).id, method),
-        showProposal,
-      ),
-    );
+    await requestPlan((saved) => client.planMethod(saved.id, method));
   }
   async function proposeWorkflow(value: Workflow) {
-    await action(() =>
-      plans.guarded(
-        project.generation,
-        project.save,
-        (saved) =>
-          client.proposeCustom((saved as ProjectView).id, value, objective),
-        showProposal,
-      ),
+    await requestPlan((saved) =>
+      client.proposeCustom(saved.id, value, objective),
     );
   }
   async function reviewWorkflow() {
@@ -567,7 +560,9 @@ export function WorkspaceShell() {
     const name =
       context.name ??
       current?.files.find((file) => file.id === fileId)?.name ??
-      current?.scientific_project?.evidence_files.find(file=>file.id===fileId)?.name??
+      current?.scientific_project?.evidence_files.find(
+        (file) => file.id === fileId,
+      )?.name ??
       "Result file";
     setFiles((values) => ({
       ...values,
@@ -845,7 +840,8 @@ export function WorkspaceShell() {
                   prepareImport={project.save}
                   onImported={(value) => {
                     project.adopt(value);
-                    if(value.scientific_project&&!current.scientific_project)setGoal('scientific_pipeline');
+                    if (value.scientific_project && !current.scientific_project)
+                      setGoal("scientific_pipeline");
                     invalidate();
                   }}
                 />
@@ -984,8 +980,8 @@ export function WorkspaceShell() {
                     runId={frozen ? run?.id : undefined}
                     workflowId={document?.id}
                     nodeId={node.id}
-                    workflow={workflow??undefined}
-                    disabled={busy||project.dirty}
+                    workflow={workflow ?? undefined}
+                    disabled={busy || project.dirty}
                     onChange={saveParameter}
                     onReview={reviewParameter}
                     onWorkflowChange={replaceScalar}
@@ -1000,10 +996,7 @@ export function WorkspaceShell() {
             <section>
               <header className="panel-heading">
                 <h2>Results</h2>
-                <button
-                disabled={!run}
-                  onClick={() => setTab("compare")}
-                >
+                <button disabled={!run} onClick={() => setTab("compare")}>
                   Compare
                 </button>
               </header>
@@ -1102,8 +1095,6 @@ export function WorkspaceShell() {
                 onLayout={view.update}
                 info={info}
                 onRefresh={() => setInfoRefresh((value) => value + 1)}
-                goal={goal}
-                onGoal={setGoal}
                 mode={mode}
                 onMode={(value) => {
                   setMode(value);
@@ -1125,7 +1116,7 @@ export function WorkspaceShell() {
                 action={action}
                 onMethod={(method) => void proposeMethod(method)}
                 onPlan={(value) => void proposeWorkflow(value)}
-                onOpenResource={(id,context) => openFile(id,context)}
+                onOpenResource={(id, context) => openFile(id, context)}
               />
             </Suspense>
           )}
@@ -1201,7 +1192,6 @@ export function WorkspaceShell() {
                         ? "Input data"
                         : "Workspace"
               }
-              goal={goal}
               objective={objective}
               mode={mode}
               permission={permission}
@@ -1209,9 +1199,7 @@ export function WorkspaceShell() {
               canPlan={!!current}
               intent={chatIntent}
               onIntent={setChatIntent}
-              onGoal={setGoal}
               onObjective={setObjective}
-              onMode={setMode}
               onPermission={setPermission}
               onPropose={() => void propose()}
               onDecision={(value) => void decide(value)}

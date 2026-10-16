@@ -5,10 +5,10 @@ export function usePlanController() {
   function invalidate() {
     ++generation.current;
   }
-  async function guarded<T>(
+  async function guarded<Saved, T>(
     inputGeneration: { current: number },
-    save: () => Promise<unknown>,
-    request: (saved: unknown) => Promise<T>,
+    save: () => Promise<Saved | undefined>,
+    request: (saved: Saved) => Promise<T>,
     publish: (value: T) => void,
   ) {
     const inputStamp = inputGeneration.current;
