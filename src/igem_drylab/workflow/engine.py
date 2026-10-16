@@ -43,10 +43,11 @@ class WorkflowEngine:
         validate_stage_bindings(workflow)
         tools: dict[str, Any] = {}
         source_bytes: dict[Path, bytes] = {}
+        source_hashes: dict[tuple[Path, ...], str] = {}
         for node in workflow.nodes:
             definition = self.tools.get(node.tool_id)
             metadata = definition.metadata()
-            metadata["implementation_sha256"] = self._implementation_hash(definition, source_bytes)
+            metadata["implementation_sha256"] = self._implementation_hash(definition, source_bytes, source_hashes)
             tools[node.tool_id] = metadata
         snapshot = {
             "project": project.model_dump(mode="json"), "workflow": workflow.model_dump(mode="json"),
@@ -70,6 +71,7 @@ class WorkflowEngine:
 
     def review_identity(self, project: Project, workflow: Workflow) -> dict[str, Any]:
         cache: dict[Path, bytes] = {}
+        hashes: dict[tuple[Path, ...], str] = {}
         tools = {node.tool_id: self.tools.get(node.tool_id) for node in workflow.nodes}
         profile_hash = None
         if project.runtime_profile_ref:
@@ -78,7 +80,7 @@ class WorkflowEngine:
             self.disclosure.register_runtime(private)
             profile_hash = identity["hash"]
         return {"tools": {key: {"version":tool.version,"runtime":tool.runtime,"plugin_hash":tool.plugin_hash,
-            "implementation_sha256":self._implementation_hash(tool,cache)} for key,tool in tools.items()},
+            "implementation_sha256":self._implementation_hash(tool,cache,hashes)} for key,tool in tools.items()},
             "runtime_profile_sha256":profile_hash,"environment":self._environment()}
 
     @staticmethod
@@ -129,15 +131,21 @@ class WorkflowEngine:
                 return
 
     @staticmethod
-    def _implementation_hash(definition: Any, cache: dict[Path, bytes] | None = None) -> str | None:
+    def _implementation_hash(definition: Any, cache: dict[Path, bytes] | None = None,
+                             hashes: dict[tuple[Path, ...], str] | None = None) -> str | None:
         source = inspect.getsourcefile(definition.handler)
         paths = ((Path(source),) if source else ()) + definition.implementation_files
         if not paths:
             return None
+        if hashes is not None and paths in hashes:
+            return hashes[paths]
         cache = {} if cache is None else cache
         for path in paths:
             if path not in cache: cache[path] = path.read_bytes()
-        return sha256(b"\0".join(cache[path] for path in paths)).hexdigest()
+        digest = sha256(b"\0".join(cache[path] for path in paths)).hexdigest()
+        if hashes is not None:
+            hashes[paths] = digest
+        return digest
 
     @staticmethod
     def _environment() -> dict[str, Any]:
@@ -172,9 +180,10 @@ class WorkflowEngine:
         if run["snapshot"]["environment"] != self._environment():
             raise ValueError("environment_changed_since_snapshot; clone the run")
         source_bytes: dict[Path, bytes] = {}
+        source_hashes: dict[tuple[Path, ...], str] = {}
         for tool_id, expected in run["snapshot"]["tools"].items():
             current = self.tools.get(tool_id)
-            digest = self._implementation_hash(current, source_bytes)
+            digest = self._implementation_hash(current, source_bytes, source_hashes)
             if current.version != expected["version"] or current.plugin_hash != expected["plugin_hash"] or digest != expected["implementation_sha256"]:
                 raise ValueError(f"tool_changed_since_snapshot:{tool_id}; clone the run with the new tool version")
 
@@ -187,14 +196,7 @@ class WorkflowEngine:
     def _execute(self, run_id: str, workflow: Workflow, snapshot: dict[str, Any]) -> RunStatus:
         project = snapshot["project"]
         policy = workflow.execution_policy
-        allowed = {node.id for node in workflow.nodes}
-        if policy.target_node_id:
-            allowed = {policy.target_node_id}
-            graph = {node.id: node.dependencies() for node in workflow.nodes}
-            while True:
-                expanded = allowed | set().union(*(graph[node] for node in allowed))
-                if expanded == allowed: break
-                allowed = expanded
+        allowed = workflow.required_nodes(policy.target_node_id)
         initial = self.store.execution_state(run_id)
         completed_before = {item["id"] for item in initial["nodes"] if item["parent_id"] is None and item["status"] == "succeeded"}
         active: dict[Future[None], tuple[str, str]] = {}

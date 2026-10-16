@@ -74,9 +74,8 @@ export function WorkflowWorkspace({projectId, projectRevision, seedId, seed, doc
     const stamp = epoch.current;
     locked.current = true; setSaving(true); setError('');
     try {
-      const value = await client.saveWorkflowDocument(projectId, current.id, {
-        layout: current.layout, selected_node_id: current.selected_node_id, view: current.view, ...changes,
-      }, projectRevision, current.revision);
+      const value = await client.saveWorkflowDocument(projectId, current.id,
+        client.workflowDocumentUpdate(current, changes), projectRevision, current.revision);
       if (stamp === epoch.current) {live.current = value; onDocument(value); if (value.selected_node_id) onSelect(value.selected_node_id);}
     } catch (reason) {if (stamp === epoch.current) setError(reason instanceof Error ? reason.message : String(reason));}
     finally {locked.current = false; if (stamp === epoch.current) setSaving(false);}

@@ -491,12 +491,7 @@ export function WorkspaceShell() {
     const value = await client.saveWorkflowDocument(
       current.id,
       document.id,
-      {
-        workflow: revised,
-        layout: document.layout,
-        selected_node_id: selected,
-        view: document.view,
-      },
+      client.workflowDocumentUpdate(document, {workflow: revised, selected_node_id: selected}),
       current.revision,
       document.revision,
     );
@@ -538,12 +533,7 @@ export function WorkspaceShell() {
       const saved = await client.saveWorkflowDocument(
         current.id,
         document.id,
-        {
-          workflow: { ...document.workflow, execution_policy: value },
-          layout: document.layout,
-          selected_node_id: document.selected_node_id,
-          view: document.view,
-        },
+        client.workflowDocumentUpdate(document, {workflow: {...document.workflow, execution_policy: value}}),
         current.revision,
         document.revision,
       );

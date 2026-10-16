@@ -5,7 +5,10 @@ import type { WorkflowDocument, Workflow } from '../contracts/generated';
 import { WorkflowWorkspace } from './WorkflowWorkspace';
 import { defaultPositions } from './WorkflowGraph';
 
-vi.mock('./client', () => ({workflowDocuments: vi.fn(), workflowDocument: vi.fn(), saveWorkflowDocument: vi.fn()}));
+vi.mock('./client', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./client')>(),
+  workflowDocuments: vi.fn(), workflowDocument: vi.fn(), saveWorkflowDocument: vi.fn(),
+}));
 import * as client from './client';
 afterEach(() => {cleanup(); vi.resetAllMocks();});
 const workflow: Workflow = {id:'fixture', name:'Software graph', description:'No science is executed', version:'1', nodes:[
@@ -14,6 +17,12 @@ const workflow: Workflow = {id:'fixture', name:'Software graph', description:'No
   {id:'c', label:'Right branch', tool_id:'workflow.gather', inputs:{results:{kind:'node', node_id:'a', path:['results']}}, depends_on:[], map:null},
 ], execution_policy:{target_node_id:null, max_completed_stages:null, checkpoints_before:[], checkpoints_after:[], allowed_tools:['workflow.gather'], max_tool_calls:10, stop_after_seconds:null, memory_limit_mb:null}};
 function document(): WorkflowDocument {return {id:'review', project_id:'p', project_revision:1, revision:1, semantic_revision:1, layout_revision:1, workflow, layout:{}, selected_node_id:'a', view:'graph'};}
+it('document updates send view state only unless a workflow change is explicitly supplied',()=>{
+  const source=document();
+  expect(client.workflowDocumentUpdate(source,{view:'list',selected_node_id:null})).toEqual({layout:{},selected_node_id:null,view:'list'});
+  expect(client.workflowDocumentUpdate(source,{workflow})).toEqual({layout:{},selected_node_id:'a',view:'graph',workflow});
+  expect(source).toEqual(document());
+});
 function Harness() {
   const [value, setValue] = useState<WorkflowDocument>();
   const [selected,setSelected]=useState('a');

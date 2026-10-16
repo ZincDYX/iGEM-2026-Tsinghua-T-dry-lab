@@ -3,7 +3,12 @@ claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
   - risk_id: REFACTORED_PLANNER_PRESERVES_DEPENDENCY_AND_REVIEW_BOUNDARIES
     group: platform
-    test_nodeids: ["tests/test_workbench_planning.py::test_hybrid_dependency_and_missing_input_contracts"]
+    test_nodeids:
+      - "tests/test_workbench_planning.py::test_hybrid_dependency_and_missing_input_contracts"
+      - "tests/test_infrastructure_contracts.py::test_dependency_closure_includes_bindings_maps_and_explicit_fanin_without_reordering"
+      - "tests/test_infrastructure_contracts.py::test_plugin_inventory_retains_default_enabled_disabled_and_explicit_enabled"
+      - "tests/test_infrastructure_contracts.py::test_mcp_forwarding_preserves_false_zero_empty_values_and_optional_omission"
+      - "tests/test_infrastructure_contracts.py::test_shared_source_hash_is_computed_once_per_review_but_never_reused_across_reviews"
     requirement_or_formula_source: unchanged production proposal semantics during responsibility extraction
     oracle_type: explicit expected stage closure, missing-input codes, policy and persisted transcript
     fixture_scope: software-only semantic fixture; no model API, scientific calculator or biological evidence

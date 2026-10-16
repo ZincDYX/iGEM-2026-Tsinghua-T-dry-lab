@@ -114,6 +114,16 @@ class Workflow(Contract):
     nodes: list[WorkflowNode] = Field(min_length=1)
     execution_policy: ExecutionPolicy = Field(default_factory=ExecutionPolicy)
 
+    def required_nodes(self, target: str | None = None) -> set[str]:
+        """Return the target and its transitive prerequisites, or the entire DAG."""
+        graph = {node.id: node.dependencies() for node in self.nodes}
+        selected = set(graph) if target is None else {target}
+        while True:
+            expanded = selected | set().union(*(graph[node] for node in selected))
+            if expanded == selected:
+                return selected
+            selected = expanded
+
     @model_validator(mode="after")
     def validate_graph(self) -> "Workflow":
         ids = [node.id for node in self.nodes]

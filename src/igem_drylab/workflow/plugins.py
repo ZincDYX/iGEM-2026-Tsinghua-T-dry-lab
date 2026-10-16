@@ -25,6 +25,10 @@ from .store import WorkflowStore, canonical
 from .tools import NodeContext, ToolDefinition, ToolFailure, WorkflowTools
 
 
+_GITHUB_REPOSITORY = re.compile(r"https://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?")
+_IGEM_REPOSITORY = re.compile(r"https://gitlab\.igem\.org/([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+?)(?:\.git)?/?")
+
+
 class PluginManifest(Contract):
     protocol_version: Literal["1"] = "1"
     id: str = Field(pattern=r"^[A-Za-z0-9_.-]+$")
@@ -141,8 +145,8 @@ class PluginManager:
 
     def fetch_github(self, repository: str, revision: str) -> dict[str, Any]:
         """Fetch pinned public source, never import or execute it before trust."""
-        match = re.fullmatch(r"https://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?", repository)
-        gitlab = re.fullmatch(r'https://gitlab\.igem\.org/([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+?)(?:\.git)?/?',repository)
+        match = _GITHUB_REPOSITORY.fullmatch(repository)
+        gitlab = _IGEM_REPOSITORY.fullmatch(repository)
         if not (match or gitlab) or not re.fullmatch(r"[0-9a-fA-F]{40}", revision):
             raise ValueError("github_requires_repository_URL_and_full_40_character_commit")
         owner, repo = match.groups() if match else ('igem',gitlab.group(1).replace('/','.'))
@@ -182,8 +186,8 @@ class PluginManager:
             return self.fetch_github(repository,revision)
         if not re.fullmatch(r'[A-Za-z0-9_./-]{1,100}',revision):
             raise ValueError('plugin_source_revision_invalid')
-        github=re.fullmatch(r'https://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?',repository)
-        gitlab=re.fullmatch(r'https://gitlab\.igem\.org/([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+?)(?:\.git)?/?',repository)
+        github = _GITHUB_REPOSITORY.fullmatch(repository)
+        gitlab = _IGEM_REPOSITORY.fullmatch(repository)
         if github:
             owner,repo=github.groups()
             endpoint=f'https://api.github.com/repos/{owner}/{repo}/commits/{quote(revision,safe="")}'
@@ -276,7 +280,9 @@ class PluginManager:
 
     def installed(self) -> list[dict[str, Any]]:
         with self.store.connection() as db:
-            return [{**json.loads(row['payload']),'enabled':self.is_enabled(json.loads(row['payload'])['hash'])} for row in db.execute("SELECT payload FROM plugins")]
+            rows = db.execute("""SELECT plugins.payload, COALESCE(plugin_enabled.enabled, 1) AS enabled
+                FROM plugins LEFT JOIN plugin_enabled ON plugins.hash = plugin_enabled.hash""")
+            return [{**json.loads(row['payload']), 'enabled':bool(row['enabled'])} for row in rows]
 
     def is_enabled(self, digest):
         with self.store.connection() as db:
@@ -299,7 +305,7 @@ class PluginManager:
         # Versions have independent registry IDs so old run snapshots retain
         # their exact implementation after a new plugin release is installed.
         tool_id = f"plugin.{manifest.id}.{record['hash'][:12]}"
-        if any(item["id"] == tool_id for item in self.tools.list()):
+        if any(tool.id == tool_id for tool in self.tools.definitions()):
             return
 
         def invoke(payload: PluginArguments, context: NodeContext) -> dict[str, Any]:

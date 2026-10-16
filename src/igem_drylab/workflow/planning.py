@@ -18,7 +18,7 @@ from .models import (
     Workflow,
     WorkflowError,
 )
-from .store import now, plan_binding
+from .store import canonical, now, plan_binding
 from igem_drylab.agent.scientific_environment import (
     ScientificEnvironment,
     ScientificObservation,
@@ -272,14 +272,7 @@ class PlanningService:
             result.missing_inputs.append("stage_configuration_not_prepared:" + target)
             return None
 
-        selected = {target}
-        while True:
-            expanded = selected | set().union(
-                *(definitions[key].dependencies() for key in selected)
-            )
-            if expanded == selected:
-                break
-            selected = expanded
+        selected = workflow.required_nodes(target)
         workflow.nodes = [node for node in workflow.nodes if node.id in selected]
         workflow.execution_policy.allowed_tools = sorted(
             {node.tool_id for node in workflow.nodes}
@@ -493,68 +486,36 @@ class PlanningService:
             ).fetchone()
         previous_id = row[0] if row else None
         previous = self.get(previous_id) if previous_id else None
-        old = (
-            {n.id: n for n in previous.workflow.nodes}
-            if previous and previous.workflow
-            else {}
-        )
-        new = {n.id: n for n in proposal.workflow.nodes} if proposal.workflow else {}
+        before_workflow = previous.workflow if previous else None
+        after_workflow = proposal.workflow
+        old = {node.id: node for node in before_workflow.nodes} if before_workflow else {}
+        new = {node.id: node for node in after_workflow.nodes} if after_workflow else {}
         changes = []
 
         def add(kind, target, before, after, node_id=None, input_name=None):
             if before != after:
-                changes.append(
-                    ProposalChange(
-                        kind=kind,
-                        target=target,
-                        before=before,
-                        after=after,
-                        node_id=node_id,
-                        input_name=input_name,
-                    )
-                )
+                changes.append(ProposalChange(kind=kind, target=target, before=before, after=after,
+                                              node_id=node_id, input_name=input_name))
 
         def text(value):
-            from .store import canonical
-
             return canonical(value) if value is not None else None
 
-        for key in sorted(old.keys() | new.keys()):
-            a, b = old.get(key), new.get(key)
-            add("node", key, a.label if a else None, b.label if b else None, key)
-            add("tool", key, a.tool_id if a else None, b.tool_id if b else None, key)
-            names = (a.inputs.keys() if a else set()) | (
-                b.inputs.keys() if b else set()
-            )
-            for name in sorted(names):
-                before = (
-                    a.inputs[name].model_dump(mode="json")
-                    if a and name in a.inputs
-                    else None
-                )
-                after = (
-                    b.inputs[name].model_dump(mode="json")
-                    if b and name in b.inputs
-                    else None
-                )
-                add("binding", key + "." + name, text(before), text(after), key, name)
-            add(
-                "dependency",
-                key,
-                text(sorted(a.dependencies())) if a else None,
-                text(sorted(b.dependencies())) if b else None,
-                key,
-            )
-        add(
-            "permission",
-            "Execution scope and permissions",
-            text(previous.workflow.execution_policy.model_dump(mode="json"))
-            if previous and previous.workflow
-            else None,
-            text(proposal.workflow.execution_policy.model_dump(mode="json"))
-            if proposal.workflow
-            else None,
-        )
+        for node_id in sorted(old.keys() | new.keys()):
+            before, after = old.get(node_id), new.get(node_id)
+            for kind, field in (("node", "label"), ("tool", "tool_id")):
+                add(kind, node_id, getattr(before, field, None), getattr(after, field, None), node_id)
+            before_inputs = before.inputs if before else {}
+            after_inputs = after.inputs if after else {}
+            for name in sorted(before_inputs.keys() | after_inputs.keys()):
+                left, right = before_inputs.get(name), after_inputs.get(name)
+                add("binding", node_id + "." + name,
+                    text(left.model_dump(mode="json")) if left is not None else None,
+                    text(right.model_dump(mode="json")) if right is not None else None, node_id, name)
+            add("dependency", node_id, text(sorted(before.dependencies())) if before else None,
+                text(sorted(after.dependencies())) if after else None, node_id)
+        add("permission", "Execution scope and permissions",
+            text(before_workflow.execution_policy.model_dump(mode="json")) if before_workflow else None,
+            text(after_workflow.execution_policy.model_dump(mode="json")) if after_workflow else None)
         result = ProposalDiff(
             proposal_id=proposal_id,
             previous_proposal_id=previous_id,
@@ -566,14 +527,16 @@ class PlanningService:
         self.boundary.check(result.model_dump(mode="json"))
         return result
 
-    def get(self, proposal_id: str):
-        with self.store.connection() as db:
-            row = db.execute(
-                "SELECT payload FROM proposals WHERE id=?", (proposal_id,)
-            ).fetchone()
+    @staticmethod
+    def _read_proposal(db, proposal_id: str) -> ProposalView:
+        row = db.execute("SELECT payload FROM proposals WHERE id=?", (proposal_id,)).fetchone()
         if row is None:
             raise KeyError(proposal_id)
         return ProposalView.model_validate_json(row[0])
+
+    def get(self, proposal_id: str):
+        with self.store.connection() as db:
+            return self._read_proposal(db, proposal_id)
 
     def decide(self, proposal_id: str, action: str):
         prepared = self.get(proposal_id)
@@ -586,19 +549,12 @@ class PlanningService:
         )
         with self.store.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute(
-                "SELECT payload FROM proposals WHERE id=?", (proposal_id,)
-            ).fetchone()
-            if row is None:
-                raise KeyError(proposal_id)
-            result = ProposalView.model_validate_json(row[0])
+            result = self._read_proposal(db, proposal_id)
             if result.status not in {"proposed", "accepted"}:
                 raise WorkflowError("proposal_not_actionable", status_code=409)
             project = db.execute(
                 "SELECT payload FROM projects WHERE id=?", (result.project_id,)
             ).fetchone()
-            from .models import Project
-
             if (
                 not project
                 or result.workflow is None
@@ -633,12 +589,7 @@ class PlanningService:
         if db is None:
             proposal = self.get(proposal_id)
         else:
-            row = db.execute(
-                "SELECT payload FROM proposals WHERE id=?", (proposal_id,)
-            ).fetchone()
-            if row is None:
-                raise KeyError(proposal_id)
-            proposal = ProposalView.model_validate_json(row[0])
+            proposal = self._read_proposal(db, proposal_id)
         if (
             proposal.status != "accepted"
             or proposal.confirmation != confirmation

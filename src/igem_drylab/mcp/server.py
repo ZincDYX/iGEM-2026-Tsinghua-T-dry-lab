@@ -86,6 +86,11 @@ def _call_local(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     return result.structured_content
 
 
+def _present(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Omit only absent optional fields; preserve false, zero and empty inputs."""
+    return {key: value for key, value in arguments.items() if value is not None}
+
+
 @server.tool(name="igem.m2.membrane_geometry", title="ER membrane-constrained M2 conformations", structured_output=True)
 def m2_membrane_geometry(payload: MembraneGeometryInput) -> dict[str, Any]:
     return _call_local("igem.m2.membrane_geometry", {"payload":payload.model_dump(mode="json")})
@@ -190,8 +195,7 @@ def m1_import_llps_results(payload: LLPSImportInput) -> dict[str, Any]:
 @server.tool(name="igem.m2.assess_regions", title="Assess actual full-length model regions", structured_output=True)
 def m2_assess_regions(candidate_id: str, sequence: str, confidence_file: str,
                       regions: list[dict[str, Any]], calculate_accessibility: bool = True, tool_input_id: str | None = None) -> dict[str, Any]:
-    return _call_local("igem.m2.assess_regions", dict(candidate_id=candidate_id, sequence=sequence,
-        confidence_file=confidence_file, regions=regions, calculate_accessibility=calculate_accessibility,tool_input_id=tool_input_id))
+    return _call_local("igem.m2.assess_regions", locals())
 
 
 @server.tool(
@@ -208,13 +212,8 @@ def m1_compute_features(
     feature_definitions_file: str | None = None,
     forbidden_amino_acid_motifs: list[str] | None = None,
 ) -> dict[str, Any]:
-    arguments: dict[str, Any] = {
-        "sequence": sequence,
-        "forbidden_amino_acid_motifs": forbidden_amino_acid_motifs or [],
-    }
-    if feature_definitions_file is not None:
-        arguments["feature_definitions_file"] = feature_definitions_file
-    return _call_local("igem.m1.compute_features", arguments)
+    forbidden_amino_acid_motifs = forbidden_amino_acid_motifs or []
+    return _call_local("igem.m1.compute_features", _present(locals()))
 
 
 @server.tool(
@@ -231,15 +230,7 @@ def m1_validate_construct_sequence(
     forbidden_restriction_sites: dict[str, str] | None = None,
     require_sequence_evidence: bool = True,
 ) -> dict[str, Any]:
-    arguments = {
-            "construct_id": construct_id,
-            "ordered_part_ids": ordered_part_ids,
-            "part_sequences": part_sequences,
-            "coding_dna": coding_dna,
-            "forbidden_restriction_sites": forbidden_restriction_sites,
-            "require_sequence_evidence": require_sequence_evidence,
-        }
-    return _call_local("igem.m1.validate_construct_sequence", {key: value for key, value in arguments.items() if value is not None})
+    return _call_local("igem.m1.validate_construct_sequence", _present(locals()))
 
 
 @server.tool(
@@ -259,15 +250,7 @@ def m1_compute_protparam(sequence: str) -> dict[str, Any]:
     structured_output=True,
 )
 def m1_parse_seg(path: str, tool_version: str, input_sha256: str, expected_length: int) -> dict[str, Any]:
-    return _call_local(
-        "igem.m1.parse_seg",
-        {
-            "path": path,
-            "tool_version": tool_version,
-            "input_sha256": input_sha256,
-            "expected_length": expected_length,
-        },
-    )
+    return _call_local("igem.m1.parse_seg", locals())
 
 
 @server.tool(
@@ -295,25 +278,8 @@ def m1_screen_sequence(
     full_fusion_sequence: str | None = None,
     require_external_evidence: bool = True,
 ) -> dict[str, Any]:
-    arguments: dict[str, Any] = {
-        "sequence": sequence,
-        "sequence_kind": sequence_kind,
-        "localization_context": localization_context,
-        "forbidden_amino_acid_motifs": forbidden_amino_acid_motifs or [],
-        "disorder_evidence": disorder_evidence,
-        "secondary_structure_evidence": secondary_structure_evidence,
-        "seg_evidence": seg_evidence,
-        "protparam_evidence": protparam_evidence,
-        "fusion_evidence": fusion_evidence,
-        "full_fusion_sha256": full_fusion_sha256,
-        "full_fusion_sequence": full_fusion_sequence,
-        "require_external_evidence": require_external_evidence,
-    }
-    if feature_definitions_file is not None:
-        arguments["feature_definitions_file"] = feature_definitions_file
-    if rules_file is not None:
-        arguments["rules_file"] = rules_file
-    return _call_local("igem.m1.screen_sequence", {key: value for key, value in arguments.items() if value is not None})
+    forbidden_amino_acid_motifs = forbidden_amino_acid_motifs or []
+    return _call_local("igem.m1.screen_sequence", _present(locals()))
 
 
 @server.tool(
@@ -328,15 +294,7 @@ def m1_parse_iupred2a(
     input_sha256: str,
     score_boundary: float = 0.5,
 ) -> dict[str, Any]:
-    return _call_local(
-        "igem.m1.parse_iupred2a",
-        {
-            "path": path,
-            "tool_version": tool_version,
-            "input_sha256": input_sha256,
-            "score_boundary": score_boundary,
-        },
-    )
+    return _call_local("igem.m1.parse_iupred2a", locals())
 
 
 @server.tool(
@@ -352,16 +310,7 @@ def m1_parse_secondary_structure(
     input_sha256: str,
     sequence_file: str | None = None,
 ) -> dict[str, Any]:
-    arguments = {
-        "path": path, "tool_name": tool_name, "tool_version": tool_version,
-        "input_sha256": input_sha256,
-    }
-    if sequence_file is not None:
-        arguments["sequence_file"] = sequence_file
-    return _call_local(
-        "igem.m1.parse_secondary_structure",
-        arguments,
-    )
+    return _call_local("igem.m1.parse_secondary_structure", _present(locals()))
 
 
 @server.tool(
@@ -393,30 +342,7 @@ def m2_calculate_geometry(
     reference_altloc: str | None = None,
     model_altloc: str | None = None,
 ) -> dict[str, Any]:
-    arguments: dict[str, Any] = {
-        "reference_pdb": reference_pdb,
-        "model_pdb": model_pdb,
-        "reference_chain": reference_chain,
-        "model_chain": model_chain,
-        "core_residues": core_residues,
-        "pocket_residues": pocket_residues,
-    }
-    optional = {
-        "tail_residues": tail_residues,
-        "core_residue_mapping": core_residue_mapping,
-        "pocket_residue_mapping": pocket_residue_mapping,
-        "first_module_chain": first_module_chain,
-        "first_module_residues": first_module_residues,
-        "second_module_chain": second_module_chain,
-        "second_module_residues": second_module_residues,
-        "clash_cutoff_angstrom": clash_cutoff_angstrom,
-        "reference_model_id": reference_model_id,
-        "model_id": model_id,
-        "reference_altloc": reference_altloc,
-        "model_altloc": model_altloc,
-    }
-    arguments.update({key: value for key, value in optional.items() if value is not None})
-    return _call_local("igem.m2.calculate_geometry", arguments)
+    return _call_local("igem.m2.calculate_geometry", _present(locals()))
 
 
 @server.tool(
@@ -467,26 +393,7 @@ def m2_pocket_sasa(
     model_altloc: str | None = None,
     residue_mapping: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    arguments: dict[str, Any] = {
-        "chain": chain,
-        "residues": residues,
-        "threshold_loss_fraction": threshold_loss_fraction,
-        "model_configuration_hash": model_configuration_hash,
-        "reference_configuration_hash": reference_configuration_hash,
-    }
-    optional = {
-        "model_json": model_json,
-        "reference_json": reference_json,
-        "model_pdb": model_pdb,
-        "reference_pdb": reference_pdb,
-        "reference_model_id": reference_model_id,
-        "model_id": model_id,
-        "reference_altloc": reference_altloc,
-        "model_altloc": model_altloc,
-        "residue_mapping": residue_mapping,
-    }
-    arguments.update({key: value for key, value in optional.items() if value is not None})
-    return _call_local("igem.scoring.pocket_sasa", {key: value for key, value in arguments.items() if value is not None})
+    return _call_local("igem.scoring.pocket_sasa", _present(locals()))
 
 
 @server.tool(
@@ -496,10 +403,7 @@ def m2_pocket_sasa(
     structured_output=True,
 )
 def m2_parse_structure_prediction(path: str, candidate_id: str | None = None, model_rank: int = 1) -> dict[str, Any]:
-    arguments: dict[str, Any] = {"path": path, "model_rank": model_rank}
-    if candidate_id is not None:
-        arguments["candidate_id"] = candidate_id
-    return _call_local("igem.parsers.structure_prediction", arguments)
+    return _call_local("igem.parsers.structure_prediction", _present(locals()))
 
 
 @server.tool(
@@ -520,18 +424,7 @@ def m2_compare_docking(
     reference_ligand_hash: str,
     fusion_ligand_hash: str,
 ) -> dict[str, Any]:
-    return _call_local(
-        "igem.scoring.docking_penalty",
-        {
-            "candidate_id": candidate_id,
-            "reference_vina_output": reference_vina_output,
-            "fusion_vina_output": fusion_vina_output,
-            "reference_configuration_hash": reference_configuration_hash,
-            "fusion_configuration_hash": fusion_configuration_hash,
-            "reference_ligand_hash": reference_ligand_hash,
-            "fusion_ligand_hash": fusion_ligand_hash,
-        },
-    )
+    return _call_local("igem.scoring.docking_penalty", locals())
 
 
 @server.tool(
@@ -577,7 +470,7 @@ def m4_analyze_steady_state(inputs: dict[str, Any]) -> dict[str, Any]:
     structured_output=True,
 )
 def check_external_tool(config_path: str, tool_name: str) -> dict[str, Any]:
-    return _call_local("igem.compute.check_tool", {"config_path": config_path, "tool_name": tool_name})
+    return _call_local("igem.compute.check_tool", locals())
 
 
 @server.tool(
@@ -587,10 +480,7 @@ def check_external_tool(config_path: str, tool_name: str) -> dict[str, Any]:
     structured_output=True,
 )
 def audit_external_tool_deployment(config_path: str, budget_bytes: int | None = 15_000_000_000) -> dict[str, Any]:
-    return _call_local(
-        "igem.compute.audit_deployment",
-        {"config_path": config_path, "budget_bytes": budget_bytes},
-    )
+    return _call_local("igem.compute.audit_deployment", locals())
 
 
 @server.tool(
@@ -610,44 +500,32 @@ def run_external_tool(
     timeout_seconds: int = 3600,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    return _call_local(
-        "igem.compute.run_tool",
-        {
-            "config_path": config_path,
-            "tool_name": tool_name,
-            "output_dir": output_dir,
-            "context": context,
-            "timeout_seconds": timeout_seconds,
-            "dry_run": dry_run,
-        },
-    )
+    return _call_local("igem.compute.run_tool", locals())
 
 
 @server.tool(name="igem.m4.analyze_prediction", structured_output=True,
              description="Original finite differences and evidence-declared LHS/Spearman; no invented ranges.")
 def m4_analyze_prediction(prediction_contract: dict[str, Any], analysis_config: dict[str, Any]) -> dict[str, Any]:
-    return _call_local("igem.m4.analyze_prediction",{"prediction_contract":prediction_contract,"analysis_config":analysis_config})
+    return _call_local("igem.m4.analyze_prediction", locals())
 
 
 @server.tool(name="igem.design.scan_scaffolds", structured_output=True,
              description="Finite candidate scan reruns M1-M4 per explicit project; retains failed designs.")
 def design_scan_scaffolds(design_plan: dict[str, Any], output_dir: str) -> dict[str, Any]:
-    return _call_local("igem.design.scan_scaffolds",{"design_plan":design_plan,"output_dir":output_dir})
+    return _call_local("igem.design.scan_scaffolds", locals())
 
 
 @server.tool(name="igem.research.freeze_prediction", structured_output=True,
              description="Freeze source, solver, parameter and calibration bytes; not a validation claim.")
 def research_freeze_prediction(prediction_file: str, parameter_file: str, calibration_datasets: dict[str,str],
                                freeze_id: str, construct_id: str, condition_id: str, claim_scope: str) -> dict[str,Any]:
-    return _call_local("igem.research.freeze_prediction",{"prediction_file":prediction_file,"parameter_file":parameter_file,
-        "calibration_datasets":calibration_datasets,"freeze_id":freeze_id,"construct_id":construct_id,
-        "condition_id":condition_id,"claim_scope":claim_scope})
+    return _call_local("igem.research.freeze_prediction", locals())
 
 
 @server.tool(name="igem.research.validate_holdout", structured_output=True,
              description="Evaluate only held-out data against frozen predictions, without fitting or changing parameters.")
 def research_validate_holdout(snapshot: dict[str,Any], dataset_id: str, dataset_file: str) -> dict[str,Any]:
-    return _call_local("igem.research.validate_holdout",{"snapshot":snapshot,"dataset_id":dataset_id,"dataset_file":dataset_file})
+    return _call_local("igem.research.validate_holdout", locals())
 
 
 @server.tool(name='igem.m1.analyse_phase_profile', structured_output=True,

@@ -5,6 +5,7 @@ import type {
   ProjectView,
   Workflow,
   ProposalView,
+  WorkflowDocument,
 } from "../contracts/generated";
 import type { ExecutionPolicy } from "../contracts/Workflow.generated";
 import type { Goal } from "../types";
@@ -245,9 +246,14 @@ export const workflowDocuments = (projectId: string, signal?: AbortSignal) =>
   list('WorkflowDocument', documentPath(projectId), signal);
 export const workflowDocument = (projectId: string, documentId: string) =>
   read('WorkflowDocument', documentPath(projectId, documentId));
+type DocumentUpdate = Pick<WorkflowDocument, 'layout' | 'selected_node_id' | 'view'> & {workflow?: Workflow};
+export function workflowDocumentUpdate({layout, selected_node_id, view}: WorkflowDocument,
+                                       changes: Partial<DocumentUpdate>): DocumentUpdate {
+  return {layout, selected_node_id, view, ...changes};
+}
 export const saveWorkflowDocument = (
   projectId: string, documentId: string,
-  value: Pick<import('../contracts/generated').WorkflowDocument, 'layout' | 'selected_node_id' | 'view'> & {workflow?: Workflow},
+  value: DocumentUpdate,
   projectRevision: number, revision?: number,
 ) => read('WorkflowDocument', documentPath(projectId, documentId), {
   ...value, expected_project_revision: projectRevision, expected_revision: revision ?? null,
