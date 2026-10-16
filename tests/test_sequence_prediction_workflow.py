@@ -1,6 +1,8 @@
 """Actual subprocess/ledger protocol, not an authentic predictor smoke test."""
 from pathlib import Path
 import sys
+import json
+import pytest
 
 from igem_drylab.workflow.builtins import builtin_tools
 from igem_drylab.workflow.engine import WorkflowEngine
@@ -41,6 +43,26 @@ def test_real_subprocess_output_and_record_persist_across_ledger_reopen(tmp_path
     reopened = WorkflowStore(tmp_path / "ledger.sqlite").run(run_id)
     assert reopened["nodes"][0]["output"] == output
     assert Path(output["parsed"]["source_file"]).is_file()
+
+
+@pytest.mark.data_contract
+@pytest.mark.parametrize('failure',['failed','timed_out'])
+def test_actual_native_failure_is_not_a_successful_workflow_node(tmp_path,failure):
+    script=tmp_path/'protocol_failure.py'
+    script.write_text('import sys,time\nprint("protocol fixture only",flush=True)\n'+('sys.exit(7)\n' if failure=='failed' else 'time.sleep(3)\n'))
+    store=WorkflowStore(tmp_path/'ledger.sqlite')
+    RuntimeProfiles(store).install('fixture',{'seg':dict(enabled=True,mode='external',
+        command=f'"{sys.executable}" "{script}"',verified_version='PROTOCOL_FIXTURE_NOT_SEG',timeout_seconds=1)})
+    engine=WorkflowEngine(store,builtin_tools(),tmp_path/'artifacts')
+    project=Project(id='p',name='PROTOCOL_FIXTURE',runtime_profile_ref='fixture',sequences=[SequenceRecord(id='input',sequence='GSAD')])
+    workflow=Workflow(id='w',name='failure contract',nodes=[WorkflowNode(id='seg',label='SEG',tool_id='prediction.seg',inputs={'item':ProjectInput(path=['sequences',0])})])
+    run=engine.run(engine.create(project,workflow));node=run['nodes'][0]
+    assert run['status']=='failed' and node['status']=='failed' and node['output'] is None
+    assert node['error']['code']=='external_prediction_'+failure and node['error']['retryable'] is False
+    failure_file=next((tmp_path/'artifacts').rglob('prediction-failure.json'))
+    saved=json.loads(failure_file.read_text());manifest=json.loads(Path(saved['execution_manifest']).read_text())
+    assert saved['tool_status']==failure and saved['parse_status']=='not_run' and saved['parsed'] is None
+    assert manifest['status']==failure and 'protocol fixture only' in manifest['stdout']
 
 
 def test_psipred_profile_route_is_wired_without_JPred_length_limits(tmp_path,monkeypatch):

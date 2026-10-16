@@ -1,6 +1,16 @@
 schema_version: test-risk-v1
 claim_scope: software_risk_records_not_a_quality_score_or_biological_validation
 risks:
+  - risk_id: NATIVE_PREDICTION_FAILURE_IS_NOT_JOB_SUCCESS
+    group: data_contract
+    test_nodeids: ["tests/test_sequence_prediction_workflow.py::test_actual_native_failure_is_not_a_successful_workflow_node", "tests/test_native_pocket_candidates.py::test_native_pocket_process_failure_is_failed_not_completed"]
+    requirement_or_formula_source: failed or timed-out native prediction must not be displayed as a successful completed job
+    oracle_type: actual subprocess nonzero exit and bounded process timeout; durable ledger reopen and original native manifest
+    fixture_scope: process/ledger contract only, not authentic predictor execution or biological validation
+    formula_version: native prediction execution outcome v1
+    units: seconds; process return code; node status
+    tolerance_basis: exact failed status and empty prediction; no automatic unknown remote-job resubmission
+    expected_faults: [failed_predictor_green_success, hardcoded_prediction_timeout, lost_failed_attempt, fabricated_parsed_result]
   - risk_id: QM_CONSTRAINED_PES_IS_NOT_FREE_MINIMUM
     group: scientific_algorithm
     test_nodeids: ["tests/test_quantum_calculations.py::test_PES_coordinate_constraints_reject_ambiguous_or_nonphysical_inputs", "tests/test_quantum_calculations.py::test_reversed_duplicate_coordinate_does_not_manufacture_independent_constraints", "tests/test_quantum_calculations.py::test_linear_angle_targets_are_not_rejected_as_nonphysical", "tests/test_quantum_calculations.py::test_native_constrained_PES_point_is_not_a_free_minimum_or_a_force_field"]

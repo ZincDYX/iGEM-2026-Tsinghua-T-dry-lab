@@ -177,6 +177,7 @@ class ToolConfig(BaseModel):
     command: str | None = None
     deployment_paths: list[Path] = Field(default_factory=list)
     verified_version: str | None = None
+    timeout_seconds: int = Field(default=7200, ge=1, description="Native prediction job timeout, configured in the private backend runtime profile.")
     extra: dict[str, Any] = Field(default_factory=dict)
 
 

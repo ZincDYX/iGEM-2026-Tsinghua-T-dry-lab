@@ -96,6 +96,14 @@ class StructurePocketPredictionInput(Contract):
     structure: StructureInput
 
 
+def _failed_native_prediction(result, native, context):
+    result['blocker']='External tool did not complete; its private execution record is retained.'
+    result['execution_manifest']=str(native.manifest_file) if native.manifest_file else None
+    (context.work_dir/'prediction-failure.json').write_text(json.dumps(result,indent=2))
+    raise ToolFailure('external_prediction_'+native.status,
+        'Native predictor did not complete; the failed attempt and execution record are retained. No prediction was published.')
+
+
 def predict_structure_pockets(payload: StructurePocketPredictionInput,context: NodeContext) -> dict:
     """Run a maintainer-configured native tool, then use the shared MCP parser."""
     payload.structure.read()  # Exact complete sequence and paired model first.
@@ -113,9 +121,9 @@ def predict_structure_pockets(payload: StructurePocketPredictionInput,context: N
         raise ValueError('P2Rank_native_command_requires_explicit_matching_profile')
     digest=sha256(payload.structure.path.read_bytes()).hexdigest()
     native=adapter.run(output_dir=directory,structure=payload.structure.path,profile=profile,
-        input_files={'structure':payload.structure.path},timeout_seconds=7200)
+        input_files={'structure':payload.structure.path},timeout_seconds=config.timeout_seconds)
     result['tool_status']=native.status
-    if native.status!='succeeded':return result
+    if native.status!='succeeded':_failed_native_prediction(result,native,context)
     if sha256(payload.structure.path.read_bytes()).hexdigest()!=digest:
         raise ValueError('P2Rank_input_structure_changed_during_execution')
     output=directory/(payload.structure.path.name+'_predictions.csv')
@@ -185,7 +193,7 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
     run = adapter.run(output_dir=output_dir, fasta=source, record="sequence_input",
         sequence=sequence,
         job_state=context.work_dir.parent / "remote-job.json",
-        input_files={"sequence": source}, timeout_seconds=7200)
+        input_files={"sequence": source}, timeout_seconds=config.timeout_seconds)
     result["tool_status"] = run.status
     if run.status != "succeeded":
         if tool=='fuzdrop':
@@ -199,8 +207,7 @@ def predict_sequence(tool: str, payload: SequencePredictionInput, context: NodeC
             if state_file.is_file() and not json.loads(state_file.read_text()).get("job_id"):
                 raise ToolFailure("remote_submission_reconciliation_required", "Submission acknowledgement unknown; never resubmit blindly.")
             raise ToolFailure("remote_retrieval_failed", "Original JPred job retained; retry retrieves that job only.",retryable=True)
-        result["blocker"] = "External tool did not complete; its private execution record is retained."
-        return result
+        _failed_native_prediction(result,run,context)
     if tool == "jpred" and native and not (output_dir / "secondary.json").is_file():
         state = json.loads((context.work_dir.parent / "remote-job.json").read_text())
         if state["status"] == "waiting_for_result":

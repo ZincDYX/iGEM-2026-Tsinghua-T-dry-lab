@@ -69,3 +69,25 @@ def test_native_execution_stage_reports_missing_tool_without_synthetic_pockets(t
     result=engine.run(engine.create(Project(id='p',name='synthetic-fixture'),task))
     output=result['nodes'][0]['output']
     assert output['tool_status']=='not_configured' and output['parsed'] is None and output['parse_status']=='not_run'
+
+
+@pytest.mark.data_contract
+def test_native_pocket_process_failure_is_failed_not_completed(tmp_path):
+    import sys
+    from igem_drylab.workflow.builtins import builtin_tools
+    from igem_drylab.workflow.engine import WorkflowEngine
+    from igem_drylab.workflow.store import WorkflowStore
+    from igem_drylab.workflow.runtime_profiles import RuntimeProfiles
+    from igem_drylab.workflow.models import Project,Workflow,WorkflowNode,LiteralInput
+    request,_=fixture(tmp_path);script=tmp_path/'not_P2Rank.py';script.write_text('raise SystemExit(7)\n')
+    store=WorkflowStore(tmp_path/'ledger.sqlite')
+    RuntimeProfiles(store).install('fixture',{'p2rank':dict(enabled=True,mode='external',
+        command=f'"{sys.executable}" "{script}" -c {{profile}}',verified_version='PROTOCOL_FIXTURE_NOT_P2RANK')})
+    engine=WorkflowEngine(store,builtin_tools(),tmp_path/'artifacts')
+    task=Workflow(id='native-pockets',name='failed-process-fixture',nodes=[WorkflowNode(id='pocket',label='Native P2Rank',tool_id='prediction.p2rank',
+        inputs={'candidate_id':LiteralInput(value='synthetic-fixture'),'structure':LiteralInput(value=request.structure.model_dump(mode='json'))})])
+    result=engine.run(engine.create(Project(id='p',name='synthetic-fixture',runtime_profile_ref='fixture'),task))
+    assert result['status']=='failed' and result['nodes'][0]['status']=='failed'
+    assert result['nodes'][0]['error']['code']=='external_prediction_failed'
+    saved=json.loads(next((tmp_path/'artifacts').rglob('prediction-failure.json')).read_text())
+    assert saved['parsed'] is None and saved['tool_status']=='failed'

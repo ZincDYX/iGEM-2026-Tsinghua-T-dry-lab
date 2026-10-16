@@ -107,6 +107,13 @@ No model weights, licensed tools, private sequences, credentials or deployment
 addresses are shipped in this repository. Optional QM dependencies are not part
 of the desktop runtime or executable.
 
+Native sequence and pocket prediction process failures now fail their workflow
+nodes instead of returning a successful node containing a failed tool record.
+The original attempt, process manifest and unparsed failure summary are retained.
+Missing/unconfigured tools remain explicit diagnostic gaps. Prediction timeouts
+are typed private backend profile settings; increasing a timeout does not alter
+the sequence or scientific method, and does not authorize blind remote retries.
+
 For the tested Linux Python 3.11 / CUDA 12 research environment:
 
 ```sh
