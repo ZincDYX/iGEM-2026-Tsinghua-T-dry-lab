@@ -503,12 +503,18 @@ def literature_qa(arguments: JsonObject) -> McpToolResult:
     semantic_enabled = arguments.get("semantic_enabled", False)
     if not isinstance(semantic_enabled, bool):
         raise ValueError("Argument 'semantic_enabled' must be a boolean")
+    graph_enabled = arguments.get("graph_enabled", False)
+    if not isinstance(graph_enabled, bool):
+        raise ValueError("Argument 'graph_enabled' must be a boolean")
+    graph_path = _optional_path(arguments, "graph_path")
     result = answer_question(
         _require_str(arguments, "question"), Path(_require_str(arguments, "evidence_path")),
         top_k=_optional_int(arguments, "top_k", 5, minimum=1),
         mode=mode,
         constraints=constraints,
         semantic_enabled=semantic_enabled,
+        graph_enabled=graph_enabled,
+        graph_path=graph_path,
     )
     compact = {key: value for key, value in result.items() if key != "sources"}
     intent = result.get("query_analysis", {}).get("intent", {}) if isinstance(result.get("query_analysis"), dict) else {}
@@ -1034,7 +1040,7 @@ LITERATURE_QA_TOOL = McpTool(
     name="igem.literature.qa",
     title="Query a local literature evidence database",
     description="Retrieve provenance-bearing local evidence. Default retrieval does not call an LLM; synthesis never approves a scientific parameter.",
-    input_schema=_schema({"question": {"type": "string"}, "evidence_path": {"type": "string"}, "top_k": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "enum": ["retrieve_only", "synthesize"]}, "constraints": {"type": "object"}, "semantic_enabled": {"type": "boolean", "default": False}}, ["question", "evidence_path"]),
+    input_schema=_schema({"question": {"type": "string"}, "evidence_path": {"type": "string"}, "top_k": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "enum": ["retrieve_only", "synthesize"]}, "constraints": {"type": "object"}, "semantic_enabled": {"type": "boolean", "default": False}, "graph_enabled": {"type": "boolean", "default": False}, "graph_path": {"type": "string"}}, ["question", "evidence_path"]),
     output_schema=_schema({"ok": {"type": "boolean"}, "status": {"type": "string"}, "answer": {"type": "string"}, "sources": {"type": "array"}}, additional_properties=True),
 )
 PIPELINE_PLAN_STAGE_TOOL = McpTool(name="igem.pipeline.plan_stage", title="Dispatch deterministic dry-lab stage", description="Stage-aware orchestration wrapper; validates Agent dispatch only and does not reproduce M1--M5 scientific calculations.", input_schema=_schema({"stage": {"type": "string", "enum": ["m1", "m2", "m3", "m4", "m5"]}}, ["stage"]), output_schema=_schema({"ok": {"type": "boolean"}, "stage": {"type": "string"}, "dispatch_only": {"type": "boolean"}}, additional_properties=True))

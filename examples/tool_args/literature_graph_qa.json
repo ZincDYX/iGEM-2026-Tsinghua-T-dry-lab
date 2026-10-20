@@ -1,0 +1,9 @@
+{
+  "question": "What evidence reports DMT activity in yeast LLPS condensates?",
+  "evidence_path": "outputs/literature_database_demo/clean_database.csv",
+  "top_k": 5,
+  "mode": "retrieve_only",
+  "semantic_enabled": false,
+  "graph_enabled": true,
+  "graph_path": "outputs/evidence_graph.json"
+}

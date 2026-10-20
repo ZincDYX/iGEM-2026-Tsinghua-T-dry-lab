@@ -73,7 +73,7 @@ class OpenAICompatiblePlanningBackend:
         try:
             plan = Plan.model_validate({"task_id": task.task_id, "steps": payload.get("steps")})
             telemetry["schema_valid_first_attempt"] = True
-            return plan.model_copy(update={"diagnostics": telemetry})
+            return plan.model_copy(update={"diagnostics": {**telemetry, "llm_response_metadata": getattr(self.client, "last_response_metadata", None) or {}}})
         except Exception as exc:
             telemetry["schema_error"] = str(exc)
         telemetry["repair_attempted"] = True
@@ -89,4 +89,4 @@ class OpenAICompatiblePlanningBackend:
             telemetry["schema_error"] = str(exc)
             raise ValueError(f"LLM plan schema rejected after one repair: {exc}") from exc
         telemetry["schema_valid_after_repair"] = True
-        return plan.model_copy(update={"diagnostics": telemetry})
+        return plan.model_copy(update={"diagnostics": {**telemetry, "llm_response_metadata": getattr(self.client, "last_response_metadata", None) or {}}})

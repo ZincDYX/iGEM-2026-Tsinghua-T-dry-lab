@@ -5,7 +5,7 @@ from pathlib import Path
 
 import typer
 
-from igem_drylab.literature import answer_question, build_prompt, load_schema
+from igem_drylab.literature import answer_question, build_knowledge_graph, build_prompt, load_evidence_documents, load_schema
 from igem_drylab.literature.qa_server import serve as serve_literature_qa
 from igem_drylab.agent import AgentRuntime, AgentTask, OpenAICompatiblePlanningBackend, HybridLLMPlanningBackend
 from igem_drylab.agent.env import load_local_env
@@ -106,10 +106,23 @@ def literature_qa_command(
     top_k: int = typer.Option(5, "--top-k", min=1),
     mode: str = typer.Option("retrieve_only", "--mode", help="retrieve_only or synthesize"),
     semantic_enabled: bool = typer.Option(False, "--semantic", help="Use the optional embedding backend configured in the environment."),
+    graph_enabled: bool = typer.Option(False, "--graph", help="Use provenance-bearing knowledge-graph retrieval in addition to BM25/embeddings."),
+    graph_path: Path | None = typer.Option(None, "--graph-path", help="Optional prebuilt graph JSON. A stale graph is ignored."),
 ) -> None:
     """Search a local evidence file and print provenance-bearing results."""
     load_local_env()
-    typer.echo(json.dumps(answer_question(question, evidence, top_k=top_k, mode=mode, semantic_enabled=semantic_enabled), ensure_ascii=False, indent=2))
+    typer.echo(json.dumps(answer_question(question, evidence, top_k=top_k, mode=mode, semantic_enabled=semantic_enabled, graph_enabled=graph_enabled, graph_path=graph_path), ensure_ascii=False, indent=2))
+
+
+@literature_app.command("build-graph")
+def build_literature_graph(
+    evidence: Path = typer.Option(..., "--evidence", "-e"),
+    output: Path = typer.Option(..., "--output", "-o"),
+) -> None:
+    """Build a deterministic evidence graph; no LLM call is made."""
+    graph = build_knowledge_graph(load_evidence_documents(evidence))
+    graph.save(output)
+    typer.echo(json.dumps({"ok": True, "output": str(output), **graph.stats}, ensure_ascii=False, indent=2))
 
 
 @literature_app.command("serve-qa")
@@ -117,10 +130,13 @@ def serve_literature_qa_command(
     evidence: Path = typer.Option(..., "--evidence", "-e"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8765, "--port", min=1, max=65535),
+    semantic_enabled: bool = typer.Option(False, "--semantic"),
+    graph_enabled: bool = typer.Option(False, "--graph"),
+    graph_path: Path | None = typer.Option(None, "--graph-path"),
 ) -> None:
     """Serve the local QA page; use a non-local host only behind your own access control."""
     load_local_env()
-    serve_literature_qa(evidence, host=host, port=port)
+    serve_literature_qa(evidence, host=host, port=port, semantic_enabled=semantic_enabled, graph_enabled=graph_enabled, graph_path=graph_path)
 
 
 @literature_app.command("search")
@@ -340,7 +356,11 @@ def _agent_runtime(
 
     load_local_env()
     prefix = "QWEN" if api_key_env.startswith("QWEN_") else "DEEPSEEK"
-    resolved_base = api_base or os.getenv(f"{prefix}_API_BASE") or "https://api.deepseek.com/chat/completions"
+    resolved_base = api_base or os.getenv(f"{prefix}_API_BASE")
+    if not resolved_base and prefix == "DEEPSEEK":
+        resolved_base = "https://api.deepseek.com/chat/completions"
+    if not resolved_base:
+        raise typer.BadParameter(f"Set {prefix}_API_BASE or pass --api-base; provider endpoints are never inferred from another provider.")
     resolved_model = model or os.getenv(f"{prefix}_MODEL") or ("qwen3-235b-a22b-instruct-2507" if prefix == "QWEN" else "deepseek-chat")
     backend_class = HybridLLMPlanningBackend if planner == "hybrid" else OpenAICompatiblePlanningBackend
     backend = backend_class.from_environment(
