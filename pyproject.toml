@@ -9,11 +9,13 @@ description = "Quantitative structure and condensate-kinetics models for iGEM 20
 requires-python = ">=3.10"
 dependencies = [
   "numpy>=1.24",
-  "scipy>=1.10",
+  "scipy>=1.12",
   "pydantic>=2.0",
   "PyYAML>=6.0",
   "typer>=0.12",
   "requests>=2.31",
+  "biopython>=1.83",
+  "jsonschema>=4.20",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +25,8 @@ test = ["pytest>=7.4"]
 
 [project.scripts]
 igem-drylab = "igem_drylab.cli:app"
+igem-freesasa = "igem_drylab.freesasa_runner:main"
+igem-vina = "igem_drylab.vina_runner:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

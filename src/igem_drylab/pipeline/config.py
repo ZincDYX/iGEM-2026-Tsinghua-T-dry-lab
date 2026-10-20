@@ -4,14 +4,30 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+import math
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from igem_drylab.parameters import ParameterRecord
 from igem_drylab.constructs import ConstructRecord
+from igem_drylab.resources import default_config_path
+from igem_drylab.design_analysis import M4AnalysisConfig
+from igem_drylab.transport_evidence import TransportEvidenceBinding
+from igem_drylab.active_network import AbsenceEvidenceBinding
+from igem_drylab.m1_prioritization import PrioritizationPolicy
+from igem_drylab.avidity_binding import AvidityBinding
+from igem_drylab.m3_workflow import M3UncertaintySettings
+from igem_drylab.compartments import MembraneTopologyEvidence, resolve_contract_paths
+from igem_drylab.membrane_geometry import MembraneGeometryInput
+from igem_drylab.m3_er import ERRecruitmentInput
+from igem_drylab.m4_compartments import CompartmentNetworkInput
+from igem_drylab.m4_workflow import M3M4JointSamples
+
+
+DEFAULT_CONFIG_DIR = default_config_path("m1_rules_v3.yaml").parent
 
 
 class RunConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str = "demo-run"
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    id: str = Field(default="demo-run", pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     output_dir: Path = Path("outputs")
 
 
@@ -22,12 +38,13 @@ class ExecutionConfig(BaseModel):
     mode: Literal["demo", "real"] = "demo"
     require_provenance: bool = True
     allow_assumptions: bool = False
+    analysis_grade: Literal["formal_measured", "mechanistic_sensitivity"] = "formal_measured"
 
 
 class StrictScientificConfig(BaseModel):
     """Reject misspelled or retired scientific settings rather than ignoring them."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class ExperimentalContext(StrictScientificConfig):
@@ -52,6 +69,7 @@ class EnzymeConfig(BaseModel):
     protein_id: str
     reaction_role: str
     structure_pdb: Path | None = None
+    sequence_sha256: str | None = None
 
 
 class ScaffoldConfig(BaseModel):
@@ -67,32 +85,80 @@ class LinkerConfig(BaseModel):
     id: str
     sequence: str
     source: str = "unknown"
+    sequence_kind: Literal["idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker"] = "enzyme_ligand_linker"
+
+
+class OrderedPartConfig(StrictScientificConfig):
+    id: str
+    kind: Literal["protein", "idr", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "tag"]
+    sequence: str | None = None
+
+
+class TruncationMapping(StrictScientificConfig):
+    reference_accession: str
+    deleted_reference_residues: list[int] = Field(min_length=1)
+    reference_to_fusion: dict[int, int]
+    source_reference: str
 
 
 class ConstructDefinition(BaseModel):
     """A wet-lab construct description; no fusion topology is inferred by code."""
 
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     model_config = ConfigDict(extra="forbid")
-    components: list[str] = Field(min_length=1)
+    components: list[str] = Field(default_factory=list)
+    parts: list[OrderedPartConfig] = Field(default_factory=list)
     domain_order: list[str] = Field(default_factory=list)
     fusion_orientation: str | None = None
+    localization_context: Literal["cytosolic", "er_anchored"] | None = None
+    localization_design_evidence: str | None = None
+    membrane_topology: MembraneTopologyEvidence | None = None
+    m1_review: dict[str, Any] | None = None
     linker_ids: list[str] = Field(default_factory=list)
     scaffold_id: str | None = None
     recruitment_tags: list[str] = Field(default_factory=list)
     enzyme_ids: list[str] = Field(default_factory=list)
     oc_n_terminal_truncation: bool | None = None
+    experimental_baseline: bool = False
+    coding_dna: str | None = None
+    sequence_source_ref: str | None = None
+    forbidden_restriction_sites: dict[str, str] | None = None
+    idr_ids: list[str] = Field(default_factory=list)
+    sequences: dict[str, str] = Field(default_factory=dict)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    oc_truncation_mapping: TruncationMapping | None = None
+
+    def ordered_part_ids(self) -> list[str]:
+        if self.parts:
+            return [part.id for part in self.parts]
+        return [self.linker_ids[0] if token.lower()=='linker' and len(self.linker_ids)==1 else token
+                for token in (self.domain_order or self.components)]
 
     @model_validator(mode="after")
-    def _one_linker_contract(self) -> "ConstructDefinition":
-        if len(self.linker_ids) > 1:
-            raise ValueError("current_m1_contract_allows_exactly_one_linker_id")
+    def _parts_contract(self) -> "ConstructDefinition":
+        if not self.parts and not self.components:
+            raise ValueError("construct_requires_ordered_parts_or_components")
+        if self.parts and self.domain_order:
+            raise ValueError("use_parts_or_domain_order_not_both")
+        if len(self.linker_ids) > 1 and "linker" in self.domain_order:
+            raise ValueError("multiple_linkers_require_explicit_part_ids")
         return self
+
+
+class DesignConfig(StrictScientificConfig):
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+    protein_construct_ids: list[str] = Field(min_length=1)
+    required_enzyme_ids: list[str] = Field(default_factory=list)
+    host: str | None = None
+    promoters: dict[str, str] = Field(default_factory=dict)
+    integration_sites: dict[str, str] = Field(default_factory=dict)
+    condition_id: str | None = None
 
 
 class InputsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     protein_fasta: Path
+    sequence_roles: dict[str, Literal["full_fusion", "idr", "enzyme", "enzyme_ligand_linker", "scaffold_linker", "rigid_linker", "protein"]] = Field(default_factory=dict)
     ligands: list[LigandConfig] = Field(default_factory=list)
     enzymes: list[EnzymeConfig]
     scaffolds: list[ScaffoldConfig]
@@ -100,6 +166,7 @@ class InputsConfig(BaseModel):
     idr_id: str | None = None
     constructs: list[ConstructDefinition] = Field(default_factory=list)
     construct_records: list[ConstructRecord] = Field(default_factory=list)
+    designs: list[DesignConfig] = Field(default_factory=list)
 
 
 class ToolConfig(BaseModel):
@@ -108,16 +175,27 @@ class ToolConfig(BaseModel):
     mode: Literal["mock", "external"] = "mock"
     repo_path: Path | None = None
     command: str | None = None
+    deployment_paths: list[Path] = Field(default_factory=list)
+    verified_version: str | None = None
+    timeout_seconds: int = Field(default=7200, ge=1, description="Native prediction job timeout, configured in the private backend runtime profile.")
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class M1Config(StrictScientificConfig):
     top_n: int = Field(default=10, ge=1)
     forbidden_motifs: list[str] = Field(default_factory=list)
+    feature_definitions_file: Path = DEFAULT_CONFIG_DIR / "m1_feature_definitions.yaml"
+    rules_file: Path = DEFAULT_CONFIG_DIR / "m1_rules_v3.yaml"
+    predictor_evidence_file: Path | None = None
+    require_external_evidence_in_real_mode: bool = True
+    prioritization_policy: PrioritizationPolicy | None = None
 
 
 class M2Config(StrictScientificConfig):
+    membrane_requests: dict[str,MembraneGeometryInput] = Field(default_factory=dict)
     structure_metrics_file: Path | None = None
+    region_assessments_file: Path | None = None
+    calculation_requests_file: Path | None = None
 
 
 class AuthorNativeEnzymeScales(StrictScientificConfig):
@@ -132,10 +210,17 @@ class AuthorNativeEnzymeScales(StrictScientificConfig):
 
 
 class M3Config(StrictScientificConfig):
+    er_requests: dict[str,ERRecruitmentInput] = Field(default_factory=dict)
+    avidity_sh3: AvidityBinding | None = None
+    avidity_pdz: AvidityBinding | None = None
+    uncertainty: M3UncertaintySettings | None = None
+    phi_source: Literal["measured", "lever_rule", "compare"] = "measured"
+    target_enzyme_ratio_parameter: str | None = None
+    design_decision_id: str | None = None
     binding_model: Literal["independent", "hill"] = "independent"
     hill_coefficient: float | None = Field(default=None, gt=0)
     recruitment: list["RecruitmentConfig"] = Field(default_factory=list)
-    recruitment_mode: Literal["finite_site", "effective_ratio"] = "finite_site"
+    recruitment_mode: Literal["finite_site", "legacy_independent_partition", "effective_ratio"] = "finite_site"
     slot_ratio_sh3_to_pdz: float | None = Field(default=None, ge=0)
     total_recruited_fraction: float | None = Field(default=None, ge=0, le=1)
     recruitment_bias_oc_vs_dmt: float = Field(default=1.0, ge=0)
@@ -144,6 +229,12 @@ class M3Config(StrictScientificConfig):
 
     @model_validator(mode="after")
     def _effective_ratio_contract(self) -> "M3Config":
+        if self.recruitment_mode!="finite_site" and any((self.avidity_sh3,self.avidity_pdz,self.uncertainty)):
+            raise ValueError("original_avidity_and_uncertainty_require_finite_site_model")
+        if self.recruitment_mode != "finite_site" and (self.phi_source != "measured" or self.target_enzyme_ratio_parameter):
+            raise ValueError("S4_and_target_feedback_require_finite_site")
+        if self.target_enzyme_ratio_parameter and not self.design_decision_id:
+            raise ValueError("target_enzyme_ratio_requires_explicit_design_decision")
         if self.recruitment_mode == "effective_ratio" and (
             self.slot_ratio_sh3_to_pdz is None or self.total_recruited_fraction is None
         ):
@@ -176,6 +267,7 @@ class FullNetworkInitialStateConfig(StrictScientificConfig):
 
     concentration_unit: Literal["uM", "author_native"] = "uM"
     intracellular: dict[str, float]
+    parameter_ids: dict[str, str] = Field(default_factory=dict)
     extracellular: dict[str, float] = Field(default_factory=lambda: {str(index): 0.0 for index in range(8, 16)})
 
     @model_validator(mode="after")
@@ -183,7 +275,7 @@ class FullNetworkInitialStateConfig(StrictScientificConfig):
         required = {str(index) for index in range(8, 16)}
         if set(self.intracellular) != required or set(self.extracellular) != required:
             raise ValueError("full_network_initial_state_requires_compounds_8_to_15")
-        if any(value < 0 for value in [*self.intracellular.values(), *self.extracellular.values()]):
+        if any(not math.isfinite(value) or value < 0 for value in [*self.intracellular.values(), *self.extracellular.values()]):
             raise ValueError("full_network_initial_state_must_be_nonnegative")
         return self
 
@@ -205,11 +297,25 @@ class InductionGateConfig(StrictScientificConfig):
 
 
 class M4Config(StrictScientificConfig):
+    compartment_requests: dict[str,CompartmentNetworkInput] = Field(default_factory=dict)
+    joint_samples: dict[str,M3M4JointSamples] = Field(default_factory=dict)
+    analysis: M4AnalysisConfig | None = None
+    assay_mode: Literal["substrate_feeding_functional", "full_pathway_production"] | None = None
+    measurement_compartment: Literal["intracellular", "extracellular", "total_extract"] | None = None
+    expression_mode: Literal["constitutive", "induced"] | None = None
+    feeding_time_h: float | None = Field(default=None, ge=0)
+    confirmed_absent_enzymes: dict[Literal["PTR", "PT", "OC", "DMT"], str] = Field(default_factory=dict)
+    network_variant: Literal["full_ten", "oc_dmt_verified_absence"] = "full_ten"
+    absence_evidence: AbsenceEvidenceBinding | None = None
+    steady_state_observation_reference: str | None = None
     target_product: str = "glabridin"
+    feed_compound_id: str | None = None
+    feed_mode: Literal["batch_initial_state", "continuous_feed"] | None = None
     t_end: float = Field(default=24.0, gt=0)
     initial_state: InitialStateConfig | None = None
     full_network_initial_state: FullNetworkInitialStateConfig | None = None
     reaction_network_file: Path | None = None
+    steady_state_initial_guess_um: dict[str, float] | None = None
     pt_gate: InductionGateConfig | None = None
     oc_gate: InductionGateConfig | None = None
     dmt_gate: InductionGateConfig | None = None
@@ -222,7 +328,7 @@ class M4Config(StrictScientificConfig):
     # The legacy reduced kernel remains for existing projects. New Galatea work
     # must explicitly opt into the audited full network rather than receiving a
     # silent interpretation of legacy five-state inputs.
-    network_mode: Literal["legacy_reduced", "galatea_full_competitive", "published_reference"] = "legacy_reduced"
+    network_mode: Literal["markdown_steady_state", "legacy_reduced", "galatea_full_competitive", "published_reference"] = "markdown_steady_state"
     scenario_mode: Literal[
         "published_reference", "homogeneous_constitutive", "homogeneous_published_like_temporal",
         "galatea_spatial", "galatea_spatiotemporal_ablation"
@@ -233,16 +339,75 @@ class M4Config(StrictScientificConfig):
     transport_access: Literal["dilute_phase", "cell_average"] = "dilute_phase"
     transport_enabled: bool = False
     transport_rate_parameter: str | None = None
+    intracellular_volume_l: float | None = Field(default=None, gt=0)
+    extracellular_volume_l: float | None = Field(default=None, gt=0)
+    volume_source_reference: str | None = None
+    transport_ratio_source_reference: str | None = None
+    transport_evidence: TransportEvidenceBinding | None = None
+    solver_points: int = Field(default=501, ge=2)
     transport_outside_over_inside: dict[str, float] = Field(default_factory=lambda: {str(index): 0.0 for index in range(8, 16)})
 
     @model_validator(mode="after")
     def _scenario_contract(self) -> "M4Config":
+        if self.network_variant == "oc_dmt_verified_absence":
+            if self.network_mode != "galatea_full_competitive" or self.unit_mode != "physical":
+                raise ValueError("active_subnetwork_requires_physical_dynamic_mode")
+            if set(self.confirmed_absent_enzymes)!={"PTR","PT"} or self.absence_evidence is None:
+                raise ValueError("active_subnetwork_requires_explicit_PTR_PT_absence_evidence")
+            if (self.assay_mode,self.feed_mode,self.feed_compound_id)!=("substrate_feeding_functional","batch_initial_state","10"):
+                raise ValueError("active_subnetwork_v1_supports_OC_DMT_only_batch_10_functional_assay")
+            if any((self.pt_gate,self.enable_degradation)):
+                raise ValueError("active_subnetwork_has_no_PT_gate_or_degradation_extension")
+        elif self.absence_evidence is not None:
+            raise ValueError("absence_evidence_requires_explicit_active_subnetwork_variant")
+        if self.transport_evidence and not self.transport_enabled:
+            raise ValueError("transport_evidence_requires_enabled_transport")
+        if self.feeding_time_h is not None and (self.feeding_time_h != 0 or self.feed_mode != "batch_initial_state"):
+            raise ValueError("current_dynamic_version_supports_only_explicit_time_zero_batch_feeding")
+        if self.assay_mode == "full_pathway_production" and self.feed_compound_id not in {None, "8"}:
+            raise ValueError("full_pathway_production_requires_input_8")
+        if self.assay_mode == "substrate_feeding_functional" and (self.feed_mode != "batch_initial_state" or self.feed_compound_id == "8"):
+            raise ValueError("substrate_feeding_assay_requires_explicit_intermediate_batch_input")
+        if self.expression_mode == "constitutive" and any((self.pt_gate,self.oc_gate,self.dmt_gate)):
+            raise ValueError("constitutive_expression_cannot_use_induction_gates")
+        if self.expression_mode == "induced" and not any((self.pt_gate,self.oc_gate,self.dmt_gate)):
+            raise ValueError("induced_expression_requires_explicit_measured_gate")
+        if any(not reference.strip() for reference in self.confirmed_absent_enzymes.values()):
+            raise ValueError("genetic_absence_requires_confirmed_construct_reference")
+        if self.feed_mode is not None or self.feed_compound_id is not None:
+            if self.network_mode == "markdown_steady_state":
+                if (self.feed_mode, self.feed_compound_id) != ("continuous_feed", "8"):
+                    raise ValueError("steady_state_supports_only_continuous_feed_of_8")
+            elif self.network_mode == "galatea_full_competitive":
+                if self.feed_mode != "batch_initial_state" or self.feed_compound_id not in {str(index) for index in range(8, 15)}:
+                    raise ValueError("full_dynamic_supports_only_explicit_batch_initial_state_feed")
+            elif self.network_mode == "legacy_reduced":
+                if self.feed_mode != "batch_initial_state" or self.feed_compound_id not in {"9", "10", "11", "13"}:
+                    raise ValueError("reduced_dynamic_supports_only_explicit_batch_initial_state_feed")
+            else:
+                raise ValueError("published_reference_boundary_is_immutable")
+        if self.network_mode != "legacy_reduced" and self.enable_degradation:
+            raise ValueError("enable_degradation_not_supported_by_selected_network")
+        if self.network_mode == "markdown_steady_state":
+            if any((self.pt_gate, self.oc_gate, self.dmt_gate, self.initial_state, self.full_network_initial_state, self.transport_enabled)):
+                raise ValueError("steady_state_does_not_support_dynamic_gates_initial_states_or_transport")
+        if self.network_mode == "legacy_reduced" and any((self.full_network_initial_state, self.transport_enabled, self.steady_state_initial_guess_um)):
+            raise ValueError("legacy_reduced_does_not_support_full_network_or_steady_fields")
+        if self.network_mode == "galatea_full_competitive" and any((self.initial_state, self.steady_state_initial_guess_um)):
+            raise ValueError("full_network_does_not_support_reduced_or_steady_initial_fields")
+        if self.network_mode == "galatea_full_competitive" and self.scenario_mode == "homogeneous_constitutive" and any((self.pt_gate, self.oc_gate, self.dmt_gate)):
+            raise ValueError("homogeneous_constitutive_does_not_support_induction_gates")
         if self.network_mode == "published_reference" and self.scenario_mode != "published_reference":
             raise ValueError("published_reference_network_requires_published_reference_scenario")
         if self.scenario_mode == "published_reference" and self.network_mode != "published_reference":
             raise ValueError("published_reference_scenario_requires_published_reference_network")
         if self.network_mode == "legacy_reduced" and self.scenario_mode != "homogeneous_constitutive":
             raise ValueError("legacy_reduced_supports_only_homogeneous_constitutive")
+        if self.network_mode == "markdown_steady_state" and self.scenario_mode != "homogeneous_constitutive":
+            raise ValueError("markdown_steady_state_uses_the_original_constitutive_steady_equations")
+        if self.steady_state_initial_guess_um is not None:
+            if set(self.steady_state_initial_guess_um) != {str(index) for index in range(8, 16)} or any(value < 0 for value in self.steady_state_initial_guess_um.values()):
+                raise ValueError("steady_state_initial_guess_requires_nonnegative_compounds_8_to_15")
         if self.network_mode == "galatea_full_competitive" and self.scenario_mode == "published_reference":
             raise ValueError("full_network_cannot_route_to_published_reference")
         if self.scenario_mode == "galatea_spatial" and self.dmt_gate is not None:
@@ -259,13 +424,20 @@ class M4Config(StrictScientificConfig):
             raise ValueError("author_native_sensitivity_requires_galatea_full_competitive_network")
         if self.unit_mode == "author_native_sensitivity" and self.transport_enabled:
             raise ValueError("author_native_transport_is_not_supported; disable_transport")
+        if self.transport_enabled and (self.intracellular_volume_l is None or self.extracellular_volume_l is None):
+            raise ValueError("transport_requires_explicit_compartment_volumes_l")
+        if self.network_mode != "galatea_full_competitive" and self.transport_rate_parameter is not None:
+            raise ValueError("transport_rate_parameter_not_supported_by_selected_network")
         if self.unit_mode == "author_native_sensitivity":
             for gate in (self.pt_gate, self.oc_gate, self.dmt_gate):
                 if gate is not None and gate.time_unit != "author_native_day_axis":
                     raise ValueError("author_native_sensitivity_gate_requires_author_native_day_axis")
+        else:
+            if any(gate is not None and gate.time_unit != "h" for gate in (self.pt_gate, self.oc_gate, self.dmt_gate)):
+                raise ValueError("physical_induction_gate_requires_hours")
         if self.scenario_mode == "homogeneous_published_like_temporal" and self.dmt_gate is None:
             raise ValueError("homogeneous_published_like_temporal_requires_dmt_gate")
-        if set(self.transport_outside_over_inside) != {str(index) for index in range(8, 16)} or any(value < 0 for value in self.transport_outside_over_inside.values()):
+        if set(self.transport_outside_over_inside) != {str(index) for index in range(8, 16)} or any(not math.isfinite(value) or value < 0 for value in self.transport_outside_over_inside.values()):
             raise ValueError("transport_outside_over_inside_requires_nonnegative_compounds_8_to_15")
         return self
 
@@ -316,6 +488,7 @@ class StagesConfig(StrictScientificConfig):
 
 
 class ProjectConfig(StrictScientificConfig):
+    prepared_through: Literal["m1", "m2", "m3", "m4", "m5"] = "m5"
     run: RunConfig
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     experimental_context: ExperimentalContext = Field(default_factory=ExperimentalContext)
@@ -331,14 +504,28 @@ class ProjectConfig(StrictScientificConfig):
             if len(values) != len(set(values)):
                 raise ValueError(f"duplicate_{label}_id")
         unique(self.inputs.linkers, "linker"); unique(self.inputs.scaffolds, "scaffold"); unique(self.inputs.enzymes, "enzyme"); unique(self.inputs.constructs, "construct")
+        unique(self.inputs.construct_records, "construct_record"); unique(self.inputs.designs, "design")
+        approved_records = [record for record in self.inputs.construct_records if record.review_status == "approved"]
+        definitions = [*self.inputs.constructs, *(ConstructDefinition.model_validate(record.candidate_definition()) for record in approved_records)]
+        unique(definitions, "combined_construct")
+        definitions_by_id = {item.id: item for item in definitions}
+        for design in self.inputs.designs:
+            if design.id in definitions_by_id or len(set(design.protein_construct_ids)) != len(design.protein_construct_ids):
+                raise ValueError("duplicate_design_or_protein_id")
+            if any(identifier not in definitions_by_id for identifier in design.protein_construct_ids):
+                raise ValueError("design_references_unknown_protein_construct")
+            enzymes = {enzyme for identifier in design.protein_construct_ids for enzyme in definitions_by_id[identifier].enzyme_ids}
+            if not set(design.required_enzyme_ids) <= enzymes:
+                raise ValueError("design_missing_required_enzyme_construct")
         ParameterRegistry = __import__("igem_drylab.parameters", fromlist=["ParameterRegistry"]).ParameterRegistry
         ParameterRegistry(self.parameters)
         linker_ids, scaffold_ids, enzyme_ids = {item.id for item in self.inputs.linkers}, {item.id for item in self.inputs.scaffolds}, {item.id for item in self.inputs.enzymes}
         for construct in self.inputs.constructs:
-            if any(item not in linker_ids for item in construct.linker_ids): raise ValueError("construct_references_unknown_linker")
+            embedded = set(construct.sequences) | {part.id for part in construct.parts}
+            if any(item not in linker_ids | embedded for item in construct.linker_ids): raise ValueError("construct_references_unknown_linker")
             if construct.scaffold_id and construct.scaffold_id not in scaffold_ids: raise ValueError("construct_references_unknown_scaffold")
             if any(item not in enzyme_ids for item in construct.enzyme_ids): raise ValueError("construct_references_unknown_enzyme")
-        if self.execution.mode == "real" and self.stages.m4_reaction.condition_id is None and any((self.stages.m4_reaction.initial_state, self.stages.m4_reaction.pt_gate, self.stages.m4_reaction.oc_gate, self.stages.m4_reaction.dmt_gate)):
+        if self.execution.mode == "real" and self.stages.m4_reaction.condition_id is None and any((self.stages.m4_reaction.initial_state, self.stages.m4_reaction.full_network_initial_state, self.stages.m4_reaction.steady_state_initial_guess_um, self.stages.m4_reaction.pt_gate, self.stages.m4_reaction.oc_gate, self.stages.m4_reaction.dmt_gate)):
             raise ValueError("real_mode_requires_explicit_condition_id")
         if self.stages.m4_reaction.unit_mode == "author_native_sensitivity":
             if self.stages.m3_concentration.recruitment_mode != "effective_ratio":
@@ -361,6 +548,13 @@ def _resolve_path(path: Path | None, base_dir: Path) -> Path | None:
 
 
 def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectConfig:
+    for definition in config.inputs.constructs:
+        if definition.membrane_topology:
+            resolve_contract_paths(definition.membrane_topology,base_dir)
+    resolve_contract_paths(config.stages.m2_fusion.membrane_requests,base_dir)
+    resolve_contract_paths(config.stages.m3_concentration.er_requests,base_dir)
+    resolve_contract_paths(config.stages.m4_reaction.compartment_requests,base_dir)
+    resolve_contract_paths(config.stages.m4_reaction.joint_samples,base_dir)
     config.inputs.protein_fasta = _resolve_path(config.inputs.protein_fasta, base_dir)  # type: ignore[assignment]
     for ligand in config.inputs.ligands:
         ligand.sdf = _resolve_path(ligand.sdf, base_dir)  # type: ignore[assignment]
@@ -370,26 +564,58 @@ def _resolve_relative_paths(config: ProjectConfig, base_dir: Path) -> ProjectCon
         scaffold.structure_pdb = _resolve_path(scaffold.structure_pdb, base_dir)  # type: ignore[assignment]
     for tool in config.tools.values():
         tool.repo_path = _resolve_path(tool.repo_path, base_dir)  # type: ignore[assignment]
+        tool.deployment_paths = [
+            path if path.is_absolute() else base_dir / path
+            for path in tool.deployment_paths
+        ]
+    config.stages.m1_llps.feature_definitions_file = _resolve_path(
+        config.stages.m1_llps.feature_definitions_file,
+        base_dir,
+    )  # type: ignore[assignment]
+    config.stages.m1_llps.rules_file = _resolve_path(config.stages.m1_llps.rules_file, base_dir)  # type: ignore[assignment]
+    config.stages.m1_llps.predictor_evidence_file = _resolve_path(
+        config.stages.m1_llps.predictor_evidence_file,
+        base_dir,
+    )  # type: ignore[assignment]
     config.stages.m2_fusion.structure_metrics_file = _resolve_path(
         config.stages.m2_fusion.structure_metrics_file,
         base_dir,
     )  # type: ignore[assignment]
+    config.stages.m2_fusion.region_assessments_file = _resolve_path(config.stages.m2_fusion.region_assessments_file, base_dir)
+    config.stages.m2_fusion.calculation_requests_file = _resolve_path(config.stages.m2_fusion.calculation_requests_file, base_dir)
     config.stages.m4_reaction.reaction_network_file = _resolve_path(config.stages.m4_reaction.reaction_network_file, base_dir)  # type: ignore[assignment]
+    if config.stages.m4_reaction.absence_evidence:
+        config.stages.m4_reaction.absence_evidence.artifact = _resolve_path(config.stages.m4_reaction.absence_evidence.artifact,base_dir)
     config.stages.m5_feedback.wetlab_results_file = _resolve_path(config.stages.m5_feedback.wetlab_results_file, base_dir)  # type: ignore[assignment]
     if config.execution.mode == "real":
-        required_files = [config.inputs.protein_fasta]
+        required_files = [
+            config.inputs.protein_fasta,
+            config.stages.m1_llps.feature_definitions_file,
+            config.stages.m1_llps.rules_file,
+        ]
         required_files.extend(item.sdf for item in config.inputs.ligands if item.sdf is not None)
         required_files.extend(item.structure_pdb for item in [*config.inputs.enzymes, *config.inputs.scaffolds] if item.structure_pdb is not None)
-        required_files.extend([config.stages.m2_fusion.structure_metrics_file, config.stages.m5_feedback.wetlab_results_file])
+        required_files.extend([config.stages.m2_fusion.structure_metrics_file, config.stages.m2_fusion.region_assessments_file,
+                              config.stages.m2_fusion.calculation_requests_file, config.stages.m5_feedback.wetlab_results_file])
         required_files.append(config.stages.m4_reaction.reaction_network_file)
         missing = [str(item) for item in required_files if item is not None and not item.exists()]
         if missing:
             raise ValueError(f"real_mode_references_missing_file:{','.join(missing)}")
     fasta_ids = _fasta_ids(config.inputs.protein_fasta)
+    if any(enzyme.sequence_sha256 for enzyme in config.inputs.enzymes):
+        from hashlib import sha256
+        from .stages import _read_fasta_sequences
+        sequences = _read_fasta_sequences(config.inputs.protein_fasta)
+        for enzyme in config.inputs.enzymes:
+            if enzyme.sequence_sha256 and sha256(sequences.get(enzyme.protein_id, "").encode("ascii")).hexdigest() != enzyme.sequence_sha256:
+                raise ValueError(f"enzyme_sequence_sha256_mismatch:{enzyme.id}")
     required_ids = {item.protein_id for item in config.inputs.enzymes}
     if config.inputs.idr_id is not None:
         required_ids.add(config.inputs.idr_id)
-    absent = sorted(required_ids - fasta_ids)
+    embedded_ids = {identifier for item in config.inputs.constructs for identifier in item.sequences}
+    embedded_ids.update(part.id for item in config.inputs.constructs for part in item.parts if part.sequence is not None)
+    embedded_ids.update(identifier for record in config.inputs.construct_records if record.review_status == "approved" for identifier in record.sequences)
+    absent = sorted(required_ids - fasta_ids - embedded_ids)
     if absent:
         raise ValueError(f"protein_id_missing_from_fasta:{','.join(absent)}")
     return config

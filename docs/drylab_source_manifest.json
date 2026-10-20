@@ -1,0 +1,629 @@
+{
+  "date": "2026-10-20",
+  "source_commit": "10162e0",
+  "scope": "Scientific source and non-sensitive method configuration only; experimental inputs/results are not included.",
+  "io_adapted": [
+    "analyses/dbtl_20261020/scripts/run_models.py",
+    "analyses/dbtl_20261020/scripts/analyze_lc.py",
+    "analyses/dbtl_20261020/scripts/audit_model_parameters.py",
+    "analyses/dbtl_20261020/scripts/diagnose_identifiability.py",
+    "analyses/dbtl_20261020/scripts/plot_results.py",
+    "analyses/dbtl_20261020/scripts/verify_study.py",
+    "analyses/dbtl_20261020/scripts/audit_identity.py",
+    "analyses/m1_29_constructs/run_m1_29_constructs.py",
+    "analyses/m1_29_constructs/finalize_m1_results.py",
+    "analyses/er_static/audit_geometry.py"
+  ],
+  "files": {
+    "src/igem_drylab/active_network.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "e8f004b18f6d13414eb063068753ec721a4995e3c47969cb348911072a04a6d5",
+      "published_sha256": "e8f004b18f6d13414eb063068753ec721a4995e3c47969cb348911072a04a6d5"
+    },
+    "src/igem_drylab/avidity_binding.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "235e80c1fe64eead0aa41a75f056535d030f40b3e34ad05883cb2eb39eb4ee26",
+      "published_sha256": "235e80c1fe64eead0aa41a75f056535d030f40b3e34ad05883cb2eb39eb4ee26"
+    },
+    "src/igem_drylab/calvados3_author_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "2bf8d976d250621e1596b9926129b51799ddda670285812951379dd352e54422",
+      "published_sha256": "2bf8d976d250621e1596b9926129b51799ddda670285812951379dd352e54422"
+    },
+    "src/igem_drylab/catgranule_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "304bae20ad86e55383f05e7917aeda4305bc85719905eb5db833bd8c9d78c7d2",
+      "published_sha256": "304bae20ad86e55383f05e7917aeda4305bc85719905eb5db833bd8c9d78c7d2"
+    },
+    "src/igem_drylab/cg_sampling.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "3c1a1d850b7e63674aca6bd208bc96a238a518c17888fa21da83bd6d1b42e526",
+      "published_sha256": "3c1a1d850b7e63674aca6bd208bc96a238a518c17888fa21da83bd6d1b42e526"
+    },
+    "src/igem_drylab/cg_trajectory_analysis.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "ca6764f5cb2695bd5b289a730652c695921a1637fc27b381888d0f1e35ae0e56",
+      "published_sha256": "ca6764f5cb2695bd5b289a730652c695921a1637fc27b381888d0f1e35ae0e56"
+    },
+    "src/igem_drylab/coarse_grain_project.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "3296d443a2539a45068e4f7efc9ce005043470d10997a361f138eb11ac3a87b4",
+      "published_sha256": "3296d443a2539a45068e4f7efc9ce005043470d10997a361f138eb11ac3a87b4"
+    },
+    "src/igem_drylab/compartments.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "879ce09d9a2f1aa319f0b1f2829566e724209f9fc85a856ff8181b968ab587ad",
+      "published_sha256": "879ce09d9a2f1aa319f0b1f2829566e724209f9fc85a856ff8181b968ab587ad"
+    },
+    "src/igem_drylab/deeptmhmm_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "8aba86742ced69f855f2fc0bb0d6e577b16364a87c07cb7d2a1d96f1f5090033",
+      "published_sha256": "8aba86742ced69f855f2fc0bb0d6e577b16364a87c07cb7d2a1d96f1f5090033"
+    },
+    "src/igem_drylab/design_analysis.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "7c6771efa7b7128f95a12be121a4ece8ac808dc09954afb07e8fae22ba04f256",
+      "published_sha256": "7c6771efa7b7128f95a12be121a4ece8ac808dc09954afb07e8fae22ba04f256"
+    },
+    "src/igem_drylab/dssp_context.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "f85d360e431e78b41d471c452e3f7493083fd0cb868e517cbea8ab58c6d84458",
+      "published_sha256": "f85d360e431e78b41d471c452e3f7493083fd0cb868e517cbea8ab58c6d84458"
+    },
+    "src/igem_drylab/enrichment.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "5fa33406eb90a6b012c91651c496f3e6ec39bf92c294bab1b758d642bb2d5434",
+      "published_sha256": "ef914a939b3ba284f77eab42d5d8a125b4f37d77248f827061f8ac491afc017d"
+    },
+    "src/igem_drylab/external_tools.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "7038693ae9e2e585f44fd93f4581f13a955f2067b8d380330be38ff5d045ca5b",
+      "published_sha256": "7038693ae9e2e585f44fd93f4581f13a955f2067b8d380330be38ff5d045ca5b"
+    },
+    "src/igem_drylab/feed10_synthetic.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "dd96c0713949190914c4324bb650d46ac3e4e3fdb285b763b1c3023bbb19858d",
+      "published_sha256": "dd96c0713949190914c4324bb650d46ac3e4e3fdb285b763b1c3023bbb19858d"
+    },
+    "src/igem_drylab/freesasa_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "6f20b6355b66d155b64dd41be6dd1c59758bb74582b46470dbbe022446a2513d",
+      "published_sha256": "6f20b6355b66d155b64dd41be6dd1c59758bb74582b46470dbbe022446a2513d"
+    },
+    "src/igem_drylab/full_network.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "5c519fb8f96173036fcba7cfc42872d91ed78260ade70955f8835a2a0a84b76a",
+      "published_sha256": "09411c0fd23dc841fe0c94c66336adc8ad2eb6b744e712c0f4fb6e9593e15d9b"
+    },
+    "src/igem_drylab/fusion_tool_import.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "6d268227623624ee82ac709e2e5855e04ceba7ce03c161220775925b89bfca84",
+      "published_sha256": "6d268227623624ee82ac709e2e5855e04ceba7ce03c161220775925b89bfca84"
+    },
+    "src/igem_drylab/fuzdrop_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "34da6df6bce7956fbeb2a79cb7cb64d1d63b71d64029907869ae048f7acf4d68",
+      "published_sha256": "34da6df6bce7956fbeb2a79cb7cb64d1d63b71d64029907869ae048f7acf4d68"
+    },
+    "src/igem_drylab/galatea_m3_m4.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "8c6bb13e10f8fd59b34ef9a38acb7ee67323e8488279890d6547baf94a9eabf2",
+      "published_sha256": "46fdaff99ce1261ef18130f7009ddfd5982751e0267882c9a4563df2fdab412d"
+    },
+    "src/igem_drylab/gromacs_er_reference_prepare.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "d909507f0f30e5a83dbe285b1d3c06244964b719decffc5c8a90d67b31e488b3",
+      "published_sha256": "d909507f0f30e5a83dbe285b1d3c06244964b719decffc5c8a90d67b31e488b3"
+    },
+    "src/igem_drylab/iupred_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "a0b274448069d2fdc9740796b3cd1d6d86dcad802540ad57da75597acb1009fe",
+      "published_sha256": "a0b274448069d2fdc9740796b3cd1d6d86dcad802540ad57da75597acb1009fe"
+    },
+    "src/igem_drylab/jpred_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "1a5aeaaf3d5410ba14fccd3bb801ca24eeecbbe905f312b81b242be464a175a4",
+      "published_sha256": "1a5aeaaf3d5410ba14fccd3bb801ca24eeecbbe905f312b81b242be464a175a4"
+    },
+    "src/igem_drylab/kinetics.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "29ee89f7e43143f599161b134ff9229ab15ff6e970afe92ca1edbc7ad6fe591d",
+      "published_sha256": "69b87888211fe0338520d4591e7360544f567b56c5af054dda14c63781719e52"
+    },
+    "src/igem_drylab/llps_artifacts.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "2a798053904ebd7cbb30e87c45102fb1bab2284c5a1e999f265ffdd51da88fa2",
+      "published_sha256": "2a798053904ebd7cbb30e87c45102fb1bab2284c5a1e999f265ffdd51da88fa2"
+    },
+    "src/igem_drylab/m1_prioritization.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "89eb82b9434f024b8138433d4d80f54c12f40bc164993bef2b48468ffce127db",
+      "published_sha256": "89eb82b9434f024b8138433d4d80f54c12f40bc164993bef2b48468ffce127db"
+    },
+    "src/igem_drylab/m3_equilibrium.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "ab8ce6b0922ee34cc74743ae97b396a7672209105ddd5de61f07c3facac77b63",
+      "published_sha256": "ab8ce6b0922ee34cc74743ae97b396a7672209105ddd5de61f07c3facac77b63"
+    },
+    "src/igem_drylab/m3_er.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "0caea81e202b164d7fe893e555336b2517fe961ca0dc072cfd8180d0a5d0ae6e",
+      "published_sha256": "0caea81e202b164d7fe893e555336b2517fe961ca0dc072cfd8180d0a5d0ae6e"
+    },
+    "src/igem_drylab/m3_workflow.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "cc45bc2fb659fec6e5c705c1dee17119e8148c913e9c15ec47b28871cbd7c016",
+      "published_sha256": "cc45bc2fb659fec6e5c705c1dee17119e8148c913e9c15ec47b28871cbd7c016"
+    },
+    "src/igem_drylab/m4_compartments.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "129c91cc40e660aa4bdee77051ce25ce862910f4d37110b9245984396abb1110",
+      "published_sha256": "129c91cc40e660aa4bdee77051ce25ce862910f4d37110b9245984396abb1110"
+    },
+    "src/igem_drylab/m4_steady_state.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "0c519f419eabd87f59bdaca5538621737bf530784c5f47452620f4244211c0e0",
+      "published_sha256": "0c519f419eabd87f59bdaca5538621737bf530784c5f47452620f4244211c0e0"
+    },
+    "src/igem_drylab/m4_workflow.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "3741341aee9eb5c61cd3d5e350781081eee4ea155a8ab4694d6a9eb6a3877e2e",
+      "published_sha256": "3741341aee9eb5c61cd3d5e350781081eee4ea155a8ab4694d6a9eb6a3877e2e"
+    },
+    "src/igem_drylab/membrane_geometry.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "a07019cd2c7e2eaf38a69fc9f36f402949b17ec718124bf7b708027db15b26d8",
+      "published_sha256": "a07019cd2c7e2eaf38a69fc9f36f402949b17ec718124bf7b708027db15b26d8"
+    },
+    "src/igem_drylab/mpipi.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "4a2ee7008a28ef2e55d54d6ffd566943118570bf4d78ad6731c0e1966c10ed4e",
+      "published_sha256": "4a2ee7008a28ef2e55d54d6ffd566943118570bf4d78ad6731c0e1966c10ed4e"
+    },
+    "src/igem_drylab/nominal_sequence_descriptors.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "34d23cfa4ac7271b3f31c3258739508b43eb29c4b3bdef7fe650fd20fa08dda7",
+      "published_sha256": "34d23cfa4ac7271b3f31c3258739508b43eb29c4b3bdef7fe650fd20fa08dda7"
+    },
+    "src/igem_drylab/phase_profile_analysis.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "54895174b440597bf7cc33927925c7c39d8677f6ab1e5dfea0b80bc7c178641a",
+      "published_sha256": "54895174b440597bf7cc33927925c7c39d8677f6ab1e5dfea0b80bc7c178641a"
+    },
+    "src/igem_drylab/pocket_preparation.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "c867cff30af032f894e812040f36bb4e8b0490cd0d5e6840875b6a91d75aced1",
+      "published_sha256": "c867cff30af032f894e812040f36bb4e8b0490cd0d5e6840875b6a91d75aced1"
+    },
+    "src/igem_drylab/prediction.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "219aad4298523264260201d629a082224151713b14829d9459fa90bc38e49f23",
+      "published_sha256": "219aad4298523264260201d629a082224151713b14829d9459fa90bc38e49f23"
+    },
+    "src/igem_drylab/pscore_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "7c044bddced9a94af87a3962e058f4d69d4db739807dde49a25b616de03384a3",
+      "published_sha256": "7c044bddced9a94af87a3962e058f4d69d4db739807dde49a25b616de03384a3"
+    },
+    "src/igem_drylab/psipred_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "d982cc3bc7bb1ff92c456422c416bde47c887af4a795f3cc5e7cee9cf75a77de",
+      "published_sha256": "d982cc3bc7bb1ff92c456422c416bde47c887af4a795f3cc5e7cee9cf75a77de"
+    },
+    "src/igem_drylab/published_reference.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "f9bf3e5775fc4a101c13b28af5a2acfc39f2b6bf637c146d780e3db451d55933",
+      "published_sha256": "06906d14c492432fde2bf30047772f0bd31b4091d25728aca7d2b5e3f9924459"
+    },
+    "src/igem_drylab/quantum_calculations.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "dbaf7751836f1809ae21f55a54f1b7c5fcec310e16da4b9ef946f1a73a35d502",
+      "published_sha256": "a328bbb5c4544c599c049705535f1dc9100567596f048d4ebbf6926178aba260"
+    },
+    "src/igem_drylab/reference_membrane_builder.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "cd1fc24437f84c9f47d1237bc7236d809a0e08852c821a9570d54fa8cf301fa8",
+      "published_sha256": "cd1fc24437f84c9f47d1237bc7236d809a0e08852c821a9570d54fa8cf301fa8"
+    },
+    "src/igem_drylab/reference_validation.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "df626b22cbea01a726e120c86056fcb74597a40183afa9d43203e71340309425",
+      "published_sha256": "df626b22cbea01a726e120c86056fcb74597a40183afa9d43203e71340309425"
+    },
+    "src/igem_drylab/region_assessment.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "8c5ed02658cbc393c9f5ad871e2e8f46af49a2eda70077d5b055ca0ea851944a",
+      "published_sha256": "8c5ed02658cbc393c9f5ad871e2e8f46af49a2eda70077d5b055ca0ea851944a"
+    },
+    "src/igem_drylab/research_validation.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "8901818f84b03c34af313f3cd9c76b31cbbaf6d71966f91532d1b5d9ad8c1b05",
+      "published_sha256": "8901818f84b03c34af313f3cd9c76b31cbbaf6d71966f91532d1b5d9ad8c1b05"
+    },
+    "src/igem_drylab/resources.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "2f47732ac07aac8721e608a5cc719bbf8b3d7fdc68188bb830509eb778c2f6b4",
+      "published_sha256": "2f47732ac07aac8721e608a5cc719bbf8b3d7fdc68188bb830509eb778c2f6b4"
+    },
+    "src/igem_drylab/structural_workflow.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "98c625b36cc19d5206a32122aabf8631fcdcced7714740aece12b3642704766f",
+      "published_sha256": "98c625b36cc19d5206a32122aabf8631fcdcced7714740aece12b3642704766f"
+    },
+    "src/igem_drylab/structure_metrics.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "716ae64df07756bde80588281cb79ebaa49aa724727892fc6a608636e853b24b",
+      "published_sha256": "a1a03659f2f82f74aea6f558c39e6ec49d5bb7b1a5c6526ea401ff38737875d1"
+    },
+    "src/igem_drylab/structure_volume.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "5a5553a4267c29b2d77ebf55ae043fd63b16b80e5c683591fc0b90ea1987db45",
+      "published_sha256": "5a5553a4267c29b2d77ebf55ae043fd63b16b80e5c683591fc0b90ea1987db45"
+    },
+    "src/igem_drylab/tango_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "7b20a5ef84ef4c6bf91d90d4c678f671aba049e334f15fe34a49bc6962391214",
+      "published_sha256": "7b20a5ef84ef4c6bf91d90d4c678f671aba049e334f15fe34a49bc6962391214"
+    },
+    "src/igem_drylab/template_geometry.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "0332902ccf4ad2cd02943fee24999b611bf2c453e1d2fd55c9dd9f9ca50998e7",
+      "published_sha256": "0332902ccf4ad2cd02943fee24999b611bf2c453e1d2fd55c9dd9f9ca50998e7"
+    },
+    "src/igem_drylab/transport_evidence.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "7a194a20d0764ce0951b452accfb667b9cebe7dcf00576388455692141a2b060",
+      "published_sha256": "7a194a20d0764ce0951b452accfb667b9cebe7dcf00576388455692141a2b060"
+    },
+    "src/igem_drylab/vina_runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "f789ff83b2c824e2e26a4329dad3085cd0e913dec3e828b6353dce2bfa0f44e2",
+      "published_sha256": "f789ff83b2c824e2e26a4329dad3085cd0e913dec3e828b6353dce2bfa0f44e2"
+    },
+    "src/igem_drylab/constructs/linker_features.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "6851e4042d1ee304247fd8968449da39230c4a96c2632ce76f61cb276e12386c",
+      "published_sha256": "6851e4042d1ee304247fd8968449da39230c4a96c2632ce76f61cb276e12386c"
+    },
+    "src/igem_drylab/constructs/predictor_artifacts.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "958fa6b1dbb8cbcc66f380d1827b8331f053c441498a52d48e0b6817ed5b304d",
+      "published_sha256": "958fa6b1dbb8cbcc66f380d1827b8331f053c441498a52d48e0b6817ed5b304d"
+    },
+    "src/igem_drylab/constructs/registry.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "ca2fc0401cc7152d26edf9ba5386481484f0582f00291c8e82621ce198f4a02c",
+      "published_sha256": "672aedd6da90a6697a35f07d46fa3f0070cb0cf47f775444dff1a4cc6f052a30"
+    },
+    "src/igem_drylab/constructs/sequence_qc.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "68eeeab6e75dc059f011fcdde4e83992c16d32ff8145ce4451e8efcd9e0757e0",
+      "published_sha256": "68eeeab6e75dc059f011fcdde4e83992c16d32ff8145ce4451e8efcd9e0757e0"
+    },
+    "src/igem_drylab/constructs/tool_evidence.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "d91232deca64fa67702628569e8705d16ba1cada526edc85c346f4faee17ce54",
+      "published_sha256": "d91232deca64fa67702628569e8705d16ba1cada526edc85c346f4faee17ce54"
+    },
+    "src/igem_drylab/constructs/__init__.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "fb422466cb1a74a50a2678b36e07936b586203b2197ba3fce955c04d555743ea",
+      "published_sha256": "c17f8fd5389949050a97f3a3edccf509367f92959623059ce474df47500720d8"
+    },
+    "src/igem_drylab/parameters/dimensions.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "f39bfd60ae7fe88c890b3ed88d8ff4fe7ccb125e3344ef5e56adbb32f6d6d694",
+      "published_sha256": "0a89dcf29632351607e4a16c55cf83a88e23cec1e6cafb7468e3d0031eaaa0fc"
+    },
+    "src/igem_drylab/parameters/models.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "3136d0253d0d1271530ad8b0c8ec7af185e75b9c0f0cd71f8b7541ec0757193a",
+      "published_sha256": "157615328593cc20a59caa017e5def76c5416341517f59f42a4b909190d41851"
+    },
+    "src/igem_drylab/parameters/registry.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "a7d20c440da56704e26975e19d287b2b603e6c28e683b0b269f48dadef4448b9",
+      "published_sha256": "b9a9366be6ddc825b4ab6f18b8e71701f2bf1e6e4466b4b3f457b144743ada1f"
+    },
+    "src/igem_drylab/parameters/requirements.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "66fd7a4165a1c86c3504fee0e95ce519fa80952400f4bc222850e9d0b7b568dd",
+      "published_sha256": "018ee7d3d72d4f11196af2eb03e8839a59f80d51c39a7f8a85e99e00b4fb5124"
+    },
+    "src/igem_drylab/parameters/validation.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "d2025ac6cd69f9452f1b493f5294b3911da0fc1c048290234ae7f0c816b78480",
+      "published_sha256": "5bc49945109a8e2ef5c4327a8b900ac2c852011e36f1a543ad4e7c56d06867f4"
+    },
+    "src/igem_drylab/parameters/__init__.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "c5225b57d9b10a970ce030f6f2631957e10cca572a90cca39f9d546c54fa7777",
+      "published_sha256": "6bddf366f663d27c7d7985500e52136b79bbb68f57b04888a32ad0551d22dfb2"
+    },
+    "src/igem_drylab/parsers/calvados.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "5d0fc0cdf1abf3b7a5fb67da1b9f46130c2025e9958a676967e27c00826658d1",
+      "published_sha256": "5d0fc0cdf1abf3b7a5fb67da1b9f46130c2025e9958a676967e27c00826658d1"
+    },
+    "src/igem_drylab/parsers/freesasa.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "b7264698122b281dc150207d6a782acb6cc980dcc3165c2533f6cd4f120ceea2",
+      "published_sha256": "b0c9511c4db0af824cbfd7149681652e155aa39ee033639a4835f1941bb2acac"
+    },
+    "src/igem_drylab/parsers/structure_prediction.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "9807aac2d3ee4ef78edc3c307b9851aff12a4edc5be9c9bd79c78f883b3601b2",
+      "published_sha256": "a94b0da61433220e7f7ca53fda09ce2b511846976edbb06de225ff282c406af1"
+    },
+    "src/igem_drylab/parsers/vina.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "93ed7ee283b6aeee20f474da6b7b6e314ddae64578d5d0fc5dfd16a5b2d88ff5",
+      "published_sha256": "83cbbfaad3940b27f7327adde1744104f178b40177f7a6488927f13fdc6c6dfa"
+    },
+    "src/igem_drylab/parsers/__init__.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "00e6dbfc72d0d1763d06bc88672476eca98b4c279b69f855938b1663bcc4e2c9",
+      "published_sha256": "74dc2270c378338958245b585406d004addebecff4a5eccd3df052fe1137ab52"
+    },
+    "src/igem_drylab/scoring/m2_site_geometry.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "75ad76734a1cf2f6356dc884d076f34f8d329b13d1fcb397faf0feee9d47c224",
+      "published_sha256": "75ad76734a1cf2f6356dc884d076f34f8d329b13d1fcb397faf0feee9d47c224"
+    },
+    "src/igem_drylab/scoring/m2_structure.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "9e4d2e1e9ca207ceb81b97b98cb96aa3fd20c0d5d61833e8298319654d65ba3b",
+      "published_sha256": "9e4d2e1e9ca207ceb81b97b98cb96aa3fd20c0d5d61833e8298319654d65ba3b"
+    },
+    "src/igem_drylab/scoring/m4_reaction.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "df38c0904499993b44d4c49df323b2815ddb3d5b9936611ee49b89ee586f64ba",
+      "published_sha256": "52901e5b550d968784b04797ab23f8de94934feea1c1e69b6453493bc36aedce"
+    },
+    "src/igem_drylab/scoring/__init__.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "43620578abc06652c7e4fae88ddff65dd5a084cdc40ccf779a490fac33092173",
+      "published_sha256": "a74fc5b895ffcd54c30830f19cfab4e48956576e155a103331de1f310d659bd2"
+    },
+    "src/igem_drylab/pipeline/adapters.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "ab869440208550a5384949099392d70eb22b1e9d1a6e4b13da9ce990ced9b246",
+      "published_sha256": "0e3b5187350a080635e938612c98f6c4e172a00f87ab8384754bf3e50a9f7f9f"
+    },
+    "src/igem_drylab/pipeline/config.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "1b4445319d2f7319691e99190730e0326a72614373ab6ea3153787eff02104f4",
+      "published_sha256": "ff2f9be131a3c842456bd34f98096a379efadc2c804cb3f837ab0e010ca483b0"
+    },
+    "src/igem_drylab/pipeline/er_stages.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "e9646b6f77e0857affb96cbc867842db88231877bea7480e74b5b6b28f3c6dc7",
+      "published_sha256": "e9646b6f77e0857affb96cbc867842db88231877bea7480e74b5b6b28f3c6dc7"
+    },
+    "src/igem_drylab/pipeline/io.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "06659b3c78f1aa038070f68bad1273b920ff024bcdf036061dbb610f4c0bf474",
+      "published_sha256": "b61f62b5ff97b9218efd12639538c4694c8e18f6e2cae6ae71f906ab3ffefe1b"
+    },
+    "src/igem_drylab/pipeline/models.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "1f565d48c23658dfc275667e17bf694ff0bba0a119b43e831b42c8691f2521a2",
+      "published_sha256": "c4bb23e56de20bcda93d8ee691d00a9d1391c7756717531465f5db34f939a4a5"
+    },
+    "src/igem_drylab/pipeline/runner.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "9be687eee502869d590afa8b7cc86b2dded8537205d2faa665f307674a496788",
+      "published_sha256": "c04076e6baef41f7a3328ef5b7b8b384baa1e3d22ffcafeaec6cfeef9df5d292"
+    },
+    "src/igem_drylab/pipeline/stages.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "2e09648757da357d8e7325dd404dabed037c55078841574d98c808d849955322",
+      "published_sha256": "be11522bd6e40319afc568510f6698a46d6ca5c9a7d1677742d663218a17cdbf"
+    },
+    "src/igem_drylab/pipeline/__init__.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "70af0fdec476d00a4e9fb477ab280ae0acbf1df7bda612d6452343e1b652fbad",
+      "published_sha256": "fe9a6b00669b07149702304135ec38f2f547f0bd41a0fe71b93d886fdadddd65"
+    },
+    "src/igem_drylab/wetlab/aggregation.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "30e95b23bc4b6d2e60346864ef01f9bad824d770b0ee2b2d213ba42b0bb260ba",
+      "published_sha256": "4c15844f28f951afea2a8b7f38c4fa58433201eb7178fd9b19584d154acd407b"
+    },
+    "src/igem_drylab/wetlab/canonical.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "3926c3568067da98df8cb85f9c1880ec67321cb24ee9e25ae25dfe7977a7c261",
+      "published_sha256": "16abc66de97c82bb4d65ef4adfa29d81ad9b29bdf833d9ee0054b06473142eeb"
+    },
+    "src/igem_drylab/wetlab/comparison.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "98dd9c5a0600ac845aafe15e3113d99aae8fa2a5b86b9243bab3ea6b2ba4223e",
+      "published_sha256": "7bfc3a086988b2fb0369381bddc4015e507f01769dc14c6d61c495765817937d"
+    },
+    "src/igem_drylab/wetlab/diagnose.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "29496ee94107186d9dc5d0e32ae72121dacb3cc4f115e7c576965c6e71abd184",
+      "published_sha256": "481fbc28be13cb24299ec305d9d06b0b927faefc6885f8882bcd80f3d78872ac"
+    },
+    "src/igem_drylab/wetlab/fit.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "b4b4753e334c92699cc7ea7894f7eeeab0cbae66af0b454b643fd237c60d06c6",
+      "published_sha256": "e151b670ada51c67a37b62e9990046b2d592bae85dd2827c1809b6672c5611ba"
+    },
+    "src/igem_drylab/wetlab/models.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "1f382c0a9b53d1fc59c7e6cd2c945f8bda032a02677f2907fcd33ee2064e864d",
+      "published_sha256": "e1c23b2e85e8ae7b6ef2969ec98183d5415b3c8ae310796671cf3868cfc55d41"
+    },
+    "src/igem_drylab/wetlab/parameter_update.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "901519919fd243a7178285b79f8d68357f060a8001828e402686305de19696ac",
+      "published_sha256": "db8c5927eeb9e82423921c243eeb02ed557f6f9bc6d05f39625dcdba32f6fb41"
+    },
+    "src/igem_drylab/wetlab/qc.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "5165b0903811de5a0cc4d137b261e0401e2deff7ce14f573fbb7996a629c056a",
+      "published_sha256": "e7a5281e940f2d0a9c6ab3b57cd555ad903105b0984deb6aaa02e4cd0e082afe"
+    },
+    "src/igem_drylab/wetlab/recommend.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "20c336c93482de0353eb8c673b7eba412d099e16e5a5c067c6de4a432c1eacde",
+      "published_sha256": "d24510bd008ecb4578069c4b5f2df1b95f0dd19fa308f21b197e9008385731bf"
+    },
+    "src/igem_drylab/wetlab/significance.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "d1436ca32a10cf74d3650a029721979a433d86b4b17193494cf44c88a93a8c10",
+      "published_sha256": "024a24f220cf21483f9598315ad4f94982dba4acb83d61a6dd93d576e1c80740"
+    },
+    "src/igem_drylab/wetlab/__init__.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "1fbbd6fa8ca1f2c128374d005d106d5c168b053a986a7735f7f460b5321ccf7f",
+      "published_sha256": "aceb2d847d8b8e6c61a14f353b64b45b75d019108a375283ad9096a644c3ae61"
+    },
+    "scripts/prepare_m2_models.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "51f5265c69308bd86daaf2f0b7d95282a8dc818151451d7a83be0d8d22c711d9",
+      "published_sha256": "51f5265c69308bd86daaf2f0b7d95282a8dc818151451d7a83be0d8d22c711d9"
+    },
+    "scripts/prepare_m2_gpu.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "94dadb4cb9a09094400512a2021fac7bd4aabd9941b39f1f4802430e7ee81a7e",
+      "published_sha256": "94dadb4cb9a09094400512a2021fac7bd4aabd9941b39f1f4802430e7ee81a7e"
+    },
+    "scripts/prepare_m2_pocket.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "d641bf160399b8840c63159c50a778ee5fea3df590f6e61125fa4beb1f0c2618",
+      "published_sha256": "d641bf160399b8840c63159c50a778ee5fea3df590f6e61125fa4beb1f0c2618"
+    },
+    "scripts/reproduce_glabridin_paper.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "1aa809bdd73481b838066f3a78bb3c36337318eb92c09af70293b1cd31b0e6be",
+      "published_sha256": "1aa809bdd73481b838066f3a78bb3c36337318eb92c09af70293b1cd31b0e6be"
+    },
+    "scripts/diagnose_glabridin_reference.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "4548ec2c15a65237d6ea464825ff1bdf89f58684df3592a18f30e4503107a7e1",
+      "published_sha256": "f224546c9c64339a03691f1e841c451b6de012369b4a7d5083be46a329da97e4"
+    },
+    "scripts/diagnose_lsoda_interpolation.py": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "ed79cf87a681b6401e3c2a6e6e3d1c5df16bb7b51fe91bc83209624ffe69dfec",
+      "published_sha256": "ed79cf87a681b6401e3c2a6e6e3d1c5df16bb7b51fe91bc83209624ffe69dfec"
+    },
+    "configs/m1_descriptive_policy_20261014.yaml": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "33018284afcd0bb3faa0008b033ebe1124c9f41e8ea8908c65ed2049e0b13f58",
+      "published_sha256": "33018284afcd0bb3faa0008b033ebe1124c9f41e8ea8908c65ed2049e0b13f58"
+    },
+    "configs/m1_feature_definitions.yaml": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "75f0e23297858a1c9bd68db724960d3d51c73cee6ae7f78a7d8b251cae8e9eb3",
+      "published_sha256": "75f0e23297858a1c9bd68db724960d3d51c73cee6ae7f78a7d8b251cae8e9eb3"
+    },
+    "configs/m1_initial_equal_weight_20261015.yaml": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "9bf445c2905004e314167137092041bca636ff3f92363feb7c7b9ae0858bfa92",
+      "published_sha256": "9bf445c2905004e314167137092041bca636ff3f92363feb7c7b9ae0858bfa92"
+    },
+    "configs/m1_m4_example.yaml": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "59900559537c70f684fd7893b1003ab468698a50efe74d771c1de5ec20507eac",
+      "published_sha256": "18ad6fe62bd037ecf4b7ca59073034463aa44672dc21ee8e62255ba43f55c8f9"
+    },
+    "configs/m1_m4_real_scoring_example.yaml": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "020b1e953b18bbda550bbebd522e158b0952e478ea945a104aeb372d87175c83",
+      "published_sha256": "fefaae7f75fb66564cb08894215cd5a2aa0bd6fa77d04eef1725e89f0c58189c"
+    },
+    "configs/m1_rules_v3.yaml": {
+      "source_reference": "local research commit 10162e0",
+      "source_sha256": "efd3da3db6f350143eccf25b286e28ed9eb034b2123e1fe58e9112ebf2ca7556",
+      "published_sha256": "efd3da3db6f350143eccf25b286e28ed9eb034b2123e1fe58e9112ebf2ca7556"
+    },
+    "analyses/dbtl_20261020/native/igem_drylab/compartments.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "879ce09d9a2f1aa319f0b1f2829566e724209f9fc85a856ff8181b968ab587ad",
+      "published_sha256": "879ce09d9a2f1aa319f0b1f2829566e724209f9fc85a856ff8181b968ab587ad"
+    },
+    "analyses/dbtl_20261020/native/igem_drylab/full_network.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "5c519fb8f96173036fcba7cfc42872d91ed78260ade70955f8835a2a0a84b76a",
+      "published_sha256": "09411c0fd23dc841fe0c94c66336adc8ad2eb6b744e712c0f4fb6e9593e15d9b"
+    },
+    "analyses/dbtl_20261020/native/igem_drylab/kinetics.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "29ee89f7e43143f599161b134ff9229ab15ff6e970afe92ca1edbc7ad6fe591d",
+      "published_sha256": "69b87888211fe0338520d4591e7360544f567b56c5af054dda14c63781719e52"
+    },
+    "analyses/dbtl_20261020/native/igem_drylab/m3_equilibrium.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "ab8ce6b0922ee34cc74743ae97b396a7672209105ddd5de61f07c3facac77b63",
+      "published_sha256": "ab8ce6b0922ee34cc74743ae97b396a7672209105ddd5de61f07c3facac77b63"
+    },
+    "analyses/dbtl_20261020/native/igem_drylab/m4_compartments.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "3d94b0cd674a608fd5a7dc1e3b29eedbf263a2ecf24f8a09ab096910c7116f41",
+      "published_sha256": "3d94b0cd674a608fd5a7dc1e3b29eedbf263a2ecf24f8a09ab096910c7116f41"
+    },
+    "analyses/dbtl_20261020/native/igem_drylab/m4_steady_state.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "0c519f419eabd87f59bdaca5538621737bf530784c5f47452620f4244211c0e0",
+      "published_sha256": "0c519f419eabd87f59bdaca5538621737bf530784c5f47452620f4244211c0e0"
+    },
+    "analyses/dbtl_20261020/native/igem_drylab/__init__.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "213e67a100b1a1afb9eaf237b95e6286f63a4231c0a958d81da466fbd7f1ca4e",
+      "published_sha256": "98cb4c8d7934f800ad22c4bc0d3712bbd7469dbce65742c32960ae94f5f58e80"
+    },
+    "analyses/dbtl_20261020/scripts/run_models.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "d275ffaeee2dc6c19c5f7873768baea05ca448ccd57b2db85fd2aae28aa2b93f",
+      "published_sha256": "df6f01b11f92e61f27d9b4e0889f0c8717473a70587871a95fbfb809691d0241"
+    },
+    "analyses/dbtl_20261020/scripts/analyze_lc.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "286235218974dcb132b154397a4aed812f2ab6b3129ecd02adfbd57f76b3439d",
+      "published_sha256": "7cd4dde5c39950e55ddbd9b9caab01b705e2b23ad5c456657f637972d42bd3e4"
+    },
+    "analyses/dbtl_20261020/scripts/audit_model_parameters.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "4e64f006645c2dd23a759e6c1d37bfe87529baa6480e4af3bd2deadc28341383",
+      "published_sha256": "2d6b153993505f92df505c81c29791021721c29ea26489caca9975dcc3a21088"
+    },
+    "analyses/dbtl_20261020/scripts/diagnose_identifiability.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "b3dec96c4d98509fd4b79b11cf27236f5774bbaba38a8fe4380527a44b85d1de",
+      "published_sha256": "5fb81b9f0f68551e4fb864756e9e3d83a8f52090cc937386ac8c0144be6481e3"
+    },
+    "analyses/dbtl_20261020/scripts/plot_results.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "7f81b40f78fc0dd3ee750c9af8238f8e120a2559a418001b7319cf2b38637fe4",
+      "published_sha256": "970340c3fd8481f5aff6bc6dc0ce3eb1eec3ea9d88bfa6859d5f5a921195e55c"
+    },
+    "analyses/dbtl_20261020/scripts/verify_study.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "d6c98c265a362d94c833393fca2938034bccc2aaf4171d45d6821280d72a96bb",
+      "published_sha256": "4f3bf06e9c4755b003bea82c16846ebcd34f423c126b7ec315c499fadc8d91eb"
+    },
+    "analyses/dbtl_20261020/scripts/audit_identity.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "d06cbb4fa082684e9e545f18b258e3b1b0db8c6f9f04144dccd8d6f2b8998a72",
+      "published_sha256": "5d99165507c1769e502ac2ad8d179fd25960068a2e3c350399fc230d96d4fa42"
+    },
+    "analyses/m1_29_constructs/run_m1_29_constructs.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "c69dc51930238bf0032ad05820a364b83a746783b53799033455ee6feb650695",
+      "published_sha256": "93aa141d16755fb7767935820709847f56a009266ed2a286fc8e48978d212190"
+    },
+    "analyses/m1_29_constructs/finalize_m1_results.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "f5ce30f2db95d941eccb5ae0816a874b4e262fc197ca84f32de8d74e3df13d47",
+      "published_sha256": "675a2f6ac31cb4fcf81216b4e29485185f834ba405efb58def4f5f9cfb2c1902"
+    },
+    "analyses/er_static/audit_geometry.py": {
+      "source_reference": "2026-10-20 scientific analysis source",
+      "source_sha256": "90cdb86adef0ced278d16c61613041fba83466791055f7c9e8b45342c8fb12ba",
+      "published_sha256": "bf911a3cb351da28bb52b317d93b9af937ff95c5893e7849ed5992753cd22cab"
+    }
+  }
+}

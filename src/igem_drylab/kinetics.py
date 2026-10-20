@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.integrate import solve_ivp
 
 
 @dataclass(frozen=True)
@@ -142,6 +141,8 @@ class InductionGate:
     def validate(self) -> None:
         if self.on_time < 0:
             raise ValueError("on_time must be nonnegative")
+        if not all(np.isfinite(value) for value in (self.on_time, self.basal, self.induced, self.transition_width)) or (self.off_time is not None and not np.isfinite(self.off_time)):
+            raise ValueError("induction_gate_values_must_be_finite")
         if self.off_time is not None and self.off_time <= self.on_time:
             raise ValueError("off_time must be greater than on_time")
         if self.basal < 0 or self.induced < 0:
@@ -428,6 +429,7 @@ def simulate_glabridin(
     t_end: float = 24.0, points: int = 241,
 ) -> GlabridinSimulationResult:
     """Segmented two-compartment ODE; no degradation gives pathway mass balance."""
+    from scipy.integrate import solve_ivp, trapezoid
     params.validate(); pt_gate.validate(); oc_gate.validate(); dmt_gate.validate()
     if t_end <= 0 or points < 2 or any(value < 0 for value in initial):
         raise ValueError("invalid simulation horizon, point count, or initial state")
@@ -448,7 +450,7 @@ def simulate_glabridin(
     time = np.concatenate(all_t); concentrations = np.concatenate(all_y, axis=1); order = np.argsort(time)
     time, concentrations = time[order], concentrations[:, order]
     degradation_rate = params.kdeg_9 * concentrations[0] + params.kdeg_10 * concentrations[1] + params.kdeg_11 * concentrations[2] + params.kdeg_13 * concentrations[3] + params.kdeg_15 * concentrations[4]
-    degradation_loss = float(np.trapezoid(degradation_rate, time))
+    degradation_loss = float(trapezoid(degradation_rate, time))
     return GlabridinSimulationResult(time, concentrations, np.asarray([gate_value(float(t), pt_gate) for t in time]), np.asarray([gate_value(float(t), oc_gate) for t in time]), np.asarray([gate_value(float(t), dmt_gate) for t in time]), degradation_loss)
 
 
@@ -458,6 +460,7 @@ def simulate_cascade(
     t_end: float = 24.0,
     points: int = 241,
 ) -> SimulationResult:
+    from scipy.integrate import solve_ivp
     params.validate()
     if t_end <= 0 or points < 2:
         raise ValueError("t_end must be positive and points must be at least 2")
@@ -499,6 +502,7 @@ def simulate_piecewise_induction(
     Step gates are integrated piecewise at on/off boundaries. Sigmoid gates are
     continuous and can be handled in a single solver pass.
     """
+    from scipy.integrate import solve_ivp
     params.validate()
     oc_gate.validate()
     dmt_gate.validate()

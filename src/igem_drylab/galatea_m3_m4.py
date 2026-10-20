@@ -102,8 +102,10 @@ def run_galatea_full_m4(
         "galatea_spatial", "galatea_spatiotemporal_ablation",
     ] = "galatea_spatial",
     transport: TransportParameters = TransportParameters(), dmt_gate: TemporalGate = TemporalGate(),
+    pt_gate: TemporalGate = TemporalGate(), oc_gate: TemporalGate = TemporalGate(),
     activity_dense: dict[str, float] | None = None, activity_dilute: dict[str, float] | None = None,
     unit_mode: Literal["physical", "author_native_sensitivity"] = "physical",
+    points: int = 501,
 ) -> FullNetworkResult:
     """Run full production M4 using M3 enzyme distributions and explicit Kp."""
     if set(metabolite_kp) != set(COMPOUNDS):
@@ -117,6 +119,8 @@ def run_galatea_full_m4(
         activity_dilute=activity_dilute or {enzyme: 1.0 for enzyme in ENZYME_SUBSTRATES},
         transport=transport,
         dmt_gate=dmt_gate,
+        pt_gate=pt_gate,
+        oc_gate=oc_gate,
         scenario=scenario,
         unit_mode=unit_mode,
     )
@@ -125,4 +129,5 @@ def run_galatea_full_m4(
         initial_intracellular=initial_intracellular,
         initial_extracellular=initial_extracellular,
         t_end=t_end,
+        points=points,
     )

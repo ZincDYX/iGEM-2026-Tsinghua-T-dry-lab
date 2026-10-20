@@ -9,7 +9,7 @@ import math
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ParameterSourceType = Literal["literature", "wetlab", "prediction", "assumption"]
-ParameterType = Literal["kcat", "km", "kd", "kp", "phi", "abundance", "activity_ratio", "degradation_rate", "export_rate", "hill_coefficient", "other"]
+ParameterType = Literal["kcat", "km", "kd", "kp", "phi", "abundance", "activity_ratio", "degradation_rate", "export_rate", "input_flux", "hill_coefficient", "other"]
 ReviewStatus = Literal["extracted", "validated", "approved", "rejected"]
 
 
@@ -30,7 +30,7 @@ class ParameterValidationError(ValueError):
 
 
 class ParameterUncertainty(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     value: float | None = Field(default=None, ge=0)
     lower: float | None = None
     upper: float | None = None
@@ -81,6 +81,10 @@ class ParameterRecord(BaseModel):
             raise ValueError("numeric parameter values require an explicit unit")
         if isinstance(self.value, (int, float)) and not math.isfinite(float(self.value)):
             raise ValueError("numeric parameter values must be finite")
+        if self.uncertainty and isinstance(self.value, (int, float)):
+            lower, upper = self.uncertainty.lower, self.uncertainty.upper
+            if lower is not None and self.value < lower or upper is not None and self.value > upper:
+                raise ValueError("uncertainty_bounds_must_contain_parameter_value")
         if self.source_type == "prediction" and self.derivation_type == "direct_measurement":
             raise ValueError("prediction cannot be direct_measurement")
         return self

@@ -2,7 +2,13 @@
 
 Reproducible dry-lab software for the Tsinghua-T iGEM 2026 glabridin project. The repository connects literature evidence, construct-level screening, two-phase condensate modelling, kinetic simulation, and wet-lab feedback without promoting predictions into biological facts.
 
-> **Project status:** ready for a small, human-reviewed `evidence.jsonl` pilot. The default workflow is deterministic and local. Optional external tools and LLM APIs are explicit opt-ins.
+> **Dry-lab code update, 20 October 2026:** current M1–M4 scientific modules,
+> M2 preparation utilities, the adopted 29-construct M1 pipeline and the frozen
+> DBTL supplement are documented in [Dry-lab code](docs/DRYLAB_CODE.md).
+> Experimental input files, result tables and simulation trajectories are not
+> included in this code update. The maintained general-purpose workbench and
+> literature UI are in [GALATEA-Caelum](https://github.com/ZincDYX/GALATEA-Caelum);
+> older Agent/software components below are retained historical implementations.
 
 ## What this repository does
 

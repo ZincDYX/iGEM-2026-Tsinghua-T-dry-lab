@@ -73,6 +73,26 @@ class ParameterRegistry:
             if require_provenance and (not has_required_provenance(record) or not record.approved_by):
                 rejected.append("incomplete_required_provenance")
                 continue
+            if require_provenance and not allow_assumptions:
+                target = {"host": host, "temperature_c": temperature_c, "pH": pH, "assay_system": assay_system}
+                absent = [f"target_{name}_not_specified" for name, value in target.items() if value is None]
+                if absent:
+                    rejected.extend(absent)
+                    continue
+                if record.source_type not in {"wetlab", "literature"}:
+                    rejected.append("formal_requires_measured_or_verified_source")
+                    continue
+                if record.construct_id != construct_id or record.condition_id != condition_id or not construct_id or not condition_id:
+                    rejected.append("formal_requires_exact_construct_and_condition_applicability")
+                    continue
+                if requirement.parameter_type in {"kcat", "km", "activity_ratio"}:
+                    expected = requirement.enzyme_sequence_sha256
+                    if not expected or record.conditions.get("enzyme_sequence_sha256") != expected:
+                        rejected.append("enzyme_sequence_applicability_not_verified")
+                        continue
+                    if any(not record.conditions.get(name) for name in ("enzyme_concentration_definition", "cofactor_conditions")):
+                        rejected.append("kinetic_assay_definition_missing")
+                        continue
             if record.parameter_type != requirement.parameter_type:
                 rejected.append("parameter_type_mismatch")
                 continue

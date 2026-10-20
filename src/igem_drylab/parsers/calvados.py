@@ -6,26 +6,29 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CalvadosResult(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
     source_dir: Path
     dense_phase_concentration: float | None = Field(default=None, ge=0)
     dilute_phase_concentration: float | None = Field(default=None, ge=0)
     enrichment_factor: float | None = Field(default=None, ge=0)
     saturation_concentration: float | None = Field(default=None, ge=0)
     rg_mean: float | None = Field(default=None, ge=0)
-    llps_score: float = Field(ge=0, le=1)
+    llps_score: None = None
+    concentration_unit: str | None = None
+    raw_density_profile: list[dict[str, Any]] = Field(default_factory=list)
     evidence_files: list[Path] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
 
 
 def parse_calvados_output(path: Path) -> CalvadosResult:
-    """Parse common CALVADOS analysis artifacts.
+    """Read explicit exported observations; never invent phases or LLPS scores.
 
-    CALVADOS analysis layouts vary by workflow. This parser supports explicit
-    summary JSON first, then falls back to density profile CSV estimates.
+    Phase boundaries, equilibration, units and scoring are a reviewed analysis
+    protocol, not a density-quantile or logarithmic parser convenience.
     """
     path = Path(path)
     if path.is_file() and path.suffix.lower() == ".json":
@@ -57,9 +60,11 @@ def _parse_summary_json(path: Path) -> CalvadosResult:
         enrichment_factor=ef,
         saturation_concentration=csat,
         rg_mean=rg,
-        llps_score=_llps_score(enrichment_factor=ef, dense=dense, dilute=dilute),
+        concentration_unit=payload.get("concentration_unit"),
         evidence_files=[path],
-        notes=["parsed_summary_json"],
+        notes=["parsed_explicit_summary_not_native_trajectory_validation",
+               "no_LLPS_score_without_reviewed_original_definition",
+               *([] if payload.get("concentration_unit") else ["concentration_unit_missing"])],
     )
 
 
@@ -73,17 +78,14 @@ def _parse_density_csv(source_dir: Path, path: Path) -> CalvadosResult:
     values = np.asarray([float(row[density_key]) for row in rows if row.get(density_key, "") != ""], dtype=float)
     if values.size == 0:
         raise ValueError("Density CSV contains no numeric density values")
-    dense = float(np.quantile(values, 0.90))
-    dilute = float(np.quantile(values, 0.10))
-    ef = dense / dilute if dilute > 0 else None
+    if not np.all(np.isfinite(values)) or np.any(values < 0):
+        raise ValueError("CALVADOS density observations must be finite and nonnegative")
     return CalvadosResult(
         source_dir=source_dir,
-        dense_phase_concentration=dense,
-        dilute_phase_concentration=dilute,
-        enrichment_factor=ef,
-        llps_score=_llps_score(enrichment_factor=ef, dense=dense, dilute=dilute),
+        raw_density_profile=rows,
         evidence_files=[path],
-        notes=["estimated_from_density_profile_quantiles"],
+        notes=["raw_profile_only", "reviewed_phase_regions_equilibration_units_and_uncertainty_required",
+               "no_quantile_phase_guess_or_invented_LLPS_score"],
     )
 
 
@@ -93,7 +95,9 @@ def _find_summary_json(path: Path) -> Path | None:
         for item in path.rglob("*.json")
         if any(token in item.name.lower() for token in ("summary", "analysis", "phase", "calvados"))
     ]
-    return sorted(candidates, key=lambda item: len(item.parts))[0] if candidates else None
+    if len(candidates)>1:
+        raise ValueError("CALVADOS_multiple_summaries_require_explicit_selection")
+    return candidates[0] if candidates else None
 
 
 def _find_density_csv(path: Path) -> Path | None:
@@ -102,7 +106,9 @@ def _find_density_csv(path: Path) -> Path | None:
         for item in path.rglob("*.csv")
         if any(token in item.name.lower() for token in ("density", "profile", "slab", "concentration"))
     ]
-    return sorted(candidates, key=lambda item: len(item.parts))[0] if candidates else None
+    if len(candidates)>1:
+        raise ValueError("CALVADOS_multiple_profiles_require_explicit_selection")
+    return candidates[0] if candidates else None
 
 
 def _first_float(payload: dict[str, Any], *keys: str) -> float | None:
@@ -110,19 +116,9 @@ def _first_float(payload: dict[str, Any], *keys: str) -> float | None:
         if key in payload and payload[key] is not None:
             return float(payload[key])
     return None
-
-
 def _pick_column(row: dict[str, str], names: tuple[str, ...]) -> str | None:
     lower = {key.lower(): key for key in row}
     for name in names:
         if name in lower:
             return lower[name]
     return None
-
-
-def _llps_score(*, enrichment_factor: float | None, dense: float | None, dilute: float | None) -> float:
-    if enrichment_factor is not None:
-        return max(0.0, min(1.0, np.log10(max(enrichment_factor, 1.0)) / 3.0))
-    if dense is not None and dilute is not None and dense > dilute:
-        return 0.5
-    return 0.0

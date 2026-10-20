@@ -1,0 +1,27 @@
+# User-supplied 2026-10-15 policy. Initial design choice, not fitted weights.
+# Add a reference_id and predeclared per-candidate comparison contexts per run.
+policy_version: m1m2-user-equalweight-initial-v2-20261015
+source_reference: M1_M2_三项规则与参考状态_20261015.md
+reviewer: user-authorized adoption of the supplied reference rules
+comparison_mode: initial_equal_weight
+comparison_group_reference: predeclared purpose, fusion background, length, conditions, tool versions and applicability
+reference_id: null
+undefined_risk_features: [charge_blockiness, SCD, Tyr_Arg_sticker_fraction]
+predictor_rules: []
+sort_keys: []
+risk_rules:
+  idr:
+    - {rule_id: polar_charged_outside_original_interval, feature: polar_plus_charged_fraction, transform: identity, operator: outside, lower: 0.50, upper: 0.80}
+    - {rule_id: elevated_hydrophobicity_below_hard_veto, feature: hydrophobic_fraction, transform: identity, operator: half_open_inside, lower: 0.20, upper: 0.35}
+    - {rule_id: high_absolute_nominal_charge, feature: net_charge_proxy, transform: absolute, operator: ge, lower: 0.10}
+    - {rule_id: proline_outside_original_interval, feature: pro_fraction, transform: identity, operator: outside, lower: 0.05, upper: 0.20}
+    - {rule_id: low_complexity_descriptor_not_pathological_aggregation, feature: shannon_entropy, transform: identity, operator: lt, lower: 2.5}
+    - {rule_id: enriched_top2_correlated_with_entropy, feature: top2_fraction, transform: identity, operator: ge, lower: 0.40}
+  enzyme_ligand_linker:
+    - {rule_id: GS_composition_review, feature: gs_fraction, transform: identity, operator: outside, lower: 0.40, upper: 0.80}
+    - {rule_id: charge_review, feature: net_charge_proxy, transform: absolute, operator: ge, lower: 0.10}
+    - {rule_id: entropy_composition_review, feature: shannon_entropy, transform: identity, operator: outside, lower: 1.5, upper: 3.0}
+  scaffold_linker:
+    - {rule_id: GS_composition_review, feature: gs_fraction, transform: identity, operator: outside, lower: 0.40, upper: 0.80}
+    - {rule_id: charge_review, feature: net_charge_proxy, transform: absolute, operator: ge, lower: 0.10}
+    - {rule_id: entropy_composition_review, feature: shannon_entropy, transform: identity, operator: outside, lower: 1.5, upper: 3.0}

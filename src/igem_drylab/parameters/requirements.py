@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-Dimension = Literal["dimensionless", "concentration", "rate"]
+Dimension = Literal["dimensionless", "concentration", "rate", "concentration_rate", "volume", "molar_energy"]
 
 
 class ParameterRequirement(BaseModel):
@@ -24,6 +24,7 @@ class ParameterRequirement(BaseModel):
     minimum_inclusive: bool = True
     maximum: float | None = None
     blocking: bool = True
+    enzyme_sequence_sha256: str | None = None
 
 
 def _requirement(name: str, parameter_type: str, **identity: str | None) -> ParameterRequirement:
@@ -35,11 +36,25 @@ def _requirement(name: str, parameter_type: str, **identity: str | None) -> Para
         return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="concentration", canonical_unit="uM", minimum=0.0, minimum_inclusive=parameter_type == "abundance", **identity)
     if parameter_type in {"kcat", "degradation_rate", "export_rate"}:
         return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="rate", canonical_unit="1/h", minimum=0.0, **identity)
+    if parameter_type == "input_flux":
+        return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="concentration_rate", canonical_unit="uM/h", minimum=0.0, minimum_inclusive=False, **identity)
     return ParameterRequirement(name=name, parameter_type=parameter_type, dimension="dimensionless", **identity)
 
 
 def m3_requirements() -> list[ParameterRequirement]:
-    """M3 only uses enzyme abundance/Kp, not fixed metabolite state totals."""
+    """Inputs for the documented M3 S1--S5/E1--E6 equilibrium."""
+    return [
+        _requirement("phi", "phi"),
+        *[_requirement(f"{enzyme}_total", "abundance", enzyme_id=enzyme.upper()) for enzyme in ("ptr", "pt", "oc", "dmt")],
+        *[_requirement(f"partition_{species}", "kp", species_id=species.upper()) for species in ("ptr", "pt", "oc", "dmt")],
+        _requirement("c_dense_scaffold", "abundance"),
+        _requirement("kd_sh3", "kd"),
+        _requirement("kd_pdz", "kd"),
+    ]
+
+
+def legacy_m3_independent_partition_requirements() -> list[ParameterRequirement]:
+    """Historical partition-only mode retained only for explicit regressions."""
     return [
         _requirement("phi", "phi"),
         *[_requirement(f"{enzyme}_total", "abundance", enzyme_id=enzyme.upper()) for enzyme in ("pt", "oc", "dmt")],
@@ -95,6 +110,14 @@ def full_m4_kinetic_requirements(*, include_transport: bool = False, include_act
     return requirements
 
 
+def m4_markdown_steady_requirements() -> list[ParameterRequirement]:
+    return [
+        *full_m4_kinetic_requirements(),
+        _requirement("input_flux_8", "input_flux", species_id="8"),
+        *[_requirement(f"ksec_{compound}", "export_rate", species_id=compound) for compound in ("8", "9", "10", "11", "12", "13", "14", "15")],
+    ]
+
+
 def m4_requirements(*, include_degradation: bool = False) -> list[ParameterRequirement]:
     requirements = [
         *m3_requirements(),
@@ -138,25 +161,64 @@ def recruitment_requirements(recruitment: object, *, binding_model: str) -> list
     return requirements
 
 
-def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
+def _requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
     """Project-aware, single catalog used by every production entry point."""
     if stage == "m3":
         author_native = getattr(project.stages.m4_reaction, "unit_mode", "physical") == "author_native_sensitivity"
         if getattr(project.stages.m3_concentration, "recruitment_mode", "finite_site") == "effective_ratio":
             return author_native_m3_effective_ratio_requirements() if author_native else m3_effective_ratio_requirements()
-        core = m3_requirements()
-        if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") == "galatea_full_competitive":
+        mode = getattr(project.stages.m3_concentration, "recruitment_mode", "finite_site")
+        core = legacy_m3_independent_partition_requirements() if mode == "legacy_independent_partition" else m3_requirements()
+        settings = project.stages.m3_concentration
+        if mode == "finite_site":
+            if settings.phi_source == "lever_rule":
+                core = [item for item in core if item.name != "phi"]
+            if settings.phi_source in {"lever_rule", "compare"}:
+                core += [_requirement("c_total_scaffold", "abundance"), _requirement("c_sat_scaffold", "abundance")]
+            if settings.target_enzyme_ratio_parameter:
+                core.append(ParameterRequirement(name=settings.target_enzyme_ratio_parameter, parameter_type="other",
+                                                dimension="dimensionless", minimum=0., minimum_inclusive=False))
+        if getattr(project.stages.m4_reaction, "network_mode", "legacy_reduced") in {"galatea_full_competitive", "markdown_steady_state"}:
             core = core + [_requirement(f"partition_x{species}", "kp", species_id=species) for species in ("8", "9", "10", "11", "12", "13", "14", "15")]
         auxiliary = [item for recruitment in getattr(project.stages.m3_concentration, "recruitment", []) for item in recruitment_requirements(recruitment, binding_model=project.stages.m3_concentration.binding_model)]
+        if project.stages.m4_reaction.network_variant == "oc_dmt_verified_absence":
+            core = [r for r in core if r.name not in {"ptr_total","pt_total","partition_ptr","partition_pt"}]
+            auxiliary = [r for r in auxiliary if r.enzyme_id not in {"PTR","PT"}]
         return core + auxiliary if include_auxiliary else core
     if stage == "m4":
         m4 = project.stages.m4_reaction
+        if getattr(m4, "network_mode", "legacy_reduced") == "markdown_steady_state":
+            return [*m4_markdown_steady_requirements(), *(author_native_m4_sensitivity_requirements(include_activity=True) if m4.activity_mode == "sensitivity_parameters" else [])]
         if getattr(m4, "network_mode", "legacy_reduced") == "galatea_full_competitive":
             if m4.unit_mode == "author_native_sensitivity":
                 return author_native_m4_sensitivity_requirements(include_activity=m4.activity_mode == "sensitivity_parameters")
-            return full_m4_kinetic_requirements(
+            result = full_m4_kinetic_requirements(
                 include_transport=m4.transport_enabled,
                 include_activity=m4.activity_mode == "sensitivity_parameters",
             )
+            if m4.transport_enabled and m4.transport_rate_parameter:
+                result = [item.model_copy(update={"name": m4.transport_rate_parameter}) if item.name == "transport_rate" else item for item in result]
+            if m4.transport_enabled and m4.transport_evidence:
+                binding=m4.transport_evidence
+                records={r.parameter_id:r for r in project.parameters}
+                for identifier,dimension,unit,species in [
+                    (binding.intracellular_volume_parameter_id,"volume","L",None),
+                    (binding.extracellular_volume_parameter_id,"volume","L",None),
+                    *[(binding.outside_over_inside_parameter_ids[c],"dimensionless","1",c) for c in ("8","9","10","11","12","13","14","15")],
+                ]:
+                    record=records.get(identifier)
+                    result.append(ParameterRequirement(name=record.name if record else identifier,parameter_type="other",
+                        dimension=dimension,canonical_unit=unit,species_id=species,minimum=0,
+                        minimum_inclusive=dimension!="volume"))
+            if m4.network_variant == "oc_dmt_verified_absence":
+                result = [r for r in result if r.enzyme_id not in {"PTR","PT"}]
+            return result
         return m4_requirements(include_degradation=project.stages.m4_reaction.enable_degradation)
     return []
+
+
+def requirements_for_stage(project: object, stage: str, *, include_auxiliary: bool = True) -> list[ParameterRequirement]:
+    inputs = getattr(project, "inputs", None)
+    identities = {item.id: item.sequence_sha256 for item in inputs.enzymes} if inputs is not None else {}
+    return [item.model_copy(update={"enzyme_sequence_sha256": identities.get(item.enzyme_id)})
+            for item in _requirements_for_stage(project, stage, include_auxiliary=include_auxiliary)]

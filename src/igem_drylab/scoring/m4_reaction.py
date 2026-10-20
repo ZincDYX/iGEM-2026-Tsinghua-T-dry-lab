@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -16,18 +17,25 @@ from igem_drylab.parsers.vina import parse_vina_output
 
 
 class DockingPenalty(BaseModel):
-    """Negative binding screen; it is not an enzyme-activity measurement."""
+    """M2 auxiliary same-ligand docking comparison, never an activity term."""
     candidate_id: str
     reference_affinity_kcal_mol: float
     fusion_affinity_kcal_mol: float
     delta_delta_g_kcal_mol: float
+    status: Literal["valid", "insufficient_data"]
+    same_configuration_verified: bool
+    same_ligand_verified: bool
+    reference_configuration_hash: str | None = None
+    fusion_configuration_hash: str | None = None
+    reference_ligand_hash: str | None = None
+    fusion_ligand_hash: str | None = None
     pose_available: bool = True
-    binding_risk: str
-    passes_negative_screen: bool
+    binding_risk: None = None
+    passes_negative_screen: None = None
     notes: str = ""
 
     @property
-    def passes(self) -> bool:
+    def passes(self) -> None:
         return self.passes_negative_screen
 
 
@@ -58,20 +66,40 @@ def compute_docking_penalty(
     candidate_id: str,
     reference_vina_output: Path,
     fusion_vina_output: Path,
-    allowed_loss_kcal_mol: float = 1.0,
+    reference_configuration_hash: str | None = None,
+    fusion_configuration_hash: str | None = None,
+    reference_ligand_hash: str | None = None,
+    fusion_ligand_hash: str | None = None,
 ) -> DockingPenalty:
     reference = parse_vina_output(reference_vina_output)
     fusion = parse_vina_output(fusion_vina_output)
     delta = fusion.best_affinity_kcal_mol - reference.best_affinity_kcal_mol
-    risk = "low" if delta <= 0 else "moderate" if delta <= allowed_loss_kcal_mol else "high"
+    same_configuration = (
+        reference_configuration_hash is not None
+        and fusion_configuration_hash is not None
+        and reference_configuration_hash == fusion_configuration_hash
+    )
+    same_ligand = (
+        reference_ligand_hash is not None
+        and fusion_ligand_hash is not None
+        and reference_ligand_hash == fusion_ligand_hash
+    )
     return DockingPenalty(
         candidate_id=candidate_id,
         reference_affinity_kcal_mol=reference.best_affinity_kcal_mol,
         fusion_affinity_kcal_mol=fusion.best_affinity_kcal_mol,
         delta_delta_g_kcal_mol=round(delta, 3),
-        binding_risk=risk,
-        passes_negative_screen=delta <= allowed_loss_kcal_mol,
-        notes="Vina affinity difference is a negative binding screen, not an activity multiplier.",
+        status="valid" if same_configuration and same_ligand else "insufficient_data",
+        same_configuration_verified=same_configuration,
+        same_ligand_verified=same_ligand,
+        reference_configuration_hash=reference_configuration_hash,
+        fusion_configuration_hash=fusion_configuration_hash,
+        reference_ligand_hash=reference_ligand_hash,
+        fusion_ligand_hash=fusion_ligand_hash,
+        notes=(
+            "Delta dock is an auxiliary same-ligand pose comparison only; it is not Kd, kcat, "
+            "enzyme activity, an activity multiplier, or an independently authorized reject threshold."
+        ),
     )
 
 
